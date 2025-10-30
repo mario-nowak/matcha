@@ -1,0 +1,8 @@
+// matcha language
+
+// basic features
+let myInt: int = 1
+let myIntExpression: int = 4 * (8 * 3) / 3 - 3 ** 3
+let myDecimal: decimal = 1.0
+let booleanValue: bool = true
+let myBooleanExpression: bool = true and (false or not true)
