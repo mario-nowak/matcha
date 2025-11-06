@@ -18,10 +18,11 @@ pub fn main() !void {
     var lexerTest = lexer.Lexer.init(fileContents, allocator);
     defer lexerTest.deinit();
 
-    const token = lexerTest.next();
-
-    // Print token directly
-    std.debug.print("Token: {f}\n", .{token});
+    while (true) {
+        const token = lexerTest.next();
+        std.debug.print("Token: {f}\n", .{token});
+        if (token.type == .EndOfFile) break;
+    }
 
     // Print file contents
     std.debug.print("{s}", .{fileContents});
