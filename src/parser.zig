@@ -89,7 +89,15 @@ pub const Parser = struct {
                     .leftBindingPower = 1.0,
                     .rightBindingPower = 1.1,
                 },
+                .Minus => OperatorInfo{
+                    .leftBindingPower = 1.0,
+                    .rightBindingPower = 1.1,
+                },
                 .Asterisk => OperatorInfo{
+                    .leftBindingPower = 2.0,
+                    .rightBindingPower = 2.1,
+                },
+                .Slash => OperatorInfo{
                     .leftBindingPower = 2.0,
                     .rightBindingPower = 2.1,
                 },
