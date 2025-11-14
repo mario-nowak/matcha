@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const lexer = @import("lexer.zig");
+const parser = @import("parser.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -18,12 +19,10 @@ pub fn main() !void {
     var lexerTest = lexer.Lexer.init(fileContents, allocator);
     defer lexerTest.deinit();
 
-    while (true) {
-        const token = lexerTest.next();
-        std.debug.print("Token: {f}\n", .{token});
-        if (token.type == .EndOfFile) break;
-    }
+    var parserTest = parser.Parser.init(lexerTest, allocator);
+    const expression = try parserTest.parse(.{ .currentBindingPower = 0 });
+    std.debug.print("Expression: {f}\n", .{expression});
 
     // Print file contents
-    std.debug.print("{s}", .{fileContents});
+    std.debug.print("{s}\n", .{fileContents});
 }
