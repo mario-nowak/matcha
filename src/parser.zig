@@ -70,6 +70,18 @@ pub const Parser = struct {
         var leftHandSide = switch (token.type) {
             .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
             .LeftParenthesis => try self.parse(.{ .currentBindingPower = 0 }),
+            .Minus => block: {
+                const operand = try self.parse(.{ .currentBindingPower = 10 });
+                const operands = try self.allocator.alloc(SExpression, 1);
+                @memcpy(operands, &[1]SExpression{operand});
+
+                break :block SExpression{
+                    .Operation = .{
+                        .Operator = token,
+                        .Operands = operands,
+                    },
+                };
+            },
             else => unreachable,
         };
 
