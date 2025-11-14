@@ -62,19 +62,15 @@ pub const Parser = struct {
     }
 
     pub fn parse(self: *Parser, state: ParseState) !SExpression {
-        std.debug.print("Parsing new expression with binding power {}\n", .{state.currentBindingPower});
         const token = self.lexer.next();
-        std.debug.print("Found token: {f}\n", .{token});
-        // null denotation
         var leftHandSide = switch (token.type) {
             .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
             else => unreachable,
         };
-        std.debug.print("Left hand side became: {f}\n", .{leftHandSide});
 
         while (true) {
+            // Find the next operator without consuming it
             const nextToken = self.lexer.peek();
-            std.debug.print("Next token: {f}\n", .{nextToken});
             const operator = switch (nextToken.type) {
                 .Plus => OperatorInfo{
                     .leftBindingPower = 1.0,
@@ -85,14 +81,18 @@ pub const Parser = struct {
                     .rightBindingPower = 2.1,
                 },
                 .IntLiteral => continue,
+                // In case we reach the end of the file, there is nothing more to parse so our the current
+                // "left hand side" is the entire expression.
                 .EndOfFile => return leftHandSide,
                 else => unreachable,
             };
-            std.debug.print("Next token is operator: {}\n", .{operator});
 
             if (operator.leftBindingPower > state.currentBindingPower) {
-                _ = self.lexer.next(); // consume operator
-                std.debug.print("Operator has higher higher binding power than current binding power\n", .{});
+                // In case the next operator binds more tigthly than the current one, we need to parse it recursively
+                // first before we can incorporate it into the current expression.
+                // Therefore, we consume the currently peeked operator and parse whatever is to the right hand side of
+                // our current operator.
+                _ = self.lexer.next();
                 const rightHandSide = try self.parse(.{ .currentBindingPower = operator.rightBindingPower });
                 const operands = try self.allocator.alloc(SExpression, 2);
                 @memcpy(operands, &[2]SExpression{ leftHandSide, rightHandSide });
@@ -103,7 +103,8 @@ pub const Parser = struct {
                     },
                 };
             } else {
-                std.debug.print("Operator has less or equal binding power than current binding power\n", .{});
+                // In case the next operator does not bind more tightly than the current one, our current left hand side
+                // expression will become the right hand side expression of the operator we last consumed.
                 return leftHandSide;
             }
         }
