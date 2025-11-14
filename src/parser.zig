@@ -45,6 +45,10 @@ pub const Parser = struct {
     lexer: Lexer,
     allocator: std.mem.Allocator,
 
+    pub const Error = error{
+        MissingClosingParenthesis,
+    };
+
     const ParseState = struct {
         currentBindingPower: f64 = 0.0,
     };
@@ -65,8 +69,17 @@ pub const Parser = struct {
         const token = self.lexer.next();
         var leftHandSide = switch (token.type) {
             .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
+            .LeftParenthesis => try self.parse(.{ .currentBindingPower = 0 }),
             else => unreachable,
         };
+
+        if (token.type == .LeftParenthesis) {
+            const nextToken = self.lexer.peek();
+            if (nextToken.type != .RightParenthesis) {
+                return Error.MissingClosingParenthesis;
+            }
+            _ = self.lexer.next();
+        }
 
         while (true) {
             // Find the next operator without consuming it
@@ -81,6 +94,7 @@ pub const Parser = struct {
                     .rightBindingPower = 2.1,
                 },
                 .IntLiteral => continue,
+                .RightParenthesis => return leftHandSide,
                 // In case we reach the end of the file, there is nothing more to parse so our the current
                 // "left hand side" is the entire expression.
                 .EndOfFile => return leftHandSide,
