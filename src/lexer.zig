@@ -107,6 +107,20 @@ pub const Lexer = struct {
         return self.lexOperator();
     }
 
+    pub fn peek(self: *Lexer) Token {
+        const lineBeforeNext = self.line;
+        const columnBeforeNext = self.column;
+        const offsetInSourceBeforeNext = self.offsetInSource;
+
+        const nextToken = self.next();
+
+        self.line = lineBeforeNext;
+        self.column = columnBeforeNext;
+        self.offsetInSource = offsetInSourceBeforeNext;
+
+        return nextToken;
+    }
+
     pub fn done(self: *Lexer) bool {
         return self.offsetInSource >= self.source.len;
     }
