@@ -9,6 +9,17 @@ pub const SExpression = union(enum) {
             self: @This(),
             writer: *std.Io.Writer,
         ) std.Io.Writer.Error!void {
+            try self.formatIndented(writer, 0);
+        }
+
+        pub fn formatIndented(
+            self: @This(),
+            writer: *std.Io.Writer,
+            indent: usize,
+        ) std.Io.Writer.Error!void {
+            for (0..indent * 2) |_| {
+                try writer.writeAll(" ");
+            }
             try writer.print("Atom({any})", .{self.Token});
         }
     },
@@ -19,14 +30,29 @@ pub const SExpression = union(enum) {
             self: @This(),
             writer: *std.Io.Writer,
         ) std.Io.Writer.Error!void {
+            try self.formatIndented(writer, 0);
+        }
+
+        pub fn formatIndented(
+            self: @This(),
+            writer: *std.Io.Writer,
+            indent: usize,
+        ) std.Io.Writer.Error!void {
+            for (0..indent * 2) |_| {
+                try writer.writeAll(" ");
+            }
             try writer.print("Operation(Operator={any}, Operands=[\n", .{self.Operator});
             for (self.Operands, 0..) |operand, index| {
                 if (index != 0) {
                     try writer.writeAll(",\n");
                 }
-                try operand.format(writer);
+                try operand.formatIndented(writer, indent + 1);
             }
-            try writer.writeAll("\n])");
+            try writer.writeAll("\n");
+            for (0..indent * 2) |_| {
+                try writer.writeAll(" ");
+            }
+            try writer.writeAll("])");
         }
     },
 
@@ -34,9 +60,17 @@ pub const SExpression = union(enum) {
         self: @This(),
         writer: *std.Io.Writer,
     ) std.Io.Writer.Error!void {
+        try self.formatIndented(writer, 0);
+    }
+
+    pub fn formatIndented(
+        self: @This(),
+        writer: *std.Io.Writer,
+        indent: usize,
+    ) std.Io.Writer.Error!void {
         switch (self) {
-            .Atom => |atom| try atom.format(writer),
-            .Operation => |operation| try operation.format(writer),
+            .Atom => |atom| try atom.formatIndented(writer, indent),
+            .Operation => |operation| try operation.formatIndented(writer, indent),
         }
     }
 };
@@ -47,6 +81,8 @@ pub const Parser = struct {
 
     pub const Error = error{
         MissingClosingParenthesis,
+        ExpectedIdentifier,
+        ExpectedEqualSign,
     };
 
     const ParseState = struct {
@@ -70,6 +106,26 @@ pub const Parser = struct {
         var leftHandSide = switch (token.type) {
             .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
             .LeftParenthesis => try self.parse(.{ .currentBindingPower = 0 }),
+            .Let => block: {
+                const identifierToken = self.lexer.next();
+                if (identifierToken.type != .Identifier) {
+                    return Error.ExpectedIdentifier;
+                }
+
+                const equalToken = self.lexer.next();
+                if (equalToken.type != .Equal) {
+                    return Error.ExpectedEqualSign;
+                }
+
+                const operand = try self.parse(.{ .currentBindingPower = 1 });
+                const operands = try self.allocator.alloc(SExpression, 2);
+                @memcpy(operands, &[2]SExpression{
+                    SExpression{ .Atom = .{ .Token = identifierToken } },
+                    operand,
+                });
+
+                break :block SExpression{ .Operation = .{ .Operator = token, .Operands = operands } };
+            },
             .Minus => block: {
                 const operand = try self.parse(.{ .currentBindingPower = 10 });
                 const operands = try self.allocator.alloc(SExpression, 1);
@@ -98,20 +154,20 @@ pub const Parser = struct {
             const nextToken = self.lexer.peek();
             const operator = switch (nextToken.type) {
                 .Plus => OperatorInfo{
-                    .leftBindingPower = 1.0,
-                    .rightBindingPower = 1.1,
+                    .leftBindingPower = 3.0,
+                    .rightBindingPower = 3.1,
                 },
                 .Minus => OperatorInfo{
-                    .leftBindingPower = 1.0,
-                    .rightBindingPower = 1.1,
+                    .leftBindingPower = 3.0,
+                    .rightBindingPower = 3.1,
                 },
                 .Asterisk => OperatorInfo{
-                    .leftBindingPower = 2.0,
-                    .rightBindingPower = 2.1,
+                    .leftBindingPower = 4.0,
+                    .rightBindingPower = 4.1,
                 },
                 .Slash => OperatorInfo{
-                    .leftBindingPower = 2.0,
-                    .rightBindingPower = 2.1,
+                    .leftBindingPower = 4.0,
+                    .rightBindingPower = 4.1,
                 },
                 .IntLiteral => continue,
                 .RightParenthesis => return leftHandSide,
