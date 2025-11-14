@@ -105,6 +105,7 @@ pub const Parser = struct {
         const token = self.lexer.next();
         var leftHandSide = switch (token.type) {
             .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
+            .Identifier => SExpression{ .Atom = .{ .Token = token } },
             .LeftParenthesis => try self.parse(.{ .currentBindingPower = 0 }),
             .Let => block: {
                 const identifierToken = self.lexer.next();
@@ -117,7 +118,7 @@ pub const Parser = struct {
                     return Error.ExpectedEqualSign;
                 }
 
-                const operand = try self.parse(.{ .currentBindingPower = 1 });
+                const operand = try self.parse(.{ .currentBindingPower = 2 });
                 const operands = try self.allocator.alloc(SExpression, 2);
                 @memcpy(operands, &[2]SExpression{
                     SExpression{ .Atom = .{ .Token = identifierToken } },
@@ -153,6 +154,10 @@ pub const Parser = struct {
             // Find the next operator without consuming it
             const nextToken = self.lexer.peek();
             const operator = switch (nextToken.type) {
+                .Semicolon => OperatorInfo{
+                    .leftBindingPower = 1.0,
+                    .rightBindingPower = 1.1,
+                },
                 .Plus => OperatorInfo{
                     .leftBindingPower = 3.0,
                     .rightBindingPower = 3.1,
@@ -170,6 +175,7 @@ pub const Parser = struct {
                     .rightBindingPower = 4.1,
                 },
                 .IntLiteral => continue,
+                .Identifier => continue,
                 .RightParenthesis => return leftHandSide,
                 // In case we reach the end of the file, there is nothing more to parse so our the current
                 // "left hand side" is the entire expression.
