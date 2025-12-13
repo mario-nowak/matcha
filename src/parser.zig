@@ -2,59 +2,64 @@ const std = @import("std");
 const Lexer = @import("lexer.zig").Lexer;
 const Token = @import("lexer.zig").Token;
 
+pub const Atom = struct {
+    Token: Token,
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try self.formatIndented(writer, 0);
+    }
+
+    pub fn formatIndented(
+        self: @This(),
+        writer: *std.Io.Writer,
+        indent: usize,
+    ) std.Io.Writer.Error!void {
+        for (0..indent * 2) |_| {
+            try writer.writeAll(" ");
+        }
+        try writer.print("Atom({any})", .{self.Token});
+    }
+};
+
+pub const Operation = struct {
+    Operator: Token,
+    Operands: []const SExpression,
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        try self.formatIndented(writer, 0);
+    }
+
+    pub fn formatIndented(
+        self: @This(),
+        writer: *std.Io.Writer,
+        indent: usize,
+    ) std.Io.Writer.Error!void {
+        for (0..indent * 2) |_| {
+            try writer.writeAll(" ");
+        }
+        try writer.print("Operation(Operator={any}, Operands=[\n", .{self.Operator});
+        for (self.Operands, 0..) |operand, index| {
+            if (index != 0) {
+                try writer.writeAll(",\n");
+            }
+            try operand.formatIndented(writer, indent + 1);
+        }
+        try writer.writeAll("\n");
+        for (0..indent * 2) |_| {
+            try writer.writeAll(" ");
+        }
+        try writer.writeAll("])");
+    }
+};
+
 pub const SExpression = union(enum) {
-    Atom: struct {
-        Token: Token,
-        pub fn format(
-            self: @This(),
-            writer: *std.Io.Writer,
-        ) std.Io.Writer.Error!void {
-            try self.formatIndented(writer, 0);
-        }
-
-        pub fn formatIndented(
-            self: @This(),
-            writer: *std.Io.Writer,
-            indent: usize,
-        ) std.Io.Writer.Error!void {
-            for (0..indent * 2) |_| {
-                try writer.writeAll(" ");
-            }
-            try writer.print("Atom({any})", .{self.Token});
-        }
-    },
-    Operation: struct {
-        Operator: Token,
-        Operands: []const SExpression,
-        pub fn format(
-            self: @This(),
-            writer: *std.Io.Writer,
-        ) std.Io.Writer.Error!void {
-            try self.formatIndented(writer, 0);
-        }
-
-        pub fn formatIndented(
-            self: @This(),
-            writer: *std.Io.Writer,
-            indent: usize,
-        ) std.Io.Writer.Error!void {
-            for (0..indent * 2) |_| {
-                try writer.writeAll(" ");
-            }
-            try writer.print("Operation(Operator={any}, Operands=[\n", .{self.Operator});
-            for (self.Operands, 0..) |operand, index| {
-                if (index != 0) {
-                    try writer.writeAll(",\n");
-                }
-                try operand.formatIndented(writer, indent + 1);
-            }
-            try writer.writeAll("\n");
-            for (0..indent * 2) |_| {
-                try writer.writeAll(" ");
-            }
-            try writer.writeAll("])");
-        }
-    },
+    Atom: Atom,
+    Operation: Operation,
 
     pub fn format(
         self: @This(),

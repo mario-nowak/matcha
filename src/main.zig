@@ -2,6 +2,7 @@ const std = @import("std");
 
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
+const llvmIrEmitter = @import("llvm_ir_emitter.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -22,6 +23,13 @@ pub fn main() !void {
     var parserTest = parser.Parser.init(lexerTest, allocator);
     const expression = try parserTest.parse(.{ .currentBindingPower = 0 });
     std.debug.print("Expression: {f}\n", .{expression});
+
+    var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
+    const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
+
+    var file = try std.fs.cwd().createFile("emission.ll", .{});
+    defer file.close();
+    _ = try file.write(emitted);
 
     // Print file contents
     std.debug.print("{s}\n", .{fileContents});
