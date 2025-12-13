@@ -5,15 +5,16 @@ const Operation = @import("parser.zig").Operation;
 const Environment = std.StringHashMap([]const u8);
 
 pub const SymbolGenerator = struct {
+    allocator: std.mem.Allocator,
     counter: usize,
     prefix: []const u8,
 
-    pub fn init(prefix: []const u8) @This() {
-        return .{ .counter = 0, .prefix = prefix };
+    pub fn init(allocator: std.mem.Allocator, prefix: []const u8) @This() {
+        return .{ .allocator = allocator, .counter = 0, .prefix = prefix };
     }
 
     pub fn generate(self: *@This()) []const u8 {
-        const symbol = std.fmt.allocPrint(std.heap.page_allocator, "%{s}_{d}", .{ self.prefix, self.counter }) catch unreachable;
+        const symbol = std.fmt.allocPrint(self.allocator, "%{s}_{d}", .{ self.prefix, self.counter }) catch unreachable;
         self.counter += 1;
 
         return symbol;
@@ -29,7 +30,7 @@ pub const LlvmIrEmitter = struct {
         return .{
             .allocator = allocator,
             .environment = Environment.init(allocator),
-            .symbolGenerator = SymbolGenerator.init(".t"),
+            .symbolGenerator = SymbolGenerator.init(allocator, ".t"),
         };
     }
 
