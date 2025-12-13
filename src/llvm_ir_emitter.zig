@@ -124,6 +124,34 @@ pub const LlvmIrEmitter = struct {
                     .auxiliaryEmission = auxiliaryEmission,
                 };
             },
+            .Minus => block: {
+                const left = self.emitExpression(operation.Operands[0]);
+                const right = self.emitExpression(operation.Operands[1]);
+
+                const symbol = self.symbolGenerator.generate();
+
+                const llvmOperation = std.fmt.allocPrint(self.allocator, "{s} = sub i32 {s}, {s}", .{ symbol, left.expressionResultSymbol, right.expressionResultSymbol }) catch unreachable;
+                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission, llvmOperation }) catch unreachable;
+
+                break :block .{
+                    .expressionResultSymbol = symbol,
+                    .auxiliaryEmission = auxiliaryEmission,
+                };
+            },
+            .Asterisk => block: {
+                const left = self.emitExpression(operation.Operands[0]);
+                const right = self.emitExpression(operation.Operands[1]);
+
+                const symbol = self.symbolGenerator.generate();
+
+                const llvmOperation = std.fmt.allocPrint(self.allocator, "{s} = mul i32 {s}, {s}", .{ symbol, left.expressionResultSymbol, right.expressionResultSymbol }) catch unreachable;
+                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission, llvmOperation }) catch unreachable;
+
+                break :block .{
+                    .expressionResultSymbol = symbol,
+                    .auxiliaryEmission = auxiliaryEmission,
+                };
+            },
             else => unreachable,
         };
     }
