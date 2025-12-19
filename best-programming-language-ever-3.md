@@ -30,7 +30,7 @@ item UsageReportService = structure {
             pluginLicenseUuid: string? = null
         },
     ): UsageReportError!Promise<RegisteredUsageReportPayload[]> {
-        val shop = await this.shopRepository:findOneOrFail({ where: uuid: shopUuid });
+        val shop = await this.shopRepository.findOneOrFail({ where: uuid: shopUuid });
 
         match? (shop.type) {
             ShopType.Shopware6 => {
@@ -60,7 +60,7 @@ item UsageReportService = structure {
 // Matcha does not have classes, only structures (more on that later)
 item User = structure {
     val name: string;
-    val age: string;
+    val age: int;
     // Member variable with a default argument
     val isCool: boolean = false;
 };
