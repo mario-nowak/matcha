@@ -15,19 +15,32 @@ item UsageReportError = error {
     PluginLicenseUuidMissingError: structure {
         val message = "Plugin license UUID is missing";
     },
-    ShopNotEligibleForUsageReportSubmissionError,
-    ShopUuidDoesNotMatchPluginLicenseError,
-    ShopUuidDoesNotMatch,
+    ShopNotEligibleForUsageReportSubmissionError: structure {
+        val message: string;
+        constructor(public val shopUuid: string, public pluginLicenseUuid: string) {
+            message = `Shop ${shopUuid} does not match plugin license ${pluginLicenseUuid}.`;
+        };
+    },
+    ShopUuidDoesNotMatchPluginLicenseError: /* ... */,
+    ShopUuidDoesNotMatch: /* ... */,
+    DuplicateUsageReportIdentifierError: structure {
+        constructor (public val )
+    },
 };
 
-item UsageReportService = structure {
+item UsageReportService = nominal structure {
+
+    constructor (
+        private val usageReportRepository: Repository<UsageReport>,
+        private val shopRepository: Repository<Shop>,
+    ) { }
 
     val registerUsageReportsForShop = async function (
         this: self,
-        {
-            shopUuid: string,
-            usageReportPayloads: UsageReportPayload[],
-            pluginLicenseUuid: string? = null
+        payload: contract {
+            val shopUuid: string;
+            val usageReportPayloads: UsageReportPayloads[];
+            val pluginLicenseUuid: string?;
         },
     ): UsageReportError!Promise<RegisteredUsageReportPayload[]> {
         val shop = await this.shopRepository.findOneOrFail({ where: uuid: shopUuid });
@@ -45,34 +58,60 @@ item UsageReportService = structure {
             }
         };
 
-        val usageReportIdentifiers = usageReportPayloads:map((usageReportPayload) => usageReportPayload.uuid);
+        val usageReportIdentifiers = usageReportPayloads.map((usageReportPayload) => usageReportPayload.uuid);
+        val usageReportPayloadsInclusiveIntervalStart = usageReportPayloads
+            .map(() => usageReportPayload.inclusiveIntervalStart)
+            .filter();
+        val existingUsageReports = await this.usageReportRepository.find(.{
+            where = [
+                .{ remoteUuid = In(usageReportIdentifiers) },
+                .{
+                    subscription = .{ shop = .{ uuid = shopUuid } },
+                    inclusiveIntervalStart = In(usageReportPayloadsInclusiveIntervalStart),
+                }
+            ],
+        });
+
+        val duplicateUsageReportIdentifiers = /* ... */;
+        return .DuplicateUsageReportIdentifierError(.{}) if 
     };
 };
 ```
 
-# Matcha specification
+# Matcha language
+
+## Hello world.
 
 ```matcha
-// File user.mt
+```
 
-// `items` are compile time definitions like contracts, errors, structures etc.
-// they must be on the top-level of a file
-// Matcha does not have classes, only structures (more on that later)
+## Primitive types
+
+## Structures
+
+### Basics
+
+```matcha
+// Matcha does not have classes or inheritance, only structures
 item User = structure {
+    // QUESTION: is it a good idea to let structures and contracts define the mutability of fields?
     val name: string;
     val age: int;
     // Member variable with a default argument
     val isCool: boolean = false;
 };
+// Items are compile time entities like structures, contracts, errors etc.
+// They must be placed on the top-level of a file.
 
-// values and variable are runtime entities
-// Instantiation of a user: (the type of tom is now inferred)
-// This "raw" instantiation must provide all uninitialized values
-val tom = User {
+// Here is an example of instantiating an object that satisfies the `User` structure
+// Matcha has a structural type system that forces you to specify a value for every field of a type.
+val tom: User = .{
     name = "Tom",
     age = 32,
     // isCool can be omitted because it is false by default
 };
+// Values and variable are runtime entities.
+// .{} is the object literal syntax.
 
 // variables can be re-assigned, values cannot
 // Because the type of `greg` is specified, the shorthand "dot" notation can be used here for object literals
@@ -92,35 +131,156 @@ val name = "Mario";
 val age = 26;
 val mario: User = .{name, age}; // shorthand notation to prevent having to write name = name etc.
 
+val alex = User {name, age}; // Syntactic sugar for defining an object that satisfies the `User` structure.
+// The type of `alex` is inferred.
 
-// File point.mt
+// Object can also be created with "unstructured" object literals.
+// The type of `unstructuredObject` is inferred
+val unstructuredObject = .{
+    someKey = "someValue",
+};
+// objects can be de-constructed and the type of someKey can be inferred from unstructuredObject's type
+val { someKey } = unstructuredObject;
+```
+
+### Contracts
+
+```matcha
 // Contracts are similar to interfaces in other programming langauges.
-// They specify only what fields an object but never their value.
-// Structures can satisfy a contract.
+// They specify only the shape of an object but never their value.
+// QUESTION: Does it make sense for contracts to specify the mutability of fields?
+// Inside a contract, self means the contract type, not the implementer. It desugars into the contract name
 item Point = contract {
     var x: int;
     var y: int;
     val distanceTo: (this: self, other:self) -> float;
 };
 
-// Values can be of a contract type
+// Instantiating a value that satisfies a contract.
 val somePoint: Point = .{
     x = 3,
     y = 7,
-    // but they need to satisfy the contract, even if it means providing implementation details
+    // Satisfying the contract requires having to provide implementation details for the distanceTo function.
+    // In matcha, functions are just values so specifying an implementation for a function is nothing more
+    // than assigning a function literal to a field of the object.
     distanceTo = function (this: self, other: self): float {
         return ((other.x - this.x)**2 + (other.y - this.y)**2)**0.5;
     };
 };
 
-// Object can also be created with unstructured object literals
-val unstructuredObject = .{
-    someKey = "someValue",
+// Some other value
+val someOtherPoint: Point = .{
+    x = -3,
+    y = 8,
+    // This "instance of a point" provides a different definition for how it computes distances
+    distanceTo = function (this: self, other: self): float {
+        return ((other.x - this.x)**2 + (other.y - this.y)**2);
+    };
 };
-// objects can be de-constructed and the type of someKey can be inferred from unstructuredObject's type
-val { someKey } = unstructuredObject;
+
+// Conceptually, every object has a pointer to it's "own" distanceTo function.
+val computeDistanceBetween = function (a: Point, b: Point): float {
+    return a.distanceTo(b);
+};
+
+// These distances won't be the same
+val distanceFromSomePointToSomeOtherPoint = computeDistanceBetween(somePoint, someOtherPoint);
+val distanceFromSomeOtherPointToSomePoint = computeDistanceBetween(someOtherPoint, somePoint);
+// This is an example of runtime polymorphism in matcha: depending on the actual point, the right
+// distanceTo function is used.
+
+// Structures can satisfy a contract.
+item EuclideanVector = structure satisfies Point {
+    // `x` and `y` are already specified on the `Point` contract.
+    // The contract's `distanceTo` function receives an immutable default value for a `EuclideanVector`
+    val distanceTo = function (this: self, other: self): float {
+        return ((other.x - this.x)**2 + (other.y - this.y)**2)**0.5;
+    };
+};
+
+val v1 = EuclideanVector {
+    x = 4,
+    y = 3,
+};
+val v2 = EuclideanVector {
+    x = 2,
+    y = 8,
+};
+val areSymmetric = computeDistanceBetween(v1, v2) == computeDistanceBetween(v2, v1);
+// `areSymmetric` is true
+```
+
+### Nominality
+
+```
+item Vector = contract {
+    val x: float;
+    val y: float;
+    val distanceTo: (this: self, other:self) -> float;
+};
+
+item StrangeVector = structure satisfies Vector {
+    val distanceTo = function (this: self, other: self): float {
+        return (other.x - this.x)**2 + (other.y - this.y)**2;
+    };
+};
+
+item EuclideanVector = nominal structure satisfies Vector {
+    val distanceTo = function (this: self, other: self): float {
+        return ((other.x - this.x)**2 + (other.y - this.y)**2)**2;
+    };
+};
+
+val computeEuclideanDistanceBetween = function (v1: EuclideanVector, v2: Vector): float {
+    return v1.distanceTo(v2);
+};
+val computeStrangeDistanceBetween = function (v1: StrangeVector, v2: Vector): float {
+    return v1.distanceTo(v2);
+};
+
+val strangeVector = StrangeVector {
+    x = 4,
+    y = 9,
+};
+val euclideanVector = EuclideanVector {
+    x = 3,
+    y = -2,
+};
+
+computeStrangeDistanceBetween(strangeVector, euclideanVector); // ✅ this is okay because all structures are satisfied
+computeStrangeDistanceBetween(euclideanVector, strangeVector); // ✅ this is okay because all structures are satisfied
+computeEuclideanDistanceBetween(euclideanVector, strangeVector); // ✅ this is okay because all nominal types and structures are satisfied
+computeEuclideanDistanceBetween(strangeVector, euclideanVector); // ❌ is not okay because `strangeVector` does not satisfy the nominal type
 
 
+item User = nominal structure {
+    // Fields are public by default
+    val coolAttribute: string;
+
+    // Nominal structures can have private fields
+    private val secret: string;
+
+    // Both nominal and non-nominal structures can have a constructor but it must be used if defined
+    constructor (
+        // Constructor property promotion
+        public val firstName: string,
+    ) {
+        // The constructor must initialize all uninitialized fields
+        secret = firstName;
+        coolAttribute = firstName;
+    };
+};
+
+// Initializing structures with a constructor must use () instead of {} and initialize all constructor fields.
+// Type of user is inferred
+val user = User(firstName = "Mario");
+// Because the type of `otherUser` is clear, the shorthand .() notation can be used.
+val otherUser: User = .(firstName = "Norman");
+```
+
+## Modules and other
+
+```matcha
 // File: immutable-point.mt
 // exporting an item or value makes them accessible in other files via an import
 export item ImmutablePoint = contract {
