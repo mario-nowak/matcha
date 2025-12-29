@@ -1,83 +1,3 @@
-# Porting existing enterprise-level code do matcha
-
-```matcha
-// Reference usage-report-service.ts
-
-item { Injectable } = import "@nestjs/common";
-item dayjs = import "dayjs";
-item { chain } = import "lodash";
-
-item { Shop } = import '/model-entities/shop';
-item { RegisteredUsageReportPayload, UsageReportPayload } = import "/usage-report/usage-report-dto";
-
-
-item UsageReportError = error {
-    PluginLicenseUuidMissingError: structure {
-        val message = "Plugin license UUID is missing";
-    },
-    ShopNotEligibleForUsageReportSubmissionError: structure {
-        val message: string;
-        constructor(public val shopUuid: string, public pluginLicenseUuid: string) {
-            message = `Shop ${shopUuid} does not match plugin license ${pluginLicenseUuid}.`;
-        };
-    },
-    ShopUuidDoesNotMatchPluginLicenseError: /* ... */,
-    ShopUuidDoesNotMatch: /* ... */,
-    DuplicateUsageReportIdentifierError: structure {
-        constructor (public val )
-    },
-};
-
-item UsageReportService = nominal structure {
-
-    constructor (
-        private val usageReportRepository: Repository<UsageReport>,
-        private val shopRepository: Repository<Shop>,
-    ) { }
-
-    val registerUsageReportsForShop = async function (
-        this: self,
-        payload: contract {
-            val shopUuid: string;
-            val usageReportPayloads: UsageReportPayloads[];
-            val pluginLicenseUuid: string?;
-        },
-    ): UsageReportError!Promise<RegisteredUsageReportPayload[]> {
-        val shop = await this.shopRepository.findOneOrFail({ where: uuid: shopUuid });
-
-        match? (shop.type) {
-            ShopType.Shopware6 => {
-                return .PluginLicenseUuidMissingError if pluginLicenseUuid == null;
-                
-                const pluginInstallationLicense = shop:getPluginInstallationLicense();
-                return .ShopNotEligibleForUsageReportSubmissionError if pluginInstallationLicense == null;
-
-                return .ShopUuidDoesNotMatchPluginLicenseError if (
-                    pluginInstallationLicense.licenseUuid != pluginLicenseUuid
-                );
-            }
-        };
-
-        val usageReportIdentifiers = usageReportPayloads.map((usageReportPayload) => usageReportPayload.uuid);
-        val usageReportPayloadsInclusiveIntervalStart = usageReportPayloads
-            .map(() => usageReportPayload.inclusiveIntervalStart)
-            .filter();
-        val existingUsageReports = await this.usageReportRepository.find(.{
-            where = [
-                .{ remoteUuid = In(usageReportIdentifiers) },
-                .{
-                    subscription = .{ shop = .{ uuid = shopUuid } },
-                    inclusiveIntervalStart = In(usageReportPayloadsInclusiveIntervalStart),
-                }
-            ],
-        });
-
-        val duplicateUsageReportIdentifiers = /* ... */;
-        return .DuplicateUsageReportIdentifierError(.{}) if 
-    };
-};
-```
-
 # Matcha language
 
 ## Northern star
@@ -145,9 +65,9 @@ If you want the story to actually carry a language (not just a tagline), you’l
 
 ```matcha
 // Import the standard library and de-structure it to obtain the console object
-item standard = import "standard";
+item Standard = import "standard";
 
-standard.console.log("Hello world!");
+Standard.console.log("Hello world!");
 ```
 
 ## Primitives
@@ -177,8 +97,8 @@ val floatingPoint: float = 4.3; // <- 64 bit float
 val floatLiteral = 4.3f8;
 
 // strings
-val message: string = "Hello world!"; // <- Strings are heap-allocated object. Message is a small header to the memory on the heap
-val message string = `${integer} is the magic number` // <- String templating
+val message: string = "Hello world!"; // <- Strings are heap-allocated objects. Message is a small header to the memory on the heap
+val templatedMessage: string = `${integer} is the magic number`; // <- String templating
 ```
 
 ## Values and variables
@@ -194,10 +114,10 @@ y = y + 1; // <- allowed
 ## Arrays
 
 ```matcha
-// Like strings, arrays are heap-allocated object. `myArray` is a small header to the memory on the heap
+// Like strings, arrays are heap-allocated objects. `myArray` is a small header to the memory on the heap
 val myArray: float[] = [3.4, 5.6, 3.3];
 val myOtherArray: Array<int> = [4, 5, 6];
-val inferredTypeArray = ["hi", "ho"]; // inferred type: Array<string>;
+val inferredTypeArray = ["hi", "ho"]; // inferred type: Array<string>
 
 myArray[0]; // <- can be accessed with []
 ```
@@ -206,7 +126,7 @@ myArray[0]; // <- can be accessed with []
 
 ## Blocks
 
-Block allow grouping multiple statement and perform lexicographic scoping.
+Blocks allow grouping multiple statements and perform lexicographic scoping.
 
 ```matcha
 val outsideOfBlock = 1;
@@ -214,7 +134,7 @@ val outsideOfBlock = 1;
     val insideOfBlock = outsideOfBlock + 1;
     val someOtherVariable = "hi";
 }
-val afterBlock = insideOfBlock // <- would cause an error because `insideOfBlock` is not available in the scope
+val afterBlock = insideOfBlock; // <- would cause an error because `insideOfBlock` is not available in the scope
 ```
 
 Blocks can be used as expressions. The last expression inside a block without a semicolon is what the block evaluates to.
@@ -230,7 +150,7 @@ val a = {
 
 The `leave` keyword can be used to "early return" inside a block expression. It can only be used in value creating contexts and must be followed by an expression. `leave` always leaves the nearest block in case of nested blocks.
 
-```match
+```matcha
 val isHappy = true;
 val isReallyHappy = {
     if isHappy leave true;
@@ -244,7 +164,7 @@ Blocks can be named to leave a specific, nested block.
 val isHappy = true;
 val c = outer: {
     val c1 = inner: {
-        if isHappy leave :outer 42
+        if isHappy leave :outer 42;
         43
     };
     c1
@@ -255,30 +175,30 @@ val c = outer: {
 
 In Matcha the if statement has no else or else if branch.
 
-```match
+```matcha
 val isHappy = (true and false) or true;
 if isHappy {
-    standard.console.log("I'm happy");
+    Standard.console.log("I'm happy");
 }
 ```
 
-Shorthand if notation for single statements
+Shorthand if notation for single statements:
 
-```match
+```matcha
 val isHappy = (true and false) or true;
-if isHappy standard.console.log("I'm happy");
+if isHappy Standard.console.log("I'm happy");
 ```
 
 ### Match expression
 
 Matcha pushes the match expression for more complex control flow branching.
-match short-circutes when encountering the first match.
+Match short-circuits when encountering the first match.
 
 ```matcha
 val isHappy = true;
 match isHappy {
-    true => standard.console.log("I'm happy"),
-    false => standard.console.log("I'm not happy"),
+    true => Standard.console.log("I'm happy"),
+    false => Standard.console.log("I'm not happy"),
 }
 ```
 
@@ -287,46 +207,37 @@ The match expression must be exhaustive.
 ```matcha
 val age = 18;
 match age {
-    11 => standard.console.log("Wow you're 11"),
-    16 => standard.console.log("16, aren't we?"),
-    42 => standard.console.log("Cool age"),
-    else => standard.console.log("No comment"),
+    11 => Standard.console.log("Wow you're 11"),
+    16 => Standard.console.log("16, aren't we?"),
+    42 => Standard.console.log("Cool age"),
+    else => Standard.console.log("No comment"),
 }
 ```
 
-When used in value-producing contexts, match must be followed by a semicolon. All arms must return the same type
+When used in value-producing contexts, match must be followed by a semicolon. All arms must return the same type.
 
 ```matcha
 val isHappy = true;
-val message = match isHappy { // Type of message is inferred as string.
+val message = match isHappy { // Type of message is inferred as string
     true => "I'm happy",
     false => "I'm not happy",
 };
 ```
 
-The `match?` statement allows non-exhaustive matches and de-sugars into a match with an "else => null" branch.
-Providing an else barnch with `match?` is dis-allowed.
+The `match?` expression allows non-exhaustive matches and de-sugars into a match with an "else => null" branch.
+Providing an else branch with `match?` is disallowed.
 
 ```matcha
 val x = 1;
-val b = match? x { // `b` has type string? (i.e. string|null)
-    0 => "zero"
-};
-```
-
-The `match!` statement allows non-exhaustive matches but de-sugars into a match with an "else => panic" branch.
-Providing an else branch with `match!` is dis-allowed.
-
-```matcha
-val x = 1;
-val c = match! x { // `c` has the type string but this can fail at runtime if x it not 0
-    0 => "zero"
+val b = match? x { // `b` has type string? (i.e. string | null)
+    0 => "zero",
 };
 ```
 
 Match can be used without a subject. In that case every arm must provide a boolean condition to evaluate. Subjectless match must also be exhaustive.
 
 ```matcha
+val x = 1;
 val d = match { // subjectless match, type of d is inferred as string
     x % 2 == 0 => "even",
     x % 2 == 1 => "odd",
@@ -334,24 +245,18 @@ val d = match { // subjectless match, type of d is inferred as string
 };
 ```
 
-`match?` and `match!` can also be subjectless.
+`match?` can also be subjectless.
 
 ```matcha
 val x = 1;
 val e = match? {
     x == 0 => "zero",
 } ?? "coalesced to this string";
-
-val f = match! { // subjectless match that de-sugars to "else => panic" branch
-    x % 2 == 0 => "even",
-    x % 2 == 1 => "odd",
-};
-// the type of f is inferred as string but the match _can_ fail at runtime, even though it logically shouldn't
 ```
 
 ## Looping
 
-Matcha has three loop types, `loop`s, `while`-loops and `for`-loops.
+Matcha has three loop types: `loop`s, `while`-loops, and `for`-loops.
 
 `loop`s loop forever until explicitly left with the `leave` keyword.
 
@@ -362,10 +267,10 @@ loop {
     if i == 10 {
         leave;
     }
-} 
+}
 ```
 
-The `continue` keyword allows to skip the current loop iteration.
+The `continue` keyword allows skipping the current loop iteration.
 
 ```matcha
 var i = 0;
@@ -379,7 +284,7 @@ loop {
 }
 ```
 
-`loops` can also be used as expressions. In value-producing contexts, loop must contain at least one `leave`. Every `leave` must be followed by an expression. All paths must leave with the same type.
+`loop`s can also be used as expressions. In value-producing contexts, loop must contain at least one `leave`. Every `leave` must be followed by an expression. All paths must leave with the same type.
 
 ```matcha
 var i = 0;
@@ -396,7 +301,7 @@ val result = loop { // The type of result is inferred as `int`
 ```matcha
 var i = 0;
 while (i < 10) {
-    standard.console.log(i);
+    Standard.console.log(i);
     i = i + 1;
 }
 ```
@@ -405,8 +310,8 @@ while (i < 10) {
 
 ```matcha
 var i = 0;
-while (i < 10) : (i = i + 1) { // `i = i + 1;` is a special assignment expression
-    standard.console.log(i);
+while (i < 10) : (i = i + 1) { // `i = i + 1` is a special assignment expression
+    Standard.console.log(i);
 }
 ```
 
@@ -425,30 +330,30 @@ val result2 = while (i < 10) : (i = i + 1) {
     if i == 10 {
         leave i;
     }
-} ?? 0; // The type of result is inferred as `int` now.
+} ?? 0; // The type of result2 is inferred as `int` now
 ```
 
-`for`-loops can use ranges. Ranges allow describing an integer iterator with a start, optional step and optional end.
+`for`-loops can use ranges. Ranges allow describing an integer iterator with a start, optional step, and optional end.
 
 ```matcha
 for index in 0..5 { // 0..5 is a range from 0 to 4
-    standard.console.log(index);
+    Standard.console.log(index);
 }
 
 for index in 10.. { // 10.. is a range from 10 to infinity
-    standard.console.log(index);
+    Standard.console.log(index);
 }
 
 for index in 10..0 { // 10..0 is a range from 10 to 1
-    standard.console.log(index);
+    Standard.console.log(index);
 }
 
 for index in 10..:2..100 { // 10..:2..100 is a range from 10 to 99 with a step size of 2
-    standard.console.log(index);
+    Standard.console.log(index);
 }
 
-for index in 100..:2..10 { // 100..:2..10 is a range from 100 to 9 with a step size of 2
-    standard.console.log(index);
+for index in 100..:2..10 { // 100..:2..10 is a range from 100 to 11 with a step size of 2
+    Standard.console.log(index);
 }
 ```
 
@@ -460,21 +365,15 @@ val points = [
     .{ x = 2, y = 3 },
     .{ x = 0, y = 0 },
 ];
-val maybePoint = for point in points { // <- Type of `maybePoint` is inferred as { x: int, y:int} | null
+val maybePoint = for point in points { // <- Type of `maybePoint` is inferred as { x: int, y: int } | null
     if point.x == 0 and point.y == 0 {
         leave point;
     }
 };
 
 val p2 = for { x, y } in points { // <- for with destructured item
-    if point.x == 0 and point.y == 0 {
-        leave point;
-    }
-};
-
-val p3 = for point@{ x, y } in points { // <- for with semi-destructured item
-    if point.x == 0 and point.y == 0 {
-        leave point;
+    if x == 0 and y == 0 {
+        leave .{ x, y };
     }
 };
 
@@ -484,9 +383,9 @@ val d = for (a, b) in (xs, ys) { // <- for with multiple lists, stops at shortes
     }
 };
 
-val e = for ({ a, b }, y@{ c, d }) in (xs, ys) { // <- destructure in multi-list for
+val e = for ({ a, b }, { c, d }) in (xs, ys) { // <- destructure in multi-list for
     if b == d {
-        leave y;
+        leave .{ c, d };
     }
 };
 ```
@@ -502,7 +401,7 @@ val firstMatch = outer: for (first, index) in (sortedOne, 0..) {
             first == second => leave :outer first,
             first > second => continue :inner,
             first < second => continue :outer,
-        }
+        };
     }
 };
 ```
@@ -518,7 +417,7 @@ item distanceBetween(v: Vector2D, w: Vector2D): float = {
 // Syntax: item <FUNCTION>(<PARAMETER_LIST>): <RETURN_TYPE> = <EXPRESSION>;
 ```
 
- The function expression is just a block so you can return the last expression of the block by omitting the ";" at the end.
+The function expression is just a block so you can return the last expression of the block by omitting the semicolon at the end.
 
 ```matcha
 item distanceBetween(v: Vector2D, w: Vector2D): float = {
@@ -526,7 +425,7 @@ item distanceBetween(v: Vector2D, w: Vector2D): float = {
 };
 ```
 
-You can make this even shorter by omitting the block entirely for this single expression function.
+You can make this even shorter by omitting the block entirely for single expression functions.
 
 ```matcha
 item distanceBetween(v: Vector2D, w: Vector2D): float = sqrt((v.x - w.x)**2 + (v.y - w.y)**2);
@@ -547,11 +446,6 @@ item length({ x, y }: Vector2D) = sqrt(x**2 + y**2);
 More examples:
 
 ```matcha
-// Function definition with semi-de-structured parameter
-item length(v@{ y }: Vector2D) = sqrt(v.x**2 + y**2);
-```
-
-```matcha
 // Function definition with anonymous structure type
 item length({ x, y }: { x: float; y: float }) = sqrt(x**2 + y**2);
 ```
@@ -564,11 +458,6 @@ item length({ x, y = 1 }: { x: float; y: float }) = sqrt(x**2 + y**2);
 ```matcha
 // Function definition with shorthand de-structure anonymous structure type
 item length({ x: float, y: float }) = sqrt(x**2 + y**2);
-```
-
-```matcha
-// Function definition with shorthand semi-de-structure anonymous structure type and default parameter
-item length(v@{ x: float, y: float = 1 }) = sqrt(v.x**2 + y**2);
 ```
 
 Functions can also be defined as runtime values using function literals:
@@ -719,7 +608,7 @@ val { someKey } = unstructuredObject;
 ### Opaque types
 
 ```matcha
-“Nominal wrappers” (opaque) for meaning-carrying primitives
+// "Nominal wrappers" (opaque) for meaning-carrying primitives
 item UserId = opaque string; // nominal identity, runtime is just string
 item OrgId = opaque string;
 val userId = UserId("abc123");
@@ -736,7 +625,7 @@ loadUser(orgId); // rejected
 3. Control of API surface: you can expose only safe constructors:
 ```matcha
 item Email = opaque string;
-fn Email.parse(s: string) -> Result<Email, InvalidEmail> { ... }
+item parseEmail = function (s: string) -> Result<Email, InvalidEmail> { ... };
 // no implicit Email("lol") unless you allow it
 ```
 With nominal struct, people can often construct it “raw” unless you add extra rules.
@@ -790,8 +679,8 @@ greetAnythingWithName(userUpdateDto); // ✅ accepted because greetAnythingWithN
 greetAnythingWithName(org); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
 greetAnythingWithName(randomStructure); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
 
-val userFromOrg = User { // explicit conversion boundary, construct a user from an org by spreading its fields
-    ...org // org must have at least the fields of User but 
+val userFromOrg = User { // Explicit conversion boundary, construct a user from an org by spreading its fields
+    ...org, // org must have at least the fields of User
     // Excess fields are "dropped" here, because a user doesn't have them
     // This constructs a new user by copying the org fields into the new User object
 };
@@ -858,7 +747,7 @@ val node: Node = .{}; // <- this is not allowed
 
 item stringifyNode = (node: Node) => match (node) {
     LetNode => `${node.identifier} = ${node.expression};`,
-    SubtractionNode(subtractionNode) => `${subtractionNode.lhs} - ${subtractionNode.rhs}`// optional capture
+    SubtractionNode(subtractionNode) => `${subtractionNode.lhs} - ${subtractionNode.rhs}`, // optional capture
 };
 ```
 
@@ -881,6 +770,7 @@ item UserRow = BaseRow & structure {
 };
 ```
 
+
 ### Memory allocation
 
 ```matcha
@@ -890,7 +780,7 @@ item User = structure {
     name: string;
 };
 val user = User { name = "Mario", age = 26 }; // <- `user` is only a handle that points to heap allocated data
-val userB = user; <- userB and user now point to the same piece of memory
+val userB = user; // <- userB and user now point to the same piece of memory
 
 val greet = function (user: User) { // <- per default, `user` is always "passed by reference", i.e. the handle to the heap-allocated object is copied but the copy points to the same object in memory
     print(`Hi ${user.name}!`);
@@ -913,7 +803,7 @@ val apply = function (dto: UserUpdateDto) { //
 };
 apply(userUpdateDto); // <- this invocation creates a copy of `userUpdateDto` and passes it to `apply`
 
-val userUpdateDtoReference = &userUpdateDto // Explicit heap allocation, type of `userUpdateDtoReference` is now Handle<UserUpdateDto>
+val userUpdateDtoReference = &userUpdateDto; // Explicit heap allocation, type of `userUpdateDtoReference` is now Handle<UserUpdateDto>
 
 userUpdateDtoReference.newAge = 42; // desugars to (*userUpdateDtoReference).newAge = 42 and mutates heap copy
 
@@ -928,13 +818,13 @@ otherApply(&userUpdateDto); // <- explicitly create handle and pass it to functi
 ### Contracts
 
 ```matcha
-// Contracts are similar to interfaces in other programming langauges.
+// Contracts are similar to interfaces in other programming languages.
 // They specify only the shape of an object but never their value.
 // Inside a contract, self means the contract type, not the implementer. It desugars into the contract name
 item Point = contract {
     x: int;
     y: int;
-    distanceTo: (this: self, other:self) -> float;
+    distanceTo: (this: self, other: self) -> float;
 };
 
 // Instantiating a value that satisfies a contract.
@@ -1025,11 +915,11 @@ val areSymmetric = computeDistanceBetween(v1, v2) == computeDistanceBetween(v2, 
 
 ### Nominality
 
-```
+```matcha
 item Vector = contract {
     x: float;
     y: float;
-    distanceTo: (this: self, other:self) -> float;
+    distanceTo: (this: self, other: self) -> float;
 };
 
 item StrangeVector = structure satisfies Vector {
@@ -1157,8 +1047,7 @@ item Vector = structure satisfies ImmutablePoint {
     };
 
     // Other function not part of the contract
-    // The @ notation allows you to destructure only parts of an argument
-    val asNormalized = function(this @ {x, y}: self): self {
+    val asNormalized = function({ x, y }: self): self {
         // Accessing a callable desugars into a function where receiver is passed as the first argument, hence we can omit the receiver in the surface language to achieve a nice, method-like syntax without having classes
         val length = this.length();
         // Since the return type can be inferred, we can use the shorthand dot notation
@@ -1169,7 +1058,7 @@ item Vector = structure satisfies ImmutablePoint {
         );
     };
 
-    val projectedUp = function ({x}: self) {
+    val projectedUp = function ({ x }: self) {
         return .(
             x,
             0
@@ -1178,7 +1067,7 @@ item Vector = structure satisfies ImmutablePoint {
 };
 
 // Instantiating a structure with a constructor requires you to use it.
-val myVector = Vector(x = 3, y =7);
+val myVector = Vector(x = 3, y = 7);
 ```
 
 ## Wild west of ideas
@@ -1249,6 +1138,61 @@ val log: AuditLog = .{
 - Shapes vs Contracts
 - all non-void values must be used (or explicitly discarded with _ = ...)
 - Godot and scala type match expressions on steroids
+
+### match! (non-exhaustive panic match)
+
+The `match!` expression allows non-exhaustive matches but de-sugars into a match with an "else => panic" branch.
+Providing an else branch with `match!` is disallowed.
+
+```matcha
+val x = 1;
+val c = match! x { // `c` has the type string but this can fail at runtime if x is not 0
+    0 => "zero",
+};
+```
+
+`match!` can also be subjectless:
+
+```matcha
+val x = 1;
+val f = match! { // subjectless match that de-sugars to "else => panic" branch
+    x % 2 == 0 => "even",
+    x % 2 == 1 => "odd",
+};
+// the type of f is inferred as string but the match _can_ fail at runtime, even though it logically shouldn't
+```
+
+### Semi-destructuring with @ notation
+
+The `@` notation allows you to destructure only parts of a parameter while keeping a reference to the whole value.
+
+```matcha
+// Function definition with semi-de-structured parameter
+item length(v@{ y }: Vector2D) = sqrt(v.x**2 + y**2);
+```
+
+```matcha
+// Function definition with shorthand semi-de-structure anonymous structure type and default parameter
+item length(v@{ x: float, y: float = 1 }) = sqrt(v.x**2 + y**2);
+```
+
+```matcha
+// For loops with semi-destructured items
+val p3 = for point@{ x, y } in points {
+    if point.x == 0 and point.y == 0 {
+        leave point;
+    }
+};
+```
+
+```matcha
+// Multi-list for with semi-destructuring
+val e = for ({ a, b }, y@{ c, d }) in (xs, ys) {
+    if b == d {
+        leave y;
+    }
+};
+```
 
 ### Array slice syntax
 
