@@ -111,6 +111,43 @@ var y = 4;
 y = y + 1; // <- allowed
 ```
 
+## Value Usage
+
+In Matcha, all non-unit values must be used or explicitly discarded. This prevents common bugs where you forget to handle a return value or expression result.
+
+```matcha
+item calculateSum(a: int, b: int): int = a + b;
+
+calculateSum(5, 10); // <- compile time error: unused value
+
+// You must either use the value
+val result = calculateSum(5, 10);
+
+// Or explicitly discard it
+_ = calculateSum(5, 10);
+```
+
+This rule applies to all expressions that produce values:
+
+```matcha
+val numbers = [1, 2, 3, 4, 5];
+
+numbers.map(x => x * 2); // <- error: unused array value
+_ = numbers.map(x => x * 2); // <- OK, explicitly discarded
+
+val doubled = numbers.map(x => x * 2); // <- OK, value is used
+```
+
+Functions that don't return a meaningful value should return `unit`:
+
+```matcha
+item printMessage(msg: string): unit = {
+    Standard.console.log(msg);
+};
+
+printMessage("Hello!"); // <- OK, unit values don't need to be used
+```
+
 ## Arrays
 
 ```matcha
