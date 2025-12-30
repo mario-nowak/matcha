@@ -715,233 +715,265 @@ opaque is a laser-focused “distinct primitive with controlled escape hatches�
 ### Conformance
 
 ```matcha
-item Organization = structure {
-    name: string;
-};
-item User = structure {
-    name: string;
-};
-item UserUpdateDto = structure {
-    name: string;
-    wasValidated: boolean;
-};
+item Organization = structure { name: string; };
+item User = structure { name: string; };
+item UserUpdateDto = structure { name: string; wasValidated: boolean; };
 
-item greetUser(user: User) = {
-    ...
-};
-item greetSomethingWithExactlyName(something: { name: string }) = {
-    ...
-};
-item greetSomethingWithExactlyNameAndMore(something: { name: string, other: string }) = {
-    ...
-};
-item greetAnythingWithName(user: { name: string, .. }) { // the `..` express a `shape` that allows anything with the given fields
-    ...
-};
+item greetUser(user: User) = { ... };
 
-val user: User = .{
-    name: "Tom",
-};
-val org: Organization = .{
-    name: "Chili's",
-};
-val userUpdateDto: UserUpdateDto = .{
-    name: "Jerry",
-    wasValidated: true,
-};
-val randomStructureWithName = .{
-    name: "Random",
-};
-val randomStructureWithNameAndMore = .{
-    name: "Random",
-    other: "property",
-};
+// Closed shape: must have exactly these fields (no extras)
+item greetSomethingWithExactlyName(something: { name: string }) = { ... };
 
-// Named structures cannot accidentally conform to other named structures, unless explicitly converted to one another.
-Explained using examples
-greetUser(user); // ✅ accepted because user has the User type
-greetUser(userUpdateDto); // ❌  rejected because `userUpdateDto` is not of type `User`
-greetUser(User { ...userUpdateDto }); // ✅ accepted because `userUpdateDto` has been explicitly used to construct a `User`. `userUpdateDto`'s excess fields are dropped here
-greetUser(org); // ❌ rejected because org is not of type `User`
-val userFromOrg = User { // Explicit conversion boundary, construct a user from an org by spreading its fields
-    ...org, // org must have at least the fields of User
-    // Excess fields are "dropped" here, because a user doesn't have them
-    // This constructs a new user by copying the org fields into the new User object
-};
-greetUser(userFromOrg); // ✅ accepted
-greetUser(User { ...org }); // ✅ accepted because `org` has been explicitly used to construct a `User`. `org`'s excess fields are dropped here
-greetUser(randomStructure); // ❌ rejected because the anonymous type of `randomStructure` is not user
-greetUser(User { ...randomStructure }); // ✅ accepted because `randomStructure` has been explicitly used to construct a `User`. `randomStructure`'s excess fields are dropped here
+// Closed shape: must have exactly these fields (no extras)
+item greetSomethingWithExactlyNameAndOther(something: { name: string, other: string }) = { ... };
 
-greetSomethingWithExactlyName(user); // ✅ accepted because the `User` type exactly matches the anonymous type of greetSomethingWithExactlyName
-greetSomethingWithExactlyName(userUpdateDto); // ❌ rejected because `userUpdateDto` is not of type `{ name: string }`
-greetSomethingWithExactlyName(.{ ...userUpdateDto }); // ✅ accepted because `userUpdateDto` has been explicitly used to construct a anonymous structure. `userUpdateDto`'s excess fields are dropped here
-greetSomethingWithExactlyName(org); // ✅ accepted because the `Organization` type exactly matches the anonymous type of greetSomethingWithExactlyName
-greetSomethingWithExactlyName(randomStructureWithName); // ✅ accepted because `randomStructureWithName`'s type exactly matches the anonymous type of greetSomethingWithExactlyName
-greetSomethingWithExactlyName(randomStructureWithNameAndMore); // ❌ rejected because `randomStructureWithNameAndMore`'s type does not exactly match the anonymous type of greetSomethingWithExactlyName
-greetSomethingWithExactlyName(.{ ...randomStructureWithNameAndMore }); // ✅ accepted because `randomStructureWithNameAndMore` has been explicitly used to construct a anonymous structure. `randomStructureWithNameAndMore`'s excess fields are dropped here
+// Open shape: may have more fields than listed
+item greetAnythingWithName(user: { name: string, .. }) = { ... };
 
-greetAnythingWithName(user); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
-greetAnythingWithName(userUpdateDto); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
-greetAnythingWithName(org); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
-greetAnythingWithName(randomStructureWithName); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
-greetAnythingWithName(randomStructureWithNameAndMore); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
+val user: User = .{ name: "Tom" };
+val org: Organization = .{ name: "Chili's" };
+val userUpdateDto: UserUpdateDto = .{ name: "Jerry", wasValidated: true };
+
+val randomStructureWithName = .{ name: "Random" };
+val randomStructureWithNameAndMore = .{ name: "Random", other: "property" };
+val randomStructureWithNameAndOtherAndMore = .{ name: "Random", other: "property", extra: 123 };
+
+
+// -----------------------------------------------------------------------------
+// Spread projection rules (type-directed spreading)
+// -----------------------------------------------------------------------------
+// 1) `..value` inside an object literal is type-directed:
+//    - If the literal is checked against a known target type (a named structure, or a shape),
+//      then only the fields required by that target are taken from the spread value.
+//      Any extra fields present on the spread value are ignored.
+//    - If there is no contextual target type (no annotation and not passed as an argument),
+//      spreading copies all fields (no projection).
+//
+// 2) Explicit fields must exist on the target type.
+//    - Explicit fields NOT present in the target are always an error.
+//    - Explicit fields present in the target are allowed and override spread-provided values.
+//
+// 3) Missing required fields is always an error.
+//
+// 4) Conflicting fields from multiple spreads is an error,
+//    unless resolved by a later explicit override.
+
+
+// -----------------------------------------------------------------------------
+// Named structure conformance
+// -----------------------------------------------------------------------------
+// Named structures do not accidentally conform to other named structures.
+// Conversions must cross an explicit construction boundary.
+
+greetUser(user);                      // ✅ (user is User)
+greetUser(userUpdateDto);             // ❌ (UserUpdateDto is not User)
+greetUser(org);                       // ❌ (Organization is not User)
+
+greetUser(User { ..userUpdateDto });  // ✅ drops `wasValidated`
+greetUser(User { ..org });            // ✅
+
+greetUser(randomStructureWithName);           // ❌ anonymous record is not User
+greetUser(User { ..randomStructureWithName }); // ✅ explicit construction
+
+
+// -----------------------------------------------------------------------------
+// Closed shape conformance: exactly `{ name }`
+// -----------------------------------------------------------------------------
+// Note: `User`/`Organization` match this today because they currently have only `name`.
+// Adding a new field to those structures would intentionally break these calls.
+
+greetSomethingWithExactlyName(user);  // ✅
+greetSomethingWithExactlyName(org);   // ✅
+
+greetSomethingWithExactlyName(userUpdateDto); // ❌ extra field `wasValidated`
+
+// Argument is checked against `{ name: string }`, so spread-projection applies here:
+greetSomethingWithExactlyName(.{ ..userUpdateDto }); // ✅ drops `wasValidated`
+
+greetSomethingWithExactlyName(randomStructureWithName);        // ✅ exactly { name }
+greetSomethingWithExactlyName(randomStructureWithNameAndMore); // ❌ extra field `other`
+
+greetSomethingWithExactlyName(.{ ..randomStructureWithNameAndMore }); // ✅ drops `other`
+
+greetSomethingWithExactlyName(.{ name = "X", other = "Y" }); // ❌ explicit extra field not in target
+
+
+// -----------------------------------------------------------------------------
+// Closed shape conformance: exactly `{ name, other }`
+// -----------------------------------------------------------------------------
+greetSomethingWithExactlyNameAndOther(randomStructureWithNameAndMore); // ✅ exactly { name, other }
+
+greetSomethingWithExactlyNameAndOther(user);                 // ❌ missing `other`
+greetSomethingWithExactlyNameAndOther(randomStructureWithName); // ❌ missing `other`
+
+greetSomethingWithExactlyNameAndOther(randomStructureWithNameAndOtherAndMore); // ❌ extra field `extra`
+
+// Spread-projection drops fields originating from the spread:
+greetSomethingWithExactlyNameAndOther(.{ ..randomStructureWithNameAndOtherAndMore }); // ✅ drops `extra`
+
+// Spread-projection does not invent missing fields:
+greetSomethingWithExactlyNameAndOther(.{ ..user }); // ❌ missing `other`
+
+// Conflicts and overrides:
+greetSomethingWithExactlyNameAndOther(.{ ..randomStructureWithNameAndMore, other = "override" }); // ✅ override allowed
+
+greetSomethingWithExactlyNameAndOther(
+  .{ ..randomStructureWithNameAndMore, ..randomStructureWithNameAndOtherAndMore }
+); // ❌ conflict on `name` and `other`
+
+
+// -----------------------------------------------------------------------------
+// Open shape conformance: at least `{ name }`
+// -----------------------------------------------------------------------------
+greetAnythingWithName(user);                           // ✅
+greetAnythingWithName(userUpdateDto);                  // ✅
+greetAnythingWithName(org);                            // ✅
+greetAnythingWithName(randomStructureWithName);        // ✅
+greetAnythingWithName(randomStructureWithNameAndMore); // ✅
+greetAnythingWithName(randomStructureWithNameAndOtherAndMore); // ✅
 ```
 
 ### Contracts
 
+Contracts are similar to interfaces in other programming languages.
+
+Using a contract as a type (`HasMagnitude`) performs runtime dispatch; using a generic constraint (`T satisfies HasMagnitude`) performs compile-time dispatch.
+
 ```matcha
-// Contracts are similar to interfaces in other programming languages.
-// They specify only the shape of an object but never their value.
-// Inside a contract, self means the contract type, not the implementer. It desugars into the contract name
-item Point = contract {
-    x: int;
-    y: int;
-    distanceTo: (this: self, other: self) -> float;
+item HasMagnitude = contract {
+    magnitude(this: self): float;
 };
 
+// Structures can satisfy a contract.
+item Vector = structure satisfies HasMagnitude {
+    x: float;
+    y: float;
+    item magnitude({ x, y }: Vector): float = sqrt(x**2 + y**2);
+};
+
+val v1 = Vector { x = 4, y = 3 };
+val magnitude = v1.magnitude();
+```
+
+Contracts can be instantiated as existential types. In this case, the value of the variable becomes a fat pointer with a vtable pointer. At runtime, the vtable pointer is used to call the appropriate function.
+
+```matcha
+item HasMagnitude = contract {
+    magnitude(this: self): float;
+};
+
+item Vector = structure satisfies HasMagnitude {
+    x: float;
+    y: float;
+    item magnitude({ x, y }: Vector): float = sqrt(x**2 + y**2);
+};
+
+item StrangeVector = structure satisfies HasMagnitude {
+    x: float;
+    y: float;
+    item magnitude({ x, y }: StrangeVector): float = sqrt(x**2 + y**2) * 2;
+};
+
+val vector: HasMagnitude = Vector { x = 4, y = 3 };
+val strangeVector: HasMagnitude = StrangeVector { x = 4, y = 3 };
+
+item computeMagnitude(point: HasMagnitude): float = point.magnitude();
+
+computeMagnitude(vector); // ✅
+computeMagnitude(strangeVector); // ✅
+computeMagnitude(Vector { x = 4, y = 3 }); // ✅
+computeMagnitude(StrangeVector { x = 4, y = 3 }); // ✅
+```
+
+Contracts can be instantiated from anonymous structures. In this case, the anonymous structure must satisfy the contract. The value of the variable becomes a fat pointer with a vtable pointer to the anonymous structures anonymous type. The vtable function entry points to a trampoline function that calls the anonymous structures function implementation.
+
+```matcha
 // Instantiating a value that satisfies a contract.
-val somePoint: Point = .{
-    x = 3,
-    y = 7,
-    // Satisfying the contract requires having to provide implementation details for the distanceTo function.
-    // In matcha, functions are just values so specifying an implementation for a function is nothing more
-    // than assigning a function literal to a field of the object.
-    distanceTo = function (this: self, other: self): float {
-        return ((other.x - this.x)**2 + (other.y - this.y)**2)**0.5;
-    };
+val somePoint: HasMagnitude = .{
+    x = 4,
+    y = 3,
+    // Satisfying the contract requires providing an implementation for the magnitude function.
+    magnitude = ({ x, y }: self): float => sqrt(x**2 + y**2),
 };
 
 // Some other value
-val someOtherPoint: Point = .{
+val someOtherPoint: HasMagnitude = .{
     x = -3,
     y = 8,
-    // This "instance of a point" provides a different definition for how it computes distances
-    distanceTo = function (this: self, other: self): float {
-        return ((other.x - this.x)**2 + (other.y - this.y)**2);
-    };
+    magnitude = ({ x, y }: self): float => sqrt(x**2 + y**2) * 2,
 };
 
-// Conceptually, every object has a pointer to it's "own" distanceTo function.
-// In reality:
-// 1) Static dispatch (direct call)
-// If the compiler knows the concrete structure type at compile time and the function is type-level:
-// val c: Vector1 = .{ x = 1, y = 3 };
-// c.distance(...)
-// This can compile to:
-// Vector1.distance(c, ...)
-// That’s a direct call. No vtable needed.
-// 2) Calling a function stored in the object (indirect call, but not “vtable dispatch”)
-// If someOtherDistance is a field that holds a function value:
-// c.someOtherDistance(...)
-// val computeDistanceBetween = function (a: Point, b: Point): float {
-//     return a.distanceTo(b);
-// };
-// This compiles to:
-// load the function pointer from the object
-// call it
-// 3) Contract-typed value (interface pair: data pointer + vtable pointer)
-// If you have:
-// item VectorContract = contract {
-//   val yetAnotherDistance: (this: self, other: self) -> float;
-// };
-// item Z = structure satisfies VectorContract {
-//   item yetAnotherDistance = function(...) { ... } // type-level method
-// };
-// val zc: VectorContract = Z { ... };
-// Then zc at runtime becomes something like:
-// data_ptr → points to the Z instance
-// vtable_ptr → points to “Z as VectorContract” method table
-// Calling:
-// zc.yetAnotherDistance(...)
-// becomes:
-// zc.vtable.yetAnotherDistance(zc.data, ...)
-// that’s vtable dispatch.
-// TODO: Don't know how to handle re-assignment of function value yet.
+val magnitude = somePoint.magnitude();
+val magnitude2 = someOtherPoint.magnitude();
 
-// These distances won't be the same
-val distanceFromSomePointToSomeOtherPoint = computeDistanceBetween(somePoint, someOtherPoint);
-val distanceFromSomeOtherPointToSomePoint = computeDistanceBetween(someOtherPoint, somePoint);
-// This is an example of runtime polymorphism in matcha: depending on the actual point, the right
-// distanceTo function is used.
-
-// Structures can satisfy a contract.
-item EuclideanVector = structure satisfies Point {
-    // `x` and `y` are already specified on the `Point` contract.
-    // The contract's `distanceTo` function receives an immutable default value for a `EuclideanVector`
-    distanceTo = function (this: self, other: self): float {
-        return ((other.x - this.x)**2 + (other.y - this.y)**2)**0.5;
-    };
-};
-
-val v1 = EuclideanVector {
-    x = 4,
-    y = 3,
-};
-val v2 = EuclideanVector {
-    x = 2,
-    y = 8,
-};
-val areSymmetric = computeDistanceBetween(v1, v2) == computeDistanceBetween(v2, v1);
-// `areSymmetric` is true
+// The correct magnitude function is used based on the runtime type of the value.
+computeMagnitude(somePoint); // ✅
+computeMagnitude(someOtherPoint); // ✅
 ```
 
-### Nominality
+### Shapes
+
+Shapes describe an open set of required fields. Unlike `structure` types, shapes are not exact: satisfying a shape means having *at least* the listed fields with compatible types, and extra fields are always allowed. Shapes are useful for describing “data requirements” (especially for object literals and anonymous structures) without forcing everything into a single named structure type. Using a shape does not introduce boxing or a vtable; the value keeps its concrete type, and field access is resolved at compile time.
 
 ```matcha
-item Vector = contract {
-    x: float;
-    y: float;
-    distanceTo: (this: self, other: self) -> float;
+item HasName = shape {
+    name: string;
 };
 
-item StrangeVector = structure satisfies Vector {
-    distanceTo = function (this: self, other: self): float {
-        return (other.x - this.x)**2 + (other.y - this.y)**2;
-    };
-};
+item greet(user: HasName): string =
+    "Hello, " + user.name;
 
-item EuclideanVector = nominal structure satisfies Vector {
-    distanceTo = function (this: self, other: self): float {
-        return ((other.x - this.x)**2 + (other.y - this.y)**2)**2;
-    };
-};
+// Extra fields are fine.
+val u1 = .{ name = "Tom", age = 32 };
+val u2 = .{ name = "Greg", isCool = true };
 
-val computeEuclideanDistanceBetween = function (v1: EuclideanVector, v2: Vector): float {
-    return v1.distanceTo(v2);
-};
-val computeStrangeDistanceBetween = function (v1: StrangeVector, v2: Vector): float {
-    return v1.distanceTo(v2);
-};
+greet(u1); // ✅
+greet(u2); // ✅
+```
 
-val strangeVector = StrangeVector {
-    x = 4,
-    y = 9,
+```matcha
+item HasName = shape { name: string; };
+
+// Generic constraints work the same way: any T with the required fields is accepted,
+// and T remains the concrete type (no boxing).
+item getName<T satisfies HasName>(value: T): string =
+    value.name;
+
+getName(.{ name = "Mario", age = 26 }); // ✅
+```
+
+```matcha
+// Shapes compose nicely with contracts: shapes describe fields, contracts describe behavior.
+item Vector2DFields = shape { x: float; y: float };
+item HasMagnitude = contract { magnitude(this: self): float; };
+
+item Vector2D = structure satisfies Vector2DFields, HasMagnitude {
+    x: float; // required by Vector2DFields
+    y: float; // required by Vector2DFields
+
+    item magnitude({ x, y }: Vector2D): float =
+        sqrt(x**2 + y**2);
 };
-val euclideanVector = EuclideanVector {
-    x = 3,
-    y = -2,
-};
-
-computeStrangeDistanceBetween(strangeVector, euclideanVector); // ✅ this is okay because all structures are satisfied
-computeStrangeDistanceBetween(euclideanVector, strangeVector); // ✅ this is okay because all structures are satisfied
-computeEuclideanDistanceBetween(euclideanVector, strangeVector); // ✅ this is okay because all nominal types and structures are satisfied
-computeEuclideanDistanceBetween(strangeVector, euclideanVector); // ❌ is not okay because `strangeVector` does not satisfy the nominal type
+```
 
 
-item User = nominal structure {
+### Opaque structures
+
+```matcha
+item User = opaque structure {
     // Fields are public by default
     coolAttribute: string;
 
-    // Nominal structures can have private fields
+    // Opaque structures can have private fields
     private secret: string;
 
-    // Both nominal and non-nominal structures can have a constructor but it must be used if defined
+    // Opaque structures can have a constructor but it must be used if defined
     constructor (
         // Constructor property promotion
         public firstName: string,
     ) {
         // The constructor must initialize all uninitialized fields
+        // No "this" is available in the constructor
         secret = firstName;
         coolAttribute = firstName;
     };
@@ -952,6 +984,29 @@ item User = nominal structure {
 val user = User(firstName = "Mario");
 // Because the type of `otherUser` is clear, the shorthand .() notation can be used.
 val otherUser: User = .(firstName = "Norman");
+```
+
+Opaque structures can also be de-structured and used where a shape or contract is expected.
+
+```matcha
+val { firstName } = User("Mario");
+
+val user = User("Mario");
+
+item greet(user: User) = "Hello, " + user.firstName;
+greet(user); // ✅
+greet(.("Mario")); // ✅
+greet(.(firstName = "Mario")); // ✅
+
+item greetShape(user: { firstName: string, .. }) = "Hello, " + user.firstName;
+greetShape(user); // ✅
+greetShape(User("Mario")); // ✅
+greetShape(.(firstName = "Mario")); // ❌ Target is not a `User` opaque structure so .() notation cannot be used to construct a `User` opaque structure.
+
+item greetUserStructure(user: { firstName: string, }) = "Hello, " + user.firstName;
+greetUserStructure(user); // ❌ The public fields of the opaque structure are not exactly the same as the fields of the structure
+greetUserStructure(.(firstName = "Mario")); // ❌ Target is not a `User` opaque structure
+greetUserStructure(.{ ...user }); // ✅ User is de-structurable and used the spread operator can be used to construct a new anonymous structure type that satisfies the structure. Excess public fields are dropped because the target structure is exact.
 ```
 
 ## Modules and other
