@@ -1011,94 +1011,95 @@ greetUserStructure(.{ ...user }); // ✅ User is de-structurable and used the sp
 
 ## Modules and other
 
+Matcha supports a module system that allows you to organize code across multiple files. Exporting an item or value makes them accessible in other files via an import.
+
+Here's how to export items from a file:
+
 ```matcha
 // File: immutable-point.mt
 // exporting an item or value makes them accessible in other files via an import
 export item ImmutablePoint = contract {
-    x: float;
-    y: float;
-
-    length: (this: self) -> float;
-    lengthSquared: (this: self) -> float;
-    lengthCubed: (this: self) -> float;
-    addedTo: (this: self, other: self) -> self;
+    length(this: self): float;
+    lengthSquared(this: self): float;
+    lengthCubed(this: self): float;
+    addedTo(this: self, other: self): self;
 };
+```
 
+You can also export values:
 
+```matcha
 // File math.mt
 // exporting a single value
 export val pi = 3.1415;
+```
 
+Importing from another file creates a module item. Modules can be destructured for easy access:
 
+```matcha
 // main.matcha
 // importing something from a different file creates a module item
 item Math = import "math.mt";
 // modules can be deconstructed for easy access
 item { ImmutablePoint } = import "immutable-point.mt";
+```
 
+Here's a complete example showing how to define a structure that satisfies an imported contract:
+
+```matcha
 // Define a structure that satisfies one of the contracts we imported.
 // A structure can satisfy one or more contracts.
-item Vector = structure satisfies ImmutablePoint {
+item Vector = opaque structure satisfies ImmutablePoint {
     // Some field for educational purposes
     cachedLength: float;
     
     // A structure can have a constructor that handles initialization
     constructor (
-        // Constructor property promotion to satisfy interface
+        // Constructor property promotion
         public x: float,
         public y: float,
     ) {
-        cachedLength = (x**2 + y**2)**0.5; // <- constructor simply does "raw" initialization
+        cachedLength = sqrt(x**2 + y**2); // <- constructor simply does "raw" initialization
         // No access to half-initialized "this" in the constructor
     };
-
-    // satisfy the contract
-    var length = function(this: self): float {
-        return (this.x**2 + this.y**2)**0.5;
-    }
-
-    // Shorthand notation, types can be omitted since they can be inferred from the contract
-    var lengthSquared = (this) => {
-        return this.x**2 + this.y**2;
-    };
-
-    // Since parameter types can be inferred, parameter destructuring makes this nice and short
-    var lengthCubed = ({x, y}) => (x**2 + y**2)**(3/2);
-
-    // satisfy the contract
-    val addedTo = function({x, y}, other) {
-        // A "structured" instantiation of a Vector with the () notation instead of the {} must be used because a constructor has been defined
-        return Vector(
-            x + other.x,
-            y + other.y,
-        );
-    };
+  
+    // Types can be omitted since they can be inferred from the contract
+    item lengthSquared({ x, y }) = x**2 + y**2;
+    item length(this) = sqrt(this.length());
+    item lengthCubed(this) = this.length()**2;
+    // An instantiation of a Vector with the () notation instead of the {} must be used because a constructor has been defined
+    item addedTo({x, y}, other) = Vector(
+        x + other.x,
+        y + other.y,
+    );
 
     // Other function not part of the contract
-    val asNormalized = function({ x, y }: self): self {
-        // Accessing a callable desugars into a function where receiver is passed as the first argument, hence we can omit the receiver in the surface language to achieve a nice, method-like syntax without having classes
+    item asNormalized(this: self): self {
         val length = this.length();
         // Since the return type can be inferred, we can use the shorthand dot notation
         return .(
+            // Positional parameter
             x / length,
             // Named parameter
             y = y / length,
         );
     };
 
-    val projectedUp = function ({ x }: self) {
-        return .(
-            x,
-            0
-        );
-    };
+    item projectedUp({ x }: self): self = .(x, 0);
 };
 
 // Instantiating a structure with a constructor requires you to use it.
 val myVector = Vector(x = 3, y = 7);
 ```
 
-## Wild west of ideas
+## TODO:
+
+- Enums
+- Tagged Unions
+- Error Values
+- Panic Values
+- all non-void values must be used (or explicitly discarded with _ = ...)
+- Godot and scala type match expressions on steroids
 
 ### Generics for compile-time polymorphism
 
@@ -1156,16 +1157,6 @@ val log: AuditLog = .{
 };
 
 ```
-
-## TODO:
-
-- Enums
-- Tagged Unions
-- Error Values
-- Panic Values
-- Shapes vs Contracts
-- all non-void values must be used (or explicitly discarded with _ = ...)
-- Godot and scala type match expressions on steroids
 
 ### match! (non-exhaustive panic match)
 
