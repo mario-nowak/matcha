@@ -556,21 +556,99 @@ x -| f desugars to f(x)
 
 ## Structures
 
-### Basics
+### 1) Structures
+
+**Concrete, constructible, exact record types.**
+
+* Named `structure` is **closed**: it has exactly its declared fields.
+* Named structures do **not** implicitly convert to other named structures (no width subtyping).
+* Literals can be used to construct them if fields match exactly.
 
 ```matcha
-// Matcha does not have classes or inheritance, only structures
+item Vec2D = structure { x: float; y: float; };
+val v = Vec2D { x=1, y=2 };
+```
+
+### 2) Shapes
+
+**Structural “record constraints” for parameters/generics.** Not constructible.
+
+* `{ x: float; y: float }` = exact shape (closed)
+* `{ x: float; y: float; .. }` = open shape (“at least these fields”)
+* Used to accept anonymous records or any value with matching fields.
+
+```matcha
+item Vec2Like = shape { x: float; y: float; };
+item length(v: Vec2Like) = ...
+```
+
+### 3) Contracts
+
+**Behavior requirements (methods), not data layout.**
+
+* Used when you need polymorphism, dispatch, or “must provide these functions”.
+* Should not be satisfied “by accident” unless you explicitly state that.
+* Structures can explicitly satisfy shapes.
+
+```matcha
+item HasLength = contract { length(self): float; };
+item magnitude(v: HasLength) = v.length();
+```
+
+### 4) Opaque primitives
+
+**Newtype over a primitive. Same runtime rep, distinct type.**
+
+* No implicit conversion to/from the underlying primitive.
+* Used for IDs, tokens, units, etc.
+
+```matcha
+item UserId = opaque string;
+val userId = UserId("123abc");
+
+item OrgId = opaque string {
+    item fromUserId(userId: UserId) = OrgId(userId); // UserId is allowed where a string is expected
+};
+```
+
+### 5) Opaque structures
+
+**Concrete structures with identity + invariants.**
+
+* Allow private fields
+* Mandatory constructor
+* No structural coercion from literals or other records unless via the constructor.
+* Used when correctness beats convenience.
+
+```matcha
+item User = opaque structure {
+  id: UserId;
+  // private/internal fields allowed
+};
+```
+
+### One key consistency rule
+
+* **Exact by default.**
+* **Open-ness must be spelled** (`..` in shapes).
+* **Dropping fields must be explicit** (spread construction), never silent.
+
+That’s the whole system: **structures = data**, **shapes = field-based acceptance**, **contracts = behavior**, **opaque = identity/invariants**.
+
+
+### Basics
+
+Matcha does not have classes or inheritance, only structures. Structures are exact, closed sets of key value pairs. They need to be defined as item. Items are compile time entities like function, enums, errors, contracts etc. They must be placed at the top level of a file. Matcha has a semi-structural and semi-nominal. More on that later.
+
+```matcha
 item User = structure {
     name: string;
     age: int;
-    // Member variable with a default argument
-    isCool: boolean = false;
+    isCool: boolean = false; // Member variable with a default argument
 };
-// Items are compile time entities like structures, contracts, errors etc.
-// They must be placed on the top-level of a file.
 
 // Here is an example of instantiating an object that satisfies the `User` structure
-// Matcha has a structural type system that forces you to specify a value for every non-default field of a type.
+// Every non-default field has to be specified.
 val tom = User {
     name = "Tom",
     age = 32,
@@ -583,23 +661,25 @@ var greg: User = .{
     age = 23,
     isCool = true, // <- default value is overriden during instantiation
 };
-// .{} is the object literal syntax.
 
 val name = "Mario";
 val age = 26;
 val mario: User = .{ name, age }; // shorthand notation to prevent having to write name = name etc.
-
 val alex = User { name, age }; // Syntactic sugar for defining an object that satisfies the `User` structure.
 // The type of `alex` is inferred as User.
+```
 
-// Object can also be created with "unstructured" object literals.
-// The type of `unstructuredObject` is inferred
+Object can also be created with "unstructured" object literals.
+
+```matcha
+// The type of `unstructuredObject` is inferred as exactly `{ someKey: string }`
 val unstructuredObject = .{
     someKey = "someValue",
 };
 // objects can be de-structured and the type of someKey can be inferred from unstructuredObject's type
 val { someKey } = unstructuredObject;
 ```
+
 
 ### Mutability
 
@@ -641,16 +721,21 @@ item Organization = structure {
 item User = structure {
     name: string;
 };
-// Satisfying a structure means that UserUpdateDto must have at least the same fields as User and can be used in places where User could be used
-item UserUpdateDto = structure satisfies User {
+item UserUpdateDto = structure {
     name: string;
     wasValidated: boolean;
 };
 
-item greetUser = function (user: User) {
+item greetUser(user: User) = {
     ...
 };
-item greetAnythingWithName = function ({ name: string }) { // <- shorthand notation to prevent having to write { name }: { name: string }
+item greetSomethingWithExactlyName(something: { name: string }) = {
+    ...
+};
+item greetSomethingWithExactlyNameAndMore(something: { name: string, other: string }) = {
+    ...
+};
+item greetAnythingWithName(user: { name: string, .. }) { // the `..` express a `shape` that allows anything with the given fields
     ...
 };
 
@@ -664,157 +749,45 @@ val userUpdateDto: UserUpdateDto = .{
     name: "Jerry",
     wasValidated: true,
 };
-val randomStructure = .{
+val randomStructureWithName = .{
     name: "Random",
 };
+val randomStructureWithNameAndMore = .{
+    name: "Random",
+    other: "property",
+};
 
-// Named structures cannot accidentally conform to other named structures, unless they explicitly satisfy each other.
-// Anonymous structures can conform to named structures and named structures can conform to anonymous ones
+// Named structures cannot accidentally conform to other named structures, unless explicitly converted to one another.
+Explained using examples
 greetUser(user); // ✅ accepted because user has the User type
-greetUser(userUpdateDto); // ✅ accepted because UserUpdateDto satisfies User
-greetUser(org); // ❌ rejected because Organization does not satisfy User
-greetUser(randomStructure); // ✅ accepted because randomStructure has an anonymous type
-greetAnythingWithName(user); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
-greetAnythingWithName(userUpdateDto); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
-greetAnythingWithName(org); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
-greetAnythingWithName(randomStructure); // ✅ accepted because greetAnythingWithName accepts an anonymous structure
-
+greetUser(userUpdateDto); // ❌  rejected because `userUpdateDto` is not of type `User`
+greetUser(User { ...userUpdateDto }); // ✅ accepted because `userUpdateDto` has been explicitly used to construct a `User`. `userUpdateDto`'s excess fields are dropped here
+greetUser(org); // ❌ rejected because org is not of type `User`
 val userFromOrg = User { // Explicit conversion boundary, construct a user from an org by spreading its fields
     ...org, // org must have at least the fields of User
     // Excess fields are "dropped" here, because a user doesn't have them
     // This constructs a new user by copying the org fields into the new User object
 };
 greetUser(userFromOrg); // ✅ accepted
-greetUser(User { ...org }); // ✅ accepted
-greetUser(.{ ...org }); // ✅ also accepted
+greetUser(User { ...org }); // ✅ accepted because `org` has been explicitly used to construct a `User`. `org`'s excess fields are dropped here
+greetUser(randomStructure); // ❌ rejected because the anonymous type of `randomStructure` is not user
+greetUser(User { ...randomStructure }); // ✅ accepted because `randomStructure` has been explicitly used to construct a `User`. `randomStructure`'s excess fields are dropped here
 
-val userAndMore = .{
-    ...user,
-    isAdmin: true,
-};
+greetSomethingWithExactlyName(user); // ✅ accepted because the `User` type exactly matches the anonymous type of greetSomethingWithExactlyName
+greetSomethingWithExactlyName(userUpdateDto); // ❌ rejected because `userUpdateDto` is not of type `{ name: string }`
+greetSomethingWithExactlyName(.{ ...userUpdateDto }); // ✅ accepted because `userUpdateDto` has been explicitly used to construct a anonymous structure. `userUpdateDto`'s excess fields are dropped here
+greetSomethingWithExactlyName(org); // ✅ accepted because the `Organization` type exactly matches the anonymous type of greetSomethingWithExactlyName
+greetSomethingWithExactlyName(randomStructureWithName); // ✅ accepted because `randomStructureWithName`'s type exactly matches the anonymous type of greetSomethingWithExactlyName
+greetSomethingWithExactlyName(randomStructureWithNameAndMore); // ❌ rejected because `randomStructureWithNameAndMore`'s type does not exactly match the anonymous type of greetSomethingWithExactlyName
+greetSomethingWithExactlyName(.{ ...randomStructureWithNameAndMore }); // ✅ accepted because `randomStructureWithNameAndMore` has been explicitly used to construct a anonymous structure. `randomStructureWithNameAndMore`'s excess fields are dropped here
+
+greetAnythingWithName(user); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
+greetAnythingWithName(userUpdateDto); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
+greetAnythingWithName(org); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
+greetAnythingWithName(randomStructureWithName); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
+greetAnythingWithName(randomStructureWithNameAndMore); // ✅ accepted because greetAnythingWithName expects an open shape with at least a `name` field
 ```
 
-### Exactness
-
-```matcha
-// Exact structures reject excess fields
-item ExactlyUser = exact structure {
-    firstName: string;
-    lastName: string;
-};
-
-val userWithEmail = .{
-    firstName = "John",
-    lastName = "Johnson",
-    email = "johnjohnson@example.com",
-};
-
-val exactUser = ExactUser { // ❌ rejected, because the spread provides excess fields
-    ...userWithEmail,
-};
-
-// TODO: Idea
-val exactUser2 = ExactUser { // ✅ accepted, excessProperties are caught in this context
-    ...userWithEmail,
-    ..excessProperties
-};
-
-val exactUser2 = ExactUser { // ✅ accepted, excessProperties are caught in this context
-    ...userWithEmail,
-    .._, // <- don't capture excess fields
-};
-
-```
-
-### Structure Union
-
-```matcha
-item LetNode = structure {
-    identifier: string;
-    expression: string;
-};
-
-item SubtractionNode = structure {
-    lhs: string;
-    rhs: string;
-};
-
-// A node is now either a LetNode or a SubtractionNode
-item Node = LetNode | SubtractionNode;
-// Union structures cannot be instantiated, you cannot type a variable as an Union structure
-val node: Node = .{}; // <- this is not allowed
-
-
-item stringifyNode = (node: Node) => match (node) {
-    LetNode => `${node.identifier} = ${node.expression};`,
-    SubtractionNode(subtractionNode) => `${subtractionNode.lhs} - ${subtractionNode.rhs}`, // optional capture
-};
-```
-
-### Structure Intersections
-
-```matcha
-item IdRow = structure {
-    id: string;
-};
-item BaseRow = structure {
-    createdAt: string;
-    updatedAt: string;
-};
-item VersionRow = structure {
-
-};
-
-item UserRow = BaseRow & structure {
-    
-};
-```
-
-
-### Memory allocation
-
-```matcha
-// For ergonomics, per default, structures are always handles to heap-allocated and GC-managed values
-item User = structure {
-    age: int;
-    name: string;
-};
-val user = User { name = "Mario", age = 26 }; // <- `user` is only a handle that points to heap allocated data
-val userB = user; // <- userB and user now point to the same piece of memory
-
-val greet = function (user: User) { // <- per default, `user` is always "passed by reference", i.e. the handle to the heap-allocated object is copied but the copy points to the same object in memory
-    print(`Hi ${user.name}!`);
-};
-
-// For tighter control, the `inline` modifier can be used on a structure
-// Inline structures are stored inline wherever they appear (stack, inside other structs, inline in arrays)
-// Passing them copies or moves the bytes (compiler can optimize)
-// No hidden heap handles.
-// Nested inline structure fields of inline structures are copied deeply with the parent structure.
-item UserUpdateDto = inline structure {
-    user: User; // <- inline structures can contain handles to heap objects, the handle is also copied
-    // “Heap-handle fields inside inline structs are copied as handles (shallow), not deep-cloned.”
-    newAge: int;
-};
-
-val userUpdateDto = UserUpdateDto { user, newAge = 27};
-val apply = function (dto: UserUpdateDto) { //
-    // ...
-};
-apply(userUpdateDto); // <- this invocation creates a copy of `userUpdateDto` and passes it to `apply`
-
-val userUpdateDtoReference = &userUpdateDto; // Explicit heap allocation, type of `userUpdateDtoReference` is now Handle<UserUpdateDto>
-
-userUpdateDtoReference.newAge = 42; // desugars to (*userUpdateDtoReference).newAge = 42 and mutates heap copy
-
-val otherApply = function (dtoReference: Handle<UserUpdateDto>) {
-    // ...
-};
-otherApply(userUpdateDtoReference); // <- passes only handle to `userUpdateDto`
-otherApply(&userUpdateDto); // <- explicitly create handle and pass it to function
-// structure types are already handles. No Handle<structure> allowed.
-// Handle<T> only exists for inline types (boxing).u
-```
 ### Contracts
 
 ```matcha
@@ -1225,3 +1198,94 @@ Rule of thumb:
 ..k.. = explicit signed stride
 
 That gives you nice syntax and avoids mysterious empty slices when someone goes 10..:2..0.
+
+
+### Structure Union
+
+```matcha
+item LetNode = structure {
+    identifier: string;
+    expression: string;
+};
+
+item SubtractionNode = structure {
+    lhs: string;
+    rhs: string;
+};
+
+// A node is now either a LetNode or a SubtractionNode
+item Node = LetNode | SubtractionNode;
+// Union structures cannot be instantiated, you cannot type a variable as an Union structure
+val node: Node = .{}; // <- this is not allowed
+
+
+item stringifyNode = (node: Node) => match (node) {
+    LetNode => `${node.identifier} = ${node.expression};`,
+    SubtractionNode(subtractionNode) => `${subtractionNode.lhs} - ${subtractionNode.rhs}`, // optional capture
+};
+```
+
+### Structure Intersections
+
+```matcha
+item IdRow = structure {
+    id: string;
+};
+item BaseRow = structure {
+    createdAt: string;
+    updatedAt: string;
+};
+item VersionRow = structure {
+
+};
+
+item UserRow = BaseRow & structure {
+    
+};
+```
+
+
+### Memory allocation
+
+```matcha
+// For ergonomics, per default, structures are always handles to heap-allocated and GC-managed values
+item User = structure {
+    age: int;
+    name: string;
+};
+val user = User { name = "Mario", age = 26 }; // <- `user` is only a handle that points to heap allocated data
+val userB = user; // <- userB and user now point to the same piece of memory
+
+val greet = function (user: User) { // <- per default, `user` is always "passed by reference", i.e. the handle to the heap-allocated object is copied but the copy points to the same object in memory
+    print(`Hi ${user.name}!`);
+};
+
+// For tighter control, the `inline` modifier can be used on a structure
+// Inline structures are stored inline wherever they appear (stack, inside other structs, inline in arrays)
+// Passing them copies or moves the bytes (compiler can optimize)
+// No hidden heap handles.
+// Nested inline structure fields of inline structures are copied deeply with the parent structure.
+item UserUpdateDto = inline structure {
+    user: User; // <- inline structures can contain handles to heap objects, the handle is also copied
+    // “Heap-handle fields inside inline structs are copied as handles (shallow), not deep-cloned.”
+    newAge: int;
+};
+
+val userUpdateDto = UserUpdateDto { user, newAge = 27};
+val apply = function (dto: UserUpdateDto) { //
+    // ...
+};
+apply(userUpdateDto); // <- this invocation creates a copy of `userUpdateDto` and passes it to `apply`
+
+val userUpdateDtoReference = &userUpdateDto; // Explicit heap allocation, type of `userUpdateDtoReference` is now Handle<UserUpdateDto>
+
+userUpdateDtoReference.newAge = 42; // desugars to (*userUpdateDtoReference).newAge = 42 and mutates heap copy
+
+val otherApply = function (dtoReference: Handle<UserUpdateDto>) {
+    // ...
+};
+otherApply(userUpdateDtoReference); // <- passes only handle to `userUpdateDto`
+otherApply(&userUpdateDto); // <- explicitly create handle and pass it to function
+// structure types are already handles. No Handle<structure> allowed.
+// Handle<T> only exists for inline types (boxing).u
+```
