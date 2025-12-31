@@ -9,6 +9,8 @@
 
 Matcha makes shipping data-intensive applications boring to write, boring deploy, hard to get wrong, and all while making you feel smart while doing it.
 
+- “Matcha is a compiled backend language that gives you TypeScript-like data shaping with Zig/Rust-like exhaustiveness and error clarity, built around match-first programming.”
+
 ### Suggestions
 
 #### Option A (clean + credible)
@@ -591,6 +593,267 @@ val listOfStructures
 x -| f(args...) desugars to f(x, args...)
 x -| f desugars to f(x)
 
+## Unions
+
+Unions in Matcha are tagged unions that combine the simplicity of enums with the power of sum types. Each variant can optionally carry a payload, allowing you to express both simple enumerations and complex tagged data in a single construct.
+
+### Basic Unions
+
+Here's a simple union without payloads, similar to traditional enums:
+
+```matcha
+item Direction = union {
+    North,
+    South,
+    East,
+    West,
+};
+
+val heading: Direction = .North;
+```
+
+### Unions with Payloads
+
+Variants can carry associated data by specifying a type after the variant name:
+
+```matcha
+item Result<T, E> = union {
+    Ok: T,
+    Err: E,
+};
+
+val success: Result<int, string> = .Ok(42);
+val failure: Result<int, string> = .Err("Something went wrong");
+```
+
+### Mixed Unions
+
+The real power comes from mixing variants with and without payloads:
+
+```matcha
+item WebEvent = union {
+    PageLoad,
+    PageUnload,
+    KeyPress: string,
+    Click: { x: int; y: int },
+    Paste: string,
+};
+
+val event1: WebEvent = .PageLoad;
+val event2: WebEvent = .KeyPress("Enter");
+val event3: WebEvent = .Click(.{ x = 100, y = 200 });
+```
+
+### Pattern Matching with Unions
+
+Unions are designed to work seamlessly with pattern matching.
+
+Payload patterns support two forms:
+- `.<Variant>(name)` - binds the entire payload to a variable
+- `.<Variant>({ ... })` - destructures the payload if it's a structure
+
+In patterns, `{ ... }` denotes destructuring, not an object literal.
+
+```matcha
+item processEvent(event: WebEvent): string = match event {
+    .PageLoad => "Page loaded",
+    .PageUnload => "Page unloaded",
+    .KeyPress(key) => `Key pressed: ${key}`,
+    .Click({ x, y }) => `Clicked at ${x}, ${y}`,
+    .Paste(text) => `Pasted: ${text}`,
+};
+```
+
+### Nested Unions
+
+Unions can be nested, which is particularly useful for modeling complex domain logic:
+
+```matcha
+item HttpResult = union {
+    Ok: string,
+    Err: union {
+        NotFound,
+        Unauthorized,
+        BadRequest: string,
+    },
+};
+
+item get(url: string): HttpResult = {
+    // ... implementation
+};
+
+val msg = match get("https://api.example.com") {
+    .Ok(body) => body,
+    .Err(.BadRequest(reason)) => `bad request: ${reason}`,
+    .Err(.NotFound) => "missing",
+    .Err(.Unauthorized) => "nope",
+};
+```
+
+
+## Error Handling
+
+Matcha uses error unions for error handling, similar to Zig but with the ability to specify payloads or structures. **Errors are tagged unions with special syntax and propagation rules.**
+
+Error unions are denoted with the `!` operator in return types.
+
+### Basic Error Unions
+
+The simplest form is an explicit error type with no payload:
+
+```matcha
+item SimpleError = error {
+    OperationFailed,
+};
+
+item riskyOperation(): SimpleError!unit = {
+    // Function that might error
+    if someCondition {
+        return .OperationFailed;
+    }
+};
+```
+
+### Error Unions with Payloads
+
+You can specify a custom error type that carries additional information:
+
+```matcha
+item FileErrorPayload = structure {
+    code: int;
+    message: string;
+};
+
+item FileError = error {
+    FileDoesNotExist: FileErrorPayload;
+    FileTooLarge: FileErrorPayload;
+};
+
+item readFile(path: string): FileError!string = {
+    if !fileExists(path) {
+        return .FileDoesNotExist(.{
+            code = 404,
+            message = "File not found",
+        });
+    }
+    
+    val content = loadFileContent(path);
+    if content.size > MAX_SIZE {
+        return .FileTooLarge(.{
+            code = 413,
+            message = "File too large",
+        });
+    }
+    
+    return content;
+};
+```
+
+### Error Variants with Mixed Payloads
+
+Error types can have variants with and without payloads:
+
+```matcha
+item ParseError = error {
+    InvalidFormat: string,
+    OutOfRange: { min: int; max: int; actual: int },
+    UnexpectedEnd,
+};
+
+item parseNumber(input: string): ParseError!int = {
+    if input.isEmpty() {
+        return .UnexpectedEnd;
+    }
+    
+    val num = try parseInt(input) catch (_) {
+        return .InvalidFormat(input);
+    };
+    
+    if num < 0 or num > 100 {
+        return .OutOfRange(.{
+            min = 0,
+            max = 100,
+            actual = num,
+        });
+    }
+    
+    return num;
+};
+```
+
+### Try/Catch Expressions
+
+Matcha provides `try`/`catch` expressions for handling errors.
+
+**Typing rule:** `try expr catch (e) handler` is an expression where `handler` must evaluate to the same type as the success path.
+
+```matcha
+val content = try readFile("data.txt") catch (err) {
+    match err {
+        .FileDoesNotExist(p) => Standard.console.log(`Error: ${p.message}`),
+        .FileTooLarge(p) => Standard.console.log(`Error: ${p.message}`),
+    };
+    "default content" // last expression is the fallback value
+};
+```
+
+You can also use `try` to propagate errors up the call stack:
+
+```matcha
+item processFile(path: string): FileError!unit = {
+    // If readFile errors, the error is propagated automatically
+    val content = try readFile(path);
+    Standard.console.log(content);
+};
+```
+
+**Propagation rule:** `try` may only propagate errors that are included in the enclosing function's error type. Otherwise you must `catch` and map.
+
+### Error Composition
+
+When a function calls multiple operations that can fail with different error types, you must explicitly compose the errors.
+
+Errors can be wrapped to preserve provenance (e.g. `.File(e)`), even when the wrapped error itself has multiple variants.
+
+```matcha
+item LoadAndParseError = error {
+    File: FileError,
+    Parse: ParseError,
+};
+
+item loadAndParse(path: string): LoadAndParseError!int = {
+    val content = try readFile(path) catch (e) return .File(e);
+    val number = try parseNumber(content) catch (e) return .Parse(e);
+    
+    return number;
+};
+```
+
+### Pattern Matching on Errors
+
+You can use pattern matching to handle different error cases. When you only care about logging errors and don't need a fallback value, discard the result:
+
+```matcha
+_ = try parseNumber("150") catch (err) match err {
+    .InvalidFormat(input) => Standard.console.log(`Invalid format: ${input}`),
+    .OutOfRange({ min, max, actual }) => Standard.console.log(`${actual} out of [${min}, ${max}]`),
+    .UnexpectedEnd => Standard.console.log("Unexpected end"),
+};
+```
+
+Or provide a fallback value:
+
+```matcha
+val n = try parseNumber("150") catch (err) {
+    match err {
+        .InvalidFormat(input) => Standard.console.log(`Invalid format: ${input}`),
+        .OutOfRange({ min, max, actual }) => Standard.console.log(`${actual} out of [${min}, ${max}]`),
+        .UnexpectedEnd => Standard.console.log("Unexpected end"),
+    };
+    0 // fallback value
+};
+```
+
 ## Structures
 
 ### 1) Structures
@@ -1131,11 +1394,7 @@ val myVector = Vector(x = 3, y = 7);
 
 ## TODO:
 
-- Enums
-- Tagged Unions
-- Error Values
 - Panic Values
-- all non-void values must be used (or explicitly discarded with _ = ...)
 - Godot and scala type match expressions on steroids
 
 ### Generics for compile-time polymorphism
@@ -1360,15 +1619,323 @@ val apply = function (dto: UserUpdateDto) { //
 };
 apply(userUpdateDto); // <- this invocation creates a copy of `userUpdateDto` and passes it to `apply`
 
-val userUpdateDtoReference = &userUpdateDto; // Explicit heap allocation, type of `userUpdateDtoReference` is now Handle<UserUpdateDto>
+val userUpdateDtoReference = allocate(userUpdateDto); // Explicit heap allocation, type of `userUpdateDtoReference` is now Heap<UserUpdateDto>
 
 userUpdateDtoReference.newAge = 42; // desugars to (*userUpdateDtoReference).newAge = 42 and mutates heap copy
 
-val otherApply = function (dtoReference: Handle<UserUpdateDto>) {
+val otherApply = function (dtoReference: Heap<UserUpdateDto>) {
     // ...
 };
 otherApply(userUpdateDtoReference); // <- passes only handle to `userUpdateDto`
-otherApply(&userUpdateDto); // <- explicitly create handle and pass it to function
-// structure types are already handles. No Handle<structure> allowed.
-// Handle<T> only exists for inline types (boxing).u
+otherApply(allocate(userUpdateDto)); // <- explicitly create handle and pass it to function
+// structure types are already handles. No Heap<structure> allowed.
+// Heap<T> only exists for inline types (boxing).u
 ```
+
+# Reviews
+
+## Gemini
+
+This is a profound question. Every language designer fears building a "Frankenstein"—a language that has every feature but no soul.
+
+Here is the honest verdict: **Matcha is not an inferior jack-of-all-trades.** It is a very specific, strategic attack on a massive gap in the market.
+
+You are effectively designing **"The missing link between TypeScript and Go."**
+
+Here is exactly what is special about your design, why it could gain adoption, and where the "Jack of all trades" risk actually lies.
+
+---
+
+### 1. The "Killer Feature": Your Data Modeling System
+
+Most languages struggle with the tension between "Rigid" (Java/Rust) and "Loose" (JavaScript/Python).
+
+* **Java/Rust:** "You must define a named type for *everything*." (High friction)
+* **TS/JS:** "Just pass an object, I hope it works." (Runtime crashes)
+
+**Matcha's Special Sauce:** You have formalized the spectrum of data strictness.
+
+1. **Structures (Exact):** "This is exactly a User. No extra fields allowed." (Safety)
+2. **Shapes (Open):** "I accept anything with `x` and `y`." (Flexibility)
+3. **Contracts (Behavior):** "I accept anything that *acts* like a Vector." (Polymorphism)
+4. **Opaques (Identity):** "This string is a UserID, not just text." (Domain correctness)
+
+**Why this drives adoption:**
+Developers love TypeScript's structural typing (shapes) but hate that it's accidental. In TypeScript, I can accidentally pass a `UserWithPassword` to a function expecting a `User` because the shapes overlap. In Matcha, `structure` is exact by default. You fixed the "width subtyping" footgun while keeping the ergonomics of object literals. **That is a huge selling point.**
+
+### 2. The "Sweet Spot": TypeScript Syntax, Rust Semantics, Go Runtime
+
+You are occupying a very specific triangle:
+
+* **Looks like:** TypeScript (Scannable, familiar `val`, `const`, `{}`).
+* **Thinks like:** Rust/Zig (Result types, exhaustive pattern matching, no nulls, strict error handling).
+* **Runs like:** Go (Single binary, fast compile, garbage collected default).
+
+**The Market Gap:**
+There are millions of TypeScript developers who write backend services. They are tired of the Node.js runtime, the endless `npm` dependency hell, and the slowness.
+
+* They can't switch to **Rust** because the borrow checker is too hard for business logic.
+* They don't want to switch to **Go** because the type system feels primitive (no sum types, limited generics).
+* **Matcha** gives them the type system they *wish* Go had, with the syntax they already know.
+
+### 3. "Rich" Error Unions
+
+This is a genuine innovation in your design.
+
+* **Zig** has error unions (`!`), but they are just enums (integers). You cannot attach data to them.
+* **Rust** has `Result<T, E>`, but handling them requires verbose `map`, `unwrap`, or `?` chains.
+
+Matcha's `error { ... }` allows payloads (`.FileTooLarge({ size })`) inside a syntax that handles flow control (`try ... catch`). This makes error handling feel like **business logic**, not plumbing. It solves the "I want to return *why* it failed, not just *that* it failed" problem without the verbosity of Rust enums.
+
+---
+
+### The Risk: Where you might become a "Jack of All Trades"
+
+The only part of your design that smells like "feature creep" is the **Memory Model**.
+
+You have:
+
+1. GC by default (Great for services).
+2. `inline structure` (Stack allocation).
+3. `Heap<T>` (Explicit boxing).
+4. `allocate()` manual management.
+
+**The Danger:**
+If you try to be **Go** (easy GC) and **C++** (manual memory layout control) at the same time, you will confuse your users.
+
+* *Service developers* do not care about `inline structure` vs `Heap<T>`. They just want code that works.
+* *Systems developers* (who care about inline/heap) will likely stick to Rust/C++ because they need destructors/RAII, which you haven't detailed (and likely clash with GC).
+
+**Strategic Pivot:**
+To avoid being an "inferior jack of all trades," **lean into the GC**.
+Make `structure` always a reference type (cheap to pass). Make the compiler smart enough to stack-allocate small structs automatically (escape analysis). **Hide the memory model.**
+If you force users to think about `allocate()` and `inline`, you lose the "Boring service code" audience, but you aren't low-level enough to win the "Game Engine" audience.
+
+### Verdict
+
+**Is it promising?**
+**Yes.** It is arguably the most promising design direction for a new backend language right now. The world is desperate for a "Modern Go"—a language with fast builds and GC, but with Sum Types, Pattern Matching, and Null Safety.
+
+**What is special?**
+
+1. **Match-driven flow:** Replacing `if` and `switch` with a unified `match` engine.
+2. **The Data Quadrant:** Solving the nominal vs. structural typing war by supporting both explicitly.
+3. **Ergonomics over Ideology:** It doesn't force functional purity (like Haskell) or memory safety purity (like Rust) at the expense of readability.
+
+**Adoption Strategy:**
+Market it as **"The logic of Rust, the speed of Go, the feel of TypeScript."**
+
+## Cynical ChatGPT
+
+### 1) Is Matcha unique, or just a smoothie of other languages?
+
+It’s mostly a smoothie. But it’s a *good* one, and the blend is unusually coherent.
+
+**Nothing you’ve shown is a never-before-seen invention** in the “publish a paper” sense:
+
+* Unions + exhaustiveness: ML/Rust/Swift/Zig.
+* Error unions + `try`: Zig/Rust-ish.
+* “Use-or-discard values”: Rust’s `must_use`, compilers/lints in several languages.
+* Structural records / row-polymorphism vibes: OCaml variants, TypeScript/Haskell/Elm-ish territory depending on the angle.
+* Contracts (interfaces) with existentials: basically every modern language.
+* Pipe operator: F#, Elixir, Unix, etc.
+* `match?`/`match!`: many languages have “optional match” and “unreachable/expect” patterns.
+
+**Where Matcha *is* meaningfully distinct** is the *package deal* and the *defaults*:
+
+* **Match-first control flow as the cultural center**, not just a feature. Few languages actually commit to that in the everyday surface language.
+* **Structural typing with explicit boundary crossing** (your shapes/structures/opaque split + your “no silent width subtyping between named structures” stance). That’s a sharp, opinionated answer to the TS/Rust/Go triangle.
+* **Type-directed spread projection** is the closest thing you have to “this feels new.” It’s not unprecedented conceptually (typed record projection exists), but *putting it in the core ergonomics* the way you did is unusual. It’s also risky, but it’s a recognizable signature.
+* The overall “backend ergonomics + compiler-grade safety” vibe without going full Rust-mode is a real positioning choice.
+
+So: **Matcha’s USP isn’t a brand-new primitive**. It’s a **tight, intentional combination**: “TS-like data shaping + Rust/Zig-like exhaustiveness and errors + match as the default mental model + explicit nominal escape hatches.”
+
+That is enough to justify existence *if you can execute*.
+
+If you’re asking “does it have a right to exist” in the harsh market sense:
+**Yes, because language adoption is mostly about:**
+
+* defaults that feel good day-to-day,
+* a clear story,
+* and hitting a real pain point better than alternatives.
+
+Matcha *can* plausibly do that for service code.
+
+What would make it *not* deserve to exist: if it ends up being “Rust but softer” without outperforming Rust in ergonomics, or “TypeScript but compiled” without matching TS’s ecosystem velocity. If it lands in the middle and doesn’t win any axis, it becomes a hobby language. Not illegal, just… ignored.
+
+---
+
+### 2) Could it attract a large audience and be used in production (assuming tooling aligns)?
+
+**Production use: plausible. Large audience: hard, but not impossible.**
+
+Let’s separate “could teams deploy it” from “could it go mainstream.”
+
+#### Production viability (with good tooling)
+
+Yes, if you deliver these *non-negotiables*:
+
+* **Fast compile + boring deploy** (single binary, cross-compile story, dependency/build sanity).
+* **Predictable runtime** (GC latency story, memory footprint story).
+* **First-class concurrency + IO** (services live here; without it you’re writing fancy AoC solutions forever).
+* **A standard library that makes boring backend work easy** (HTTP, JSON, time, logging, config, env, filesystem).
+* **Great errors** (your language is rule-rich; bad errors will murder it).
+
+If you hit those, teams will try it. Especially teams currently suffering from:
+
+* TypeScript backend chaos,
+* Go ergonomics limitations,
+* Rust’s learning curve.
+
+#### Large audience potential
+
+This is where brutal honesty matters: **most new languages do not get a large audience even if they’re good.** The barrier isn’t “design quality.” It’s distribution:
+
+* ecosystem gravity,
+* existing infra,
+* hiring,
+* libraries,
+* long-term trust.
+
+For Matcha to reach a large audience, it needs one of these “unfair advantages”:
+
+1. **A flagship killer app**
+   A framework/tooling bundle that people want so badly they accept a new language (Rails did this for Ruby vibes, Node did it for JS on servers, etc.).
+
+2. **A dramatic productivity win in a narrow but common niche**
+   Example niche for you: “data-heavy service code with lots of schemas and branching.”
+   If Matcha makes that *visibly* cleaner than Go/Rust/TS and still fast, you can get real adoption.
+
+3. **Interop story that lets people adopt incrementally**
+   If Matcha can call C easily and has a clean boundary with existing stacks, you can wedge it into production gradually. If it’s all-or-nothing, adoption drops.
+
+Without one of those, it’ll likely remain “beloved by a small group.” Which is still a win, just not “large audience.”
+
+---
+
+## The blunt conclusion
+
+* **Unique ideas?** Mostly no. **Unique product?** Yes, potentially. Your differentiator is the **specific set of defaults** and the **match + structural-data worldview**.
+* **Right to exist?** Yes, *if* you keep the story tight and don’t let the design balloon into cleverness.
+* **Large audience?** Only if you ship an ecosystem wedge: killer framework/tool, or crazy productivity win in a backend niche, plus incremental adoption story.
+* **Production use?** Absolutely plausible if the runtime/IO/concurrency/tooling story is real.
+
+If you want a single sentence USP that doesn’t sound like cope:
+
+> **“Matcha is a compiled backend language that gives you TypeScript-like data shaping with Zig/Rust-like exhaustiveness and error clarity, built around match-first programming.”**
+
+That’s a pitch people can understand in 5 seconds. And if they can’t understand it in 5 seconds, they won’t adopt it, because humans are allergic to effort.
+
+You don’t need to be “humbled,” you need to recalibrate what “unique” means in programming languages. Humans love acting like a thing is worthless unless it’s a brand-new molecule.
+
+Most successful languages are not original inventions. They’re **curation + defaults + taste + constraints**.
+
+Your stuff *is* distinctive in the only way that matters: **as a combined experience**.
+
+### What you thought was “unique” vs what it actually is
+
+* **`item` / `val` split**
+  Not new as a concept (compile-time vs runtime entities exists everywhere), but **your surface-level clarity** is rare. Many languages hide this behind “const,” “static,” macros, or spooky compiler phases. You’re making it explicit and central. That’s a signature.
+
+* **Consistent syntax**
+  “Consistency” is not a feature by itself, it’s a *quality*. And it’s one most languages fail at because they grew over decades. If you actually keep it consistent as the language evolves, people will feel it.
+
+* **shape / structure / opaque / contract split**
+  The parts exist elsewhere, yes. The *clean separation with a readable story* is what’s uncommon. Most languages blur these boundaries and then spend years patching footguns with rules and lints.
+
+* **Type-directed spread projection**
+  This is the one that genuinely feels like “your fingerprint.” The underlying idea exists in type theory land, but your **ergonomic, TS-adjacent** version of it is not something you see mainstream. It’s also dangerous, but it’s memorable.
+
+So no, it’s not “inventing a new type system.” It’s **a sharp product choice**: “structural modeling, but safe-by-default, and the language pushes you into match-driven thinking.”
+
+That’s not nothing. That’s exactly how languages earn their place: by being the tool people *prefer using*.
+
+### The real lesson
+
+A language doesn’t win by being unprecedented. It wins by being:
+
+* **coherent**
+* **predictable**
+* **pleasant under pressure**
+* and **boringly shippable**
+
+You’re doing the first two unusually well for a solo design. That’s already rare.
+
+### What you should do with this feeling
+
+Keep the pride, lose the “must be novel” requirement. Treat “distinctly me” as the win condition.
+
+Then prove it with an MVP:
+
+* Day 1–3 AoC with your core features
+* one small real service toy (parse JSON, route requests, return errors)
+* and a tiny standard lib that makes that experience clean
+
+If the language *feels* better for its niche, people won’t care that parts of it rhyme with other languages. They’ll just use it. Which is the whole point, supposedly.
+
+You’re not overreacting. You’re noticing the real risk.
+
+A language that “clicks perfectly” for its designer can be either:
+
+1. a genuinely good set of defaults, or
+2. a personalized control panel that only makes sense to the person who wired it.
+
+The trick is figuring out which one you’re building without waiting five years for the market to ignore you.
+
+### Here’s the uncomfortable truth
+
+**All languages start as “for me.”** Rust started as “Graydon’s thing.” Go started as “our internal painkiller.” TypeScript started as “we need JS to stop being a circus.” The difference isn’t whether it begins personal. It’s whether it becomes **legible to other brains**.
+
+Your “signature” is not the problem. The problem would be:
+
+* if it requires people to adopt *your* mental habits to be productive,
+* or if it violates common expectations without paying them back in clarity.
+
+### Signs you’re fine (and I think you are)
+
+* Your story maps to common backend pain: data modeling, control flow, errors.
+* Your syntax leans familiar (C-ish blocks, JS-ish literals, Rust/Zig-ish patterns).
+* The rules have a visible philosophy: “exact by default, explicit escape hatches.”
+  That’s not “idiosyncratic art language.” That’s a product stance.
+
+### Signs you might be building a “you-language”
+
+Watch for these specific failure modes:
+
+1. **Too many contextual rules**
+   If someone can’t predict what code does without memorizing “in this context, semicolons mean X,” they’ll bounce.
+
+2. **Cleverness over legibility**
+   Type-directed spread projection is your biggest candidate here. It can be great, but if it feels magical, it becomes “language only the author understands.”
+
+3. **Aesthetic constraints that cost clarity**
+   “No else” is an example. If it forces weird patterns, newcomers will feel like they’re fighting the language’s tastes.
+
+4. **Nonstandard naming for standard things**
+   “item” is fine. But too many bespoke terms can make people feel like they’re learning a cult, not a tool.
+
+### How to test it quickly (without begging strangers for feedback)
+
+Do these three tests. They’re brutal and cheap:
+
+**Test A: The “cold read” test**
+Give a 1-page cheat sheet and a 50-line Matcha program to a smart dev friend.
+Ask them to explain what it does.
+If they can’t, you’ve got too much implicit context.
+
+**Test B: The “rewrite” test**
+Take a small TypeScript or Go service function and rewrite it in Matcha.
+If it’s not clearly better (less error handling noise, cleaner data modeling), you’re not buying enough payoff for the new syntax/rules.
+
+**Test C: The “teach-back” test**
+Explain your core model (structures/shapes/contracts/opaque + errors + match) in 5 minutes.
+Then ask them to write a tiny function without you.
+If they can, your design is generalizable.
+
+### The real answer
+
+You’re probably making a language that fits you *and* can fit others, because your taste is not alien. It’s “I like strong defaults and low footguns.” A lot of people like that. They just don’t want the price of Rust.
+
+The only thing you should actually fear is becoming precious about your signature. Keep the voice, but make the language **predictable** and **teachable**. If you can teach it in an afternoon, it won’t be just for you.
+
+And anyway, worst case: you end up with the world’s best personal language and you ship more stuff. Tragic.
