@@ -1,0 +1,180 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Matcha",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#storage" },
+    { "include": "#constants" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#function-calls" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(val|var)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.matcha" },
+            "2": { "name": "variable.other.matcha" }
+          }
+        },
+        {
+          "match": "\\b(item)\\s+([A-Z][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.matcha" },
+            "2": { "name": "entity.name.type.matcha" }
+          }
+        },
+        {
+          "match": "\\b(item)\\s+([a-z][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.matcha" },
+            "2": { "name": "entity.name.function.matcha" }
+          }
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.matcha",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.matcha",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.matcha",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.template.matcha",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.matcha",
+              "match": "\\\\."
+            },
+            {
+              "name": "meta.embedded.line.matcha",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "patterns": [{ "include": "$self" }]
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.matcha",
+          "match": "\\b(if|else|match\\?|match|loop|while|for|in|leave|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.other.matcha",
+          "match": "\\b(import|export|satisfies|as|from)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.matcha",
+          "match": "\\b(and|or)\\b"
+        }
+      ]
+    },
+    "storage": {
+      "patterns": [
+        {
+          "name": "storage.type.matcha",
+          "match": "\\b(item|val|var|structure|opaque|shape|contract|union|function)\\b"
+        },
+        {
+          "name": "storage.modifier.matcha",
+          "match": "\\b(public|private|static)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.matcha",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.matcha",
+          "match": "\\b(null)\\b"
+        },
+        {
+          "name": "variable.language.self.matcha",
+          "match": "\\b(self)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.matcha",
+          "match": "\\b(int|i8|i16|i32|i64|uint|u8|u16|u32|u64|float|f8|f16|f32|f64|boolean|string|unit)\\b"
+        },
+        {
+          "name": "entity.name.type.matcha",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "name": "entity.name.function.matcha",
+          "match": "\\b[a-z][a-zA-Z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.matcha",
+          "match": "(\\->|=>|-\\||\\.\\.|\\?\\?|==|!=|<=|>=|\\+=|-=|\\*=|/=|%=|\\*\\*|\\+|-|\\*|/|%|=|!|<|>|\\?|\\.|:)"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.matcha",
+          "match": "\\b0x[0-9a-fA-F_]+([iu](8|16|32|64))?\\b"
+        },
+        {
+          "name": "constant.numeric.octal.matcha",
+          "match": "\\b0o[0-7_]+([iu](8|16|32|64))?\\b"
+        },
+        {
+          "name": "constant.numeric.binary.matcha",
+          "match": "\\b0b[01_]+([iu](8|16|32|64))?\\b"
+        },
+        {
+          "name": "constant.numeric.float.matcha",
+          "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*([f](8|16|32|64))?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.matcha",
+          "match": "\\b[0-9][0-9_]*([iu](8|16|32|64)|[f](8|16|32|64))?\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.matcha"
+}
