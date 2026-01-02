@@ -1,0 +1,36 @@
+{
+  "name": "matcha-lang",
+  "displayName": "Matcha Language Support",
+  "description": "Syntax highlighting and language support for Matcha",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "matcha",
+        "aliases": [
+          "Matcha",
+          "matcha",
+          "mt"
+        ],
+        "extensions": [
+          ".mt",
+          ".matcha"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "matcha",
+        "scopeName": "source.matcha",
+        "path": "./syntaxes/matcha.tmLanguage.json"
+      }
+    ]
+  }
+}
