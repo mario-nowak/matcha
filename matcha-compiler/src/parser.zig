@@ -1,84 +1,8 @@
 const std = @import("std");
 const Lexer = @import("lexer.zig").Lexer;
 const Token = @import("lexer.zig").Token;
-
-pub const Atom = struct {
-    Token: Token,
-    pub fn format(
-        self: @This(),
-        writer: *std.Io.Writer,
-    ) std.Io.Writer.Error!void {
-        try self.formatIndented(writer, 0);
-    }
-
-    pub fn formatIndented(
-        self: @This(),
-        writer: *std.Io.Writer,
-        indent: usize,
-    ) std.Io.Writer.Error!void {
-        for (0..indent * 2) |_| {
-            try writer.writeAll(" ");
-        }
-        try writer.print("Atom({any})", .{self.Token});
-    }
-};
-
-pub const Operation = struct {
-    Operator: Token,
-    Operands: []const SExpression,
-
-    pub fn format(
-        self: @This(),
-        writer: *std.Io.Writer,
-    ) std.Io.Writer.Error!void {
-        try self.formatIndented(writer, 0);
-    }
-
-    pub fn formatIndented(
-        self: @This(),
-        writer: *std.Io.Writer,
-        indent: usize,
-    ) std.Io.Writer.Error!void {
-        for (0..indent * 2) |_| {
-            try writer.writeAll(" ");
-        }
-        try writer.print("Operation(Operator={any}, Operands=[\n", .{self.Operator});
-        for (self.Operands, 0..) |operand, index| {
-            if (index != 0) {
-                try writer.writeAll(",\n");
-            }
-            try operand.formatIndented(writer, indent + 1);
-        }
-        try writer.writeAll("\n");
-        for (0..indent * 2) |_| {
-            try writer.writeAll(" ");
-        }
-        try writer.writeAll("])");
-    }
-};
-
-pub const SExpression = union(enum) {
-    Atom: Atom,
-    Operation: Operation,
-
-    pub fn format(
-        self: @This(),
-        writer: *std.Io.Writer,
-    ) std.Io.Writer.Error!void {
-        try self.formatIndented(writer, 0);
-    }
-
-    pub fn formatIndented(
-        self: @This(),
-        writer: *std.Io.Writer,
-        indent: usize,
-    ) std.Io.Writer.Error!void {
-        switch (self) {
-            .Atom => |atom| try atom.formatIndented(writer, indent),
-            .Operation => |operation| try operation.formatIndented(writer, indent),
-        }
-    }
-};
+const Ast = @import("abstract_syntax_tree.zig");
+const Node = Ast.Node;
 
 pub const Parser = struct {
     lexer: Lexer,
@@ -106,13 +30,13 @@ pub const Parser = struct {
         };
     }
 
-    pub fn parse(self: *Parser, state: ParseState) !SExpression {
+    pub fn parse(self: *Parser, state: ParseState) !Node {
         const token = self.lexer.next();
         var leftHandSide = switch (token.type) {
-            .IntLiteral => SExpression{ .Atom = .{ .Token = token } },
-            .Identifier => SExpression{ .Atom = .{ .Token = token } },
+            .IntLiteral => Node{ .Integer = token },
+            .Identifier => Node{ .Identifier = token },
             .LeftParenthesis => try self.parse(.{ .currentBindingPower = 0 }),
-            .Let => block: {
+            .Val => block: {
                 const identifierToken = self.lexer.next();
                 if (identifierToken.type != .Identifier) {
                     return Error.ExpectedIdentifier;
@@ -123,24 +47,26 @@ pub const Parser = struct {
                     return Error.ExpectedEqualSign;
                 }
 
-                const operand = try self.parse(.{ .currentBindingPower = 2 });
-                const operands = try self.allocator.alloc(SExpression, 2);
-                @memcpy(operands, &[2]SExpression{
-                    SExpression{ .Atom = .{ .Token = identifierToken } },
-                    operand,
-                });
+                const value = try self.allocator.create(Node);
+                value.* = try self.parse(.{ .currentBindingPower = 2 });
 
-                break :block SExpression{ .Operation = .{ .Operator = token, .Operands = operands } };
+                break :block Node{
+                    .ValueDeclaration = .{
+                        .val_token = token,
+                        .name = identifierToken,
+                        .type_annotation = null,
+                        .value = value,
+                    },
+                };
             },
             .Minus => block: {
-                const operand = try self.parse(.{ .currentBindingPower = 10 });
-                const operands = try self.allocator.alloc(SExpression, 1);
-                @memcpy(operands, &[1]SExpression{operand});
+                const operand = try self.allocator.create(Node);
+                operand.* = try self.parse(.{ .currentBindingPower = 10 });
 
-                break :block SExpression{
-                    .Operation = .{
-                        .Operator = token,
-                        .Operands = operands,
+                break :block Node{
+                    .UnaryExpression = .{
+                        .operator = token,
+                        .operand = operand,
                     },
                 };
             },
@@ -179,13 +105,13 @@ pub const Parser = struct {
                     .leftBindingPower = 4.0,
                     .rightBindingPower = 4.1,
                 },
-                .IntLiteral => continue,
-                .Identifier => continue,
+                .IntLiteral => return leftHandSide,
+                .Identifier => return leftHandSide,
                 .RightParenthesis => return leftHandSide,
                 // In case we reach the end of the file, there is nothing more to parse so our the current
                 // "left hand side" is the entire expression.
                 .EndOfFile => return leftHandSide,
-                else => unreachable,
+                else => return leftHandSide,
             };
 
             if (operator.leftBindingPower > state.currentBindingPower) {
@@ -194,13 +120,17 @@ pub const Parser = struct {
                 // Therefore, we consume the currently peeked operator and parse whatever is to the right hand side of
                 // our current operator.
                 _ = self.lexer.next();
-                const rightHandSide = try self.parse(.{ .currentBindingPower = operator.rightBindingPower });
-                const operands = try self.allocator.alloc(SExpression, 2);
-                @memcpy(operands, &[2]SExpression{ leftHandSide, rightHandSide });
-                leftHandSide = .{
-                    .Operation = .{
-                        .Operator = nextToken,
-                        .Operands = operands,
+                const rightHandSide = try self.allocator.create(Node);
+                rightHandSide.* = try self.parse(.{ .currentBindingPower = operator.rightBindingPower });
+
+                const leftHandSidePtr = try self.allocator.create(Node);
+                leftHandSidePtr.* = leftHandSide;
+
+                leftHandSide = Node{
+                    .BinaryExpression = .{
+                        .left = leftHandSidePtr,
+                        .operator = nextToken,
+                        .right = rightHandSide,
                     },
                 };
             } else {
