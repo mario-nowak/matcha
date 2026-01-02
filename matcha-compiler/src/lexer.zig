@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const TokenType = union(enum) {
     //
-    Let,
+    Val,
     LeftParenthesis,
     RightParenthesis,
     Equal,
@@ -38,7 +38,7 @@ pub const Token = struct {
         try writer.print("Token(line={}, col={}, type=", .{ self.line, self.column });
 
         switch (self.type) {
-            .Let => try writer.writeAll("Let"),
+            .Val => try writer.writeAll("Val"),
             .LeftParenthesis => try writer.writeAll("LeftParenthesis"),
             .RightParenthesis => try writer.writeAll("RightParenthesis"),
             .Equal => try writer.writeAll("Equal"),
@@ -233,7 +233,7 @@ pub const Lexer = struct {
     }
 
     fn asKeyword(alphanumeric: []const u8) ?TokenType {
-        if (std.mem.eql(u8, alphanumeric, "let")) return .Let;
+        if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
         return null;
     }
 

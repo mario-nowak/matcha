@@ -1,8 +1,6 @@
 const std = @import("std");
-const SExpression = @import("parser.zig").SExpression;
-const Operation = @import("parser.zig").Operation;
-
-const Environment = std.StringHashMap([]const u8);
+const Ast = @import("abstract_syntax_tree.zig");
+const Node = Ast.Node;
 
 pub const SymbolGenerator = struct {
     allocator: std.mem.Allocator,
@@ -23,18 +21,29 @@ pub const SymbolGenerator = struct {
 
 pub const LlvmIrEmitter = struct {
     allocator: std.mem.Allocator,
-    environment: Environment,
     symbolGenerator: SymbolGenerator,
+    environment: std.StringHashMap([]const u8),
+    instructions: std.ArrayListUnmanaged([]const u8),
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
-            .environment = Environment.init(allocator),
             .symbolGenerator = SymbolGenerator.init(allocator, ".t"),
+            .environment = std.StringHashMap([]const u8).init(allocator),
+            .instructions = .{},
         };
     }
 
-    pub fn emitLlvmIr(self: *@This(), sExpression: SExpression) []const u8 {
+    pub fn emitLlvmIr(self: *@This(), node: Node) []const u8 {
+        const resultRegister = self.emitNode(node) catch unreachable;
+
+        var instructionsBuffer = std.ArrayListUnmanaged(u8){};
+        defer instructionsBuffer.deinit(self.allocator);
+
+        for (self.instructions.items) |instruction| {
+            instructionsBuffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
+        }
+
         const template =
             \\; Formatting constant
             \\@.str = private unnamed_addr constant [4 x i8] c"%d\0A\00"
@@ -46,114 +55,67 @@ pub const LlvmIrEmitter = struct {
             \\    ; get pointer to @.str
             \\    %fmtptr = getelementptr inbounds [4 x i8], [4 x i8]* @.str, i64 0, i64 0
             \\    ; call printf with formatting string and last expression
-            \\    call i32 (i8*, ...) @printf(i8* %fmtptr, i32 {s})
-            \\
-            \\    ret i32 {s}
+            \\    call i32 (i8*, ...) @printf(i8* %fmtptr, i64 {s})
+            \\    ret i32 0
             \\}}
         ;
-        const result = self.emitExpression(sExpression);
-        return std.fmt.allocPrint(self.allocator, template, .{ result.auxiliaryEmission, result.expressionResultSymbol, result.expressionResultSymbol }) catch unreachable;
+
+        return std.fmt.allocPrint(self.allocator, template, .{ instructionsBuffer.items, resultRegister }) catch unreachable;
     }
 
-    const ExpressionEmissionResult = struct {
-        expressionResultSymbol: []const u8,
-        auxiliaryEmission: []const u8,
-    };
-
-    fn emitExpression(self: *@This(), sExpression: SExpression) ExpressionEmissionResult {
-        return switch (sExpression) {
-            .Atom => |atom| .{
-                .expressionResultSymbol = switch (atom.Token.type) {
-                    .Identifier => |identifier| self.environment.get(identifier) orelse unreachable,
-                    .IntLiteral => |intLiteral| std.fmt.allocPrint(self.allocator, "{d}", .{intLiteral}) catch unreachable,
-                    else => unreachable,
-                },
-                .auxiliaryEmission = "",
+    fn emitNode(self: *@This(), node: Node) ![]const u8 {
+        switch (node) {
+            .Integer => |token| {
+                return std.fmt.allocPrint(self.allocator, "{d}", .{token.type.IntLiteral}) catch unreachable;
             },
-            .Operation => |operation| block: {
-                const result = self.emitOperation(operation);
-
-                break :block .{
-                    .expressionResultSymbol = result.expressionResultSymbol,
-                    .auxiliaryEmission = result.auxiliaryEmission,
-                };
+            .Identifier => |token| {
+                const name = token.type.Identifier;
+                if (self.environment.get(name)) |register| {
+                    return register;
+                } else {
+                    // For now, assume 0 if not found or handle error
+                    return "0";
+                }
             },
-        };
-    }
+            .BinaryExpression => |expr| {
+                if (expr.operator.type == .Semicolon) {
+                    _ = try self.emitNode(expr.left.*);
+                    return try self.emitNode(expr.right.*);
+                }
 
-    const OperationEmissionResult = struct {
-        expressionResultSymbol: []const u8,
-        auxiliaryEmission: []const u8,
-    };
+                const leftReg = try self.emitNode(expr.left.*);
+                const rightReg = try self.emitNode(expr.right.*);
+                const resultReg = self.symbolGenerator.generate();
 
-    fn emitOperation(self: *@This(), operation: Operation) OperationEmissionResult {
-        return switch (operation.Operator.type) {
-            .Semicolon => block: {
-                const left = self.emitExpression(operation.Operands[0]);
-                const right = self.emitExpression(operation.Operands[1]);
-                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission }) catch unreachable;
-
-                break :block .{
-                    .expressionResultSymbol = right.expressionResultSymbol,
-                    .auxiliaryEmission = auxiliaryEmission,
-                };
-            },
-            .Let => block: {
-                const identifier = switch (operation.Operands[0]) {
-                    .Atom => |atom| switch (atom.Token.type) {
-                        .Identifier => |identifier| identifier,
-                        else => unreachable,
-                    },
+                const op = switch (expr.operator.type) {
+                    .Plus => "add",
+                    .Minus => "sub",
+                    .Asterisk => "mul",
+                    .Slash => "sdiv",
                     else => unreachable,
                 };
-                const expression = self.emitExpression(operation.Operands[1]);
-                self.environment.put(identifier, expression.expressionResultSymbol) catch unreachable;
 
-                break :block .{ .expressionResultSymbol = expression.expressionResultSymbol, .auxiliaryEmission = expression.auxiliaryEmission };
+                const instruction = std.fmt.allocPrint(self.allocator, "{s} = {s} i64 {s}, {s}", .{ resultReg, op, leftReg, rightReg }) catch unreachable;
+                try self.instructions.append(self.allocator, instruction);
+
+                return resultReg;
             },
-            .Plus => block: {
-                const left = self.emitExpression(operation.Operands[0]);
-                const right = self.emitExpression(operation.Operands[1]);
+            .UnaryExpression => |expr| {
+                const operandReg = try self.emitNode(expr.operand.*);
+                const resultReg = self.symbolGenerator.generate();
 
-                const symbol = self.symbolGenerator.generate();
+                const instruction = std.fmt.allocPrint(self.allocator, "{s} = sub i64 0, {s}", .{ resultReg, operandReg }) catch unreachable;
+                try self.instructions.append(self.allocator, instruction);
 
-                const llvmOperation = std.fmt.allocPrint(self.allocator, "{s} = add i32 {s}, {s}", .{ symbol, left.expressionResultSymbol, right.expressionResultSymbol }) catch unreachable;
-                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission, llvmOperation }) catch unreachable;
-
-                break :block .{
-                    .expressionResultSymbol = symbol,
-                    .auxiliaryEmission = auxiliaryEmission,
-                };
+                return resultReg;
             },
-            .Minus => block: {
-                const left = self.emitExpression(operation.Operands[0]);
-                const right = self.emitExpression(operation.Operands[1]);
-
-                const symbol = self.symbolGenerator.generate();
-
-                const llvmOperation = std.fmt.allocPrint(self.allocator, "{s} = sub i32 {s}, {s}", .{ symbol, left.expressionResultSymbol, right.expressionResultSymbol }) catch unreachable;
-                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission, llvmOperation }) catch unreachable;
-
-                break :block .{
-                    .expressionResultSymbol = symbol,
-                    .auxiliaryEmission = auxiliaryEmission,
-                };
+            .ValueDeclaration => |decl| {
+                const valueReg = try self.emitNode(decl.value.*);
+                const name = decl.name.type.Identifier;
+                try self.environment.put(name, valueReg);
+                return valueReg;
             },
-            .Asterisk => block: {
-                const left = self.emitExpression(operation.Operands[0]);
-                const right = self.emitExpression(operation.Operands[1]);
-
-                const symbol = self.symbolGenerator.generate();
-
-                const llvmOperation = std.fmt.allocPrint(self.allocator, "{s} = mul i32 {s}, {s}", .{ symbol, left.expressionResultSymbol, right.expressionResultSymbol }) catch unreachable;
-                const auxiliaryEmission = std.fmt.allocPrint(self.allocator, "{s}\n{s}\n{s}", .{ left.auxiliaryEmission, right.auxiliaryEmission, llvmOperation }) catch unreachable;
-
-                break :block .{
-                    .expressionResultSymbol = symbol,
-                    .auxiliaryEmission = auxiliaryEmission,
-                };
-            },
-            else => unreachable,
-        };
+            else => return "0",
+        }
     }
 };

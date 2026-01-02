@@ -22,7 +22,7 @@ pub fn main() !void {
 
     var parserTest = parser.Parser.init(lexerTest, allocator);
     const expression = try parserTest.parse(.{ .currentBindingPower = 0 });
-    std.debug.print("Expression: {f}\n", .{expression});
+    std.debug.print("Expression: {any}\n", .{expression});
 
     var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
     const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
