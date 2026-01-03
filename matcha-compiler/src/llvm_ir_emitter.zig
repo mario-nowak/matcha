@@ -1,6 +1,35 @@
 const std = @import("std");
 const Ast = @import("abstract_syntax_tree.zig");
 const Node = Ast.Node;
+const Program = Ast.Program;
+
+pub const Environment = struct {
+    allocator: std.mem.Allocator,
+    parent: ?*Environment,
+    bindings: std.StringHashMap([]const u8),
+
+    pub fn init(allocator: std.mem.Allocator, parent: ?*Environment) @This() {
+        return .{
+            .allocator = allocator,
+            .parent = parent,
+            .bindings = std.StringHashMap([]const u8).init(allocator),
+        };
+    }
+
+    pub fn lookup(self: *@This(), name: []const u8) ?[]const u8 {
+        if (self.bindings.get(name)) |value| {
+            return value;
+        }
+        if (self.parent) |parent| {
+            return parent.lookup(name);
+        }
+        return null;
+    }
+
+    pub fn insert(self: *@This(), name: []const u8, register: []const u8) !void {
+        try self.bindings.put(name, register);
+    }
+};
 
 pub const SymbolGenerator = struct {
     allocator: std.mem.Allocator,
@@ -22,26 +51,28 @@ pub const SymbolGenerator = struct {
 pub const LlvmIrEmitter = struct {
     allocator: std.mem.Allocator,
     symbolGenerator: SymbolGenerator,
-    environment: std.StringHashMap([]const u8),
-    instructions: std.ArrayListUnmanaged([]const u8),
+    instructions: std.ArrayList([]const u8),
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
             .symbolGenerator = SymbolGenerator.init(allocator, ".t"),
-            .environment = std.StringHashMap([]const u8).init(allocator),
             .instructions = .{},
         };
     }
 
-    pub fn emitLlvmIr(self: *@This(), node: Node) []const u8 {
-        const resultRegister = self.emitNode(node) catch unreachable;
+    pub fn emitLlvmIr(self: *@This(), program: Program) []const u8 {
+        var root_environment = Environment.init(self.allocator, null);
+        var result_register: []const u8 = "0";
+        for (program.statements) |statement| {
+            result_register = self.emitNode(&statement, &root_environment) catch unreachable;
+        }
 
-        var instructionsBuffer = std.ArrayListUnmanaged(u8){};
-        defer instructionsBuffer.deinit(self.allocator);
+        var instructions_buffer = std.ArrayList(u8){};
+        defer instructions_buffer.deinit(self.allocator);
 
         for (self.instructions.items) |instruction| {
-            instructionsBuffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
+            instructions_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
         }
 
         const template =
@@ -60,17 +91,17 @@ pub const LlvmIrEmitter = struct {
             \\}}
         ;
 
-        return std.fmt.allocPrint(self.allocator, template, .{ instructionsBuffer.items, resultRegister }) catch unreachable;
+        return std.fmt.allocPrint(self.allocator, template, .{ instructions_buffer.items, result_register }) catch unreachable;
     }
 
-    fn emitNode(self: *@This(), node: Node) ![]const u8 {
-        switch (node) {
+    fn emitNode(self: *@This(), node: *const Node, environment: *Environment) ![]const u8 {
+        switch (node.*) {
             .Integer => |token| {
                 return std.fmt.allocPrint(self.allocator, "{d}", .{token.type.IntLiteral}) catch unreachable;
             },
             .Identifier => |token| {
                 const name = token.type.Identifier;
-                if (self.environment.get(name)) |register| {
+                if (environment.lookup(name)) |register| {
                     return register;
                 } else {
                     // For now, assume 0 if not found or handle error
@@ -79,12 +110,12 @@ pub const LlvmIrEmitter = struct {
             },
             .BinaryExpression => |expr| {
                 if (expr.operator.type == .Semicolon) {
-                    _ = try self.emitNode(expr.left.*);
-                    return try self.emitNode(expr.right.*);
+                    _ = try self.emitNode(expr.left, environment);
+                    return try self.emitNode(expr.right, environment);
                 }
 
-                const leftReg = try self.emitNode(expr.left.*);
-                const rightReg = try self.emitNode(expr.right.*);
+                const leftReg = try self.emitNode(expr.left, environment);
+                const rightReg = try self.emitNode(expr.right, environment);
                 const resultReg = self.symbolGenerator.generate();
 
                 const op = switch (expr.operator.type) {
@@ -101,7 +132,7 @@ pub const LlvmIrEmitter = struct {
                 return resultReg;
             },
             .UnaryExpression => |expr| {
-                const operandReg = try self.emitNode(expr.operand.*);
+                const operandReg = try self.emitNode(expr.operand, environment);
                 const resultReg = self.symbolGenerator.generate();
 
                 const instruction = std.fmt.allocPrint(self.allocator, "{s} = sub i64 0, {s}", .{ resultReg, operandReg }) catch unreachable;
@@ -110,10 +141,27 @@ pub const LlvmIrEmitter = struct {
                 return resultReg;
             },
             .ValueDeclaration => |decl| {
-                const valueReg = try self.emitNode(decl.value.*);
+                const valueReg = try self.emitNode(decl.value, environment);
                 const name = decl.name.type.Identifier;
-                try self.environment.put(name, valueReg);
+                try environment.insert(name, valueReg);
                 return valueReg;
+            },
+            .Block => |block| {
+                // Create a child environment for the block scope
+                var block_environment = Environment.init(self.allocator, environment);
+
+                // Emit all statements in the block
+                for (block.statements) |statement| {
+                    _ = try self.emitNode(&statement, &block_environment);
+                }
+
+                // Emit the result expression if it exists
+                const resultRegister = if (block.result) |result_node|
+                    try self.emitNode(result_node, &block_environment)
+                else
+                    "0";
+
+                return resultRegister;
             },
             else => return "0",
         }
