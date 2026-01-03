@@ -17,9 +17,9 @@ pub const SemanticAnalyzer = struct {
     }
 
     pub fn validateProgram(self: *@This(), program: *const Program) !void {
-        var scope = Scope.init(self.allocator, null);
+        var root_scope = Scope.init(self.allocator, null);
         for (program.statements) |statement| {
-            try self.validateNode(&statement, &scope);
+            try self.validateNode(&statement, &root_scope);
         }
     }
 

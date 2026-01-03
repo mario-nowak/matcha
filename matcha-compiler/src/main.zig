@@ -29,13 +29,13 @@ pub fn main() !void {
 
     std.debug.print("Expression: {any}\n", .{program});
 
-    // var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
-    // const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
+    var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
+    const emitted = llvmIrEmitterTest.emitLlvmIr(program);
 
-    // var file = try std.fs.cwd().createFile("emission.ll", .{});
-    // defer file.close();
-    // _ = try file.write(emitted);
+    var file = try std.fs.cwd().createFile("emission.ll", .{});
+    defer file.close();
+    _ = try file.write(emitted);
 
     // Print file contents
-    // std.debug.print("{s}\n", .{fileContents});
+    std.debug.print("{s}\n", .{fileContents});
 }
