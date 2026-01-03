@@ -21,16 +21,16 @@ pub fn main() !void {
     defer lexerTest.deinit();
 
     var parserTest = parser.Parser.init(lexerTest, allocator);
-    const expression = try parserTest.parse(.{ .currentBindingPower = 0 });
+    const expression = try parserTest.parse();
     std.debug.print("Expression: {any}\n", .{expression});
 
-    var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
-    const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
+    // var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
+    // const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
 
-    var file = try std.fs.cwd().createFile("emission.ll", .{});
-    defer file.close();
-    _ = try file.write(emitted);
+    // var file = try std.fs.cwd().createFile("emission.ll", .{});
+    // defer file.close();
+    // _ = try file.write(emitted);
 
     // Print file contents
-    std.debug.print("{s}\n", .{fileContents});
+    // std.debug.print("{s}\n", .{fileContents});
 }

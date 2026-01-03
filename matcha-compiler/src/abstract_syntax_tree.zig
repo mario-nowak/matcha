@@ -33,6 +33,7 @@ pub const UnaryExpression = struct {
 pub const Block = struct {
     left_brace: Token,
     statements: []Node,
+    result: ?*Node,
     right_brace: Token,
 };
 
@@ -46,4 +47,8 @@ pub const IfExpression = struct {
 // Placeholder for TypeNode until we implement types properly
 pub const TypeNode = struct {
     name: Token,
+};
+
+pub const Program = struct {
+    statements: []Node,
 };
