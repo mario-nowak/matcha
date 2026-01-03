@@ -2,6 +2,7 @@ const std = @import("std");
 
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
+const SemanticAnalyzer = @import("semantic_analysis/semantic_analyzer.zig").SemanticAnalyzer;
 const llvmIrEmitter = @import("llvm_ir_emitter.zig");
 
 pub fn main() !void {
@@ -21,8 +22,12 @@ pub fn main() !void {
     defer lexerTest.deinit();
 
     var parserTest = parser.Parser.init(lexerTest, allocator);
-    const expression = try parserTest.parse();
-    std.debug.print("Expression: {any}\n", .{expression});
+    const program = try parserTest.parse();
+
+    var semanticAnalyzer = SemanticAnalyzer.init(allocator);
+    try semanticAnalyzer.validateProgram(&program);
+
+    std.debug.print("Expression: {any}\n", .{program});
 
     // var llvmIrEmitterTest = llvmIrEmitter.LlvmIrEmitter.init(allocator);
     // const emitted = llvmIrEmitterTest.emitLlvmIr(expression);
