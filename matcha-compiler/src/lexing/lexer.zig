@@ -1,68 +1,7 @@
 const std = @import("std");
-
-pub const TokenType = union(enum) {
-    //
-    Val,
-    LeftParenthesis,
-    RightParenthesis,
-    Equal,
-    Colon,
-    Semicolon,
-    Plus,
-    Minus,
-    Asterisk,
-    Slash,
-    LeftBrace,
-    RightBrace,
-    //
-    Identifier: []const u8,
-    IntLiteral: i64,
-    RealLiteral: f64,
-    BooleanLiteral: bool,
-    //
-    EndOfFile,
-    Error: struct {
-        message: []const u8,
-    },
-};
-
-pub const Token = struct {
-    line: usize,
-    column: usize,
-    offsetInSource: usize,
-    lenInSource: u32,
-    type: TokenType,
-
-    pub fn format(
-        self: Token,
-        writer: anytype,
-    ) !void {
-        try writer.print("Token(line={}, col={}, type=", .{ self.line, self.column });
-
-        switch (self.type) {
-            .Val => try writer.writeAll("Val"),
-            .LeftParenthesis => try writer.writeAll("LeftParenthesis"),
-            .RightParenthesis => try writer.writeAll("RightParenthesis"),
-            .LeftBrace => try writer.writeAll("LeftBrace"),
-            .RightBrace => try writer.writeAll("RightBrace"),
-            .Equal => try writer.writeAll("Equal"),
-            .Colon => try writer.writeAll("Colon"),
-            .Semicolon => try writer.writeAll("Semicolon"),
-            .Plus => try writer.writeAll("Plus"),
-            .Minus => try writer.writeAll("Minus"),
-            .Asterisk => try writer.writeAll("Asterisk"),
-            .Slash => try writer.writeAll("Slash"),
-            .Identifier => |lexeme| try writer.print("Identifier(\"{s}\")", .{lexeme}),
-            .IntLiteral => |value| try writer.print("IntLiteral({})", .{value}),
-            .RealLiteral => |value| try writer.print("RealLiteral({})", .{value}),
-            .BooleanLiteral => |value| try writer.print("BooleanLiteral({})", .{value}),
-            .EndOfFile => try writer.writeAll("EndOfFile"),
-            .Error => |err| try writer.print("Error(\"{s}\")", .{err.message}),
-        }
-
-        try writer.writeAll(")");
-    }
-};
+const token_module = @import("token.zig");
+const TokenType = token_module.TokenType;
+const Token = token_module.Token;
 
 pub const Lexer = struct {
     source: []const u8,
@@ -151,7 +90,10 @@ pub const Lexer = struct {
         }
 
         const alphanumeric = self.source[self.offsetInSource .. self.offsetInSource + self.offsetInToken];
-        var tokenType = asKeyword(alphanumeric);
+        var tokenType = asBooleanLiteral(alphanumeric);
+        if (tokenType == null) {
+            tokenType = asKeyword(alphanumeric);
+        }
         if (tokenType == null) {
             tokenType = .{ .Identifier = alphanumeric };
         }
@@ -236,6 +178,12 @@ pub const Lexer = struct {
         self.column += 1;
 
         return token;
+    }
+
+    fn asBooleanLiteral(alphanumeric: []const u8) ?TokenType {
+        if (std.mem.eql(u8, alphanumeric, "true")) return .{ .BooleanLiteral = true };
+        if (std.mem.eql(u8, alphanumeric, "false")) return .{ .BooleanLiteral = false };
+        return null;
     }
 
     fn asKeyword(alphanumeric: []const u8) ?TokenType {

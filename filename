@@ -1,3 +1,0 @@
-let variable = 1 + (2 + 3) * 4 * (3 - 4);
-let otherVariable = (1 + variable) * 4;
-let hiAnnaLena = variable * variable + otherVariable
