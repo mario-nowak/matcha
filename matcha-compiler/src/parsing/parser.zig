@@ -1,19 +1,19 @@
 const std = @import("std");
-const Lexer = @import("lexer.zig").Lexer;
-const Token = @import("lexer.zig").Token;
-const Ast = @import("abstract_syntax_tree.zig");
-const Node = Ast.Node;
-const Program = Ast.Program;
+const lexing = @import("lexing");
+const ast = @import("ast");
 
 pub const Parser = struct {
-    lexer: Lexer,
+    lexer: lexing.Lexer,
     allocator: std.mem.Allocator,
+    next_node_id: ast.NodeId = 0,
 
     pub const ParserError = error{
         MissingClosingParenthesis,
         ExpectedIdentifier,
         ExpectedEqualSign,
         ExpectedSemicolon,
+        ExpectedColonOrEqualSign,
+        ExpectedTypeAnnotation,
     };
 
     const ParseState = struct {
@@ -25,15 +25,21 @@ pub const Parser = struct {
         rightBindingPower: f64,
     };
 
-    pub fn init(lexer: Lexer, allocator: std.mem.Allocator) Parser {
+    pub fn init(lexer: lexing.Lexer, allocator: std.mem.Allocator) Parser {
         return .{
             .lexer = lexer,
             .allocator = allocator,
         };
     }
 
-    pub fn parse(self: *Parser) !Program {
-        var statements = std.ArrayList(Node){};
+    fn createNode(self: *Parser, kind: ast.NodeKind) ast.Node {
+        const id = self.next_node_id;
+        self.next_node_id += 1;
+        return .{ .id = id, .kind = kind };
+    }
+
+    pub fn parse(self: *Parser) !ast.Program {
+        var statements = std.ArrayList(ast.Node){};
 
         while (true) {
             const token = self.lexer.peek();
@@ -45,12 +51,12 @@ pub const Parser = struct {
             try statements.append(self.allocator, statement);
         }
 
-        return Program{
+        return ast.Program{
             .statements = try statements.toOwnedSlice(self.allocator),
         };
     }
 
-    fn parseStatement(self: *Parser) ParserError!Node {
+    fn parseStatement(self: *Parser) ParserError!ast.Node {
         const token = self.lexer.peek();
         std.debug.print("Parsing statement, got token: {any}\n", .{token});
         return switch (token.type) {
@@ -63,7 +69,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseValueDeclaration(self: *Parser) ParserError!Node {
+    fn parseValueDeclaration(self: *Parser) ParserError!ast.Node {
         const valToken = self.lexer.next(); // consume 'val'
 
         const identifierToken = self.lexer.next();
@@ -71,41 +77,56 @@ pub const Parser = struct {
             return ParserError.ExpectedIdentifier;
         }
 
-        const equalToken = self.lexer.next();
-        if (equalToken.type != .Equal) {
-            return ParserError.ExpectedEqualSign;
-        }
+        const colon_or_equal_token = self.lexer.next();
+        const type_annotation: ?lexing.Token = switch (colon_or_equal_token.type) {
+            .Colon => block: {
+                const next_token = self.lexer.next();
+                if (next_token.type != .Identifier) {
+                    return ParserError.ExpectedTypeAnnotation;
+                }
 
-        const value = self.allocator.create(Node) catch unreachable;
+                const equalToken = self.lexer.next();
+                if (equalToken.type != .Equal) {
+                    return ParserError.ExpectedEqualSign;
+                }
+
+                break :block next_token;
+            },
+            .Equal => null,
+            else => return ParserError.ExpectedColonOrEqualSign,
+        };
+
+        const value = self.allocator.create(ast.Node) catch unreachable;
         value.* = try self.parseExpression(.{ .currentBindingPower = 0 });
 
-        const semicolonToken = self.lexer.next();
-        if (semicolonToken.type != .Semicolon) {
+        const semicolon_token = self.lexer.next();
+        if (semicolon_token.type != .Semicolon) {
+            std.debug.print("Expected semicolon, got token: {any}\n", .{semicolon_token});
             return ParserError.ExpectedSemicolon;
         }
 
-        return Node{
+        return self.createNode(.{
             .ValueDeclaration = .{
                 .val_token = valToken,
                 .name = identifierToken,
-                .type_annotation = null,
+                .type_annotation = if (type_annotation) |typeToken| .{ .name_token = typeToken } else null,
                 .value = value,
             },
-        };
+        });
     }
 
-    fn parseBlock(self: *Parser, leftBraceToken: Token) ParserError!Node {
-        var statements = std.ArrayList(Node){};
+    fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) ParserError!ast.Node {
+        var statements = std.ArrayList(ast.Node){};
 
-        var result: ?*Node = null;
+        var result: ?*ast.Node = null;
 
         while (true) {
-            const nextToken = self.lexer.peek();
-            std.debug.print("Parsing block, got token: {any}\n", .{nextToken});
-            switch (nextToken.type) {
+            const next_token = self.lexer.peek();
+            std.debug.print("Parsing block, got token: {any}\n", .{next_token});
+            switch (next_token.type) {
                 .RightBrace => break,
                 .Val => {
-                    std.debug.print("Parsing value declaration in block, got token: {any}\n", .{nextToken});
+                    std.debug.print("Parsing value declaration in block, got token: {any}\n", .{next_token});
                     const statement = try self.parseValueDeclaration();
                     statements.append(self.allocator, statement) catch unreachable;
                     continue;
@@ -115,9 +136,9 @@ pub const Parser = struct {
 
             const expression = try self.parseExpression(.{ .currentBindingPower = 0 });
 
-            const postExpressionToken = self.lexer.peek();
-            std.debug.print("Post-expression token in block: {any}\n", .{postExpressionToken});
-            switch (postExpressionToken.type) {
+            const post_expression_token = self.lexer.peek();
+            std.debug.print("Post-expression token in block: {any}\n", .{post_expression_token});
+            switch (post_expression_token.type) {
                 .Semicolon => {
                     _ = self.lexer.next(); // consume semicolon
                     statements.append(self.allocator, expression) catch unreachable;
@@ -126,56 +147,62 @@ pub const Parser = struct {
                     // This is the last expression in the block, we can set it as the result
                     // and break out of the loop.
                     // Note: We don't append it to statements since it's the result expression.
-                    const resultNode = self.allocator.create(Node) catch unreachable;
+                    const resultNode = self.allocator.create(ast.Node) catch unreachable;
                     resultNode.* = expression;
                     result = resultNode; // Now assign the non-optional pointer to the optional
                     break;
                 },
-                else => return ParserError.ExpectedSemicolon,
+                else => {
+                    std.debug.print("Expected semicolon or right brace after block expression, got token: {any}\n", .{post_expression_token});
+                    return ParserError.ExpectedSemicolon;
+                },
             }
         }
 
-        const rightBraceToken = self.lexer.next();
+        const right_brace_token = self.lexer.next();
 
-        return Node{
+        return self.createNode(.{
             .Block = .{
                 .left_brace = leftBraceToken,
                 .statements = statements.toOwnedSlice(self.allocator) catch unreachable,
                 .result = result,
-                .right_brace = rightBraceToken,
+                .right_brace = right_brace_token,
             },
-        };
+        });
     }
 
-    fn parseExpressionStatement(self: *Parser) ParserError!Node {
+    fn parseExpressionStatement(self: *Parser) ParserError!ast.Node {
         const expression = try self.parseExpression(.{ .currentBindingPower = 0 });
 
         const semicolonToken = self.lexer.next();
         if (semicolonToken.type != .Semicolon) {
+            std.debug.print("Expected semicolon after expression statement, got token: {any}\n", .{semicolonToken});
             return ParserError.ExpectedSemicolon;
         }
 
         return expression;
     }
 
-    pub fn parseExpression(self: *Parser, state: ParseState) ParserError!Node {
+    pub fn parseExpression(self: *Parser, state: ParseState) ParserError!ast.Node {
         const token = self.lexer.next();
         std.debug.print("Parsing expression, got token: {any}\n", .{token});
         var leftHandSide = switch (token.type) {
-            .IntLiteral => Node{ .Integer = token },
-            .Identifier => Node{ .Identifier = token },
+            .IntLiteral => self.createNode(.{ .IntegerLiteral = token }),
+            .BooleanLiteral => self.createNode(.{ .BooleanLiteral = token }),
+            .Identifier => self.createNode(.{ .Identifier = token }),
             .LeftParenthesis => try self.parseExpression(.{ .currentBindingPower = 0 }),
             .LeftBrace => try self.parseBlock(token),
             .Minus => block: {
-                const operand = self.allocator.create(Node) catch unreachable;
+                const operand = self.allocator.create(ast.Node) catch unreachable;
                 operand.* = try self.parseExpression(.{ .currentBindingPower = 10 });
 
-                break :block Node{
+                break :block self.createNode(.{
                     .UnaryExpression = .{
-                        .operator = token,
+                        .operator = .Negate,
+                        .operator_token = token,
                         .operand = operand,
                     },
-                };
+                });
             },
             else => unreachable,
         };
@@ -225,19 +252,26 @@ pub const Parser = struct {
                 // Therefore, we consume the currently peeked operator and parse whatever is to the right hand side of
                 // our current operator.
                 _ = self.lexer.next();
-                const rightHandSide = self.allocator.create(Node) catch unreachable;
+                const rightHandSide = self.allocator.create(ast.Node) catch unreachable;
                 rightHandSide.* = try self.parseExpression(.{ .currentBindingPower = operator.rightBindingPower });
 
-                const leftHandSidePtr = self.allocator.create(Node) catch unreachable;
+                const leftHandSidePtr = self.allocator.create(ast.Node) catch unreachable;
                 leftHandSidePtr.* = leftHandSide;
 
-                leftHandSide = Node{
+                leftHandSide = self.createNode(.{
                     .BinaryExpression = .{
+                        .operator = switch (nextToken.type) {
+                            .Plus => ast.BinaryOperator.Add,
+                            .Minus => ast.BinaryOperator.Subtract,
+                            .Asterisk => ast.BinaryOperator.Multiply,
+                            .Slash => ast.BinaryOperator.Divide,
+                            else => unreachable,
+                        },
                         .left = leftHandSidePtr,
-                        .operator = nextToken,
+                        .operator_token = nextToken,
                         .right = rightHandSide,
                     },
-                };
+                });
             } else {
                 // In case the next operator does not bind more tightly than the current one, our current left hand side
                 // expression will become the right hand side expression of the operator we last consumed.
