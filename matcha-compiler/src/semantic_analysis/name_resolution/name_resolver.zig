@@ -46,11 +46,11 @@ pub const NameResolver = struct {
                 self.next_symbol_id += 1;
                 try self.symbol_table.put(symbol_id, .{
                     .id = symbol_id,
-                    .name = valueDeclaration.name.type.Identifier,
+                    .name = valueDeclaration.name.kind.Identifier,
                     .declaredAt = valueDeclaration.val_token,
                 });
                 try self.resolution_map.put(node.id, symbol_id);
-                try scope.insertSymbol(valueDeclaration.name.type.Identifier, symbol_id);
+                try scope.insertSymbol(valueDeclaration.name.kind.Identifier, symbol_id);
             },
             .BinaryExpression => |binaryExpression| {
                 try self.resolveNode(binaryExpression.left, scope);
@@ -60,15 +60,16 @@ pub const NameResolver = struct {
                 try self.resolveNode(unaryExpression.operand, scope);
             },
             .Identifier => {
-                const symbol_id = scope.lookupSymbol(node.kind.Identifier.type.Identifier);
+                const symbol_id = scope.lookupSymbol(node.kind.Identifier.kind.Identifier);
                 if (symbol_id) |id| {
                     try self.resolution_map.put(node.id, id);
                 } else {
-                    std.debug.print("Semantic Error: Undefined identifier: {s}\n", .{node.kind.Identifier.type.Identifier});
+                    std.debug.print("Semantic Error: Undefined identifier: {s}\n", .{node.kind.Identifier.kind.Identifier});
                     return NameResolutionError.UndefinedIdentifier;
                 }
             },
             .IntegerLiteral => {},
+            .BooleanLiteral => {},
             .Block => |block| {
                 var block_scope = Scope.init(self.allocator, scope);
                 for (block.statements) |statement| {
@@ -78,7 +79,21 @@ pub const NameResolver = struct {
                     try self.resolveNode(result_node, &block_scope);
                 }
             },
-            else => {},
+            .IfStatement => |if_statement| {
+                try self.resolveNode(if_statement.condition, scope);
+                try self.resolveNode(if_statement.then_branch, scope);
+                if (if_statement.else_branch) |else_branch| {
+                    try self.resolveNode(else_branch.else_block, scope);
+                }
+            },
+            .IfExpression => |if_expression| {
+                try self.resolveNode(if_expression.condition, scope);
+                try self.resolveNode(if_expression.then_block, scope);
+                try self.resolveNode(if_expression.else_block, scope);
+            },
+            .ExpressionStatement => |expression_statement| {
+                try self.resolveNode(expression_statement.expression, scope);
+            },
         }
     }
 };
