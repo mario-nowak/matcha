@@ -4,7 +4,7 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 
 const ValidationContext = struct {
-    requiresValue: bool,
+    requires_value: bool,
 };
 
 const TypeError = error{
@@ -33,7 +33,7 @@ pub const TypeChecker = struct {
         self.symbol_type_map = typing.SymbolTypeMap.init(self.allocator);
         self.node_type_map = typing.NodeTypeMap.init(self.allocator);
         var context = ValidationContext{
-            .requiresValue = false,
+            .requires_value = false,
         };
 
         for (resolved_program.program.statements) |*statement| {
@@ -55,17 +55,14 @@ pub const TypeChecker = struct {
         self: *@This(),
         node: *const ast.Node,
         resolved_program: *const symbols.ResolvedProgram,
-        context: *ValidationContext,
+        context: *const ValidationContext,
     ) !void {
         switch (node.kind) {
             .ValueDeclaration => |value_declaration| {
-                var value_context = ValidationContext{
-                    .requiresValue = true,
-                };
                 try self.checkNode(
                     value_declaration.value,
                     resolved_program,
-                    &value_context,
+                    &ValidationContext{ .requires_value = true },
                 );
                 const value_type = self.node_type_map.get(value_declaration.value.id).?;
                 const annotated_type = if (value_declaration.type_annotation) |type_annotation|
@@ -80,20 +77,18 @@ pub const TypeChecker = struct {
                 }
                 const symbol_id = resolved_program.name_resolution_map.get(node.id).?;
                 try self.symbol_type_map.put(symbol_id, value_type);
+                try self.node_type_map.put(node.id, .Unit);
             },
             .BinaryExpression => |binaryExpression| {
-                var expr_context = ValidationContext{
-                    .requiresValue = true,
-                };
                 try self.checkNode(
                     binaryExpression.left,
                     resolved_program,
-                    &expr_context,
+                    &ValidationContext{ .requires_value = true },
                 );
                 try self.checkNode(
                     binaryExpression.right,
                     resolved_program,
-                    &expr_context,
+                    &ValidationContext{ .requires_value = true },
                 );
 
                 const left_expression_type = self.node_type_map.get(binaryExpression.left.id).?;
@@ -115,13 +110,10 @@ pub const TypeChecker = struct {
                 }
             },
             .UnaryExpression => |unaryExpression| {
-                var expr_context = ValidationContext{
-                    .requiresValue = true,
-                };
                 try self.checkNode(
                     unaryExpression.operand,
                     resolved_program,
-                    &expr_context,
+                    &ValidationContext{ .requires_value = true },
                 );
                 const operand_type = self.node_type_map.get(unaryExpression.operand.id).?;
                 if (typing.unary_operator_rules_by_type.get(operand_type)) |rules_for_operand_type| {
@@ -137,26 +129,28 @@ pub const TypeChecker = struct {
                 }
             },
             .Block => |block| {
-                if (context.requiresValue and block.result == null) {
+                if (context.requires_value and block.result == null) {
                     std.debug.print("Type Error: Block must produce a value in this context\n", .{});
                     return TypeError.BlockMustProduceValue;
                 }
-                if (!context.requiresValue and block.result != null) {
+                if (!context.requires_value and block.result != null) {
                     std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
                     return TypeError.BlockCannotProduceValue;
                 }
 
-                var statement_context = ValidationContext{
-                    .requiresValue = false,
-                };
                 for (block.statements) |*statement| {
-                    try self.checkNode(statement, resolved_program, &statement_context);
+                    try self.checkNode(
+                        statement,
+                        resolved_program,
+                        &ValidationContext{ .requires_value = false },
+                    );
                 }
                 if (block.result) |result_node| {
-                    var result_context = ValidationContext{
-                        .requiresValue = true,
-                    };
-                    try self.checkNode(result_node, resolved_program, &result_context);
+                    try self.checkNode(
+                        result_node,
+                        resolved_program,
+                        &ValidationContext{ .requires_value = true },
+                    );
                     const result_type = self.node_type_map.get(result_node.id).?;
                     try self.node_type_map.put(node.id, result_type);
                 }
@@ -172,14 +166,78 @@ pub const TypeChecker = struct {
                 const symbol_type = self.symbol_type_map.get(symbol_id).?;
                 try self.node_type_map.put(node.id, symbol_type);
             },
-            .IfExpression => {
-                // TODO:
+            .IfStatement => |if_statement| {
+                try self.checkNode(
+                    if_statement.condition,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                const if_condition_type = self.node_type_map.get(if_statement.condition.id).?;
+                if (if_condition_type != .Boolean) {
+                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
+                    return TypeError.TypeMismatch;
+                }
+
+                try self.checkNode(
+                    if_statement.then_branch,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = false },
+                );
+
+                if (if_statement.else_branch) |else_branch| {
+                    try self.checkNode(
+                        else_branch.else_block,
+                        resolved_program,
+                        &ValidationContext{ .requires_value = false },
+                    );
+                }
+            },
+            .IfExpression => |if_expression| {
+                try self.checkNode(
+                    if_expression.condition,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                const if_condition_type = self.node_type_map.get(if_expression.condition.id).?;
+                if (if_condition_type != .Boolean) {
+                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
+                    return TypeError.TypeMismatch;
+                }
+
+                try self.checkNode(
+                    if_expression.then_block,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                const then_block_type = self.node_type_map.get(if_expression.then_block.id).?;
+
+                try self.checkNode(
+                    if_expression.else_block,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                const else_block_type = self.node_type_map.get(if_expression.else_block.id).?;
+
+                if (then_block_type != else_block_type) {
+                    std.debug.print("Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n", .{ then_block_type, else_block_type });
+                    return TypeError.TypeMismatch;
+                }
+
+                try self.node_type_map.put(node.id, then_block_type);
+            },
+            .ExpressionStatement => |expression_statement| {
+                try self.checkNode(
+                    expression_statement.expression,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                try self.node_type_map.put(node.id, .Unit);
             },
         }
     }
 
     fn asType(typeAnnotation: ast.TypeAnnotation) !typing.Type {
-        const typeName = typeAnnotation.name_token.type.Identifier;
+        const typeName = typeAnnotation.name_token.kind.Identifier;
         if (std.mem.eql(u8, typeName, "boolean")) {
             return .Boolean;
         } else if (std.mem.eql(u8, typeName, "int")) {

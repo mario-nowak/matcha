@@ -1,6 +1,8 @@
-pub const TokenType = union(enum) {
+pub const TokenKind = union(enum) {
     //
     Val,
+    If,
+    Else,
     LeftParenthesis,
     RightParenthesis,
     Equal,
@@ -29,7 +31,7 @@ pub const Token = struct {
     column: usize,
     offsetInSource: usize,
     lenInSource: u32,
-    type: TokenType,
+    kind: TokenKind,
 
     pub fn format(
         self: Token,
@@ -37,8 +39,10 @@ pub const Token = struct {
     ) !void {
         try writer.print("Token(line={}, col={}, type=", .{ self.line, self.column });
 
-        switch (self.type) {
+        switch (self.kind) {
             .Val => try writer.writeAll("Val"),
+            .If => try writer.writeAll("If"),
+            .Else => try writer.writeAll("Else"),
             .LeftParenthesis => try writer.writeAll("LeftParenthesis"),
             .RightParenthesis => try writer.writeAll("RightParenthesis"),
             .LeftBrace => try writer.writeAll("LeftBrace"),

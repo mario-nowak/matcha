@@ -124,30 +124,37 @@ pub fn build(b: *std.Build) void {
     //
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
+    const exe_root_module = b.createModule(.{
+        // b.createModule defines a new module just like b.addModule but,
+        // unlike b.addModule, it does not expose the module to consumers of
+        // this package, which is why in this case we don't have to give it a name.
+        .root_source_file = b.path("src/main.zig"),
+        // Target and optimization levels must be explicitly wired in when
+        // defining an executable or library (in the root module), and you
+        // can also hardcode a specific target for an executable or library
+        // definition if desireable (e.g. firmware for embedded devices).
+        .target = target,
+        .optimize = optimize,
+        // List of modules available for import in source files part of the
+        // root module.
+        .imports = &.{
+            // Here "matcha" is the name you will use in your source code to
+            // import this module (e.g. `@import("matcha")`). The name is
+            // repeated because you are allowed to rename your imports, which
+            // can be extremely useful in case of collisions (which can happen
+            // importing modules from different packages).
+            .{ .name = "matcha", .module = matcha_module },
+        },
+    });
+
     const exe = b.addExecutable(.{
         .name = "matcha",
-        .root_module = b.createModule(.{
-            // b.createModule defines a new module just like b.addModule but,
-            // unlike b.addModule, it does not expose the module to consumers of
-            // this package, which is why in this case we don't have to give it a name.
-            .root_source_file = b.path("src/main.zig"),
-            // Target and optimization levels must be explicitly wired in when
-            // defining an executable or library (in the root module), and you
-            // can also hardcode a specific target for an executable or library
-            // definition if desireable (e.g. firmware for embedded devices).
-            .target = target,
-            .optimize = optimize,
-            // List of modules available for import in source files part of the
-            // root module.
-            .imports = &.{
-                // Here "matcha" is the name you will use in your source code to
-                // import this module (e.g. `@import("matcha")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
-                .{ .name = "matcha", .module = matcha_module },
-            },
-        }),
+        .root_module = exe_root_module,
+    });
+
+    const exe_check = b.addExecutable(.{
+        .name = "matcha",
+        .root_module = exe_root_module,
     });
 
     // This declares intent for the executable to be installed into the
@@ -155,6 +162,11 @@ pub fn build(b: *std.Build) void {
     // step). By default the install prefix is `zig-out/` but can be overridden
     // by passing `--prefix` or `-p`.
     b.installArtifact(exe);
+
+    // A dedicated check step lets ZLS run fast compile diagnostics without
+    // installing the executable first.
+    const check_step = b.step("check", "Check if the app compiles");
+    check_step.dependOn(&exe_check.step);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).

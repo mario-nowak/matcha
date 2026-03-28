@@ -1,7 +1,7 @@
 const std = @import("std");
-const token_module = @import("token.zig");
-const TokenType = token_module.TokenType;
-const Token = token_module.Token;
+const tokens = @import("token.zig");
+const TokenType = tokens.TokenKind;
+const Token = tokens.Token;
 
 pub const Lexer = struct {
     source: []const u8,
@@ -35,7 +35,7 @@ pub const Lexer = struct {
                 .column = self.column,
                 .offsetInSource = self.offsetInSource,
                 .lenInSource = 0,
-                .type = .EndOfFile,
+                .kind = .EndOfFile,
             };
         }
 
@@ -103,7 +103,7 @@ pub const Lexer = struct {
             .column = self.column,
             .offsetInSource = self.offsetInSource,
             .lenInSource = self.offsetInToken,
-            .type = tokenType.?,
+            .kind = tokenType.?,
         };
 
         self.column += self.offsetInToken;
@@ -128,7 +128,7 @@ pub const Lexer = struct {
             .column = self.column,
             .offsetInSource = self.offsetInSource,
             .lenInSource = self.offsetInToken,
-            .type = .{ .IntLiteral = std.fmt.parseInt(i64, numeric, 10) catch 0 },
+            .kind = .{ .IntLiteral = std.fmt.parseInt(i64, numeric, 10) catch 0 },
         };
 
         self.column += self.offsetInToken;
@@ -158,7 +158,7 @@ pub const Lexer = struct {
             .column = self.column,
             .offsetInSource = self.offsetInSource,
             .lenInSource = 1,
-            .type = switch (character) {
+            .kind = switch (character) {
                 '=' => .Equal,
                 '(' => .LeftParenthesis,
                 ')' => .RightParenthesis,
@@ -188,6 +188,8 @@ pub const Lexer = struct {
 
     fn asKeyword(alphanumeric: []const u8) ?TokenType {
         if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
+        if (std.mem.eql(u8, alphanumeric, "if")) return .If;
+        if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
         return null;
     }
 

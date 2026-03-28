@@ -4,14 +4,18 @@ const lexing = @import("lexing");
 pub const NodeId = u32;
 
 pub const NodeKind = union(enum) {
+    // Statements-ish nodes
     ValueDeclaration: ValueDeclaration,
+    IfStatement: IfStatement,
+    ExpressionStatement: ExpressionStatement,
+    // Expressions-ish nodes
+    IfExpression: IfExpression,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
     Identifier: lexing.Token,
     IntegerLiteral: lexing.Token,
     BooleanLiteral: lexing.Token,
     Block: Block,
-    IfExpression: IfExpression,
 };
 
 pub const Node = struct {
@@ -24,6 +28,22 @@ pub const ValueDeclaration = struct {
     name: lexing.Token,
     type_annotation: ?TypeAnnotation,
     value: *Node,
+};
+
+pub const IfStatement = struct {
+    if_token: lexing.Token,
+    condition: *Node,
+    then_branch: *Node,
+    else_branch: ?IfStatementElseBranch,
+};
+
+pub const IfStatementElseBranch = struct {
+    else_token: lexing.Token,
+    else_block: *Node,
+};
+
+pub const ExpressionStatement = struct {
+    expression: *Node,
 };
 
 pub const BinaryOperator = enum {
@@ -60,8 +80,9 @@ pub const Block = struct {
 pub const IfExpression = struct {
     if_token: lexing.Token,
     condition: *Node,
-    then_branch: *Block,
-    else_branch: ?*Block,
+    then_block: *Node,
+    else_token: lexing.Token,
+    else_block: *Node,
 };
 
 pub const TypeAnnotation = struct {
