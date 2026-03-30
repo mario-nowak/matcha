@@ -16,12 +16,33 @@ pub const BinaryOperatorRules = std.EnumArray(ast.BinaryOperator, ?BinaryOperato
 pub const BinaryOperatorRulesByType = std.EnumArray(Type, ?BinaryOperatorRules);
 pub const binary_operator_rules_by_type = BinaryOperatorRulesByType.init(.{
     .Unit = null,
-    .Boolean = null,
+    .Boolean = BinaryOperatorRules.init(.{
+        .And = .{ .argument_type = .Boolean, .return_type = .Boolean },
+        .Or = .{ .argument_type = .Boolean, .return_type = .Boolean },
+        .Equal = .{ .argument_type = .Boolean, .return_type = .Boolean },
+        .NotEqual = .{ .argument_type = .Boolean, .return_type = .Boolean },
+        .LessThan = null,
+        .LessThanOrEqual = null,
+        .GreaterThan = null,
+        .GreaterThanOrEqual = null,
+        .Add = null,
+        .Subtract = null,
+        .Multiply = null,
+        .Divide = null,
+    }),
     .Integer = BinaryOperatorRules.init(.{
         .Add = .{ .argument_type = .Integer, .return_type = .Integer },
         .Subtract = .{ .argument_type = .Integer, .return_type = .Integer },
         .Multiply = .{ .argument_type = .Integer, .return_type = .Integer },
         .Divide = .{ .argument_type = .Integer, .return_type = .Integer },
+        .Equal = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .NotEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .LessThan = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .LessThanOrEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .GreaterThan = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .GreaterThanOrEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
+        .And = null,
+        .Or = null,
     }),
 });
 
@@ -32,9 +53,13 @@ pub const UnaryOperatorRules = std.EnumArray(ast.UnaryOperator, ?UnaryOperatorSi
 pub const UnaryOperatorRulesByType = std.EnumArray(Type, ?UnaryOperatorRules);
 pub const unary_operator_rules_by_type = UnaryOperatorRulesByType.init(.{
     .Unit = null,
-    .Boolean = null,
+    .Boolean = UnaryOperatorRules.init(.{
+        .Negate = null,
+        .Not = .{ .return_type = .Boolean },
+    }),
     .Integer = UnaryOperatorRules.init(.{
         .Negate = .{ .return_type = .Integer },
+        .Not = null,
     }),
 });
 

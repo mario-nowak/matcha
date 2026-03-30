@@ -64,7 +64,6 @@ pub const NameResolver = struct {
                 if (symbol_id) |id| {
                     try self.resolution_map.put(node.id, id);
                 } else {
-                    std.debug.print("Semantic Error: Undefined identifier: {s}\n", .{node.kind.Identifier.kind.Identifier});
                     return NameResolutionError.UndefinedIdentifier;
                 }
             },
@@ -82,9 +81,6 @@ pub const NameResolver = struct {
             .IfStatement => |if_statement| {
                 try self.resolveNode(if_statement.condition, scope);
                 try self.resolveNode(if_statement.then_branch, scope);
-                if (if_statement.else_branch) |else_branch| {
-                    try self.resolveNode(else_branch.else_block, scope);
-                }
             },
             .IfExpression => |if_expression| {
                 try self.resolveNode(if_expression.condition, scope);

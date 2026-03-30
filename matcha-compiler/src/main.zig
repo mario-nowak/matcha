@@ -20,7 +20,6 @@ pub fn main() !void {
 
     var parser = matcha.parsing.Parser.init(lexer, allocator);
     const program = try parser.parse();
-    std.debug.print("Expression: {any}\n", .{program});
 
     const name_resolver = matcha.semantic_analysis.name_resolution.NameResolver.init(allocator);
     const type_checker = matcha.semantic_analysis.type_checking.TypeChecker.init(allocator);
@@ -36,7 +35,4 @@ pub fn main() !void {
     var file = try std.fs.cwd().createFile("emission.ll", .{});
     defer file.close();
     _ = try file.write(emitted);
-
-    // Print file contents
-    std.debug.print("{s}\n", .{file_contents});
 }

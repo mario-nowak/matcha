@@ -1,6 +1,6 @@
 const std = @import("std");
 const tokens = @import("token.zig");
-const TokenType = tokens.TokenKind;
+const TokenKind = tokens.TokenKind;
 const Token = tokens.Token;
 
 pub const Lexer = struct {
@@ -11,10 +11,10 @@ pub const Lexer = struct {
     offsetInToken: u32,
     allocator: std.mem.Allocator,
 
-    pub fn init(source: []const u8, alloctor: std.mem.Allocator) Lexer {
+    pub fn init(source: []const u8, allocator: std.mem.Allocator) Lexer {
         return .{
             .source = source,
-            .allocator = alloctor,
+            .allocator = allocator,
             .line = 1,
             .column = 1,
             .offsetInSource = 0,
@@ -138,20 +138,32 @@ pub const Lexer = struct {
     }
 
     fn lexOperator(self: *Lexer) Token {
-        self.offsetInToken = 0;
-        for (self.source[self.offsetInSource..self.source.len]) |character| {
-            _ = switch (character) {
-                '=' => .{},
-                else => break,
-            };
-            self.offsetInToken += 1;
-        }
-
-        if (self.offsetInToken > 0) {
-            // todo check for multi character operators
-        }
-
         const character = self.source[self.offsetInSource];
+        if (self.offsetInSource + 1 < self.source.len) {
+            const nextCharacter = self.source[self.offsetInSource + 1];
+            const multiCharacterKind: ?TokenKind = switch (character) {
+                '=' => if (nextCharacter == '=') .EqualEqual else null,
+                '!' => if (nextCharacter == '=') .NotEqual else null,
+                '<' => if (nextCharacter == '=') .LessThanOrEqual else null,
+                '>' => if (nextCharacter == '=') .GreaterThanOrEqual else null,
+                else => null,
+            };
+
+            if (multiCharacterKind) |kind| {
+                const token = Token{
+                    .line = self.line,
+                    .column = self.column,
+                    .offsetInSource = self.offsetInSource,
+                    .lenInSource = 2,
+                    .kind = kind,
+                };
+
+                self.offsetInSource += 2;
+                self.column += 2;
+
+                return token;
+            }
+        }
 
         const token = Token{
             .line = self.line,
@@ -159,7 +171,7 @@ pub const Lexer = struct {
             .offsetInSource = self.offsetInSource,
             .lenInSource = 1,
             .kind = switch (character) {
-                '=' => .Equal,
+                '=' => .Assign,
                 '(' => .LeftParenthesis,
                 ')' => .RightParenthesis,
                 '{' => .LeftBrace,
@@ -170,6 +182,8 @@ pub const Lexer = struct {
                 '-' => .Minus,
                 '*' => .Asterisk,
                 '/' => .Slash,
+                '<' => .LessThan,
+                '>' => .GreaterThan,
                 else => .{ .Error = .{ .message = "Unrecognized character" } },
             },
         };
@@ -180,16 +194,19 @@ pub const Lexer = struct {
         return token;
     }
 
-    fn asBooleanLiteral(alphanumeric: []const u8) ?TokenType {
+    fn asBooleanLiteral(alphanumeric: []const u8) ?TokenKind {
         if (std.mem.eql(u8, alphanumeric, "true")) return .{ .BooleanLiteral = true };
         if (std.mem.eql(u8, alphanumeric, "false")) return .{ .BooleanLiteral = false };
         return null;
     }
 
-    fn asKeyword(alphanumeric: []const u8) ?TokenType {
+    fn asKeyword(alphanumeric: []const u8) ?TokenKind {
         if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
         if (std.mem.eql(u8, alphanumeric, "if")) return .If;
         if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
+        if (std.mem.eql(u8, alphanumeric, "not")) return .Not;
+        if (std.mem.eql(u8, alphanumeric, "and")) return .And;
+        if (std.mem.eql(u8, alphanumeric, "or")) return .Or;
         return null;
     }
 

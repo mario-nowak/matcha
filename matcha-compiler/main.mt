@@ -15,7 +15,7 @@ if someBool {
     val onlyWhenTrue = 3;
 } else {
     val onlyWhenTrue = 5;
-}
+};
 
 val ifExpression = if someBool { 3 } else { 4 };
 
@@ -40,5 +40,20 @@ val blockResult = {
     val a = hiAnnaLena;
     val b = hiAnnaLena * 2;
     val unknown = false;
-    a + b + if unknown { 1 } else { 2 }
+    a + b + if not unknown { 1 } else { 2 }
 };
+
+val i_had_a_coffee = true;
+val i_had_an_ice_cream = false;
+
+val im_happy = i_had_a_coffee or i_had_an_ice_cream;
+val im_really_happy = i_had_a_coffee and i_had_an_ice_cream;
+
+val happiness_score = if im_happy {
+    if im_really_happy { 2 } else { 1 }
+} else {
+    0
+};
+
+val im_happy_confirmed = happiness_score >= 1;
+val exit_code = if im_happy_confirmed { 1 } else { 0 };
