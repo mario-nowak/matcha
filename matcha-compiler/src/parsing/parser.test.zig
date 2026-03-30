@@ -1,0 +1,125 @@
+const std = @import("std");
+const ast = @import("ast");
+const helpers = @import("../test_helpers.zig");
+
+const NodeTag = std.meta.Tag(ast.NodeKind);
+const TestError = error{UnexpectedNodeKind};
+
+fn expectNodeTag(node: *const ast.Node, expected: NodeTag) !void {
+    try std.testing.expectEqual(expected, std.meta.activeTag(node.kind));
+}
+
+fn expectBinaryExpression(node: *const ast.Node, expected_operator: ast.BinaryOperator) !ast.BinaryExpression {
+    const binary_expression = switch (node.kind) {
+        .BinaryExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(expected_operator, binary_expression.operator);
+    return binary_expression;
+}
+
+fn expectUnaryExpression(node: *const ast.Node, expected_operator: ast.UnaryOperator) !ast.UnaryExpression {
+    const unary_expression = switch (node.kind) {
+        .UnaryExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(expected_operator, unary_expression.operator);
+    return unary_expression;
+}
+
+test "parser distinguishes statement ifs from expression ifs" {
+    const source =
+        \\if true { val scoped = 1; }
+        \\if true { val left = 1; } else { val right = 2; };
+        \\val answer = {
+        \\    if true { 1 } else { 2 }
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 3), parsed.program.statements.len);
+    try expectNodeTag(&parsed.program.statements[0], .IfStatement);
+
+    const expression_statement = switch (parsed.program.statements[1].kind) {
+        .ExpressionStatement => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectNodeTag(expression_statement.expression, .IfExpression);
+
+    const value_declaration = switch (parsed.program.statements[2].kind) {
+        .ValueDeclaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const block = switch (value_declaration.value.kind) {
+        .Block => |block_value| block_value,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expect(block.result != null);
+    try expectNodeTag(block.result.?, .IfExpression);
+}
+
+test "parser respects boolean and comparison precedence" {
+    const source =
+        \\val result = 1 + 2 >= 3 and false or true;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const value_declaration = switch (parsed.program.statements[0].kind) {
+        .ValueDeclaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    const or_expression = try expectBinaryExpression(value_declaration.value, .Or);
+    try expectNodeTag(or_expression.right, .BooleanLiteral);
+
+    const and_expression = try expectBinaryExpression(or_expression.left, .And);
+    try expectNodeTag(and_expression.right, .BooleanLiteral);
+
+    const comparison_expression = try expectBinaryExpression(and_expression.left, .GreaterThanOrEqual);
+    try expectNodeTag(comparison_expression.right, .IntegerLiteral);
+
+    const add_expression = try expectBinaryExpression(comparison_expression.left, .Add);
+    try expectNodeTag(add_expression.left, .IntegerLiteral);
+    try expectNodeTag(add_expression.right, .IntegerLiteral);
+}
+
+test "parser binds unary not tighter than and" {
+    const source =
+        \\val result = not false and true;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const value_declaration = switch (parsed.program.statements[0].kind) {
+        .ValueDeclaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    const and_expression = try expectBinaryExpression(value_declaration.value, .And);
+    _ = try expectUnaryExpression(and_expression.left, .Not);
+    try expectNodeTag(and_expression.right, .BooleanLiteral);
+}
+
+test "parser keeps block ending with statement if as statement-only block" {
+    const source =
+        \\{
+        \\    if true { val scoped = 1; }
+        \\}
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const block = switch (parsed.program.statements[0].kind) {
+        .Block => |block_value| block_value,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(@as(usize, 1), block.statements.len);
+    try std.testing.expect(block.result == null);
+    try expectNodeTag(&block.statements[0], .IfStatement);
+}

@@ -185,9 +185,17 @@ pub const LlvmIrEmitter = struct {
                     .Subtract => "sub",
                     .Multiply => "mul",
                     .Divide => "sdiv",
+                    .Equal => "icmp eq",
+                    .NotEqual => "icmp ne",
+                    .LessThan => "icmp slt",
+                    .LessThanOrEqual => "icmp sle",
+                    .GreaterThan => "icmp sgt",
+                    .GreaterThanOrEqual => "icmp sge",
+                    .And => "and",
+                    .Or => "or",
                 };
-                const operation_type = typed_program.node_type_map.get(node.id).?;
-                const instruction_type = llvm_ir_type_by_matcha_type.get(operation_type);
+                const left_operand_type = typed_program.node_type_map.get(binary_expression.left.id).?;
+                const instruction_type = llvm_ir_type_by_matcha_type.get(left_operand_type);
                 const instruction = std.fmt.allocPrint(
                     self.allocator,
                     "{s} = {s} {s} {s}, {s}",
@@ -214,6 +222,11 @@ pub const LlvmIrEmitter = struct {
                     .Negate => std.fmt.allocPrint(
                         self.allocator,
                         "{s} = sub {s} 0, {s}",
+                        .{ result_register, instruction_type, operand_result.register.? },
+                    ) catch unreachable,
+                    .Not => std.fmt.allocPrint(
+                        self.allocator,
+                        "{s} = xor {s} {s}, 1",
                         .{ result_register, instruction_type, operand_result.register.? },
                     ) catch unreachable,
                 };
@@ -266,7 +279,6 @@ pub const LlvmIrEmitter = struct {
                 );
 
                 const then_label = self.symbol_generator.generateLabel("then");
-                const else_label = self.symbol_generator.generateLabel("else");
                 const continue_label = self.symbol_generator.generateLabel("continue");
                 const branch_continue_instruction = std.fmt.allocPrint(
                     self.allocator,
@@ -278,20 +290,13 @@ pub const LlvmIrEmitter = struct {
                 const branch_instruction = std.fmt.allocPrint(
                     self.allocator,
                     "br i1 {s}, label %{s}, label %{s}",
-                    .{ condition_result.register.?, then_label, else_label },
+                    .{ condition_result.register.?, then_label, continue_label },
                 ) catch unreachable;
                 try self.lines.append(self.allocator, .{ .instruction = branch_instruction });
 
                 // "then" path
                 try self.emitLabel(then_label);
                 _ = try self.emitNode(if_statement.then_branch, then_label, typed_program, environment);
-                try self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction });
-
-                // "else" path
-                try self.emitLabel(else_label);
-                if (if_statement.else_branch) |else_branch| {
-                    _ = try self.emitNode(else_branch.else_block, else_label, typed_program, environment);
-                }
                 try self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction });
 
                 try self.emitLabel(continue_label);
@@ -349,27 +354,34 @@ pub const LlvmIrEmitter = struct {
 
                 // "continue" path
                 try self.emitLabel(continue_label);
-                const result_register = self.symbol_generator.generateRegister();
                 const result_type = typed_program.node_type_map.get(node.id).?;
-                const instruction_type = llvm_ir_type_by_matcha_type.get(result_type);
-                const phi_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "{s} = phi {s} [{s}, %{s}], [{s}, %{s}]",
-                    .{
-                        result_register,
-                        instruction_type,
-                        then_result.register.?,
-                        then_result.exit_label,
-                        else_result.register.?,
-                        else_result.exit_label,
-                    },
-                ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = phi_instruction });
+                if (result_type == .Unit) {
+                    return .{
+                        .exit_label = continue_label,
+                        .register = null,
+                    };
+                } else {
+                    const result_register = self.symbol_generator.generateRegister();
+                    const instruction_type = llvm_ir_type_by_matcha_type.get(result_type);
+                    const phi_instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "{s} = phi {s} [{s}, %{s}], [{s}, %{s}]",
+                        .{
+                            result_register,
+                            instruction_type,
+                            then_result.register.?,
+                            then_result.exit_label,
+                            else_result.register.?,
+                            else_result.exit_label,
+                        },
+                    ) catch unreachable;
+                    try self.lines.append(self.allocator, .{ .instruction = phi_instruction });
 
-                return .{
-                    .exit_label = continue_label,
-                    .register = result_register,
-                };
+                    return .{
+                        .exit_label = continue_label,
+                        .register = result_register,
+                    };
+                }
             },
             .ExpressionStatement => |expression_statement| {
                 const emission_result = try self.emitNode(

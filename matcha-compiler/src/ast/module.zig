@@ -34,10 +34,12 @@ pub const IfStatement = struct {
     if_token: lexing.Token,
     condition: *Node,
     then_branch: *Node,
-    else_branch: ?IfStatementElseBranch,
 };
 
-pub const IfStatementElseBranch = struct {
+pub const IfExpression = struct {
+    if_token: lexing.Token,
+    condition: *Node,
+    then_block: *Node,
     else_token: lexing.Token,
     else_block: *Node,
 };
@@ -51,6 +53,14 @@ pub const BinaryOperator = enum {
     Subtract,
     Multiply,
     Divide,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    And,
+    Or,
 };
 
 pub const BinaryExpression = struct {
@@ -62,6 +72,7 @@ pub const BinaryExpression = struct {
 
 pub const UnaryOperator = enum {
     Negate,
+    Not,
 };
 
 pub const UnaryExpression = struct {
@@ -75,14 +86,6 @@ pub const Block = struct {
     statements: []Node,
     result: ?*Node,
     right_brace: lexing.Token,
-};
-
-pub const IfExpression = struct {
-    if_token: lexing.Token,
-    condition: *Node,
-    then_block: *Node,
-    else_token: lexing.Token,
-    else_block: *Node,
 };
 
 pub const TypeAnnotation = struct {

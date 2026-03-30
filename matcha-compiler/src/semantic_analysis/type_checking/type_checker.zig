@@ -71,7 +71,6 @@ pub const TypeChecker = struct {
                     null;
                 if (annotated_type) |annotated| {
                     if (annotated != value_type) {
-                        std.debug.print("Type Error: TODO\n", .{});
                         return TypeError.TypeMismatch;
                     }
                 }
@@ -96,16 +95,13 @@ pub const TypeChecker = struct {
                 if (typing.binary_operator_rules_by_type.get(left_expression_type)) |rules_for_left_type| {
                     if (rules_for_left_type.get(binaryExpression.operator)) |operator_rule| {
                         if (operator_rule.argument_type != right_expression_type) {
-                            std.debug.print("Type Error: TODO\n", .{});
                             return TypeError.TypeMismatch;
                         }
                         try self.node_type_map.put(node.id, operator_rule.return_type);
                     } else {
-                        std.debug.print("Type Error: TODO\n", .{});
                         return TypeError.TypeMismatch;
                     }
                 } else {
-                    std.debug.print("Type Error: TODO\n", .{});
                     return TypeError.TypeMismatch;
                 }
             },
@@ -120,21 +116,17 @@ pub const TypeChecker = struct {
                     if (rules_for_operand_type.get(unaryExpression.operator)) |operator_rule| {
                         try self.node_type_map.put(node.id, operator_rule.return_type);
                     } else {
-                        std.debug.print("Type Error: TODO\n", .{});
                         return TypeError.TypeMismatch;
                     }
                 } else {
-                    std.debug.print("Type Error: TODO\n", .{});
                     return TypeError.TypeMismatch;
                 }
             },
             .Block => |block| {
                 if (context.requires_value and block.result == null) {
-                    std.debug.print("Type Error: Block must produce a value in this context\n", .{});
                     return TypeError.BlockMustProduceValue;
                 }
                 if (!context.requires_value and block.result != null) {
-                    std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
                     return TypeError.BlockCannotProduceValue;
                 }
 
@@ -153,6 +145,8 @@ pub const TypeChecker = struct {
                     );
                     const result_type = self.node_type_map.get(result_node.id).?;
                     try self.node_type_map.put(node.id, result_type);
+                } else {
+                    try self.node_type_map.put(node.id, .Unit);
                 }
             },
             .IntegerLiteral => {
@@ -174,7 +168,6 @@ pub const TypeChecker = struct {
                 );
                 const if_condition_type = self.node_type_map.get(if_statement.condition.id).?;
                 if (if_condition_type != .Boolean) {
-                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
                     return TypeError.TypeMismatch;
                 }
 
@@ -183,14 +176,7 @@ pub const TypeChecker = struct {
                     resolved_program,
                     &ValidationContext{ .requires_value = false },
                 );
-
-                if (if_statement.else_branch) |else_branch| {
-                    try self.checkNode(
-                        else_branch.else_block,
-                        resolved_program,
-                        &ValidationContext{ .requires_value = false },
-                    );
-                }
+                try self.node_type_map.put(node.id, .Unit);
             },
             .IfExpression => |if_expression| {
                 try self.checkNode(
@@ -200,26 +186,24 @@ pub const TypeChecker = struct {
                 );
                 const if_condition_type = self.node_type_map.get(if_expression.condition.id).?;
                 if (if_condition_type != .Boolean) {
-                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
                     return TypeError.TypeMismatch;
                 }
 
                 try self.checkNode(
                     if_expression.then_block,
                     resolved_program,
-                    &ValidationContext{ .requires_value = true },
+                    &ValidationContext{ .requires_value = context.requires_value },
                 );
                 const then_block_type = self.node_type_map.get(if_expression.then_block.id).?;
 
                 try self.checkNode(
                     if_expression.else_block,
                     resolved_program,
-                    &ValidationContext{ .requires_value = true },
+                    &ValidationContext{ .requires_value = context.requires_value },
                 );
                 const else_block_type = self.node_type_map.get(if_expression.else_block.id).?;
 
                 if (then_block_type != else_block_type) {
-                    std.debug.print("Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n", .{ then_block_type, else_block_type });
                     return TypeError.TypeMismatch;
                 }
 
@@ -229,7 +213,7 @@ pub const TypeChecker = struct {
                 try self.checkNode(
                     expression_statement.expression,
                     resolved_program,
-                    &ValidationContext{ .requires_value = true },
+                    &ValidationContext{ .requires_value = false },
                 );
                 try self.node_type_map.put(node.id, .Unit);
             },
@@ -243,7 +227,6 @@ pub const TypeChecker = struct {
         } else if (std.mem.eql(u8, typeName, "int")) {
             return .Integer;
         } else {
-            std.debug.print("Type Error: Unknown type annotation: {s}\n", .{typeName});
             return TypeError.TypeMismatch;
         }
     }

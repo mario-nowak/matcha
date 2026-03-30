@@ -2,6 +2,16 @@ const std = @import("std");
 const lexing = @import("lexing");
 const ast = @import("ast");
 
+pub const ParsedIf = union(enum) {
+    statement: ast.Node,
+    expression: ast.Node,
+};
+
+pub const BlockItem = union(enum) {
+    statement: ast.Node,
+    expression: ast.Node,
+};
+
 pub const Parser = struct {
     lexer: lexing.Lexer,
     allocator: std.mem.Allocator,
@@ -61,15 +71,40 @@ pub const Parser = struct {
 
     fn parseStatement(self: *Parser) ParserError!ast.Node {
         const token = self.lexer.peek();
-        std.debug.print("Parsing statement, got token: {any}\n", .{token});
         return switch (token.kind) {
             .Val => try self.parseValueDeclaration(),
-            .If => try self.parseIfStatement(),
+            .If => block: {
+                const if_token = self.lexer.next(); // consume 'if'
+                const if_form = try self.parseIfForm(if_token);
+                break :block switch (if_form) {
+                    .statement => |if_statement| if_statement,
+                    .expression => |if_expression| expression_block: {
+                        const next_token = self.lexer.next();
+                        if (next_token.kind != .Semicolon) {
+                            return ParserError.ExpectedSemicolon;
+                        }
+                        const expression = self.allocator.create(ast.Node) catch unreachable;
+                        expression.* = if_expression;
+                        break :expression_block self.createNode(.{
+                            .ExpressionStatement = .{
+                                .expression = expression,
+                            },
+                        });
+                    },
+                };
+            },
             .LeftBrace => {
                 const leftBrace = self.lexer.next();
                 return try self.parseBlock(leftBrace);
             },
             else => try self.parseExpressionStatement(),
+        };
+    }
+
+    fn startsStatementOnlyConstruct(token: lexing.Token) bool {
+        return switch (token.kind) {
+            .Val => true,
+            else => false,
         };
     }
 
@@ -90,13 +125,13 @@ pub const Parser = struct {
                 }
 
                 const equalToken = self.lexer.next();
-                if (equalToken.kind != .Equal) {
+                if (equalToken.kind != .Assign) {
                     return ParserError.ExpectedEqualSign;
                 }
 
                 break :block next_token;
             },
-            .Equal => null,
+            .Assign => null,
             else => return ParserError.ExpectedColonOrEqualSign,
         };
 
@@ -105,7 +140,6 @@ pub const Parser = struct {
 
         const semicolon_token = self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
-            std.debug.print("Expected semicolon, got token: {any}\n", .{semicolon_token});
             return ParserError.ExpectedSemicolon;
         }
 
@@ -119,10 +153,8 @@ pub const Parser = struct {
         });
     }
 
-    fn parseIfStatement(self: *Parser) ParserError!ast.Node {
-        const if_token = self.lexer.next(); // consume if token
+    fn parseIfForm(self: *Parser, if_token: lexing.Token) ParserError!ParsedIf {
         if (if_token.kind != .If) {
-            std.debug.print("Expected if token, got token: {any}\n", .{if_token});
             return ParserError.ExpectedIf;
         }
 
@@ -130,7 +162,6 @@ pub const Parser = struct {
         condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const then_branch = self.allocator.create(ast.Node) catch unreachable;
-        var else_branch: ?ast.IfStatementElseBranch = null;
 
         const post_condition_token = self.lexer.peek();
         if (post_condition_token.kind == .LeftBrace) {
@@ -143,18 +174,31 @@ pub const Parser = struct {
 
                 const else_branch_left_brace_token = self.lexer.next();
                 if (else_branch_left_brace_token.kind != .LeftBrace) {
-                    std.debug.print(
-                        "Expected left brace after else, got token: {any}\n",
-                        .{else_branch_left_brace_token},
-                    );
                     return ParserError.ExpectedLeftBrace;
                 }
                 const else_block = self.allocator.create(ast.Node) catch unreachable;
                 else_block.* = try self.parseBlock(else_branch_left_brace_token);
 
-                else_branch = .{
-                    .else_token = else_token,
-                    .else_block = else_block,
+                return .{
+                    .expression = self.createNode(.{
+                        .IfExpression = .{
+                            .if_token = if_token,
+                            .condition = condition,
+                            .then_block = then_branch,
+                            .else_token = else_token,
+                            .else_block = else_block,
+                        },
+                    }),
+                };
+            } else {
+                return .{
+                    .statement = self.createNode(.{
+                        .IfStatement = .{
+                            .if_token = if_token,
+                            .condition = condition,
+                            .then_branch = then_branch,
+                        },
+                    }),
                 };
             }
         } else {
@@ -162,105 +206,42 @@ pub const Parser = struct {
 
             const post_then_branch_token = self.lexer.peek();
             if (post_then_branch_token.kind == .Else) {
-                std.debug.print("Using else is not allowed when the then branch is a single statement without braces, got token: {any}\n", .{post_then_branch_token});
                 return ParserError.UnexpectedElse;
             }
+
+            return .{
+                .statement = self.createNode(.{
+                    .IfStatement = .{
+                        .if_token = if_token,
+                        .condition = condition,
+                        .then_branch = then_branch,
+                    },
+                }),
+            };
         }
-
-        return self.createNode(.{ .IfStatement = .{
-            .if_token = if_token,
-            .condition = condition,
-            .then_branch = then_branch,
-            .else_branch = else_branch,
-        } });
-    }
-
-    fn parseIfExpression(self: *Parser, if_token: lexing.Token) ParserError!ast.Node {
-        const condition = self.allocator.create(ast.Node) catch unreachable;
-        condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
-
-        const left_brace_token = self.lexer.next();
-        if (left_brace_token.kind != .LeftBrace) {
-            std.debug.print(
-                "Expected left brace after if condition in if expression, got token: {any}\n",
-                .{left_brace_token},
-            );
-            return ParserError.ExpectedLeftBrace;
-        }
-        const then_block = self.allocator.create(ast.Node) catch unreachable;
-        then_block.* = try self.parseBlock(left_brace_token);
-
-        const else_token = self.lexer.next();
-        if (else_token.kind != .Else) {
-            std.debug.print(
-                "Expected else token after then block in if expression, got token: {any}\n",
-                .{else_token},
-            );
-            return ParserError.ExpectedIf;
-        }
-
-        const else_block = self.allocator.create(ast.Node) catch unreachable;
-        const else_left_brace_token = self.lexer.next();
-        if (else_left_brace_token.kind != .LeftBrace) {
-            std.debug.print(
-                "Expected left brace after else token in if expression, got token: {any}\n",
-                .{else_left_brace_token},
-            );
-            return ParserError.ExpectedLeftBrace;
-        }
-        else_block.* = try self.parseBlock(else_left_brace_token);
-
-        return self.createNode(.{
-            .IfExpression = .{
-                .if_token = if_token,
-                .condition = condition,
-                .then_block = then_block,
-                .else_token = else_token,
-                .else_block = else_block,
-            },
-        });
     }
 
     fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) ParserError!ast.Node {
         var statements = std.ArrayList(ast.Node){};
-
         var result: ?*ast.Node = null;
 
         while (true) {
-            const next_token = self.lexer.peek();
-            std.debug.print("Parsing block, got token: {any}\n", .{next_token});
-            switch (next_token.kind) {
-                .RightBrace => break,
-                .Val => {
-                    std.debug.print("Parsing value declaration in block, got token: {any}\n", .{next_token});
-                    const statement = try self.parseValueDeclaration();
+            const block_item = try self.parseBlockItem();
+            switch (block_item) {
+                .statement => |statement| {
                     statements.append(self.allocator, statement) catch unreachable;
-                    continue;
+                    const post_statement_token = self.lexer.peek();
+                    if (post_statement_token.kind == .RightBrace) {
+                        // Done parsing the block. It finished with a statement, so there is no result expression.
+                        break;
+                    }
                 },
-                else => {},
-            }
-
-            const expression = try self.parseExpression(.{ .current_binding_power = 0 });
-
-            const post_expression_token = self.lexer.peek();
-            std.debug.print("Post-expression token in block: {any}\n", .{post_expression_token});
-            switch (post_expression_token.kind) {
-                .Semicolon => {
-                    _ = self.lexer.next(); // consume semicolon
-                    statements.append(self.allocator, expression) catch unreachable;
-                },
-                .RightBrace => {
-                    // This is the last expression in the block, we can set it as the result
-                    // and break out of the loop.
-                    // Note: We don't append it to statements since it's the result expression.
-                    const resultNode = self.allocator.create(ast.Node) catch unreachable;
-                    resultNode.* = expression;
-                    result = resultNode; // Now assign the non-optional pointer to the optional
+                .expression => |expression| {
+                    const expression_node = self.allocator.create(ast.Node) catch unreachable;
+                    expression_node.* = expression;
+                    result = expression_node;
+                    // Done parsing the block. It finished with an expression, so we set the result and break out of the loop.
                     break;
-                },
-                else => {
-                    std.debug.print("Expected semicolon or right brace after block expression, got token: {any}\n", .{post_expression_token});
-                    return ParserError.ExpectedSemicolon;
                 },
             }
         }
@@ -277,26 +258,92 @@ pub const Parser = struct {
         });
     }
 
-    fn parseExpressionStatement(self: *Parser) ParserError!ast.Node {
+    fn parseBlockItem(self: *Parser) ParserError!BlockItem {
+        const token = self.lexer.peek();
+        if (Parser.startsStatementOnlyConstruct(token)) {
+            const statement = try self.parseStatement();
+            return .{ .statement = statement };
+        }
+
+        switch (token.kind) {
+            .If => {
+                const if_token = self.lexer.next(); // consume 'if'
+                const if_form = try self.parseIfForm(if_token);
+                return switch (if_form) {
+                    .statement => |if_statement| .{ .statement = if_statement },
+                    .expression => |if_expression| {
+                        const post_if_expression_token = self.lexer.peek();
+                        switch (post_if_expression_token.kind) {
+                            .Semicolon => {
+                                _ = self.lexer.next(); // consume semicolon
+                                const expression_node = self.allocator.create(ast.Node) catch unreachable;
+                                expression_node.* = if_expression;
+                                return .{ .statement = self.createNode(.{
+                                    .ExpressionStatement = .{
+                                        .expression = expression_node,
+                                    },
+                                }) };
+                            },
+                            .RightBrace => return .{ .expression = if_expression },
+                            else => return ParserError.ExpectedSemicolon,
+                        }
+                    },
+                };
+            },
+            else => {},
+        }
+
         const expression = try self.parseExpression(.{ .current_binding_power = 0 });
+        const post_expression_token = self.lexer.peek();
+        switch (post_expression_token.kind) {
+            .Semicolon => {
+                _ = self.lexer.next(); // consume semicolon
+                const expression_node = self.allocator.create(ast.Node) catch unreachable;
+                expression_node.* = expression;
+                return .{ .statement = self.createNode(.{
+                    .ExpressionStatement = .{
+                        .expression = expression_node,
+                    },
+                }) };
+            },
+            .RightBrace => return .{
+                .expression = expression,
+            },
+            else => return ParserError.ExpectedSemicolon,
+        }
+    }
+
+    fn parseExpressionStatement(self: *Parser) ParserError!ast.Node {
+        const expression = self.allocator.create(ast.Node) catch unreachable;
+        expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const semicolonToken = self.lexer.next();
         if (semicolonToken.kind != .Semicolon) {
-            std.debug.print("Expected semicolon after expression statement, got token: {any}\n", .{semicolonToken});
             return ParserError.ExpectedSemicolon;
         }
 
-        return expression;
+        return self.createNode(.{
+            .ExpressionStatement = .{
+                .expression = expression,
+            },
+        });
     }
 
     pub fn parseExpression(self: *Parser, state: ParseState) ParserError!ast.Node {
         const token = self.lexer.next();
-        std.debug.print("Parsing expression, got token: {any}\n", .{token});
         var left_hand_side = switch (token.kind) {
             .IntLiteral => self.createNode(.{ .IntegerLiteral = token }),
             .BooleanLiteral => self.createNode(.{ .BooleanLiteral = token }),
             .Identifier => self.createNode(.{ .Identifier = token }),
-            .If => try self.parseIfExpression(token),
+            .If => if_block: {
+                const if_form = try self.parseIfForm(token);
+                break :if_block switch (if_form) {
+                    .statement => |_| {
+                        return ParserError.ExpectedIdentifier; // TODO:
+                    },
+                    .expression => |if_expression| if_expression,
+                };
+            },
             .LeftParenthesis => try self.parseExpression(.{ .current_binding_power = 0 }),
             .LeftBrace => try self.parseBlock(token),
             .Minus => block: {
@@ -311,10 +358,19 @@ pub const Parser = struct {
                     },
                 });
             },
-            else => {
-                std.debug.print("Unexpected token at the beginning of expression: {any}\n", .{token});
-                return ParserError.ExpectedIdentifier;
+            .Not => block: {
+                const operand = self.allocator.create(ast.Node) catch unreachable;
+                operand.* = try self.parseExpression(.{ .current_binding_power = 10 });
+
+                break :block self.createNode(.{
+                    .UnaryExpression = .{
+                        .operator = .Not,
+                        .operator_token = token,
+                        .operand = operand,
+                    },
+                });
             },
+            else => return ParserError.ExpectedIdentifier,
         };
 
         if (token.kind == .LeftParenthesis) {
@@ -329,21 +385,29 @@ pub const Parser = struct {
             // Find the next operator without consuming it
             const next_token = self.lexer.peek();
             const operator = switch (next_token.kind) {
-                .Plus => OperatorInfo{
+                .Or => OperatorInfo{
+                    .left_binding_power = 1.0,
+                    .right_binding_power = 1.1,
+                },
+                .And => OperatorInfo{
+                    .left_binding_power = 2.0,
+                    .right_binding_power = 2.1,
+                },
+                .EqualEqual, .NotEqual => OperatorInfo{
                     .left_binding_power = 3.0,
                     .right_binding_power = 3.1,
                 },
-                .Minus => OperatorInfo{
-                    .left_binding_power = 3.0,
-                    .right_binding_power = 3.1,
-                },
-                .Asterisk => OperatorInfo{
+                .LessThan, .LessThanOrEqual, .GreaterThan, .GreaterThanOrEqual => OperatorInfo{
                     .left_binding_power = 4.0,
                     .right_binding_power = 4.1,
                 },
-                .Slash => OperatorInfo{
-                    .left_binding_power = 4.0,
-                    .right_binding_power = 4.1,
+                .Plus, .Minus => OperatorInfo{
+                    .left_binding_power = 5.0,
+                    .right_binding_power = 5.1,
+                },
+                .Asterisk, .Slash => OperatorInfo{
+                    .left_binding_power = 6.0,
+                    .right_binding_power = 6.1,
                 },
                 .IntLiteral => return left_hand_side,
                 .Identifier => return left_hand_side,
@@ -375,6 +439,14 @@ pub const Parser = struct {
                             .Minus => ast.BinaryOperator.Subtract,
                             .Asterisk => ast.BinaryOperator.Multiply,
                             .Slash => ast.BinaryOperator.Divide,
+                            .EqualEqual => ast.BinaryOperator.Equal,
+                            .NotEqual => ast.BinaryOperator.NotEqual,
+                            .LessThan => ast.BinaryOperator.LessThan,
+                            .LessThanOrEqual => ast.BinaryOperator.LessThanOrEqual,
+                            .GreaterThan => ast.BinaryOperator.GreaterThan,
+                            .GreaterThanOrEqual => ast.BinaryOperator.GreaterThanOrEqual,
+                            .And => ast.BinaryOperator.And,
+                            .Or => ast.BinaryOperator.Or,
                             else => unreachable,
                         },
                         .left = left_hand_side_pointer,

@@ -103,6 +103,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "typing", .module = typing_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "emission", .module = emission_module },
         },
