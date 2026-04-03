@@ -6,7 +6,8 @@ const typing = @import("typing");
 const Register = []const u8;
 const Instruction = []const u8;
 const Label = []const u8;
-const RegisterBySymbolId = std.AutoHashMap(symbols.SymbolId, Register);
+const Storage = []const u8;
+const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 const LlvmIrTypeByMatchaType = std.EnumArray(typing.Type, []const u8);
 
 const Line = union(enum) {
@@ -21,14 +22,16 @@ const llvm_ir_type_by_matcha_type = LlvmIrTypeByMatchaType.init(.{
 });
 
 pub const Environment = struct {
-    allocator: std.mem.Allocator,
-    register_by_symbol_id: RegisterBySymbolId,
+    storage_by_symbol_id: StorageBySymbolId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .register_by_symbol_id = RegisterBySymbolId.init(allocator),
+            .storage_by_symbol_id = StorageBySymbolId.init(allocator),
         };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.storage_by_symbol_id.deinit();
     }
 };
 
@@ -40,15 +43,23 @@ pub const EmissionResult = struct {
 pub const SymbolGenerator = struct {
     allocator: std.mem.Allocator,
     register_counter: usize,
+    storage_counter: usize,
     label_counter: usize,
     register_prefix: []const u8,
+    storage_prefix: []const u8,
 
-    pub fn init(allocator: std.mem.Allocator, prefix: []const u8) @This() {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        register_prefix: []const u8,
+        storage_prefix: []const u8,
+    ) @This() {
         return .{
             .allocator = allocator,
             .register_counter = 0,
+            .storage_counter = 0,
             .label_counter = 0,
-            .register_prefix = prefix,
+            .register_prefix = register_prefix,
+            .storage_prefix = storage_prefix,
         };
     }
 
@@ -61,6 +72,17 @@ pub const SymbolGenerator = struct {
         self.register_counter += 1;
 
         return register;
+    }
+
+    pub fn generateStorage(self: *@This()) Storage {
+        const storage = std.fmt.allocPrint(
+            self.allocator,
+            "%{s}_{d}",
+            .{ self.storage_prefix, self.storage_counter },
+        ) catch unreachable;
+        self.storage_counter += 1;
+
+        return storage;
     }
 
     pub fn generateLabel(self: *@This(), label_name: []const u8) Label {
@@ -83,21 +105,22 @@ pub const LlvmIrEmitter = struct {
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
-            .symbol_generator = SymbolGenerator.init(allocator, ".t"),
+            .symbol_generator = SymbolGenerator.init(allocator, ".t", ".s"),
             .lines = .{},
         };
     }
 
+    pub fn deinit(self: *@This()) void {
+        self.lines.deinit(self.allocator);
+    }
+
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
         var environment = Environment.init(self.allocator);
-        var result_register: Register = "0";
+        defer environment.deinit();
         var current_label: Label = "entry";
         for (typed_program.resolved_program.program.statements) |statement| {
             const result = self.emitNode(&statement, current_label, typed_program, &environment) catch unreachable;
             current_label = result.exit_label;
-            if (result.register) |register| {
-                result_register = register;
-            }
         }
 
         var instructions_buffer = std.ArrayList(u8){};
@@ -115,22 +138,14 @@ pub const LlvmIrEmitter = struct {
         }
 
         const template =
-            \\; Formatting constant
-            \\@.str = private unnamed_addr constant [4 x i8] c"%d\0A\00"
-            \\; Tell LLVM C's printf exists
-            \\declare i32 @printf(i8*, ...)
             \\define i32 @main() {{
             \\entry:
             \\{s}
-            \\    ; get pointer to @.str
-            \\    %fmtptr = getelementptr inbounds [4 x i8], [4 x i8]* @.str, i64 0, i64 0
-            \\    ; call printf with formatting string and last expression
-            \\    call i32 (i8*, ...) @printf(i8* %fmtptr, i64 {s})
             \\    ret i32 0
             \\}}
         ;
 
-        return std.fmt.allocPrint(self.allocator, template, .{ instructions_buffer.items, result_register }) catch unreachable;
+        return std.fmt.allocPrint(self.allocator, template, .{instructions_buffer.items}) catch unreachable;
     }
 
     fn emitNode(
@@ -159,7 +174,10 @@ pub const LlvmIrEmitter = struct {
             },
             .Identifier => {
                 const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
-                const register = environment.register_by_symbol_id.get(symbol_id).?;
+                const storage = environment.storage_by_symbol_id.get(symbol_id).?;
+                const llvm_ir_type = llvm_ir_type_by_matcha_type.get(typed_program.node_type_map.get(node.id).?);
+                const register = self.symbol_generator.generateRegister();
+                try self.emitLoad(register, storage, llvm_ir_type);
 
                 return .{
                     .exit_label = entry_label,
@@ -237,7 +255,7 @@ pub const LlvmIrEmitter = struct {
                     .register = result_register,
                 };
             },
-            .ValueDeclaration => |value_declaration| {
+            .Declaration => |value_declaration| {
                 const value_declaration_result = try self.emitNode(
                     value_declaration.value,
                     entry_label,
@@ -245,9 +263,37 @@ pub const LlvmIrEmitter = struct {
                     environment,
                 );
                 const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
-                try environment.register_by_symbol_id.put(symbol_id, value_declaration_result.register.?);
+                const value_type = typed_program.node_type_map.get(value_declaration.value.id).?;
+                const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
 
-                return value_declaration_result;
+                const storage = self.symbol_generator.generateStorage();
+                try self.emitAlloca(storage, llvm_ir_type);
+                try self.emitStore(value_declaration_result.register.?, storage, llvm_ir_type);
+
+                environment.storage_by_symbol_id.put(symbol_id, storage) catch unreachable;
+
+                return .{
+                    .exit_label = value_declaration_result.exit_label,
+                    .register = null,
+                };
+            },
+            .Assignment => |assignment| {
+                const value_result = try self.emitNode(
+                    assignment.value,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
+                const storage = environment.storage_by_symbol_id.get(symbol_id).?;
+                const value_type = typed_program.node_type_map.get(assignment.value.id).?;
+                const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
+                try self.emitStore(value_result.register.?, storage, llvm_ir_type);
+
+                return .{
+                    .exit_label = value_result.exit_label,
+                    .register = null,
+                };
             },
             .Block => |block| {
                 var current_label = entry_label;
@@ -401,5 +447,32 @@ pub const LlvmIrEmitter = struct {
 
     fn emitLabel(self: *@This(), label: Label) !void {
         try self.lines.append(self.allocator, .{ .label = label });
+    }
+
+    fn emitAlloca(self: *@This(), storage: Storage, llvm_ir_type: []const u8) !void {
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = alloca {s}",
+            .{ storage, llvm_ir_type },
+        ) catch unreachable;
+        try self.lines.append(self.allocator, .{ .instruction = instruction });
+    }
+
+    fn emitStore(self: *@This(), value_register: Register, storage: Storage, llvm_ir_type: []const u8) !void {
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "store {s} {s}, {s}* {s}",
+            .{ llvm_ir_type, value_register, llvm_ir_type, storage },
+        ) catch unreachable;
+        try self.lines.append(self.allocator, .{ .instruction = instruction });
+    }
+
+    fn emitLoad(self: *@This(), result_register: Register, storage: Storage, llvm_ir_type: []const u8) !void {
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = load {s}, {s}* {s}",
+            .{ result_register, llvm_ir_type, llvm_ir_type, storage },
+        ) catch unreachable;
+        try self.lines.append(self.allocator, .{ .instruction = instruction });
     }
 };

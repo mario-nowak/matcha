@@ -48,11 +48,11 @@ test "parser distinguishes statement ifs from expression ifs" {
     };
     try expectNodeTag(expression_statement.expression, .IfExpression);
 
-    const value_declaration = switch (parsed.program.statements[2].kind) {
-        .ValueDeclaration => |declaration| declaration,
+    const declaration = switch (parsed.program.statements[2].kind) {
+        .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const block = switch (value_declaration.value.kind) {
+    const block = switch (declaration.value.kind) {
         .Block => |block_value| block_value,
         else => return TestError.UnexpectedNodeKind,
     };
@@ -68,12 +68,12 @@ test "parser respects boolean and comparison precedence" {
     var parsed = try helpers.parseProgram(source);
     defer parsed.deinit();
 
-    const value_declaration = switch (parsed.program.statements[0].kind) {
-        .ValueDeclaration => |declaration| declaration,
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
 
-    const or_expression = try expectBinaryExpression(value_declaration.value, .Or);
+    const or_expression = try expectBinaryExpression(declaration.value, .Or);
     try expectNodeTag(or_expression.right, .BooleanLiteral);
 
     const and_expression = try expectBinaryExpression(or_expression.left, .And);
@@ -95,14 +95,40 @@ test "parser binds unary not tighter than and" {
     var parsed = try helpers.parseProgram(source);
     defer parsed.deinit();
 
-    const value_declaration = switch (parsed.program.statements[0].kind) {
-        .ValueDeclaration => |declaration| declaration,
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
 
-    const and_expression = try expectBinaryExpression(value_declaration.value, .And);
+    const and_expression = try expectBinaryExpression(declaration.value, .And);
     _ = try expectUnaryExpression(and_expression.left, .Not);
     try expectNodeTag(and_expression.right, .BooleanLiteral);
+}
+
+test "parser allows identifier-led trailing block expressions" {
+    const source =
+        \\val result = {
+        \\    val left = 1;
+        \\    val right = 2;
+        \\    left + right
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const block = switch (declaration.value.kind) {
+        .Block => |block_value| block_value,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expectEqual(@as(usize, 2), block.statements.len);
+    try std.testing.expect(block.result != null);
+    _ = try expectBinaryExpression(block.result.?, .Add);
 }
 
 test "parser keeps block ending with statement if as statement-only block" {

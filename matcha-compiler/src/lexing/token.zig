@@ -1,6 +1,7 @@
 pub const TokenKind = union(enum) {
     // Keywords
     Val,
+    Var,
     If,
     Else,
     Not,
@@ -51,6 +52,7 @@ pub const Token = struct {
 
         switch (self.kind) {
             .Val => try writer.writeAll("Val"),
+            .Var => try writer.writeAll("Var"),
             .If => try writer.writeAll("If"),
             .Else => try writer.writeAll("Else"),
             .Not => try writer.writeAll("Not"),

@@ -72,7 +72,7 @@ pub const Parser = struct {
     fn parseStatement(self: *Parser) ParserError!ast.Node {
         const token = self.lexer.peek();
         return switch (token.kind) {
-            .Val => try self.parseValueDeclaration(),
+            .Val, .Var => try self.parseDeclaration(),
             .If => block: {
                 const if_token = self.lexer.next(); // consume 'if'
                 const if_form = try self.parseIfForm(if_token);
@@ -97,19 +97,25 @@ pub const Parser = struct {
                 const leftBrace = self.lexer.next();
                 return try self.parseBlock(leftBrace);
             },
+            .Identifier => if (self.startsAssignmentStatement())
+                try self.parseAssignmentStatement()
+            else
+                try self.parseExpressionStatement(),
             else => try self.parseExpressionStatement(),
         };
     }
 
     fn startsStatementOnlyConstruct(token: lexing.Token) bool {
         return switch (token.kind) {
-            .Val => true,
+            .Val,
+            .Var,
+            => true,
             else => false,
         };
     }
 
-    fn parseValueDeclaration(self: *Parser) ParserError!ast.Node {
-        const valToken = self.lexer.next(); // consume 'val'
+    fn parseDeclaration(self: *Parser) ParserError!ast.Node {
+        const val_or_var_token = self.lexer.next(); // consume token
 
         const identifierToken = self.lexer.next();
         if (identifierToken.kind != .Identifier) {
@@ -144,13 +150,55 @@ pub const Parser = struct {
         }
 
         return self.createNode(.{
-            .ValueDeclaration = .{
-                .val_token = valToken,
+            .Declaration = .{
+                .val_token = val_or_var_token,
                 .name = identifierToken,
                 .type_annotation = if (type_annotation) |typeToken| .{ .name_token = typeToken } else null,
                 .value = value,
+                .binding_mutability = switch (val_or_var_token.kind) {
+                    .Val => ast.BindingMutability.Immutable,
+                    .Var => ast.BindingMutability.Mutable,
+                    else => unreachable,
+                },
             },
         });
+    }
+
+    fn parseAssignmentStatement(self: *@This()) ParserError!ast.Node {
+        const identifier_token = self.lexer.next();
+        if (identifier_token.kind != .Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+
+        const assignment_token = self.lexer.next();
+        if (assignment_token.kind != .Assign) {
+            return ParserError.ExpectedEqualSign;
+        }
+
+        const value = self.allocator.create(ast.Node) catch unreachable;
+        value.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+        const semicolon_token = self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            return ParserError.ExpectedSemicolon;
+        }
+
+        return self.createNode(.{
+            .Assignment = .{
+                .identifier_token = identifier_token,
+                .assignment_token = assignment_token,
+                .value = value,
+            },
+        });
+    }
+
+    fn startsAssignmentStatement(self: *@This()) bool {
+        var lookahead = self.lexer;
+        if (lookahead.peek().kind != .Identifier) return false;
+
+        // Advance only the copied lexer to inspect the following token.
+        _ = lookahead.next();
+        return lookahead.peek().kind == .Assign;
     }
 
     fn parseIfForm(self: *Parser, if_token: lexing.Token) ParserError!ParsedIf {
@@ -289,6 +337,10 @@ pub const Parser = struct {
                         }
                     },
                 };
+            },
+            .Identifier => if (self.startsAssignmentStatement()) {
+                const assignment_statement = try self.parseAssignmentStatement();
+                return .{ .statement = assignment_statement };
             },
             else => {},
         }

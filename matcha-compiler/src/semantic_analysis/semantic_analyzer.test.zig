@@ -29,7 +29,7 @@ test "semantic analysis assigns expected types to if forms and comparisons" {
     const typed_program = analyzed.typed_program;
 
     const comparison_declaration = switch (parsed.program.statements[0].kind) {
-        .ValueDeclaration => |declaration| declaration,
+        .Declaration => |declaration| declaration,
         else => return TestError.UnexpectedNodeKind,
     };
     const comparison_symbol_id = typed_program.resolved_program.name_resolution_map.get(parsed.program.statements[0].id).?;
@@ -44,7 +44,7 @@ test "semantic analysis assigns expected types to if forms and comparisons" {
     try std.testing.expectEqual(.Unit, typed_program.node_type_map.get(unit_if_statement.expression.id).?);
 
     const score_declaration = switch (parsed.program.statements[2].kind) {
-        .ValueDeclaration => |declaration| declaration,
+        .Declaration => |declaration| declaration,
         else => return TestError.UnexpectedNodeKind,
     };
     const score_symbol_id = typed_program.resolved_program.name_resolution_map.get(parsed.program.statements[2].id).?;
@@ -63,7 +63,7 @@ test "semantic analysis maps declaration and identifier use to the same symbol" 
 
     const first_statement = analyzed.parsed.program.statements[0];
     const second_declaration = switch (analyzed.parsed.program.statements[1].kind) {
-        .ValueDeclaration => |declaration| declaration,
+        .Declaration => |declaration| declaration,
         else => return TestError.UnexpectedNodeKind,
     };
     const if_expression = switch (second_declaration.value.kind) {

@@ -1,7 +1,3 @@
-; Formatting constant
-@.str = private unnamed_addr constant [4 x i8] c"%d\0A\00"
-; Tell LLVM C's printf exists
-declare i32 @printf(i8*, ...)
 define i32 @main() {
 entry:
     %.t_0 = add i64 2, 3
@@ -9,29 +5,58 @@ entry:
     %.t_2 = sub i64 3, 4
     %.t_3 = mul i64 %.t_1, %.t_2
     %.t_4 = add i64 1, %.t_3
-    %.t_5 = add i64 1, %.t_4
-    %.t_6 = mul i64 %.t_5, 4
-    %.t_7 = mul i64 %.t_4, %.t_4
-    %.t_8 = add i64 %.t_7, %.t_6
-    %.t_9 = add i64 %.t_8, 1
-    %.t_10 = mul i64 %.t_9, 2
-    br i1 0, label %label_then_0, label %label_continue_1
+    %.s_0 = alloca i64
+    store i64 %.t_4, i64* %.s_0
+    %.t_5 = load i64, i64* %.s_0
+    %.t_6 = add i64 1, %.t_5
+    %.t_7 = mul i64 %.t_6, 4
+    %.s_1 = alloca i64
+    store i64 %.t_7, i64* %.s_1
+    %.t_8 = load i64, i64* %.s_0
+    %.t_9 = load i64, i64* %.s_0
+    %.t_10 = mul i64 %.t_8, %.t_9
+    %.t_11 = load i64, i64* %.s_1
+    %.t_12 = add i64 %.t_10, %.t_11
+    %.s_2 = alloca i64
+    store i64 %.t_12, i64* %.s_2
+    %.t_13 = load i64, i64* %.s_2
+    %.t_14 = add i64 %.t_13, 1
+    %.s_3 = alloca i64
+    store i64 %.t_14, i64* %.s_3
+    %.t_15 = load i64, i64* %.s_3
+    %.t_16 = mul i64 %.t_15, 2
+    %.s_4 = alloca i64
+    store i64 %.t_16, i64* %.s_4
+    %.s_5 = alloca i1
+    store i1 0, i1* %.s_5
+    %.t_17 = load i1, i1* %.s_5
+    br i1 %.t_17, label %label_then_0, label %label_continue_1
 label_then_0:
+    %.s_6 = alloca i64
+    store i64 4, i64* %.s_6
     br label %label_continue_1
 label_continue_1:
-    br i1 0, label %label_then_2, label %label_else_3
+    %.t_18 = load i1, i1* %.s_5
+    br i1 %.t_18, label %label_then_2, label %label_else_3
 label_then_2:
+    %.s_7 = alloca i64
+    store i64 3, i64* %.s_7
     br label %label_continue_4
 label_else_3:
+    %.s_8 = alloca i64
+    store i64 5, i64* %.s_8
     br label %label_continue_4
 label_continue_4:
-    br i1 0, label %label_then_5, label %label_else_6
+    %.t_19 = load i1, i1* %.s_5
+    br i1 %.t_19, label %label_then_5, label %label_else_6
 label_then_5:
     br label %label_continue_7
 label_else_6:
     br label %label_continue_7
 label_continue_7:
-    %.t_11 = phi i64 [3, %label_then_5], [4, %label_else_6]
+    %.t_20 = phi i64 [3, %label_then_5], [4, %label_else_6]
+    %.s_9 = alloca i64
+    store i64 %.t_20, i64* %.s_9
     br i1 1, label %label_then_8, label %label_else_9
 label_then_8:
     br i1 0, label %label_then_11, label %label_else_12
@@ -40,12 +65,14 @@ label_then_11:
 label_else_12:
     br label %label_continue_13
 label_continue_13:
-    %.t_12 = phi i64 [1, %label_then_11], [2, %label_else_12]
+    %.t_21 = phi i64 [1, %label_then_11], [2, %label_else_12]
     br label %label_continue_10
 label_else_9:
     br label %label_continue_10
 label_continue_10:
-    %.t_13 = phi i64 [%.t_12, %label_continue_13], [3, %label_else_9]
+    %.t_22 = phi i64 [%.t_21, %label_continue_13], [3, %label_else_9]
+    %.s_10 = alloca i64
+    store i64 %.t_22, i64* %.s_10
     br i1 1, label %label_then_14, label %label_else_15
 label_then_14:
     br i1 0, label %label_then_17, label %label_else_18
@@ -54,54 +81,102 @@ label_then_17:
 label_else_18:
     br label %label_continue_19
 label_continue_19:
-    %.t_14 = phi i64 [1, %label_then_17], [2, %label_else_18]
+    %.t_23 = phi i64 [1, %label_then_17], [2, %label_else_18]
     br label %label_continue_16
 label_else_15:
     br label %label_continue_16
 label_continue_16:
-    %.t_15 = phi i64 [%.t_14, %label_continue_19], [3, %label_else_15]
-    %.t_16 = add i64 %.t_15, 4
-    %.t_17 = sub i64 0, 1
-    %.t_18 = add i64 1, 2
-    %.t_19 = mul i64 %.t_8, 2
-    %.t_20 = add i64 %.t_8, %.t_19
-    %.t_21 = xor i1 0, 1
-    br i1 %.t_21, label %label_then_20, label %label_else_21
+    %.t_24 = phi i64 [%.t_23, %label_continue_19], [3, %label_else_15]
+    %.t_25 = add i64 %.t_24, 4
+    %.s_11 = alloca i64
+    store i64 %.t_25, i64* %.s_11
+    %.s_12 = alloca i1
+    store i1 1, i1* %.s_12
+    %.s_13 = alloca i1
+    store i1 1, i1* %.s_13
+    %.s_14 = alloca i64
+    store i64 2, i64* %.s_14
+    %.t_26 = sub i64 0, 1
+    %.s_15 = alloca i64
+    store i64 %.t_26, i64* %.s_15
+    %.t_27 = add i64 1, 2
+    %.s_16 = alloca i64
+    store i64 %.t_27, i64* %.s_16
+    %.t_28 = load i64, i64* %.s_2
+    %.s_17 = alloca i64
+    store i64 %.t_28, i64* %.s_17
+    %.t_29 = load i64, i64* %.s_2
+    %.t_30 = mul i64 %.t_29, 2
+    %.s_18 = alloca i64
+    store i64 %.t_30, i64* %.s_18
+    %.s_19 = alloca i1
+    store i1 0, i1* %.s_19
+    %.t_31 = load i64, i64* %.s_17
+    %.t_32 = load i64, i64* %.s_18
+    %.t_33 = add i64 %.t_31, %.t_32
+    %.t_34 = load i1, i1* %.s_19
+    %.t_35 = xor i1 %.t_34, 1
+    br i1 %.t_35, label %label_then_20, label %label_else_21
 label_then_20:
     br label %label_continue_22
 label_else_21:
     br label %label_continue_22
 label_continue_22:
-    %.t_22 = phi i64 [1, %label_then_20], [2, %label_else_21]
-    %.t_23 = add i64 %.t_20, %.t_22
-    %.t_24 = or i1 1, 0
-    %.t_25 = and i1 1, 0
-    br i1 %.t_24, label %label_then_23, label %label_else_24
+    %.t_36 = phi i64 [1, %label_then_20], [2, %label_else_21]
+    %.t_37 = add i64 %.t_33, %.t_36
+    %.s_20 = alloca i64
+    store i64 %.t_37, i64* %.s_20
+    %.s_21 = alloca i1
+    store i1 1, i1* %.s_21
+    %.s_22 = alloca i1
+    store i1 0, i1* %.s_22
+    %.t_38 = load i1, i1* %.s_21
+    %.t_39 = load i1, i1* %.s_22
+    %.t_40 = or i1 %.t_38, %.t_39
+    %.s_23 = alloca i1
+    store i1 %.t_40, i1* %.s_23
+    %.t_41 = load i1, i1* %.s_21
+    %.t_42 = load i1, i1* %.s_22
+    %.t_43 = and i1 %.t_41, %.t_42
+    %.s_24 = alloca i1
+    store i1 %.t_43, i1* %.s_24
+    %.t_44 = load i1, i1* %.s_23
+    br i1 %.t_44, label %label_then_23, label %label_else_24
 label_then_23:
-    br i1 %.t_25, label %label_then_26, label %label_else_27
+    %.t_45 = load i1, i1* %.s_24
+    br i1 %.t_45, label %label_then_26, label %label_else_27
 label_then_26:
     br label %label_continue_28
 label_else_27:
     br label %label_continue_28
 label_continue_28:
-    %.t_26 = phi i64 [2, %label_then_26], [1, %label_else_27]
+    %.t_46 = phi i64 [2, %label_then_26], [1, %label_else_27]
     br label %label_continue_25
 label_else_24:
     br label %label_continue_25
 label_continue_25:
-    %.t_27 = phi i64 [%.t_26, %label_continue_28], [0, %label_else_24]
-    %.t_28 = icmp sge i64 %.t_27, 1
-    br i1 %.t_28, label %label_then_29, label %label_else_30
+    %.t_47 = phi i64 [%.t_46, %label_continue_28], [0, %label_else_24]
+    %.s_25 = alloca i64
+    store i64 %.t_47, i64* %.s_25
+    %.t_48 = load i64, i64* %.s_25
+    %.t_49 = icmp sge i64 %.t_48, 1
+    %.s_26 = alloca i1
+    store i1 %.t_49, i1* %.s_26
+    %.t_50 = load i1, i1* %.s_26
+    br i1 %.t_50, label %label_then_29, label %label_else_30
 label_then_29:
     br label %label_continue_31
 label_else_30:
     br label %label_continue_31
 label_continue_31:
-    %.t_29 = phi i64 [1, %label_then_29], [0, %label_else_30]
+    %.t_51 = phi i64 [1, %label_then_29], [0, %label_else_30]
+    %.s_27 = alloca i64
+    store i64 %.t_51, i64* %.s_27
+    %.s_28 = alloca i64
+    store i64 10, i64* %.s_28
+    %.t_52 = load i64, i64* %.s_28
+    %.t_53 = mul i64 %.t_52, 2
+    store i64 %.t_53, i64* %.s_28
 
-    ; get pointer to @.str
-    %fmtptr = getelementptr inbounds [4 x i8], [4 x i8]* @.str, i64 0, i64 0
-    ; call printf with formatting string and last expression
-    call i32 (i8*, ...) @printf(i8* %fmtptr, i64 %.t_29)
     ret i32 0
 }

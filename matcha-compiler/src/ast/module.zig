@@ -5,9 +5,10 @@ pub const NodeId = u32;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
-    ValueDeclaration: ValueDeclaration,
+    Declaration: Declaration,
     IfStatement: IfStatement,
     ExpressionStatement: ExpressionStatement,
+    Assignment: Assignment,
     // Expressions-ish nodes
     IfExpression: IfExpression,
     BinaryExpression: BinaryExpression,
@@ -23,11 +24,23 @@ pub const Node = struct {
     kind: NodeKind,
 };
 
-pub const ValueDeclaration = struct {
+pub const Declaration = struct {
     val_token: lexing.Token,
     name: lexing.Token,
     type_annotation: ?TypeAnnotation,
     value: *Node,
+    binding_mutability: BindingMutability,
+};
+
+pub const Assignment = struct {
+    identifier_token: lexing.Token,
+    assignment_token: lexing.Token,
+    value: *Node,
+};
+
+pub const BindingMutability = enum {
+    Mutable,
+    Immutable,
 };
 
 pub const IfStatement = struct {
