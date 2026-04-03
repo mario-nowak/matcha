@@ -10,6 +10,8 @@ const Storage = []const u8;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 const LlvmIrTypeByMatchaType = std.EnumArray(typing.Type, []const u8);
 
+const print_int_formatting_string = ".print_int_formatting_string";
+
 const Line = union(enum) {
     instruction: Instruction,
     label: Label,
@@ -101,12 +103,14 @@ pub const LlvmIrEmitter = struct {
     allocator: std.mem.Allocator,
     symbol_generator: SymbolGenerator,
     lines: std.ArrayList(Line),
+    needs_printf: bool,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
             .symbol_generator = SymbolGenerator.init(allocator, ".t", ".s"),
             .lines = .{},
+            .needs_printf = false,
         };
     }
 
@@ -137,7 +141,14 @@ pub const LlvmIrEmitter = struct {
             }
         }
 
+        const prelude = if (self.needs_printf)
+            \\@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
+            \\declare i32 @printf(i8*, ...)
+        else
+            "";
+
         const template =
+            \\{s}
             \\define i32 @main() {{
             \\entry:
             \\{s}
@@ -145,7 +156,14 @@ pub const LlvmIrEmitter = struct {
             \\}}
         ;
 
-        return std.fmt.allocPrint(self.allocator, template, .{instructions_buffer.items}) catch unreachable;
+        return std.fmt.allocPrint(
+            self.allocator,
+            template,
+            .{
+                prelude,
+                instructions_buffer.items,
+            },
+        ) catch unreachable;
     }
 
     fn emitNode(
@@ -182,6 +200,48 @@ pub const LlvmIrEmitter = struct {
                 return .{
                     .exit_label = entry_label,
                     .register = register,
+                };
+            },
+            .CallExpression => |call_expression| {
+                switch (call_expression.callee.kind) {
+                    .Identifier => |identifier| {
+                        // --- Debugging ---
+                        if (!std.mem.eql(u8, identifier.kind.Identifier, "printInt")) {
+                            unreachable;
+                        }
+                    },
+                    else => unreachable,
+                }
+
+                self.needs_printf = true;
+
+                const argument_result = try self.emitNode(
+                    &call_expression.arguments[0],
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+
+                // Get pointer to the string used to format integer printing
+                const integer_formatting_string_pointer = self.symbol_generator.generateRegister();
+                const print_instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0",
+                    .{integer_formatting_string_pointer},
+                ) catch unreachable;
+                try self.lines.append(self.allocator, .{ .instruction = print_instruction });
+
+                // Call C printf function with formatting string and actual value
+                const call_instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "call i32 (i8*, ...) @printf(i8* {s}, i64 {s})",
+                    .{ integer_formatting_string_pointer, argument_result.register.? },
+                ) catch unreachable;
+                try self.lines.append(self.allocator, .{ .instruction = call_instruction });
+
+                return .{
+                    .exit_label = argument_result.exit_label,
+                    .register = null,
                 };
             },
             .BinaryExpression => |binary_expression| {

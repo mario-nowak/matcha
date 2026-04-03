@@ -96,6 +96,29 @@ pub const TypeChecker = struct {
                 }
                 try self.node_type_map.put(node.id, .Unit);
             },
+            .CallExpression => |call_expression| {
+                switch (call_expression.callee.kind) {
+                    .Identifier => |identifier| {
+                        if (!std.mem.eql(u8, identifier.kind.Identifier, "printInt")) {
+                            return TypeError.TypeMismatch;
+                        }
+
+                        if (call_expression.arguments.len != 1) {
+                            return TypeError.TypeMismatch;
+                        }
+
+                        const argument = call_expression.arguments[0];
+                        try self.checkNode(&argument, resolved_program, &ValidationContext{ .requires_value = true });
+                        const argument_type = self.node_type_map.get(argument.id).?;
+                        if (argument_type != .Integer) {
+                            return TypeError.TypeMismatch;
+                        }
+
+                        try self.node_type_map.put(node.id, .Unit);
+                    },
+                    else => return TypeError.TypeMismatch,
+                }
+            },
             .BinaryExpression => |binaryExpression| {
                 try self.checkNode(
                     binaryExpression.left,

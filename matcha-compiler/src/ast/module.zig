@@ -11,6 +11,7 @@ pub const NodeKind = union(enum) {
     Assignment: Assignment,
     // Expressions-ish nodes
     IfExpression: IfExpression,
+    CallExpression: CallExpression,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
     Identifier: lexing.Token,
@@ -59,6 +60,13 @@ pub const IfExpression = struct {
 
 pub const ExpressionStatement = struct {
     expression: *Node,
+};
+
+pub const CallExpression = struct {
+    callee: *Node,
+    left_parenthesis: lexing.Token,
+    arguments: []Node,
+    right_parenthesis: lexing.Token,
 };
 
 pub const BinaryOperator = enum {

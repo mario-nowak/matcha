@@ -184,6 +184,7 @@ pub const Lexer = struct {
                 '/' => .Slash,
                 '<' => .LessThan,
                 '>' => .GreaterThan,
+                ',' => .Comma,
                 else => .{ .Error = .{ .message = "Unrecognized character" } },
             },
         };

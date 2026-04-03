@@ -25,6 +25,7 @@ pub const TokenKind = union(enum) {
     Minus,
     Asterisk,
     Slash,
+    Comma,
     //
     Identifier: []const u8,
     IntLiteral: i64,
@@ -69,6 +70,7 @@ pub const Token = struct {
             .Minus => try writer.writeAll("Minus"),
             .Asterisk => try writer.writeAll("Asterisk"),
             .Slash => try writer.writeAll("Slash"),
+            .Comma => try writer.writeAll("Comma"),
             .Identifier => |lexeme| try writer.print("Identifier(\"{s}\")", .{lexeme}),
             .IntLiteral => |value| try writer.print("IntLiteral({})", .{value}),
             .RealLiteral => |value| try writer.print("RealLiteral({})", .{value}),
