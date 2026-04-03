@@ -40,6 +40,13 @@ pub const NameResolver = struct {
         };
     }
 
+    pub fn generateSymbolId(self: *@This()) symbols.SymbolId {
+        const symbol_id = self.next_symbol_id;
+        self.next_symbol_id += 1;
+
+        return symbol_id;
+    }
+
     fn resolveNode(self: *@This(), node: *const ast.Node, scope: *Scope) !void {
         switch (node.kind) {
             .Declaration => |value_declaration| {
@@ -49,8 +56,7 @@ pub const NameResolver = struct {
                     return NameResolutionError.ValueAlreadyDeclared;
                 }
                 try self.resolveNode(value_declaration.value, scope);
-                const symbol_id = self.next_symbol_id;
-                self.next_symbol_id += 1;
+                const symbol_id = self.generateSymbolId();
                 try self.symbol_table.put(symbol_id, .{
                     .id = symbol_id,
                     .name = value_declaration.name.kind.Identifier,
@@ -78,6 +84,21 @@ pub const NameResolver = struct {
                     return NameResolutionError.UndefinedIdentifier;
                 }
                 try self.resolveNode(assignment.value, scope);
+            },
+            .CallExpression => |call_expression| {
+                switch (call_expression.callee.kind) {
+                    .Identifier => |identifier| {
+                        // -- Debugging --
+                        if (!std.mem.eql(u8, identifier.kind.Identifier, "printInt")) {
+                            try self.resolveNode(call_expression.callee, scope);
+                        }
+                    },
+                    else => try self.resolveNode(call_expression.callee, scope),
+                }
+
+                for (call_expression.arguments) |*argument| {
+                    try self.resolveNode(argument, scope);
+                }
             },
             .BinaryExpression => |binaryExpression| {
                 try self.resolveNode(binaryExpression.left, scope);

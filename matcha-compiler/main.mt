@@ -59,4 +59,6 @@ val im_happy_confirmed = happiness_score >= 1;
 val exit_code = if im_happy_confirmed { 1 } else { 0 };
 
 var this_is_mutable = 10;
+printInt(this_is_mutable);
 this_is_mutable = this_is_mutable * 2;
+printInt(this_is_mutable);

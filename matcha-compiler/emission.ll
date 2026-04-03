@@ -1,3 +1,5 @@
+@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
+declare i32 @printf(i8*, ...)
 define i32 @main() {
 entry:
     %.t_0 = add i64 2, 3
@@ -175,8 +177,14 @@ label_continue_31:
     %.s_28 = alloca i64
     store i64 10, i64* %.s_28
     %.t_52 = load i64, i64* %.s_28
-    %.t_53 = mul i64 %.t_52, 2
-    store i64 %.t_53, i64* %.s_28
+    %.t_53 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
+    call i32 (i8*, ...) @printf(i8* %.t_53, i64 %.t_52)
+    %.t_54 = load i64, i64* %.s_28
+    %.t_55 = mul i64 %.t_54, 2
+    store i64 %.t_55, i64* %.s_28
+    %.t_56 = load i64, i64* %.s_28
+    %.t_57 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
+    call i32 (i8*, ...) @printf(i8* %.t_57, i64 %.t_56)
 
     ret i32 0
 }

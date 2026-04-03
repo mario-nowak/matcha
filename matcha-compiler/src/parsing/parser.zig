@@ -19,6 +19,7 @@ pub const Parser = struct {
 
     pub const ParserError = error{
         MissingClosingParenthesis,
+        ExpectedOpeningParenthesis,
         ExpectedIdentifier,
         ExpectedEqualSign,
         ExpectedSemicolon,
@@ -422,7 +423,10 @@ pub const Parser = struct {
                     },
                 });
             },
-            else => return ParserError.ExpectedIdentifier,
+            else => {
+                std.debug.print("Expected expression starter, got: {any}\n", .{token});
+                return ParserError.ExpectedIdentifier;
+            },
         };
 
         if (token.kind == .LeftParenthesis) {
@@ -436,6 +440,12 @@ pub const Parser = struct {
         while (true) {
             // Find the next operator without consuming it
             const next_token = self.lexer.peek();
+
+            if (next_token.kind == .LeftParenthesis) {
+                left_hand_side = try self.parseCalleeExpression(left_hand_side);
+                continue;
+            }
+
             const operator = switch (next_token.kind) {
                 .Or => OperatorInfo{
                     .left_binding_power = 1.0,
@@ -511,6 +521,42 @@ pub const Parser = struct {
                 // expression will become the right hand side expression of the operator we last consumed.
                 return left_hand_side;
             }
+        }
+    }
+
+    pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) ParserError!ast.Node {
+        const left_parenthesis = self.lexer.next();
+        if (left_parenthesis.kind != .LeftParenthesis) {
+            return ParserError.ExpectedOpeningParenthesis;
+        }
+
+        var next_token = self.lexer.peek();
+        var arguments = std.ArrayList(ast.Node){};
+
+        while (true) : (next_token = self.lexer.peek()) {
+            if (next_token.kind == .RightParenthesis) {
+                const right_parenthesis = self.lexer.next();
+
+                const callee = self.allocator.create(ast.Node) catch unreachable;
+                callee.* = left_hand_size;
+
+                return self.createNode(.{
+                    .CallExpression = .{
+                        .callee = callee,
+                        .left_parenthesis = left_parenthesis,
+                        .arguments = arguments.toOwnedSlice(self.allocator) catch unreachable,
+                        .right_parenthesis = right_parenthesis,
+                    },
+                });
+            }
+
+            if (next_token.kind == .Comma) {
+                _ = self.lexer.next(); // consume comma
+                continue;
+            }
+
+            const argument = try self.parseExpression(.{ .current_binding_power = 0.0 });
+            arguments.append(self.allocator, argument) catch unreachable;
         }
     }
 };
