@@ -58,7 +58,7 @@ pub const TypeChecker = struct {
         context: *const ValidationContext,
     ) !void {
         switch (node.kind) {
-            .ValueDeclaration => |value_declaration| {
+            .Declaration => |value_declaration| {
                 try self.checkNode(
                     value_declaration.value,
                     resolved_program,
@@ -71,11 +71,29 @@ pub const TypeChecker = struct {
                     null;
                 if (annotated_type) |annotated| {
                     if (annotated != value_type) {
+                        std.debug.print(
+                            "Type Error: Value declaration annotation does not match initializer type, expected {any}, got {any}\n",
+                            .{ annotated, value_type },
+                        );
                         return TypeError.TypeMismatch;
                     }
                 }
                 const symbol_id = resolved_program.name_resolution_map.get(node.id).?;
                 try self.symbol_type_map.put(symbol_id, value_type);
+                try self.node_type_map.put(node.id, .Unit);
+            },
+            .Assignment => |assignment| {
+                try self.checkNode(assignment.value, resolved_program, &ValidationContext{ .requires_value = true });
+                const value_type = self.node_type_map.get(assignment.value.id).?;
+                const symbol_id = resolved_program.name_resolution_map.get(node.id).?;
+                const symbol_type = self.symbol_type_map.get(symbol_id).?;
+                if (symbol_type != value_type) {
+                    std.debug.print(
+                        "Type Error: Cannot assign value of type {any} to symbol of type {any}\n",
+                        .{ value_type, symbol_type },
+                    );
+                    return TypeError.TypeMismatch;
+                }
                 try self.node_type_map.put(node.id, .Unit);
             },
             .BinaryExpression => |binaryExpression| {
@@ -95,13 +113,25 @@ pub const TypeChecker = struct {
                 if (typing.binary_operator_rules_by_type.get(left_expression_type)) |rules_for_left_type| {
                     if (rules_for_left_type.get(binaryExpression.operator)) |operator_rule| {
                         if (operator_rule.argument_type != right_expression_type) {
+                            std.debug.print(
+                                "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
+                                .{ binaryExpression.operator, operator_rule.argument_type, right_expression_type },
+                            );
                             return TypeError.TypeMismatch;
                         }
                         try self.node_type_map.put(node.id, operator_rule.return_type);
                     } else {
+                        std.debug.print(
+                            "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
+                            .{ binaryExpression.operator, left_expression_type },
+                        );
                         return TypeError.TypeMismatch;
                     }
                 } else {
+                    std.debug.print(
+                        "Type Error: No binary operator rules exist for left operand type {any}\n",
+                        .{left_expression_type},
+                    );
                     return TypeError.TypeMismatch;
                 }
             },
@@ -116,17 +146,27 @@ pub const TypeChecker = struct {
                     if (rules_for_operand_type.get(unaryExpression.operator)) |operator_rule| {
                         try self.node_type_map.put(node.id, operator_rule.return_type);
                     } else {
+                        std.debug.print(
+                            "Type Error: Unary operator {any} is not supported for operand type {any}\n",
+                            .{ unaryExpression.operator, operand_type },
+                        );
                         return TypeError.TypeMismatch;
                     }
                 } else {
+                    std.debug.print(
+                        "Type Error: No unary operator rules exist for operand type {any}\n",
+                        .{operand_type},
+                    );
                     return TypeError.TypeMismatch;
                 }
             },
             .Block => |block| {
                 if (context.requires_value and block.result == null) {
+                    std.debug.print("Type Error: Block must produce a value in this context\n", .{});
                     return TypeError.BlockMustProduceValue;
                 }
                 if (!context.requires_value and block.result != null) {
+                    std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
                     return TypeError.BlockCannotProduceValue;
                 }
 
@@ -168,6 +208,7 @@ pub const TypeChecker = struct {
                 );
                 const if_condition_type = self.node_type_map.get(if_statement.condition.id).?;
                 if (if_condition_type != .Boolean) {
+                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
                     return TypeError.TypeMismatch;
                 }
 
@@ -186,6 +227,7 @@ pub const TypeChecker = struct {
                 );
                 const if_condition_type = self.node_type_map.get(if_expression.condition.id).?;
                 if (if_condition_type != .Boolean) {
+                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
                     return TypeError.TypeMismatch;
                 }
 
@@ -204,6 +246,10 @@ pub const TypeChecker = struct {
                 const else_block_type = self.node_type_map.get(if_expression.else_block.id).?;
 
                 if (then_block_type != else_block_type) {
+                    std.debug.print(
+                        "Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n",
+                        .{ then_block_type, else_block_type },
+                    );
                     return TypeError.TypeMismatch;
                 }
 
@@ -227,6 +273,7 @@ pub const TypeChecker = struct {
         } else if (std.mem.eql(u8, typeName, "int")) {
             return .Integer;
         } else {
+            std.debug.print("Type Error: Unknown type annotation: {s}\n", .{typeName});
             return TypeError.TypeMismatch;
         }
     }

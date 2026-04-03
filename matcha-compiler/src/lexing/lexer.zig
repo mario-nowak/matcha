@@ -202,6 +202,7 @@ pub const Lexer = struct {
 
     fn asKeyword(alphanumeric: []const u8) ?TokenKind {
         if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
+        if (std.mem.eql(u8, alphanumeric, "var")) return .Var;
         if (std.mem.eql(u8, alphanumeric, "if")) return .If;
         if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
         if (std.mem.eql(u8, alphanumeric, "not")) return .Not;
