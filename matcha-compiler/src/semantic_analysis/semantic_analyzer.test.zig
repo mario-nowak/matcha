@@ -10,7 +10,12 @@ fn expectAnalyzeError(expected: anyerror, source: []const u8) !void {
     const allocator = parsed.allocator();
     const name_resolver = @import("semantic_analysis").name_resolution.NameResolver.init(allocator);
     const type_checker = @import("semantic_analysis").type_checking.TypeChecker.init(allocator);
-    var analyzer = @import("semantic_analysis").SemanticAnalyzer.init(name_resolver, type_checker);
+    const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator{};
+    var analyzer = @import("semantic_analysis").SemanticAnalyzer.init(
+        name_resolver,
+        type_checker,
+        control_flow_validator,
+    );
 
     try std.testing.expectError(expected, analyzer.validateProgram(&parsed.program));
 }
@@ -97,5 +102,15 @@ test "semantic analysis rejects non-unit if expressions used as statements" {
 test "semantic analysis rejects unary not on integers" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val bad = not 1;
+    );
+}
+
+test "semantic analysis rejects loop control outside loops" {
+    try expectAnalyzeError(error.LeaveUsedOutsideOfLoop,
+        \\if true { leave; }
+    );
+
+    try expectAnalyzeError(error.ContinueUsedOutsideOfLoop,
+        \\if true { continue; }
     );
 }

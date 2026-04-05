@@ -62,3 +62,47 @@ var this_is_mutable = 10;
 printInt(this_is_mutable);
 this_is_mutable = this_is_mutable * 2;
 printInt(this_is_mutable);
+
+var n = 6;
+var sum = 0;
+var i = 0;
+loop {
+    if i >= n  leave;
+
+    var j = 1;
+    loop {
+
+        sum = sum + j;
+
+        j = j + 1;
+        if j > i+1 leave;
+    }
+
+    i = i + 1;
+}
+
+printInt(sum);
+
+printInt(0);
+var limit = 5;
+var is_even = false;
+var uneven_sum = 0;
+var counter = 1;
+loop {
+    if counter >= limit leave;
+
+    if is_even {
+        counter = counter + 1;
+        is_even = not is_even;
+        continue;
+    } else {
+        uneven_sum = uneven_sum + counter;
+        printInt(uneven_sum);
+    };
+
+    counter = counter + 1;
+    is_even = not is_even;
+}
+
+printInt(0);
+printInt(uneven_sum);

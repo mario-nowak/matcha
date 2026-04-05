@@ -7,6 +7,9 @@ pub const TokenKind = union(enum) {
     Not,
     And,
     Or,
+    Loop,
+    Leave,
+    Continue,
     // Punctuation
     LeftParenthesis,
     RightParenthesis,

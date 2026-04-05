@@ -96,6 +96,13 @@ pub const TypeChecker = struct {
                 }
                 try self.node_type_map.put(node.id, .Unit);
             },
+            .Loop => |loop| {
+                for (loop.statements) |*statement| {
+                    try self.checkNode(statement, resolved_program, &ValidationContext{ .requires_value = false });
+                }
+            },
+            .Leave => {},
+            .Continue => {},
             .CallExpression => |call_expression| {
                 switch (call_expression.callee.kind) {
                     .Identifier => |identifier| {

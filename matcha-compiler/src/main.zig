@@ -23,9 +23,11 @@ pub fn main() !void {
 
     const name_resolver = matcha.semantic_analysis.name_resolution.NameResolver.init(allocator);
     const type_checker = matcha.semantic_analysis.type_checking.TypeChecker.init(allocator);
+    const control_flow_validator = matcha.semantic_analysis.control_flow_validation.ControlFlowValidator{};
     var semantic_analyzer = matcha.semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
+        control_flow_validator,
     );
     const typed_program = try semantic_analyzer.validateProgram(&program);
 

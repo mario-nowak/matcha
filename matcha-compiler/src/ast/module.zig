@@ -9,6 +9,9 @@ pub const NodeKind = union(enum) {
     IfStatement: IfStatement,
     ExpressionStatement: ExpressionStatement,
     Assignment: Assignment,
+    Loop: Loop,
+    Leave: Leave,
+    Continue: Continue,
     // Expressions-ish nodes
     IfExpression: IfExpression,
     CallExpression: CallExpression,
@@ -42,6 +45,21 @@ pub const Assignment = struct {
 pub const BindingMutability = enum {
     Mutable,
     Immutable,
+};
+
+pub const Loop = struct {
+    loop_token: lexing.Token,
+    left_brace: lexing.Token,
+    statements: []Node,
+    right_brace: lexing.Token,
+};
+
+pub const Leave = struct {
+    leave_token: lexing.Token,
+};
+
+pub const Continue = struct {
+    continue_token: lexing.Token,
 };
 
 pub const IfStatement = struct {

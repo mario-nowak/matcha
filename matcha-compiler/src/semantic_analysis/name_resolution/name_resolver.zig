@@ -85,6 +85,14 @@ pub const NameResolver = struct {
                 }
                 try self.resolveNode(assignment.value, scope);
             },
+            .Loop => |loop| {
+                var loop_scope = Scope.init(self.allocator, scope);
+                for (loop.statements) |*statement| {
+                    try self.resolveNode(statement, &loop_scope);
+                }
+            },
+            .Leave => {},
+            .Continue => {},
             .CallExpression => |call_expression| {
                 switch (call_expression.callee.kind) {
                     .Identifier => |identifier| {
