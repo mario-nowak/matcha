@@ -75,7 +75,7 @@ pub const Parser = struct {
         return switch (token.kind) {
             .Val, .Var => try self.parseDeclaration(),
             .If => block: {
-                const if_token = self.lexer.next(); // consume 'if'
+                const if_token = self.lexer.next();
                 const if_form = try self.parseIfForm(if_token);
                 break :block switch (if_form) {
                     .statement => |if_statement| if_statement,
@@ -94,6 +94,31 @@ pub const Parser = struct {
                     },
                 };
             },
+            .Loop => try self.parseLoopStatement(),
+            .Leave => {
+                const leave_token = self.lexer.next();
+                const semicolon = self.lexer.next();
+                if (semicolon.kind != .Semicolon) {
+                    return ParserError.ExpectedSemicolon;
+                }
+                return self.createNode(.{
+                    .Leave = .{
+                        .leave_token = leave_token,
+                    },
+                });
+            },
+            .Continue => {
+                const continue_token = self.lexer.next();
+                const semicolon = self.lexer.next();
+                if (semicolon.kind != .Semicolon) {
+                    return ParserError.ExpectedSemicolon;
+                }
+                return self.createNode(.{
+                    .Continue = .{
+                        .continue_token = continue_token,
+                    },
+                });
+            },
             .LeftBrace => {
                 const leftBrace = self.lexer.next();
                 return try self.parseBlock(leftBrace);
@@ -110,6 +135,9 @@ pub const Parser = struct {
         return switch (token.kind) {
             .Val,
             .Var,
+            .Loop,
+            .Leave,
+            .Continue,
             => true,
             else => false,
         };
@@ -161,6 +189,39 @@ pub const Parser = struct {
                     .Var => ast.BindingMutability.Mutable,
                     else => unreachable,
                 },
+            },
+        });
+    }
+
+    fn parseLoopStatement(self: *@This()) ParserError!ast.Node {
+        const loop_token = self.lexer.next();
+        if (loop_token.kind != .Loop) {
+            unreachable;
+        }
+
+        const left_brace = self.lexer.next();
+        if (left_brace.kind != .LeftBrace) {
+            return ParserError.ExpectedLeftBrace;
+        }
+
+        var statements = std.ArrayList(ast.Node){};
+
+        var current_token = self.lexer.peek();
+        while (current_token.kind != .RightBrace) : (current_token = self.lexer.peek()) {
+            statements.append(self.allocator, try self.parseStatement()) catch unreachable;
+        }
+
+        const right_brace = self.lexer.next();
+        if (right_brace.kind != .RightBrace) {
+            unreachable;
+        }
+
+        return self.createNode(.{
+            .Loop = .{
+                .loop_token = loop_token,
+                .left_brace = left_brace,
+                .statements = statements.toOwnedSlice(self.allocator) catch unreachable,
+                .right_brace = right_brace,
             },
         });
     }
