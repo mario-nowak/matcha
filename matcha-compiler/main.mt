@@ -67,7 +67,9 @@ var n = 6;
 var sum = 0;
 var i = 0;
 loop {
-    if i >= n  leave;
+    if i >= n {
+        leave;
+    }
 
     var j = 1;
     loop {
@@ -75,7 +77,9 @@ loop {
         sum = sum + j;
 
         j = j + 1;
-        if j > i+1 leave;
+        if j > i+1 {
+            leave;
+        }
     }
 
     i = i + 1;
@@ -89,7 +93,9 @@ var is_even = false;
 var uneven_sum = 0;
 var counter = 1;
 loop {
-    if counter >= limit leave;
+    if counter >= limit {
+        leave;
+    }
 
     if is_even {
         counter = counter + 1;
@@ -106,3 +112,21 @@ loop {
 
 printInt(0);
 printInt(uneven_sum);
+
+var x_00001 = 1;
+if x_00001 <= 10 {
+    x_00001 = x_00001 + 1;
+}
+printInt(x_00001);
+
+var is_true = true;
+while is_true {
+    is_true = false;
+}
+
+
+var x_02 = 0;
+while x_02 < 10 {
+    printInt(x_02);
+    x_02 = x_02 + 1;
+}

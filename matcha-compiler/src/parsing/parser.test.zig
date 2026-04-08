@@ -60,6 +60,14 @@ test "parser distinguishes statement ifs from expression ifs" {
     try expectNodeTag(block.result.?, .IfExpression);
 }
 
+test "parser requires braces for one-branch if bodies" {
+    const source =
+        \\if true printInt(1);
+    ;
+
+    try std.testing.expectError(error.ExpectedLeftBrace, helpers.parseProgram(source));
+}
+
 test "parser respects boolean and comparison precedence" {
     const source =
         \\val result = 1 + 2 >= 3 and false or true;

@@ -28,6 +28,12 @@ const LoopContext = struct {
     leave_label: Label,
 };
 
+const LoopConstruct = struct {
+    condition: ?*ast.Node,
+    update: ?*ast.Node,
+    body_block: *ast.Block,
+};
+
 pub const Environment = struct {
     storage_by_symbol_id: StorageBySymbolId,
     loop_context: ?LoopContext,
@@ -135,7 +141,7 @@ pub const LlvmIrEmitter = struct {
         defer environment.deinit();
         var current_label: Label = "entry";
         for (typed_program.resolved_program.program.statements) |statement| {
-            const result = self.emitNode(&statement, current_label, typed_program, &environment) catch unreachable;
+            const result = self.emitNode(&statement, current_label, typed_program, &environment);
             if (result.exit_label) |exit_label| {
                 current_label = exit_label;
             } else {
@@ -146,7 +152,7 @@ pub const LlvmIrEmitter = struct {
         var storage_allocation_buffer = std.ArrayList(u8){};
         defer storage_allocation_buffer.deinit(self.allocator);
         for (self.storage_allocation_instructions.items) |instruction| {
-            storage_allocation_buffer.writer(self.allocator).print("   {s}\n", .{instruction}) catch unreachable;
+            storage_allocation_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
         }
 
         var instructions_buffer = std.ArrayList(u8){};
@@ -195,7 +201,7 @@ pub const LlvmIrEmitter = struct {
         entry_label: Label,
         typed_program: *const typing.TypedProgram,
         environment: *Environment,
-    ) !EmissionResult {
+    ) EmissionResult {
         switch (node.kind) {
             .IntegerLiteral => |token| {
                 return .{
@@ -218,7 +224,7 @@ pub const LlvmIrEmitter = struct {
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
                 const llvm_ir_type = llvm_ir_type_by_matcha_type.get(typed_program.node_type_map.get(node.id).?);
                 const register = self.symbol_generator.generateRegister();
-                try self.emitLoad(register, storage, llvm_ir_type);
+                self.emitLoad(register, storage, llvm_ir_type);
 
                 return .{
                     .exit_label = entry_label,
@@ -226,47 +232,40 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Loop => |loop| {
-                const loop_header_label = self.symbol_generator.generateLabel("loop_header");
-                const loop_exit_label = self.symbol_generator.generateLabel("loop_exit");
-                const previous_loop_context = environment.loop_context;
-                const loop_context = LoopContext{
-                    .continue_label = loop_header_label,
-                    .leave_label = loop_exit_label,
+                var body_block = switch (loop.body_block.kind) {
+                    .Block => |block| block,
+                    else => unreachable,
                 };
-                environment.loop_context = loop_context;
 
-                const branch_to_header_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br label %{s}",
-                    .{loop_header_label},
-                ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction });
-
-                try self.emitLabel(loop_header_label);
-                var current_label = loop_header_label;
-                var falls_through = true;
-                for (loop.statements) |*statement| {
-                    const result = try self.emitNode(statement, current_label, typed_program, environment);
-                    if (result.exit_label) |exit_label| {
-                        current_label = exit_label;
-                    } else {
-                        falls_through = false;
-                        break;
-                    }
-                }
-
-                if (falls_through) {
-                    try self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction });
-                }
-
-                try self.emitLabel(loop_exit_label);
-
-                environment.loop_context = previous_loop_context;
-
-                return .{
-                    .exit_label = loop_exit_label,
-                    .register = null,
+                const loop_construct = LoopConstruct{
+                    .condition = null,
+                    .body_block = &body_block,
+                    .update = null,
                 };
+
+                return self.emitLoopConstruct(
+                    loop_construct,
+                    typed_program,
+                    environment,
+                );
+            },
+            .While => |while_statement| {
+                var body_block = switch (while_statement.body_block.kind) {
+                    .Block => |block| block,
+                    else => unreachable,
+                };
+
+                const loop_construct = LoopConstruct{
+                    .condition = while_statement.condition,
+                    .body_block = &body_block,
+                    .update = while_statement.update,
+                };
+
+                return self.emitLoopConstruct(
+                    loop_construct,
+                    typed_program,
+                    environment,
+                );
             },
             .Leave => {
                 const branch_instruction = std.fmt.allocPrint(
@@ -274,7 +273,7 @@ pub const LlvmIrEmitter = struct {
                     "br label %{s}",
                     .{environment.loop_context.?.leave_label},
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = branch_instruction });
+                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
 
                 return .{
                     .exit_label = null,
@@ -287,7 +286,7 @@ pub const LlvmIrEmitter = struct {
                     "br label %{s}",
                     .{environment.loop_context.?.continue_label},
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = branch_instruction });
+                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
 
                 return .{
                     .exit_label = null,
@@ -307,7 +306,7 @@ pub const LlvmIrEmitter = struct {
 
                 self.needs_printf = true;
 
-                const argument_result = try self.emitNode(
+                const argument_result = self.emitNode(
                     &call_expression.arguments[0],
                     entry_label,
                     typed_program,
@@ -321,7 +320,7 @@ pub const LlvmIrEmitter = struct {
                     "{s} = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0",
                     .{integer_formatting_string_pointer},
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = print_instruction });
+                self.lines.append(self.allocator, .{ .instruction = print_instruction }) catch unreachable;
 
                 // Call C printf function with formatting string and actual value
                 const call_instruction = std.fmt.allocPrint(
@@ -329,7 +328,7 @@ pub const LlvmIrEmitter = struct {
                     "call i32 (i8*, ...) @printf(i8* {s}, i64 {s})",
                     .{ integer_formatting_string_pointer, argument_result.register.? },
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = call_instruction });
+                self.lines.append(self.allocator, .{ .instruction = call_instruction }) catch unreachable;
 
                 return .{
                     .exit_label = argument_result.exit_label,
@@ -337,13 +336,13 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .BinaryExpression => |binary_expression| {
-                const left_result = try self.emitNode(
+                const left_result = self.emitNode(
                     binary_expression.left,
                     entry_label,
                     typed_program,
                     environment,
                 );
-                const right_result = try self.emitNode(
+                const right_result = self.emitNode(
                     binary_expression.right,
                     left_result.exit_label.?,
                     typed_program,
@@ -371,7 +370,7 @@ pub const LlvmIrEmitter = struct {
                     "{s} = {s} {s} {s}, {s}",
                     .{ result_register, operator, instruction_type, left_result.register.?, right_result.register.? },
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = instruction });
+                self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
 
                 return .{
                     .exit_label = right_result.exit_label,
@@ -379,7 +378,7 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .UnaryExpression => |unary_expression| {
-                const operand_result = try self.emitNode(
+                const operand_result = self.emitNode(
                     unary_expression.operand,
                     entry_label,
                     typed_program,
@@ -400,7 +399,7 @@ pub const LlvmIrEmitter = struct {
                         .{ result_register, instruction_type, operand_result.register.? },
                     ) catch unreachable,
                 };
-                try self.lines.append(self.allocator, .{ .instruction = instruction });
+                self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
 
                 return .{
                     .exit_label = operand_result.exit_label,
@@ -408,7 +407,7 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Declaration => |value_declaration| {
-                const value_declaration_result = try self.emitNode(
+                const value_declaration_result = self.emitNode(
                     value_declaration.value,
                     entry_label,
                     typed_program,
@@ -419,8 +418,8 @@ pub const LlvmIrEmitter = struct {
                 const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
 
                 const storage = self.symbol_generator.generateStorage();
-                try self.emitAlloca(storage, llvm_ir_type);
-                try self.emitStore(value_declaration_result.register.?, storage, llvm_ir_type);
+                self.emitAlloca(storage, llvm_ir_type);
+                self.emitStore(value_declaration_result.register.?, storage, llvm_ir_type);
 
                 environment.storage_by_symbol_id.put(symbol_id, storage) catch unreachable;
 
@@ -430,7 +429,7 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Assignment => |assignment| {
-                const value_result = try self.emitNode(
+                const value_result = self.emitNode(
                     assignment.value,
                     entry_label,
                     typed_program,
@@ -440,50 +439,22 @@ pub const LlvmIrEmitter = struct {
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
                 const value_type = typed_program.node_type_map.get(assignment.value.id).?;
                 const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
-                try self.emitStore(value_result.register.?, storage, llvm_ir_type);
+                self.emitStore(value_result.register.?, storage, llvm_ir_type);
 
                 return .{
                     .exit_label = value_result.exit_label,
                     .register = null,
                 };
             },
-            .Block => |block| {
-                var current_label = entry_label;
-                for (block.statements) |statement| {
-                    const emission_result = try self.emitNode(&statement, current_label, typed_program, environment);
-                    if (emission_result.exit_label) |exit_label| {
-                        current_label = exit_label;
-                    } else {
-                        return .{
-                            .exit_label = null,
-                            .register = null,
-                        };
-                    }
-                }
-
-                // Emit the result expression if it exists
-                var result_register: ?Register = null;
-                if (block.result) |result_node| {
-                    const emission_result = try self.emitNode(result_node, current_label, typed_program, environment);
-                    result_register = emission_result.register;
-                    if (emission_result.exit_label) |exit_label| {
-                        current_label = exit_label;
-                    } else {
-                        return .{
-                            .exit_label = null,
-                            .register = null,
-                        };
-                    }
-                }
-
-                return .{
-                    .exit_label = current_label,
-                    .register = result_register,
-                };
-            },
+            .Block => |block| return self.emitBlock(
+                block,
+                entry_label,
+                typed_program,
+                environment,
+            ),
             .IfStatement => |if_statement| {
                 // Emit condition expression
-                const condition_result = try self.emitNode(
+                const condition_result = self.emitNode(
                     if_statement.condition,
                     entry_label,
                     typed_program,
@@ -504,16 +475,16 @@ pub const LlvmIrEmitter = struct {
                     "br i1 {s}, label %{s}, label %{s}",
                     .{ condition_result.register.?, then_label, continue_label },
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = branch_instruction });
+                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
 
                 // "then" path
-                try self.emitLabel(then_label);
-                const then_result = try self.emitNode(if_statement.then_branch, then_label, typed_program, environment);
+                self.emitLabel(then_label);
+                const then_result = self.emitNode(if_statement.then_branch, then_label, typed_program, environment);
                 if (then_result.exit_label) |_| {
-                    try self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction });
+                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
                 }
 
-                try self.emitLabel(continue_label);
+                self.emitLabel(continue_label);
 
                 return .{
                     .exit_label = continue_label,
@@ -522,7 +493,7 @@ pub const LlvmIrEmitter = struct {
             },
             .IfExpression => |if_expression| {
                 // Emit condition expression
-                const condition_result = try self.emitNode(
+                const condition_result = self.emitNode(
                     if_expression.condition,
                     entry_label,
                     typed_program,
@@ -544,11 +515,11 @@ pub const LlvmIrEmitter = struct {
                     "br i1 {s}, label %{s}, label %{s}",
                     .{ condition_result.register.?, then_label, else_label },
                 ) catch unreachable;
-                try self.lines.append(self.allocator, .{ .instruction = branch_instruction });
+                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
 
                 // "then" path
-                try self.emitLabel(then_label);
-                const then_result = try self.emitNode(
+                self.emitLabel(then_label);
+                const then_result = self.emitNode(
                     if_expression.then_block,
                     then_label,
                     typed_program,
@@ -556,12 +527,12 @@ pub const LlvmIrEmitter = struct {
                 );
                 const then_falls_through = then_result.exit_label != null;
                 if (then_falls_through) {
-                    try self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction });
+                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
                 }
 
                 // "else" path
-                try self.emitLabel(else_label);
-                const else_result = try self.emitNode(
+                self.emitLabel(else_label);
+                const else_result = self.emitNode(
                     if_expression.else_block,
                     else_label,
                     typed_program,
@@ -569,7 +540,7 @@ pub const LlvmIrEmitter = struct {
                 );
                 const else_falls_through = else_result.exit_label != null;
                 if (else_falls_through) {
-                    try self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction });
+                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
                 }
 
                 if (!then_falls_through and !else_falls_through) {
@@ -580,7 +551,7 @@ pub const LlvmIrEmitter = struct {
                 }
 
                 // "continue" path
-                try self.emitLabel(continue_label);
+                self.emitLabel(continue_label);
                 const result_type = typed_program.node_type_map.get(node.id).?;
                 if (result_type == .Unit) {
                     return .{
@@ -603,7 +574,7 @@ pub const LlvmIrEmitter = struct {
                                 else_result.exit_label.?,
                             },
                         ) catch unreachable;
-                        try self.lines.append(self.allocator, .{ .instruction = phi_instruction });
+                        self.lines.append(self.allocator, .{ .instruction = phi_instruction }) catch unreachable;
 
                         return .{
                             .exit_label = continue_label,
@@ -618,7 +589,7 @@ pub const LlvmIrEmitter = struct {
                 }
             },
             .ExpressionStatement => |expression_statement| {
-                const emission_result = try self.emitNode(
+                const emission_result = self.emitNode(
                     expression_statement.expression,
                     entry_label,
                     typed_program,
@@ -633,34 +604,161 @@ pub const LlvmIrEmitter = struct {
         }
     }
 
-    fn emitLabel(self: *@This(), label: Label) !void {
-        try self.lines.append(self.allocator, .{ .label = label });
+    fn emitLoopConstruct(
+        self: *@This(),
+        loop_construct: LoopConstruct,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const loop_header_label = self.symbol_generator.generateLabel("loop_header");
+        const loop_body_label = self.symbol_generator.generateLabel("loop_body");
+        const loop_continue_label = self.symbol_generator.generateLabel("loop_continue");
+        const loop_exit_label = self.symbol_generator.generateLabel("loop_exit");
+        const previous_loop_context = environment.loop_context;
+        const loop_context = LoopContext{
+            .continue_label = loop_continue_label,
+            .leave_label = loop_exit_label,
+        };
+        environment.loop_context = loop_context;
+
+        // Loop header
+        const branch_to_header_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "br label %{s}",
+            .{loop_header_label},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+        self.emitLabel(loop_header_label);
+        if (loop_construct.condition) |condition| {
+            const condition_result = self.emitNode(
+                condition,
+                loop_header_label,
+                typed_program,
+                environment,
+            );
+            if (condition_result.exit_label == null) {
+                environment.loop_context = previous_loop_context;
+                return .{
+                    .exit_label = null,
+                    .register = null,
+                };
+            }
+            const branch_instruction = std.fmt.allocPrint(
+                self.allocator,
+                "br i1 {s}, label %{s}, label %{s}",
+                .{ condition_result.register.?, loop_body_label, loop_exit_label },
+            ) catch unreachable;
+            self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
+        } else {
+            const branch_to_body_instruction = std.fmt.allocPrint(
+                self.allocator,
+                "br label %{s}",
+                .{loop_body_label},
+            ) catch unreachable;
+            self.lines.append(self.allocator, .{ .instruction = branch_to_body_instruction }) catch unreachable;
+        }
+
+        // Loop body
+        self.emitLabel(loop_body_label);
+        const body_result = self.emitBlock(loop_construct.body_block.*, loop_body_label, typed_program, environment);
+
+        // Loop continue
+        const branch_to_continue_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "br label %{s}",
+            .{loop_continue_label},
+        ) catch unreachable;
+        if (body_result.exit_label != null) {
+            self.lines.append(self.allocator, .{ .instruction = branch_to_continue_instruction }) catch unreachable;
+        }
+        self.emitLabel(loop_continue_label);
+        if (loop_construct.update) |update| {
+            const update_result = self.emitNode(update, loop_continue_label, typed_program, environment);
+            if (update_result.exit_label != null) {
+                self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+            }
+        } else {
+            self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+        }
+
+        self.emitLabel(loop_exit_label);
+        environment.loop_context = previous_loop_context;
+
+        return .{
+            .exit_label = loop_exit_label,
+            .register = null,
+        };
     }
 
-    fn emitAlloca(self: *@This(), storage: Storage, llvm_ir_type: []const u8) !void {
+    fn emitBlock(
+        self: *@This(),
+        block: ast.Block,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        var current_label = entry_label;
+        for (block.statements) |statement| {
+            const emission_result = self.emitNode(&statement, current_label, typed_program, environment);
+            if (emission_result.exit_label) |exit_label| {
+                current_label = exit_label;
+            } else {
+                return .{
+                    .exit_label = null,
+                    .register = null,
+                };
+            }
+        }
+
+        // Emit the result expression if it exists
+        var result_register: ?Register = null;
+        if (block.result) |result_node| {
+            const emission_result = self.emitNode(result_node, current_label, typed_program, environment);
+            result_register = emission_result.register;
+            if (emission_result.exit_label) |exit_label| {
+                current_label = exit_label;
+            } else {
+                return .{
+                    .exit_label = null,
+                    .register = null,
+                };
+            }
+        }
+
+        return .{
+            .exit_label = current_label,
+            .register = result_register,
+        };
+    }
+
+    fn emitLabel(self: *@This(), label: Label) void {
+        self.lines.append(self.allocator, .{ .label = label }) catch unreachable;
+    }
+
+    fn emitAlloca(self: *@This(), storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = alloca {s}",
             .{ storage, llvm_ir_type },
         ) catch unreachable;
-        try self.storage_allocation_instructions.append(self.allocator, instruction);
+        self.storage_allocation_instructions.append(self.allocator, instruction) catch unreachable;
     }
 
-    fn emitStore(self: *@This(), value_register: Register, storage: Storage, llvm_ir_type: []const u8) !void {
+    fn emitStore(self: *@This(), value_register: Register, storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
             "store {s} {s}, {s}* {s}",
             .{ llvm_ir_type, value_register, llvm_ir_type, storage },
         ) catch unreachable;
-        try self.lines.append(self.allocator, .{ .instruction = instruction });
+        self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
     }
 
-    fn emitLoad(self: *@This(), result_register: Register, storage: Storage, llvm_ir_type: []const u8) !void {
+    fn emitLoad(self: *@This(), result_register: Register, storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = load {s}, {s}* {s}",
             .{ result_register, llvm_ir_type, llvm_ir_type, storage },
         ) catch unreachable;
-        try self.lines.append(self.allocator, .{ .instruction = instruction });
+        self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
     }
 };

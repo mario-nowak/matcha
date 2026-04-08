@@ -119,12 +119,13 @@ pub const Parser = struct {
                     },
                 });
             },
+            .While => try self.parseWhileStatement(),
             .LeftBrace => {
                 const leftBrace = self.lexer.next();
                 return try self.parseBlock(leftBrace);
             },
             .Identifier => if (self.startsAssignmentStatement())
-                try self.parseAssignmentStatement()
+                try self.parseAssignmentStatement(.{ .require_semicolon = true })
             else
                 try self.parseExpressionStatement(),
             else => try self.parseExpressionStatement(),
@@ -138,6 +139,7 @@ pub const Parser = struct {
             .Loop,
             .Leave,
             .Continue,
+            .While,
             => true,
             else => false,
         };
@@ -204,29 +206,56 @@ pub const Parser = struct {
             return ParserError.ExpectedLeftBrace;
         }
 
-        var statements = std.ArrayList(ast.Node){};
-
-        var current_token = self.lexer.peek();
-        while (current_token.kind != .RightBrace) : (current_token = self.lexer.peek()) {
-            statements.append(self.allocator, try self.parseStatement()) catch unreachable;
-        }
-
-        const right_brace = self.lexer.next();
-        if (right_brace.kind != .RightBrace) {
-            unreachable;
-        }
+        const body_block = self.allocator.create(ast.Node) catch unreachable;
+        body_block.* = try self.parseBlock(left_brace);
 
         return self.createNode(.{
             .Loop = .{
                 .loop_token = loop_token,
-                .left_brace = left_brace,
-                .statements = statements.toOwnedSlice(self.allocator) catch unreachable,
-                .right_brace = right_brace,
+                .body_block = body_block,
             },
         });
     }
 
-    fn parseAssignmentStatement(self: *@This()) ParserError!ast.Node {
+    fn parseWhileStatement(self: *@This()) ParserError!ast.Node {
+        const while_token = self.lexer.next();
+        if (while_token.kind != .While) {
+            unreachable;
+        }
+
+        const condition = self.allocator.create(ast.Node) catch unreachable;
+        condition.* = try self.parseExpression(.{ .current_binding_power = 0.0 });
+
+        var update: ?*ast.Node = null;
+        var post_condition_token = self.lexer.peek();
+        if (post_condition_token.kind == .Colon) {
+            _ = self.lexer.next();
+            const assignment_statement = self.allocator.create(ast.Node) catch unreachable;
+            assignment_statement.* = try self.parseAssignmentStatement(.{ .require_semicolon = false });
+            update = assignment_statement;
+            post_condition_token = self.lexer.peek();
+        }
+
+        if (post_condition_token.kind != .LeftBrace) {
+            std.debug.print("Expected left brace after while condition (and optional update), got: {any}\n", .{post_condition_token});
+            return ParserError.ExpectedLeftBrace;
+        }
+        const left_brace_token = self.lexer.next();
+
+        const body = self.allocator.create(ast.Node) catch unreachable;
+        body.* = try self.parseBlock(left_brace_token);
+
+        return self.createNode(.{
+            .While = .{
+                .while_token = while_token,
+                .condition = condition,
+                .update = update,
+                .body_block = body,
+            },
+        });
+    }
+
+    fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) ParserError!ast.Node {
         const identifier_token = self.lexer.next();
         if (identifier_token.kind != .Identifier) {
             return ParserError.ExpectedIdentifier;
@@ -240,9 +269,11 @@ pub const Parser = struct {
         const value = self.allocator.create(ast.Node) catch unreachable;
         value.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolon_token = self.lexer.next();
-        if (semicolon_token.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+        if (options.require_semicolon) {
+            const semicolon_token = self.lexer.next();
+            if (semicolon_token.kind != .Semicolon) {
+                return ParserError.ExpectedSemicolon;
+            }
         }
 
         return self.createNode(.{
@@ -271,54 +302,38 @@ pub const Parser = struct {
         const condition = self.allocator.create(ast.Node) catch unreachable;
         condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
+        const then_branch_left_brace_token = self.lexer.next();
+        if (then_branch_left_brace_token.kind != .LeftBrace) {
+            return ParserError.ExpectedLeftBrace;
+        }
+
         const then_branch = self.allocator.create(ast.Node) catch unreachable;
 
-        const post_condition_token = self.lexer.peek();
-        if (post_condition_token.kind == .LeftBrace) {
-            const then_branch_left_brace_token = self.lexer.next();
-            then_branch.* = try self.parseBlock(then_branch_left_brace_token);
+        then_branch.* = try self.parseBlock(then_branch_left_brace_token);
 
-            const post_then_branch_token = self.lexer.peek();
-            if (post_then_branch_token.kind == .Else) {
-                const else_token = self.lexer.next();
+        const post_then_branch_token = self.lexer.peek();
+        if (post_then_branch_token.kind == .Else) {
+            const else_token = self.lexer.next();
 
-                const else_branch_left_brace_token = self.lexer.next();
-                if (else_branch_left_brace_token.kind != .LeftBrace) {
-                    return ParserError.ExpectedLeftBrace;
-                }
-                const else_block = self.allocator.create(ast.Node) catch unreachable;
-                else_block.* = try self.parseBlock(else_branch_left_brace_token);
-
-                return .{
-                    .expression = self.createNode(.{
-                        .IfExpression = .{
-                            .if_token = if_token,
-                            .condition = condition,
-                            .then_block = then_branch,
-                            .else_token = else_token,
-                            .else_block = else_block,
-                        },
-                    }),
-                };
-            } else {
-                return .{
-                    .statement = self.createNode(.{
-                        .IfStatement = .{
-                            .if_token = if_token,
-                            .condition = condition,
-                            .then_branch = then_branch,
-                        },
-                    }),
-                };
+            const else_branch_left_brace_token = self.lexer.next();
+            if (else_branch_left_brace_token.kind != .LeftBrace) {
+                return ParserError.ExpectedLeftBrace;
             }
+            const else_block = self.allocator.create(ast.Node) catch unreachable;
+            else_block.* = try self.parseBlock(else_branch_left_brace_token);
+
+            return .{
+                .expression = self.createNode(.{
+                    .IfExpression = .{
+                        .if_token = if_token,
+                        .condition = condition,
+                        .then_block = then_branch,
+                        .else_token = else_token,
+                        .else_block = else_block,
+                    },
+                }),
+            };
         } else {
-            then_branch.* = try self.parseStatement();
-
-            const post_then_branch_token = self.lexer.peek();
-            if (post_then_branch_token.kind == .Else) {
-                return ParserError.UnexpectedElse;
-            }
-
             return .{
                 .statement = self.createNode(.{
                     .IfStatement = .{
@@ -401,7 +416,7 @@ pub const Parser = struct {
                 };
             },
             .Identifier => if (self.startsAssignmentStatement()) {
-                const assignment_statement = try self.parseAssignmentStatement();
+                const assignment_statement = try self.parseAssignmentStatement(.{ .require_semicolon = true });
                 return .{ .statement = assignment_statement };
             },
             else => {},
@@ -423,7 +438,10 @@ pub const Parser = struct {
             .RightBrace => return .{
                 .expression = expression,
             },
-            else => return ParserError.ExpectedSemicolon,
+            else => {
+                std.debug.print("Expected semicolon, got: {any}", .{post_expression_token.kind});
+                return ParserError.ExpectedSemicolon;
+            },
         }
     }
 

@@ -12,6 +12,7 @@ pub const NodeKind = union(enum) {
     Loop: Loop,
     Leave: Leave,
     Continue: Continue,
+    While: While,
     // Expressions-ish nodes
     IfExpression: IfExpression,
     CallExpression: CallExpression,
@@ -49,9 +50,7 @@ pub const BindingMutability = enum {
 
 pub const Loop = struct {
     loop_token: lexing.Token,
-    left_brace: lexing.Token,
-    statements: []Node,
-    right_brace: lexing.Token,
+    body_block: *Node,
 };
 
 pub const Leave = struct {
@@ -60,6 +59,13 @@ pub const Leave = struct {
 
 pub const Continue = struct {
     continue_token: lexing.Token,
+};
+
+pub const While = struct {
+    while_token: lexing.Token,
+    condition: *Node,
+    update: ?*Node,
+    body_block: *Node,
 };
 
 pub const IfStatement = struct {
