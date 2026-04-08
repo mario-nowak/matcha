@@ -87,6 +87,14 @@ test "semantic analysis rejects non-boolean if conditions" {
     );
 }
 
+test "semantic analysis rejects non-boolean while conditions" {
+    try expectAnalyzeError(error.TypeMismatch,
+        \\while 1 {
+        \\    leave;
+        \\}
+    );
+}
+
 test "semantic analysis rejects mismatched if expression branches" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val value = if true { 1 } else { false };

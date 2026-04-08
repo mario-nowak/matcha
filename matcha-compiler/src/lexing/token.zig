@@ -10,6 +10,7 @@ pub const TokenKind = union(enum) {
     Loop,
     Leave,
     Continue,
+    While,
     // Punctuation
     LeftParenthesis,
     RightParenthesis,

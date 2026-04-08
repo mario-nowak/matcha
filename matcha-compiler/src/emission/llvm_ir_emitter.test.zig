@@ -86,6 +86,20 @@ test "llvm emission stores and loads mutable variables" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store void") == null);
 }
 
+test "llvm emission routes while continue through the update clause" {
+    const llvm_ir = try emit(
+        \\var i = 0;
+        \\while i < 5 : i = i + 1 {
+        \\    continue;
+        \\}
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_body_1:\n    br label %label_loop_continue_2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_body_1:\n    br label %label_loop_header_0") == null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_continue_2:\n    %.t_2 = load i64, i64* %.s_0\n    %.t_3 = add i64 %.t_2, 1\n    store i64 %.t_3, i64* %.s_0\n    br label %label_loop_header_0") != null);
+}
+
 test "llvm emission returns from main without implicit printing" {
     const llvm_ir = try emit(
         \\val answer = 41 + 1;

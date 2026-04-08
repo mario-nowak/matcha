@@ -34,7 +34,13 @@ pub fn main() !void {
     var llvm_ir_emitter = matcha.emission.LlvmIrEmitter.init(allocator);
     const emitted = llvm_ir_emitter.emitLlvmIr(&typed_program);
 
-    var file = try std.fs.cwd().createFile("emission.ll", .{});
+    const file_name_without_extension = fileName[0 .. std.mem.indexOf(u8, fileName, ".") orelse fileName.len];
+    const output_file_name = std.fmt.allocPrint(
+        allocator,
+        "{s}-emission.ll",
+        .{file_name_without_extension},
+    ) catch unreachable;
+    var file = try std.fs.cwd().createFile(output_file_name, .{});
     defer file.close();
     _ = try file.write(emitted);
 }

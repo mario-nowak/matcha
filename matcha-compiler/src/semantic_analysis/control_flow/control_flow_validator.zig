@@ -31,9 +31,15 @@ pub const ControlFlowValidator = struct {
             },
             .Loop => |loop| {
                 const loop_context = ControlFlowValidationContext{ .loop_depth = context.loop_depth + 1 };
-                for (loop.statements) |*statement| {
-                    try self.validateNode(statement, &loop_context);
+                try self.validateNode(loop.body_block, &loop_context);
+            },
+            .While => |while_statement| {
+                try self.validateNode(while_statement.condition, context);
+                if (while_statement.update) |update| {
+                    try self.validateNode(update, context);
                 }
+                const loop_context = ControlFlowValidationContext{ .loop_depth = context.loop_depth + 1 };
+                try self.validateNode(while_statement.body_block, &loop_context);
             },
             .Continue => {
                 if (context.loop_depth == 0) {

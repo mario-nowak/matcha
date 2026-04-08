@@ -97,9 +97,35 @@ pub const TypeChecker = struct {
                 try self.node_type_map.put(node.id, .Unit);
             },
             .Loop => |loop| {
-                for (loop.statements) |*statement| {
-                    try self.checkNode(statement, resolved_program, &ValidationContext{ .requires_value = false });
+                try self.checkNode(
+                    loop.body_block,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = false },
+                );
+            },
+            .While => |while_statement| {
+                try self.checkNode(
+                    while_statement.condition,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = true },
+                );
+                const while_condition_type = self.node_type_map.get(while_statement.condition.id).?;
+                if (while_condition_type != .Boolean) {
+                    std.debug.print("Type Error: While condition must be of type boolean, got {any}\n", .{while_condition_type});
+                    return TypeError.TypeMismatch;
                 }
+                if (while_statement.update) |update| {
+                    try self.checkNode(
+                        update,
+                        resolved_program,
+                        &ValidationContext{ .requires_value = false },
+                    );
+                }
+                try self.checkNode(
+                    while_statement.body_block,
+                    resolved_program,
+                    &ValidationContext{ .requires_value = false },
+                );
             },
             .Leave => {},
             .Continue => {},

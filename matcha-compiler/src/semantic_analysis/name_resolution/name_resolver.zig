@@ -87,9 +87,15 @@ pub const NameResolver = struct {
             },
             .Loop => |loop| {
                 var loop_scope = Scope.init(self.allocator, scope);
-                for (loop.statements) |*statement| {
-                    try self.resolveNode(statement, &loop_scope);
+                try self.resolveNode(loop.body_block, &loop_scope);
+            },
+            .While => |while_statement| {
+                try self.resolveNode(while_statement.condition, scope);
+                if (while_statement.update) |update| {
+                    try self.resolveNode(update, scope);
                 }
+                var loop_scope = Scope.init(self.allocator, scope);
+                try self.resolveNode(while_statement.body_block, &loop_scope);
             },
             .Leave => {},
             .Continue => {},
