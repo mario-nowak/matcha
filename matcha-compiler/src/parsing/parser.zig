@@ -28,6 +28,8 @@ pub const Parser = struct {
         ExpectedLeftBrace,
         ExpectedIf,
         UnexpectedElse,
+        ExpectedCommaOrClosingParenthesis,
+        ExpectedColon,
     };
 
     const ParseState = struct {
@@ -74,6 +76,8 @@ pub const Parser = struct {
         const token = self.lexer.peek();
         return switch (token.kind) {
             .Val, .Var => try self.parseDeclaration(),
+            .Item => try self.parseItem(),
+            .Return => try self.parseReturnStatement(),
             .If => block: {
                 const if_token = self.lexer.next();
                 const if_form = try self.parseIfForm(if_token);
@@ -140,6 +144,8 @@ pub const Parser = struct {
             .Leave,
             .Continue,
             .While,
+            .Item,
+            .Return,
             => true,
             else => false,
         };
@@ -191,6 +197,139 @@ pub const Parser = struct {
                     .Var => ast.BindingMutability.Mutable,
                     else => unreachable,
                 },
+            },
+        });
+    }
+
+    fn parseItem(self: *@This()) ParserError!ast.Node {
+        const item_token = self.lexer.next();
+        if (item_token.kind != .Item) {
+            unreachable;
+        }
+
+        const identifier_token = self.lexer.next();
+        if (identifier_token.kind != .Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+
+        const post_identifier_token = self.lexer.peek();
+        if (post_identifier_token.kind == .LeftParenthesis) {
+            return try self.parseFunctionDefinition(item_token, identifier_token);
+        }
+
+        return ParserError.ExpectedOpeningParenthesis;
+    }
+
+    fn parseFunctionDefinition(
+        self: *@This(),
+        item_token: lexing.Token,
+        identifier_token: lexing.Token,
+    ) ParserError!ast.Node {
+        const left_parenthesis_token = self.lexer.next();
+        if (left_parenthesis_token.kind != .LeftParenthesis) {
+            std.debug.print("Expected left parenthesis after function name, got: {any}\n", .{left_parenthesis_token});
+            return ParserError.ExpectedOpeningParenthesis;
+        }
+
+        var parameters = std.ArrayList(ast.Parameter){};
+        var next_token = self.lexer.next();
+        while (next_token.kind != .RightParenthesis) : (next_token = self.lexer.next()) {
+            if (next_token.kind != .Identifier) {
+                return ParserError.ExpectedIdentifier;
+            }
+            const parameter_name_token = next_token;
+
+            const colon_token = self.lexer.next();
+            if (colon_token.kind != .Colon) {
+                return ParserError.ExpectedColonOrEqualSign;
+            }
+
+            const type_annotation_token = self.lexer.next();
+            if (type_annotation_token.kind != .Identifier) {
+                return ParserError.ExpectedTypeAnnotation;
+            }
+
+            parameters.append(self.allocator, .{
+                .name = parameter_name_token,
+                .type_annotation = .{ .name_token = type_annotation_token },
+            }) catch unreachable;
+
+            const post_parameter_token = self.lexer.peek();
+            if (post_parameter_token.kind == .Comma) {
+                _ = self.lexer.next(); // consume comma and continue to next parameter
+            } else if (post_parameter_token.kind != .RightParenthesis) {
+                return ParserError.ExpectedCommaOrClosingParenthesis;
+            }
+        }
+
+        if (next_token.kind != .RightParenthesis) {
+            return ParserError.MissingClosingParenthesis;
+        }
+
+        const colon_token = self.lexer.next();
+        if (colon_token.kind != .Colon) {
+            return ParserError.ExpectedColon;
+        }
+
+        const return_type_token = self.lexer.next();
+        if (return_type_token.kind != .Identifier) {
+            return ParserError.ExpectedTypeAnnotation;
+        }
+        const return_type_annotation = ast.TypeAnnotation{ .name_token = return_type_token };
+
+        const assign_token = self.lexer.next();
+        if (assign_token.kind != .Assign) {
+            return ParserError.ExpectedEqualSign;
+        }
+
+        const body_expression = self.allocator.create(ast.Node) catch unreachable;
+        body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+        const semicolon_token = self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            return ParserError.ExpectedSemicolon;
+        }
+
+        return self.createNode(.{
+            .FunctionDefinition = .{
+                .item_token = item_token,
+                .identifier_token = identifier_token,
+                .parameters = parameters.toOwnedSlice(self.allocator) catch unreachable,
+                .return_type_annotation = return_type_annotation,
+                .body_expression = body_expression,
+            },
+        });
+    }
+
+    fn parseReturnStatement(self: *@This()) ParserError!ast.Node {
+        const return_token = self.lexer.next();
+        if (return_token.kind != .Return) {
+            unreachable;
+        }
+
+        const post_return_token = self.lexer.peek();
+        if (post_return_token.kind == .Semicolon) {
+            _ = self.lexer.next(); // consume semicolon
+            return self.createNode(.{
+                .Return = .{
+                    .return_token = return_token,
+                    .value = null,
+                },
+            });
+        }
+
+        const expression = self.allocator.create(ast.Node) catch unreachable;
+        expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+        const semicolon_token = self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            return ParserError.ExpectedSemicolon;
+        }
+
+        return self.createNode(.{
+            .Return = .{
+                .return_token = return_token,
+                .value = expression,
             },
         });
     }

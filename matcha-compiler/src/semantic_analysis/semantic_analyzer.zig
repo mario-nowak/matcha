@@ -28,9 +28,9 @@ pub const SemanticAnalyzer = struct {
     }
 
     pub fn validateProgram(self: *@This(), program: *const ast.Program) !typing.TypedProgram {
-        try self.control_flow_validator.validateProgram(program);
-        const resolved_program = try self.name_resolver.resolve(program);
-        const typed_program = try self.type_checker.check(resolved_program);
+        const exit_behavior_by_node_id = try self.control_flow_validator.validateProgram(program);
+        const resolved_program = try self.name_resolver.resolveProgram(program);
+        const typed_program = try self.type_checker.checkProgram(resolved_program, exit_behavior_by_node_id);
 
         return typed_program;
     }

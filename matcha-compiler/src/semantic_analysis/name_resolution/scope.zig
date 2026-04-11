@@ -3,6 +3,10 @@ const symbols = @import("symbols");
 
 const ScopeBindings = std.StringHashMap(symbols.SymbolId);
 
+const ScopeError = error{
+    NameAlreadyInScope,
+};
+
 pub const Scope = struct {
     parent: ?*const Scope,
     bindings: ScopeBindings,
@@ -14,8 +18,8 @@ pub const Scope = struct {
         };
     }
 
-    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) !void {
-        try self.bindings.put(name, symbol_id);
+    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) void {
+        self.bindings.put(name, symbol_id) catch unreachable;
     }
 
     pub fn lookupSymbol(self: *const @This(), name: []const u8) ?symbols.SymbolId {
@@ -26,4 +30,12 @@ pub const Scope = struct {
 
         return null;
     }
+
+    pub fn validateNotInScope(self: *const @This(), name: []const u8) ScopeError!void {
+        if (self.lookupSymbol(name)) |_| {
+            return ScopeError.NameAlreadyInScope;
+        }
+    }
 };
+
+pub const ModuleScope = Scope;

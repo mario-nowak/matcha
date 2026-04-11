@@ -110,3 +110,28 @@ test "llvm emission returns from main without implicit printing" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.str") == null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "ret i32 0") != null);
 }
+
+test "llvm emission emits user-defined functions and calls them from main" {
+    const llvm_ir = try emit(
+        \\item identity(value: int): int = value;
+        \\val answer = identity(42);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define i64 @matcha_0_identity(i64 %arg_0_value)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 %arg_0_value, i64* %.s_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_0_identity(i64 42)") != null);
+}
+
+test "llvm emission lowers printInt as a real llvm function" {
+    const llvm_ir = try emit(
+        \\item logValue(value: int): unit = printInt(value);
+        \\logValue(7);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i32 @printf") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printInt(i64 %arg_0_value)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @builtin_printInt(i64 %.t_0)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_0_logValue(i64 7)") != null);
+}

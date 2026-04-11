@@ -37,14 +37,17 @@ const LoopConstruct = struct {
 pub const Environment = struct {
     storage_by_symbol_id: StorageBySymbolId,
     loop_context: ?LoopContext,
+    function_return_type: typing.Type,
 
     pub fn init(
         allocator: std.mem.Allocator,
         loop_context: ?LoopContext,
+        function_return_type: typing.Type,
     ) @This() {
         return .{
             .storage_by_symbol_id = StorageBySymbolId.init(allocator),
             .loop_context = loop_context,
+            .function_return_type = function_return_type,
         };
     }
 
@@ -134,21 +137,71 @@ pub const LlvmIrEmitter = struct {
 
     pub fn deinit(self: *@This()) void {
         self.lines.deinit(self.allocator);
+        self.storage_allocation_instructions.deinit(self.allocator);
     }
 
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
-        var environment = Environment.init(self.allocator, null);
-        defer environment.deinit();
-        var current_label: Label = "entry";
-        for (typed_program.resolved_program.program.statements) |statement| {
-            const result = self.emitNode(&statement, current_label, typed_program, &environment);
-            if (result.exit_label) |exit_label| {
-                current_label = exit_label;
-            } else {
-                break;
+        self.needs_printf = false;
+
+        var user_defined_functions = std.ArrayList([]const u8){};
+        defer user_defined_functions.deinit(self.allocator);
+        for (typed_program.resolved_program.program.statements) |*statement| {
+            switch (statement.kind) {
+                .FunctionDefinition => {
+                    const function_ir = self.emitFunctionDefinition(statement, typed_program);
+                    user_defined_functions.append(self.allocator, function_ir) catch unreachable;
+                },
+                else => {},
             }
         }
 
+        const main_function_ir = self.emitMainFunction(typed_program);
+        const builtin_print_int_ir = if (self.needs_printf)
+            self.emitBuiltinPrintIntFunction()
+        else
+            "";
+
+        var module_buffer = std.ArrayList(u8){};
+        defer module_buffer.deinit(self.allocator);
+        if (self.needs_printf) {
+            module_buffer.writer(self.allocator).print(
+                \\@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
+                \\declare i32 @printf(i8*, ...)
+                \\
+                \\
+            , .{}) catch unreachable;
+        }
+        if (builtin_print_int_ir.len > 0) {
+            module_buffer.writer(self.allocator).print("{s}\n\n", .{builtin_print_int_ir}) catch unreachable;
+        }
+        for (user_defined_functions.items, 0..) |function_ir, index| {
+            module_buffer.writer(self.allocator).print("{s}", .{function_ir}) catch unreachable;
+            if (index + 1 < user_defined_functions.items.len) {
+                module_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
+            }
+        }
+        if (user_defined_functions.items.len > 0) {
+            module_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
+        }
+        module_buffer.writer(self.allocator).print("{s}\n", .{main_function_ir}) catch unreachable;
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{module_buffer.items}) catch unreachable;
+    }
+
+    fn resetCurrentFunctionState(self: *@This()) void {
+        self.lines.deinit(self.allocator);
+        self.storage_allocation_instructions.deinit(self.allocator);
+        self.symbol_generator = SymbolGenerator.init(self.allocator, ".t", ".s");
+        self.lines = .{};
+        self.storage_allocation_instructions = .{};
+    }
+
+    fn renderCurrentFunction(
+        self: *@This(),
+        function_name: []const u8,
+        return_llvm_ir_type: []const u8,
+        parameter_list: []const u8,
+    ) []const u8 {
         var storage_allocation_buffer = std.ArrayList(u8){};
         defer storage_allocation_buffer.deinit(self.allocator);
         for (self.storage_allocation_instructions.items) |instruction| {
@@ -168,31 +221,165 @@ pub const LlvmIrEmitter = struct {
             }
         }
 
-        const prelude = if (self.needs_printf)
-            \\@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
-            \\declare i32 @printf(i8*, ...)
-        else
-            "";
-
-        const template =
-            \\{s}
-            \\define i32 @main() {{
+        return std.fmt.allocPrint(
+            self.allocator,
+            \\define {s} @{s}({s}) {{
             \\entry:
             \\{s}
             \\{s}
-            \\    ret i32 0
             \\}}
-        ;
-
-        return std.fmt.allocPrint(
-            self.allocator,
-            template,
+        ,
             .{
-                prelude,
+                return_llvm_ir_type,
+                function_name,
+                parameter_list,
                 storage_allocation_buffer.items,
                 instructions_buffer.items,
             },
         ) catch unreachable;
+    }
+
+    fn emitMainFunction(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
+        self.resetCurrentFunctionState();
+
+        var environment = Environment.init(self.allocator, null, .Integer);
+        defer environment.deinit();
+        var current_label: Label = "entry";
+
+        for (typed_program.resolved_program.program.statements) |*statement| {
+            switch (statement.kind) {
+                .FunctionDefinition => continue,
+                else => {},
+            }
+
+            const result = self.emitNode(statement, current_label, typed_program, &environment);
+            if (result.exit_label) |exit_label| {
+                current_label = exit_label;
+            } else {
+                break;
+            }
+        }
+
+        self.lines.append(self.allocator, .{ .instruction = "ret i32 0" }) catch unreachable;
+
+        return self.renderCurrentFunction("main", "i32", "");
+    }
+
+    fn emitFunctionDefinition(
+        self: *@This(),
+        function_node: *const ast.Node,
+        typed_program: *const typing.TypedProgram,
+    ) []const u8 {
+        const function_definition = switch (function_node.kind) {
+            .FunctionDefinition => |function_definition| function_definition,
+            else => unreachable,
+        };
+
+        self.resetCurrentFunctionState();
+
+        const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node.id) orelse unreachable;
+        const function_symbol = typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
+        const function_return_type = typed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_return_llvm_ir_type = llvm_ir_type_by_matcha_type.get(function_return_type);
+        const parameter_symbol_ids = typed_program.resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
+            function_symbol_id,
+        ) orelse unreachable;
+
+        var parameter_list_buffer = std.ArrayList(u8){};
+        defer parameter_list_buffer.deinit(self.allocator);
+        var environment = Environment.init(self.allocator, null, function_return_type);
+        defer environment.deinit();
+
+        for (parameter_symbol_ids, 0..) |parameter_symbol_id, index| {
+            const parameter_symbol = typed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
+            const parameter_type = typed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+            const parameter_llvm_ir_type = llvm_ir_type_by_matcha_type.get(parameter_type);
+            const parameter_register = std.fmt.allocPrint(
+                self.allocator,
+                "%arg_{d}_{s}",
+                .{ index, parameter_symbol.name },
+            ) catch unreachable;
+
+            if (index > 0) {
+                parameter_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+            }
+            parameter_list_buffer.writer(self.allocator).print(
+                "{s} {s}",
+                .{ parameter_llvm_ir_type, parameter_register },
+            ) catch unreachable;
+
+            const storage = self.symbol_generator.generateStorage();
+            self.emitAlloca(storage, parameter_llvm_ir_type);
+            self.emitStore(parameter_register, storage, parameter_llvm_ir_type);
+            environment.storage_by_symbol_id.put(parameter_symbol_id, storage) catch unreachable;
+        }
+
+        const body_result = self.emitNode(
+            function_definition.body_expression,
+            "entry",
+            typed_program,
+            &environment,
+        );
+
+        if (body_result.exit_label != null) {
+            switch (function_return_type) {
+                .Unit => {
+                    self.lines.append(self.allocator, .{ .instruction = "ret void" }) catch unreachable;
+                },
+                else => {
+                    const return_instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "ret {s} {s}",
+                        .{ function_return_llvm_ir_type, body_result.register orelse unreachable },
+                    ) catch unreachable;
+                    self.lines.append(self.allocator, .{ .instruction = return_instruction }) catch unreachable;
+                },
+            }
+        }
+
+        return self.renderCurrentFunction(
+            self.getLlvmFunctionName(function_symbol),
+            function_return_llvm_ir_type,
+            parameter_list_buffer.items,
+        );
+    }
+
+    fn emitBuiltinPrintIntFunction(self: *@This()) []const u8 {
+        self.resetCurrentFunctionState();
+
+        const formatting_string_pointer = self.symbol_generator.generateRegister();
+        const formatting_string_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0",
+            .{formatting_string_pointer},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = formatting_string_instruction }) catch unreachable;
+
+        const print_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call i32 (i8*, ...) @printf(i8* {s}, i64 %arg_0_value)",
+            .{formatting_string_pointer},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = print_instruction }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = "ret void" }) catch unreachable;
+
+        return self.renderCurrentFunction("builtin_printInt", "void", "i64 %arg_0_value");
+    }
+
+    fn getLlvmFunctionName(self: *@This(), symbol: symbols.Symbol) []const u8 {
+        switch (symbol.kind) {
+            .Function => |function_info| switch (function_info.implementation) {
+                .BuiltinPrintInt => return "builtin_printInt",
+                .UserDefined => {
+                    return std.fmt.allocPrint(
+                        self.allocator,
+                        "matcha_{d}_{s}",
+                        .{ symbol.id, symbol.name },
+                    ) catch unreachable;
+                },
+            },
+            else => unreachable,
+        }
     }
 
     fn emitNode(
@@ -203,6 +390,45 @@ pub const LlvmIrEmitter = struct {
         environment: *Environment,
     ) EmissionResult {
         switch (node.kind) {
+            .FunctionDefinition => {
+                return .{
+                    .exit_label = entry_label,
+                    .register = null,
+                };
+            },
+            .Return => |return_statement| {
+                if (return_statement.value) |return_value| {
+                    const value_result = self.emitNode(
+                        return_value,
+                        entry_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (value_result.exit_label == null) {
+                        return .{
+                            .exit_label = null,
+                            .register = null,
+                        };
+                    }
+
+                    const return_instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "ret {s} {s}",
+                        .{
+                            llvm_ir_type_by_matcha_type.get(environment.function_return_type),
+                            value_result.register.?,
+                        },
+                    ) catch unreachable;
+                    self.lines.append(self.allocator, .{ .instruction = return_instruction }) catch unreachable;
+                } else {
+                    self.lines.append(self.allocator, .{ .instruction = "ret void" }) catch unreachable;
+                }
+
+                return .{
+                    .exit_label = null,
+                    .register = null,
+                };
+            },
             .IntegerLiteral => |token| {
                 return .{
                     .exit_label = entry_label,
@@ -220,9 +446,9 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Identifier => {
-                const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
+                const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
-                const llvm_ir_type = llvm_ir_type_by_matcha_type.get(typed_program.node_type_map.get(node.id).?);
+                const llvm_ir_type = llvm_ir_type_by_matcha_type.get(typed_program.type_by_node_id.get(node.id).?);
                 const register = self.symbol_generator.generateRegister();
                 self.emitLoad(register, storage, llvm_ir_type);
 
@@ -294,45 +520,89 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .CallExpression => |call_expression| {
-                switch (call_expression.callee.kind) {
-                    .Identifier => |identifier| {
-                        // --- Debugging ---
-                        if (!std.mem.eql(u8, identifier.kind.Identifier, "printInt")) {
-                            unreachable;
-                        }
-                    },
+                const callee_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(
+                    call_expression.callee.id,
+                ) orelse unreachable;
+                const callee_symbol = typed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
+                const function_info = switch (callee_symbol.kind) {
+                    .Function => |function_info| function_info,
                     else => unreachable,
+                };
+                if (function_info.implementation == .BuiltinPrintInt) {
+                    self.needs_printf = true;
                 }
 
-                self.needs_printf = true;
+                const parameter_symbol_ids = typed_program.resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
+                    callee_symbol_id,
+                ) orelse unreachable;
+                var current_label = entry_label;
+                var argument_registers = std.ArrayList(Register){};
+                defer argument_registers.deinit(self.allocator);
+                for (call_expression.arguments) |*argument| {
+                    const argument_result = self.emitNode(
+                        argument,
+                        current_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (argument_result.exit_label) |exit_label| {
+                        current_label = exit_label;
+                    } else {
+                        return .{
+                            .exit_label = null,
+                            .register = null,
+                        };
+                    }
+                    argument_registers.append(
+                        self.allocator,
+                        argument_result.register orelse unreachable,
+                    ) catch unreachable;
+                }
 
-                const argument_result = self.emitNode(
-                    &call_expression.arguments[0],
-                    entry_label,
-                    typed_program,
-                    environment,
-                );
+                var argument_list_buffer = std.ArrayList(u8){};
+                defer argument_list_buffer.deinit(self.allocator);
+                for (parameter_symbol_ids, argument_registers.items, 0..) |parameter_symbol_id, argument_register, index| {
+                    const parameter_type = typed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+                    if (index > 0) {
+                        argument_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+                    }
+                    argument_list_buffer.writer(self.allocator).print(
+                        "{s} {s}",
+                        .{
+                            llvm_ir_type_by_matcha_type.get(parameter_type),
+                            argument_register,
+                        },
+                    ) catch unreachable;
+                }
 
-                // Get pointer to the string used to format integer printing
-                const integer_formatting_string_pointer = self.symbol_generator.generateRegister();
-                const print_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "{s} = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0",
-                    .{integer_formatting_string_pointer},
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = print_instruction }) catch unreachable;
+                const function_name = self.getLlvmFunctionName(callee_symbol);
+                const function_return_type = typed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+                const function_return_llvm_ir_type = llvm_ir_type_by_matcha_type.get(function_return_type);
+                if (function_return_type == .Unit) {
+                    const call_instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "call {s} @{s}({s})",
+                        .{ function_return_llvm_ir_type, function_name, argument_list_buffer.items },
+                    ) catch unreachable;
+                    self.lines.append(self.allocator, .{ .instruction = call_instruction }) catch unreachable;
 
-                // Call C printf function with formatting string and actual value
+                    return .{
+                        .exit_label = current_label,
+                        .register = null,
+                    };
+                }
+
+                const result_register = self.symbol_generator.generateRegister();
                 const call_instruction = std.fmt.allocPrint(
                     self.allocator,
-                    "call i32 (i8*, ...) @printf(i8* {s}, i64 {s})",
-                    .{ integer_formatting_string_pointer, argument_result.register.? },
+                    "{s} = call {s} @{s}({s})",
+                    .{ result_register, function_return_llvm_ir_type, function_name, argument_list_buffer.items },
                 ) catch unreachable;
                 self.lines.append(self.allocator, .{ .instruction = call_instruction }) catch unreachable;
 
                 return .{
-                    .exit_label = argument_result.exit_label,
-                    .register = null,
+                    .exit_label = current_label,
+                    .register = result_register,
                 };
             },
             .BinaryExpression => |binary_expression| {
@@ -363,7 +633,7 @@ pub const LlvmIrEmitter = struct {
                     .And => "and",
                     .Or => "or",
                 };
-                const left_operand_type = typed_program.node_type_map.get(binary_expression.left.id).?;
+                const left_operand_type = typed_program.type_by_node_id.get(binary_expression.left.id).?;
                 const instruction_type = llvm_ir_type_by_matcha_type.get(left_operand_type);
                 const instruction = std.fmt.allocPrint(
                     self.allocator,
@@ -385,7 +655,7 @@ pub const LlvmIrEmitter = struct {
                     environment,
                 );
                 const result_register = self.symbol_generator.generateRegister();
-                const operation_type = typed_program.node_type_map.get(node.id).?;
+                const operation_type = typed_program.type_by_node_id.get(node.id).?;
                 const instruction_type = llvm_ir_type_by_matcha_type.get(operation_type);
                 const instruction = switch (unary_expression.operator) {
                     .Negate => std.fmt.allocPrint(
@@ -413,8 +683,8 @@ pub const LlvmIrEmitter = struct {
                     typed_program,
                     environment,
                 );
-                const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
-                const value_type = typed_program.node_type_map.get(value_declaration.value.id).?;
+                const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+                const value_type = typed_program.type_by_node_id.get(value_declaration.value.id).?;
                 const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
 
                 const storage = self.symbol_generator.generateStorage();
@@ -435,9 +705,9 @@ pub const LlvmIrEmitter = struct {
                     typed_program,
                     environment,
                 );
-                const symbol_id = typed_program.resolved_program.name_resolution_map.get(node.id).?;
+                const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
-                const value_type = typed_program.node_type_map.get(assignment.value.id).?;
+                const value_type = typed_program.type_by_node_id.get(assignment.value.id).?;
                 const llvm_ir_type = llvm_ir_type_by_matcha_type.get(value_type);
                 self.emitStore(value_result.register.?, storage, llvm_ir_type);
 
@@ -552,7 +822,7 @@ pub const LlvmIrEmitter = struct {
 
                 // "continue" path
                 self.emitLabel(continue_label);
-                const result_type = typed_program.node_type_map.get(node.id).?;
+                const result_type = typed_program.type_by_node_id.get(node.id).?;
                 if (result_type == .Unit) {
                     return .{
                         .exit_label = continue_label,

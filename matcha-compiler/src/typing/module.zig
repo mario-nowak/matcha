@@ -63,11 +63,11 @@ pub const unary_operator_rules_by_type = UnaryOperatorRulesByType.init(.{
     }),
 });
 
-pub const SymbolTypeMap = std.AutoHashMap(symbols.SymbolId, Type);
-pub const NodeTypeMap = std.AutoHashMap(ast.NodeId, Type);
+pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, Type);
+pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, Type);
 
 pub const TypedProgram = struct {
     resolved_program: symbols.ResolvedProgram,
-    symbol_type_map: SymbolTypeMap,
-    node_type_map: NodeTypeMap,
+    type_by_symbol_id: TypeBySymbolId,
+    type_by_node_id: TypeByNodeId,
 };

@@ -11,6 +11,8 @@ pub const TokenKind = union(enum) {
     Leave,
     Continue,
     While,
+    Item,
+    Return,
     // Punctuation
     LeftParenthesis,
     RightParenthesis,
@@ -79,6 +81,7 @@ pub const Token = struct {
             .IntLiteral => |value| try writer.print("IntLiteral({})", .{value}),
             .RealLiteral => |value| try writer.print("RealLiteral({})", .{value}),
             .BooleanLiteral => |value| try writer.print("BooleanLiteral({})", .{value}),
+            .Return => try writer.writeAll("Return"),
             .EndOfFile => try writer.writeAll("EndOfFile"),
             .Error => |err| try writer.print("Error(\"{s}\")", .{err.message}),
         }

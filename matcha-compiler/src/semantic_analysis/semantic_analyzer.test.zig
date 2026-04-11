@@ -10,7 +10,7 @@ fn expectAnalyzeError(expected: anyerror, source: []const u8) !void {
     const allocator = parsed.allocator();
     const name_resolver = @import("semantic_analysis").name_resolution.NameResolver.init(allocator);
     const type_checker = @import("semantic_analysis").type_checking.TypeChecker.init(allocator);
-    const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator{};
+    const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator.init(allocator);
     var analyzer = @import("semantic_analysis").SemanticAnalyzer.init(
         name_resolver,
         type_checker,
@@ -37,24 +37,24 @@ test "semantic analysis assigns expected types to if forms and comparisons" {
         .Declaration => |declaration| declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const comparison_symbol_id = typed_program.resolved_program.name_resolution_map.get(parsed.program.statements[0].id).?;
-    try std.testing.expectEqual(.Boolean, typed_program.symbol_type_map.get(comparison_symbol_id).?);
-    try std.testing.expectEqual(.Boolean, typed_program.node_type_map.get(comparison_declaration.value.id).?);
+    const comparison_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
+    try std.testing.expectEqual(.Boolean, typed_program.type_by_symbol_id.get(comparison_symbol_id).?);
+    try std.testing.expectEqual(.Boolean, typed_program.type_by_node_id.get(comparison_declaration.value.id).?);
 
     const unit_if_statement = switch (parsed.program.statements[1].kind) {
         .ExpressionStatement => |statement| statement,
         else => return TestError.UnexpectedNodeKind,
     };
-    try std.testing.expectEqual(.Unit, typed_program.node_type_map.get(parsed.program.statements[1].id).?);
-    try std.testing.expectEqual(.Unit, typed_program.node_type_map.get(unit_if_statement.expression.id).?);
+    try std.testing.expectEqual(.Unit, typed_program.type_by_node_id.get(parsed.program.statements[1].id).?);
+    try std.testing.expectEqual(.Unit, typed_program.type_by_node_id.get(unit_if_statement.expression.id).?);
 
     const score_declaration = switch (parsed.program.statements[2].kind) {
         .Declaration => |declaration| declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const score_symbol_id = typed_program.resolved_program.name_resolution_map.get(parsed.program.statements[2].id).?;
-    try std.testing.expectEqual(.Integer, typed_program.symbol_type_map.get(score_symbol_id).?);
-    try std.testing.expectEqual(.Integer, typed_program.node_type_map.get(score_declaration.value.id).?);
+    const score_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(parsed.program.statements[2].id).?;
+    try std.testing.expectEqual(.Integer, typed_program.type_by_symbol_id.get(score_symbol_id).?);
+    try std.testing.expectEqual(.Integer, typed_program.type_by_node_id.get(score_declaration.value.id).?);
 }
 
 test "semantic analysis maps declaration and identifier use to the same symbol" {
@@ -76,9 +76,26 @@ test "semantic analysis maps declaration and identifier use to the same symbol" 
         else => return TestError.UnexpectedNodeKind,
     };
 
-    const declaration_symbol = analyzed.typed_program.resolved_program.name_resolution_map.get(first_statement.id).?;
-    const identifier_symbol = analyzed.typed_program.resolved_program.name_resolution_map.get(if_expression.condition.id).?;
+    const declaration_symbol = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(first_statement.id).?;
+    const identifier_symbol = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(if_expression.condition.id).?;
     try std.testing.expectEqual(declaration_symbol, identifier_symbol);
+}
+
+test "semantic analysis resolves parameter references inside function bodies" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item identity(value: int): int = value;
+    );
+    defer analyzed.deinit();
+
+    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
+        .FunctionDefinition => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expectEqual(
+        .Integer,
+        analyzed.typed_program.type_by_node_id.get(function_definition.body_expression.id).?,
+    );
 }
 
 test "semantic analysis rejects non-boolean if conditions" {
@@ -110,6 +127,12 @@ test "semantic analysis rejects non-unit if expressions used as statements" {
 test "semantic analysis rejects unary not on integers" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val bad = not 1;
+    );
+}
+
+test "semantic analysis rejects non-unit expression-bodied functions with a branch that falls through without a value" {
+    try expectAnalyzeError(error.NotAllPathsReturnValue,
+        \\item f(): int = if true { 1 } else { val x = 1; };
     );
 }
 

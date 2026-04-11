@@ -1,23 +1,53 @@
+pub const std = @import("std");
 pub const ast = @import("ast");
 
 pub const ControlFlowValidationError = error{
     LeaveUsedOutsideOfLoop,
     ContinueUsedOutsideOfLoop,
+    FunctionDefinitionInsideBlock,
+    NotAllPathsReturnValue,
+    ReturnWithoutValueInNonUnitFunction,
+    ReturnUsedOutsideOfFunction,
 };
+
+pub const ExitBehavior = enum {
+    FallsThroughWithValue,
+    FallsThroughWithoutValue,
+    Terminates,
+};
+
+pub const ExitBehaviorByNodeId = std.AutoHashMap(ast.NodeId, ExitBehavior);
 
 pub const ControlFlowValidationContext = struct {
     loop_depth: u32 = 0,
+    scope_depth: u32 = 0,
+    in_function: bool = false,
 };
 
 pub const ControlFlowValidator = struct {
-    pub fn validateProgram(self: *@This(), program: *const ast.Program) ControlFlowValidationError!void {
+    exit_behavior_by_node_id: ExitBehaviorByNodeId,
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+    ) @This() {
+        return .{
+            .exit_behavior_by_node_id = ExitBehaviorByNodeId.init(allocator),
+        };
+    }
+
+    pub fn validateProgram(
+        self: *@This(),
+        program: *const ast.Program,
+    ) ControlFlowValidationError!ExitBehaviorByNodeId {
         const context = ControlFlowValidationContext{};
         for (program.statements) |*statement| {
             try self.validateNode(statement, &context);
         }
+
+        return self.exit_behavior_by_node_id;
     }
 
-    pub fn validateNode(
+    fn validateNode(
         self: *@This(),
         node: *const ast.Node,
         context: *const ControlFlowValidationContext,
@@ -26,11 +56,37 @@ pub const ControlFlowValidator = struct {
             .Declaration => |declaration| {
                 try self.validateNode(declaration.value, context);
             },
+            .FunctionDefinition => |function_definition| {
+                if (context.scope_depth > 0) {
+                    std.debug.print("Semantic Error: Function definitions are not allowed inside blocks\n", .{});
+                    return ControlFlowValidationError.FunctionDefinitionInsideBlock;
+                }
+                const function_context = ControlFlowValidationContext{
+                    .loop_depth = 0,
+                    .scope_depth = 0,
+                    .in_function = true,
+                };
+                try self.validateNode(function_definition.body_expression, &function_context);
+                try self.validateFunctionReturnsValue(&function_definition);
+            },
+            .Return => |return_statement| {
+                if (!context.in_function) {
+                    std.debug.print("Semantic Error: Return statements are only allowed inside functions\n", .{});
+                    return ControlFlowValidationError.ReturnUsedOutsideOfFunction;
+                }
+                if (return_statement.value) |expression| {
+                    try self.validateNode(expression, context);
+                }
+            },
             .Assignment => |assignment| {
                 try self.validateNode(assignment.value, context);
             },
             .Loop => |loop| {
-                const loop_context = ControlFlowValidationContext{ .loop_depth = context.loop_depth + 1 };
+                const loop_context = ControlFlowValidationContext{
+                    .loop_depth = context.loop_depth + 1,
+                    .scope_depth = context.scope_depth,
+                    .in_function = context.in_function,
+                };
                 try self.validateNode(loop.body_block, &loop_context);
             },
             .While => |while_statement| {
@@ -38,7 +94,11 @@ pub const ControlFlowValidator = struct {
                 if (while_statement.update) |update| {
                     try self.validateNode(update, context);
                 }
-                const loop_context = ControlFlowValidationContext{ .loop_depth = context.loop_depth + 1 };
+                const loop_context = ControlFlowValidationContext{
+                    .loop_depth = context.loop_depth + 1,
+                    .scope_depth = context.scope_depth,
+                    .in_function = context.in_function,
+                };
                 try self.validateNode(while_statement.body_block, &loop_context);
             },
             .Continue => {
@@ -77,17 +137,203 @@ pub const ControlFlowValidator = struct {
                 try self.validateNode(unary_expression.operand, context);
             },
             .Block => |block| {
+                const block_context = ControlFlowValidationContext{
+                    .loop_depth = context.loop_depth,
+                    .scope_depth = context.scope_depth + 1,
+                    .in_function = context.in_function,
+                };
                 for (block.statements) |*statement| {
-                    try self.validateNode(statement, context);
+                    try self.validateNode(statement, &block_context);
                 }
                 if (block.result) |result_node| {
-                    try self.validateNode(result_node, context);
+                    try self.validateNode(result_node, &block_context);
                 }
             },
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
             => {},
+        }
+    }
+
+    pub fn validateFunctionReturnsValue(self: *@This(), function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
+        const result = try self.validateTerminatesWithValue(function_definition.body_expression);
+        const is_unit_function = std.mem.eql(
+            u8,
+            function_definition.return_type_annotation.name_token.kind.Identifier,
+            "unit",
+        );
+        if (!is_unit_function and result == .FallsThroughWithoutValue) {
+            std.debug.print("Semantic Error: Not all paths in the function return a value\n", .{});
+            return ControlFlowValidationError.NotAllPathsReturnValue;
+        }
+    }
+
+    pub fn validateTerminatesWithValue(
+        self: *@This(),
+        node: *const ast.Node,
+    ) ControlFlowValidationError!ExitBehavior {
+        switch (node.kind) {
+            .Return => |_| {
+                self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                return .Terminates;
+            },
+            .Block => |block| {
+                for (block.statements) |*statement| {
+                    const result = try self.validateTerminatesWithValue(statement);
+                    if (result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+
+                if (block.result) |result_node| {
+                    self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                    return self.validateTerminatesWithValue(result_node);
+                } else {
+                    self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                    return .FallsThroughWithoutValue;
+                }
+            },
+            .Declaration => |declaration| {
+                const result = try self.validateTerminatesWithValue(declaration.value);
+                self.exit_behavior_by_node_id.put(declaration.value.id, result) catch unreachable;
+                return result;
+            },
+            .FunctionDefinition => return ControlFlowValidationError.FunctionDefinitionInsideBlock,
+            .IfStatement => |if_statement| {
+                const condition_result = try self.validateTerminatesWithValue(if_statement.condition);
+                if (condition_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                _ = try self.validateTerminatesWithValue(if_statement.then_branch);
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                return .FallsThroughWithoutValue;
+            },
+            .ExpressionStatement => |expression_statement| {
+                const result = try self.validateTerminatesWithValue(expression_statement.expression);
+                if (result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                } else {
+                    self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                    return .FallsThroughWithoutValue;
+                }
+            },
+            .Assignment => |assignment| {
+                const result = try self.validateTerminatesWithValue(assignment.value);
+                self.exit_behavior_by_node_id.put(assignment.value.id, result) catch unreachable;
+                return result;
+            },
+            .Loop => |loop| {
+                const result = try self.validateTerminatesWithValue(loop.body_block);
+                self.exit_behavior_by_node_id.put(node.id, result) catch unreachable;
+                return result;
+            },
+            .While => |while_statement| {
+                const condition_result = try self.validateTerminatesWithValue(while_statement.condition);
+                if (condition_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+
+                if (while_statement.update) |update| {
+                    const update_result = try self.validateTerminatesWithValue(update);
+                    if (update_result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+
+                _ = try self.validateTerminatesWithValue(while_statement.body_block);
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+
+                return .FallsThroughWithoutValue;
+            },
+            .Leave => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                return .FallsThroughWithoutValue;
+            },
+            .Continue => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                return .FallsThroughWithoutValue;
+            },
+            .IfExpression => |if_expression| {
+                const condition_result = try self.validateTerminatesWithValue(if_expression.condition);
+                if (condition_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                const then_result = try self.validateTerminatesWithValue(if_expression.then_block);
+                const else_result = try self.validateTerminatesWithValue(if_expression.else_block);
+                if (then_result == .Terminates and else_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+
+                if (then_result == .FallsThroughWithoutValue or else_result == .FallsThroughWithoutValue) {
+                    self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                    return .FallsThroughWithoutValue;
+                }
+
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .CallExpression => |call_expression| {
+                const callee_result = try self.validateTerminatesWithValue(call_expression.callee);
+                if (callee_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+
+                for (call_expression.arguments) |*argument| {
+                    const argument_result = try self.validateTerminatesWithValue(argument);
+                    if (argument_result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+
+                return .FallsThroughWithValue;
+            },
+            .BinaryExpression => |binary_expression| {
+                const left_result = try self.validateTerminatesWithValue(binary_expression.left);
+                if (left_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                const right_result = try self.validateTerminatesWithValue(binary_expression.right);
+                if (right_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .UnaryExpression => |unary_expression| {
+                const operand_result = try self.validateTerminatesWithValue(unary_expression.operand);
+                if (operand_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .Identifier => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .IntegerLiteral => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .BooleanLiteral => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
         }
     }
 };
