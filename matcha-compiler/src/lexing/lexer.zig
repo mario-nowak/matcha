@@ -213,6 +213,8 @@ pub const Lexer = struct {
         if (std.mem.eql(u8, alphanumeric, "leave")) return .Leave;
         if (std.mem.eql(u8, alphanumeric, "continue")) return .Continue;
         if (std.mem.eql(u8, alphanumeric, "while")) return .While;
+        if (std.mem.eql(u8, alphanumeric, "item")) return .Item;
+        if (std.mem.eql(u8, alphanumeric, "return")) return .Return;
         return null;
     }
 
