@@ -27,9 +27,11 @@ pub const Parser = struct {
         ExpectedTypeAnnotation,
         ExpectedLeftBrace,
         ExpectedIf,
+        ExpectedMatch,
         UnexpectedElse,
         ExpectedCommaOrClosingParenthesis,
         ExpectedColon,
+        ExpectedFatArrow,
     };
 
     const ParseState = struct {
@@ -485,6 +487,85 @@ pub const Parser = struct {
         }
     }
 
+    fn parseMatchExpression(self: *Parser, match_token: lexing.Token) ParserError!ast.Node {
+        if (match_token.kind != .Match) {
+            return ParserError.ExpectedMatch;
+        }
+
+        var subject: ?*ast.Node = null;
+        const post_match_token = self.lexer.peek();
+        if (post_match_token.kind != .LeftBrace) {
+            const subject_node = self.allocator.create(ast.Node) catch unreachable;
+            subject_node.* = try self.parseExpression(.{ .current_binding_power = 0 });
+            subject = subject_node;
+        }
+
+        const left_brace_token = self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            return ParserError.ExpectedLeftBrace;
+        }
+
+        var arms = std.ArrayList(ast.MatchArm){};
+        var else_token: ?lexing.Token = null;
+        var else_arm: ?*ast.Node = null;
+
+        while (true) {
+            const next_token = self.lexer.peek();
+            if (next_token.kind == .RightBrace) {
+                _ = self.lexer.next();
+                break;
+            }
+
+            if (next_token.kind == .Else) {
+                else_token = self.lexer.next();
+                const arrow_token = self.lexer.next();
+                if (arrow_token.kind != .FatArrow) {
+                    return ParserError.ExpectedFatArrow;
+                }
+
+                const body = self.allocator.create(ast.Node) catch unreachable;
+                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                else_arm = body;
+            } else {
+                const pattern_or_condition = self.allocator.create(ast.Node) catch unreachable;
+                pattern_or_condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+                const arrow_token = self.lexer.next();
+                if (arrow_token.kind != .FatArrow) {
+                    return ParserError.ExpectedFatArrow;
+                }
+
+                const body = self.allocator.create(ast.Node) catch unreachable;
+                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+                arms.append(self.allocator, .{
+                    .pattern_or_condition = pattern_or_condition,
+                    .body = body,
+                    .fat_arrow_token = arrow_token,
+                }) catch unreachable;
+            }
+
+            const separator_or_end = self.lexer.peek();
+            switch (separator_or_end.kind) {
+                .Comma => {
+                    _ = self.lexer.next();
+                },
+                .RightBrace => {},
+                else => return ParserError.ExpectedSemicolon,
+            }
+        }
+
+        return self.createNode(.{
+            .MatchExpression = .{
+                .match_token = match_token,
+                .subject = subject,
+                .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
+                .else_token = else_token,
+                .else_arm = else_arm,
+            },
+        });
+    }
+
     fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) ParserError!ast.Node {
         var statements = std.ArrayList(ast.Node){};
         var result: ?*ast.Node = null;
@@ -616,6 +697,7 @@ pub const Parser = struct {
                     .expression => |if_expression| if_expression,
                 };
             },
+            .Match => try self.parseMatchExpression(token),
             .LeftParenthesis => try self.parseExpression(.{ .current_binding_power = 0 }),
             .LeftBrace => try self.parseBlock(token),
             .Minus => block: {
@@ -694,10 +776,12 @@ pub const Parser = struct {
                 .Identifier => return left_hand_side,
                 .RightParenthesis => return left_hand_side,
                 .LeftBrace => return left_hand_side,
+                .FatArrow => return left_hand_side,
                 // In case we reach the end of the file, there is nothing more to parse so our the current
                 // "left hand side" is the entire expression.
                 .EndOfFile => return left_hand_side,
                 .Semicolon => return left_hand_side,
+                .Comma => return left_hand_side,
                 else => return left_hand_side,
             };
 

@@ -66,19 +66,48 @@ test "lexer keeps keyword prefixes inside identifiers" {
 
 test "lexer distinguishes assign from equality operators" {
     var lexer = lexing.Lexer.init(
-        "= == != < <= > >=",
+        "= => == != < <= > >=",
         std.heap.page_allocator,
     );
     defer lexer.deinit();
 
     const expected_tags = [_]TokenTag{
         .Assign,
+        .FatArrow,
         .EqualEqual,
         .NotEqual,
         .LessThan,
         .LessThanOrEqual,
         .GreaterThan,
         .GreaterThanOrEqual,
+        .EndOfFile,
+    };
+
+    for (expected_tags) |expected_tag| {
+        try expectTokenTag(lexer.next(), expected_tag);
+    }
+}
+
+test "lexer tokenizes match keyword and arrows" {
+    var lexer = lexing.Lexer.init(
+        \\match value { true => 1, else => 0 }
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const expected_tags = [_]TokenTag{
+        .Match,
+        .Identifier,
+        .LeftBrace,
+        .BooleanLiteral,
+        .FatArrow,
+        .IntLiteral,
+        .Comma,
+        .Else,
+        .FatArrow,
+        .IntLiteral,
+        .RightBrace,
         .EndOfFile,
     };
 

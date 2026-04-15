@@ -4,14 +4,24 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const control_flow_validation = @import("../control_flow/module.zig");
 
-const ValidationContext = struct {
-    requires_value: bool,
+const ValidationContext = enum {
+    Statement,
+    Expression,
+    FunctionBody,
+};
+
+const ExhaustivenessClass = enum {
+    Boolean,
+    IntegerOpen,
+    Subjectless,
 };
 
 const TypeError = error{
     BlockMustProduceValue,
     BlockCannotProduceValue,
     TypeMismatch,
+    NonExhaustiveMatch,
+    DuplicateMatchArm,
 };
 
 pub const TypeChecker = struct {
@@ -34,9 +44,7 @@ pub const TypeChecker = struct {
     ) TypeError!typing.TypedProgram {
         self.type_by_symbol_id = typing.TypeBySymbolId.init(self.allocator);
         self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
-        var context = ValidationContext{
-            .requires_value = false,
-        };
+        const context: ValidationContext = .Statement;
 
         try self.seedModuleLevelFunctionSignatures(&resolved_program);
 
@@ -45,7 +53,7 @@ pub const TypeChecker = struct {
                 statement,
                 &resolved_program,
                 exit_behavior_by_node_id,
-                &context,
+                context,
             );
         }
 
@@ -111,7 +119,7 @@ pub const TypeChecker = struct {
         node: *const ast.Node,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-        context: *const ValidationContext,
+        context: ValidationContext,
     ) TypeError!void {
         switch (node.kind) {
             .Declaration => |value_declaration| {
@@ -119,7 +127,7 @@ pub const TypeChecker = struct {
                     value_declaration.value,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const value_type = self.type_by_node_id.get(value_declaration.value.id).?;
                 const annotated_type = if (value_declaration.type_annotation) |type_annotation|
@@ -154,7 +162,7 @@ pub const TypeChecker = struct {
                         return_value,
                         resolved_program,
                         exit_behavior_by_node_id,
-                        &ValidationContext{ .requires_value = true },
+                        .Expression,
                     );
                 }
             },
@@ -163,7 +171,7 @@ pub const TypeChecker = struct {
                     assignment.value,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const value_type = self.type_by_node_id.get(assignment.value.id).?;
                 const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id).?;
@@ -182,7 +190,7 @@ pub const TypeChecker = struct {
                     loop.body_block,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = false },
+                    .Statement,
                 );
             },
             .While => |while_statement| {
@@ -190,7 +198,7 @@ pub const TypeChecker = struct {
                     while_statement.condition,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const while_condition_type = self.type_by_node_id.get(while_statement.condition.id).?;
                 if (while_condition_type != .Boolean) {
@@ -202,14 +210,14 @@ pub const TypeChecker = struct {
                         update,
                         resolved_program,
                         exit_behavior_by_node_id,
-                        &ValidationContext{ .requires_value = false },
+                        .Statement,
                     );
                 }
                 try self.checkNode(
                     while_statement.body_block,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = false },
+                    .Statement,
                 );
             },
             .Leave => {},
@@ -236,7 +244,7 @@ pub const TypeChecker = struct {
                                 argument,
                                 resolved_program,
                                 exit_behavior_by_node_id,
-                                &ValidationContext{ .requires_value = true },
+                                .Expression,
                             );
                             const argument_type = self.type_by_node_id.get(argument.id) orelse unreachable;
                             const parameter_type = self.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
@@ -261,13 +269,13 @@ pub const TypeChecker = struct {
                     binaryExpression.left,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 try self.checkNode(
                     binaryExpression.right,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
 
                 const left_expression_type = self.type_by_node_id.get(binaryExpression.left.id).?;
@@ -302,7 +310,7 @@ pub const TypeChecker = struct {
                     unaryExpression.operand,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const operand_type = self.type_by_node_id.get(unaryExpression.operand.id).?;
                 if (typing.unary_operator_rules_by_type.get(operand_type)) |rules_for_operand_type| {
@@ -324,11 +332,11 @@ pub const TypeChecker = struct {
                 }
             },
             .Block => |block| {
-                if (context.requires_value and block.result == null) {
+                if (context == .Expression and block.result == null) {
                     std.debug.print("Type Error: Block must produce a value in this context\n", .{});
                     return TypeError.BlockMustProduceValue;
                 }
-                if (!context.requires_value and block.result != null) {
+                if (context == .Statement and block.result != null) {
                     std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
                     return TypeError.BlockCannotProduceValue;
                 }
@@ -338,7 +346,7 @@ pub const TypeChecker = struct {
                         statement,
                         resolved_program,
                         exit_behavior_by_node_id,
-                        &ValidationContext{ .requires_value = false },
+                        .Statement,
                     );
                 }
                 if (block.result) |result_node| {
@@ -346,7 +354,7 @@ pub const TypeChecker = struct {
                         result_node,
                         resolved_program,
                         exit_behavior_by_node_id,
-                        &ValidationContext{ .requires_value = true },
+                        .Expression,
                     );
                     const result_type = self.type_by_node_id.get(result_node.id).?;
                     self.type_by_node_id.put(node.id, result_type) catch unreachable;
@@ -373,7 +381,7 @@ pub const TypeChecker = struct {
                     if_statement.condition,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const if_condition_type = self.type_by_node_id.get(if_statement.condition.id).?;
                 if (if_condition_type != .Boolean) {
@@ -385,7 +393,7 @@ pub const TypeChecker = struct {
                     if_statement.then_branch,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = false },
+                    .Statement,
                 );
                 self.type_by_node_id.put(node.id, .Unit) catch unreachable;
             },
@@ -394,7 +402,7 @@ pub const TypeChecker = struct {
                     if_expression.condition,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = true },
+                    .Expression,
                 );
                 const if_condition_type = self.type_by_node_id.get(if_expression.condition.id).?;
                 if (if_condition_type != .Boolean) {
@@ -406,7 +414,7 @@ pub const TypeChecker = struct {
                     if_expression.then_block,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = context.requires_value },
+                    context,
                 );
                 const then_block_type = self.type_by_node_id.get(if_expression.then_block.id).?;
 
@@ -414,7 +422,7 @@ pub const TypeChecker = struct {
                     if_expression.else_block,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = context.requires_value },
+                    context,
                 );
                 const else_block_type = self.type_by_node_id.get(if_expression.else_block.id).?;
 
@@ -428,13 +436,27 @@ pub const TypeChecker = struct {
 
                 self.type_by_node_id.put(node.id, then_block_type) catch unreachable;
             },
+            .MatchExpression => |match_expression| {
+                const match_type = try self.checkMatchExpression(
+                    &match_expression,
+                    resolved_program,
+                    exit_behavior_by_node_id,
+                    context,
+                );
+                self.type_by_node_id.put(node.id, match_type) catch unreachable;
+            },
             .ExpressionStatement => |expression_statement| {
                 try self.checkNode(
                     expression_statement.expression,
                     resolved_program,
                     exit_behavior_by_node_id,
-                    &ValidationContext{ .requires_value = false },
+                    .Statement,
                 );
+                const expression_type = self.type_by_node_id.get(expression_statement.expression.id).?;
+                if (expression_type != .Unit) {
+                    std.debug.print("Type Error: Expression statement must evaluate to unit\n", .{});
+                    return TypeError.BlockCannotProduceValue;
+                }
                 self.type_by_node_id.put(node.id, .Unit) catch unreachable;
             },
         }
@@ -454,7 +476,7 @@ pub const TypeChecker = struct {
             function_definition.body_expression,
             resolved_program,
             exit_behavior_by_node_id,
-            &ValidationContext{ .requires_value = false },
+            .FunctionBody,
         );
         try self.checkReturnStatementsMatchType(
             function_definition.body_expression,
@@ -551,6 +573,18 @@ pub const TypeChecker = struct {
                 try self.checkReturnStatementsMatchType(if_expression.then_block, function_return_type, resolved_program);
                 try self.checkReturnStatementsMatchType(if_expression.else_block, function_return_type, resolved_program);
             },
+            .MatchExpression => |match_expression| {
+                if (match_expression.subject) |subject| {
+                    try self.checkReturnStatementsMatchType(subject, function_return_type, resolved_program);
+                }
+                for (match_expression.arms) |arm| {
+                    try self.checkReturnStatementsMatchType(arm.pattern_or_condition, function_return_type, resolved_program);
+                    try self.checkReturnStatementsMatchType(arm.body, function_return_type, resolved_program);
+                }
+                if (match_expression.else_arm) |else_arm| {
+                    try self.checkReturnStatementsMatchType(else_arm, function_return_type, resolved_program);
+                }
+            },
             .Block => |block| {
                 for (block.statements) |*statement| {
                     try self.checkReturnStatementsMatchType(statement, function_return_type, resolved_program);
@@ -612,5 +646,157 @@ pub const TypeChecker = struct {
             std.debug.print("Type Error: Unknown type annotation: {s}\n", .{type_name});
             return TypeError.TypeMismatch;
         }
+    }
+
+    fn checkMatchExpression(
+        self: *@This(),
+        match_expression: *const ast.MatchExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+        context: ValidationContext,
+    ) TypeError!typing.Type {
+        const exhaustiveness_class: ExhaustivenessClass = if (match_expression.subject) |subject| class: {
+            try self.checkNode(
+                subject,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+            const subject_type = self.type_by_node_id.get(subject.id) orelse unreachable;
+            break :class switch (subject_type) {
+                .Boolean => .Boolean,
+                .Integer => .IntegerOpen,
+                else => {
+                    std.debug.print("Type Error: Match subject must be boolean or integer in v1, got {any}\n", .{subject_type});
+                    return TypeError.TypeMismatch;
+                },
+            };
+        } else .Subjectless;
+
+        var saw_true = false;
+        var saw_false = false;
+        var integer_patterns = std.AutoHashMap(i64, void).init(self.allocator);
+        defer integer_patterns.deinit();
+
+        var arm_result_type: ?typing.Type = null;
+        for (match_expression.arms) |arm| {
+            switch (exhaustiveness_class) {
+                .Subjectless => {
+                    try self.checkNode(
+                        arm.pattern_or_condition,
+                        resolved_program,
+                        exit_behavior_by_node_id,
+                        .Expression,
+                    );
+                    const condition_type = self.type_by_node_id.get(arm.pattern_or_condition.id) orelse unreachable;
+                    if (condition_type != .Boolean) {
+                        std.debug.print("Type Error: Subjectless match arm condition must be boolean, got {any}\n", .{condition_type});
+                        return TypeError.TypeMismatch;
+                    }
+                },
+                .Boolean => switch (arm.pattern_or_condition.kind) {
+                    .BooleanLiteral => |token| {
+                        if (token.kind.BooleanLiteral) {
+                            if (saw_true) return TypeError.DuplicateMatchArm;
+                            saw_true = true;
+                        } else {
+                            if (saw_false) return TypeError.DuplicateMatchArm;
+                            saw_false = true;
+                        }
+                        self.type_by_node_id.put(arm.pattern_or_condition.id, .Boolean) catch unreachable;
+                    },
+                    else => {
+                        std.debug.print("Type Error: Boolean match arms must use boolean literals in v1\n", .{});
+                        return TypeError.TypeMismatch;
+                    },
+                },
+                .IntegerOpen => switch (arm.pattern_or_condition.kind) {
+                    .IntegerLiteral => |token| {
+                        try self.checkNode(
+                            arm.pattern_or_condition,
+                            resolved_program,
+                            exit_behavior_by_node_id,
+                            .Expression,
+                        );
+                        const value = token.kind.IntLiteral;
+                        if (integer_patterns.contains(value)) {
+                            return TypeError.DuplicateMatchArm;
+                        }
+                        integer_patterns.put(value, {}) catch unreachable;
+                    },
+                    else => {
+                        try self.checkNode(
+                            arm.pattern_or_condition,
+                            resolved_program,
+                            exit_behavior_by_node_id,
+                            .Expression,
+                        );
+                        const pattern_type = self.type_by_node_id.get(arm.pattern_or_condition.id) orelse unreachable;
+                        if (pattern_type != .Integer) {
+                            std.debug.print("Type Error: Integer match arms must be integer expressions in v1\n", .{});
+                            return TypeError.TypeMismatch;
+                        }
+                    },
+                },
+            }
+
+            try self.checkNode(
+                arm.body,
+                resolved_program,
+                exit_behavior_by_node_id,
+                context,
+            );
+            const body_type = self.type_by_node_id.get(arm.body.id) orelse unreachable;
+            if (arm_result_type) |expected_type| {
+                if (expected_type != body_type) {
+                    std.debug.print(
+                        "Type Error: Match arms must all produce the same type, expected {any}, got {any}\n",
+                        .{ expected_type, body_type },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+            } else {
+                arm_result_type = body_type;
+            }
+        }
+
+        if (match_expression.else_arm) |else_arm| {
+            try self.checkNode(
+                else_arm,
+                resolved_program,
+                exit_behavior_by_node_id,
+                context,
+            );
+            const else_type = self.type_by_node_id.get(else_arm.id) orelse unreachable;
+            if (arm_result_type) |expected_type| {
+                if (expected_type != else_type) {
+                    std.debug.print(
+                        "Type Error: Match else arm must produce the same type as other arms, expected {any}, got {any}\n",
+                        .{ expected_type, else_type },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+            } else {
+                arm_result_type = else_type;
+            }
+        }
+
+        const is_exhaustive = switch (exhaustiveness_class) {
+            .Subjectless => match_expression.else_arm != null,
+            .Boolean => (saw_true and saw_false) or match_expression.else_arm != null,
+            .IntegerOpen => match_expression.else_arm != null,
+        };
+        if (!is_exhaustive) {
+            std.debug.print("Type Error: Match expression is not exhaustive in v1\n", .{});
+            return TypeError.NonExhaustiveMatch;
+        }
+
+        const result_type = arm_result_type orelse .Unit;
+        if (context == .Statement and result_type != .Unit) {
+            std.debug.print("Type Error: Match expression used as statement must evaluate to unit\n", .{});
+            return TypeError.BlockCannotProduceValue;
+        }
+
+        return result_type;
     }
 };

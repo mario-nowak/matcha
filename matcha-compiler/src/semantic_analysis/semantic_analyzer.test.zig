@@ -98,6 +98,43 @@ test "semantic analysis resolves parameter references inside function bodies" {
     );
 }
 
+test "semantic analysis allows if expression as expression-bodied function body" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item choose(flag: boolean): int = if flag { 1 } else { 0 };
+    );
+    defer analyzed.deinit();
+
+    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
+        .FunctionDefinition => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expectEqual(
+        .Integer,
+        analyzed.typed_program.type_by_node_id.get(function_definition.body_expression.id).?,
+    );
+}
+
+test "semantic analysis allows match expression as expression-bodied function body" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item choose(value: int): int = match value {
+        \\    0 => 1,
+        \\    else => value,
+        \\};
+    );
+    defer analyzed.deinit();
+
+    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
+        .FunctionDefinition => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expectEqual(
+        .Integer,
+        analyzed.typed_program.type_by_node_id.get(function_definition.body_expression.id).?,
+    );
+}
+
 test "semantic analysis rejects non-boolean if conditions" {
     try expectAnalyzeError(error.TypeMismatch,
         \\if 1 { val x = 1; }
@@ -203,5 +240,90 @@ test "semantic analysis type-checks string-typed function definitions" {
 test "semantic analysis rejects assigning integer to string variable" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val greeting: string = 42;
+    );
+}
+
+test "semantic analysis type-checks exhaustive boolean match expressions" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val label = match true {
+        \\    true => "yes",
+        \\    false => "no",
+        \\};
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[0].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(.String, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
+test "semantic analysis type-checks subjectless and integer matches with else" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val a = match {
+        \\    true => 1,
+        \\    else => 0,
+        \\};
+        \\val b = match 2 {
+        \\    1 + 1 => "one",
+        \\    else => "other",
+        \\};
+    );
+    defer analyzed.deinit();
+}
+
+test "semantic analysis rejects non-exhaustive boolean and integer matches without else" {
+    try expectAnalyzeError(error.NonExhaustiveMatch,
+        \\val label = match true {
+        \\    true => "yes",
+        \\};
+    );
+
+    try expectAnalyzeError(error.NonExhaustiveMatch,
+        \\val label = match 1 {
+        \\    1 => "one",
+        \\};
+    );
+}
+
+test "semantic analysis rejects duplicate and invalid v1 match arms" {
+    try expectAnalyzeError(error.DuplicateMatchArm,
+        \\val label = match true {
+        \\    true => "yes",
+        \\    true => "still yes",
+        \\    false => "no",
+        \\};
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\val label = match 1 {
+        \\    "two" => "two",
+        \\    else => "other",
+        \\};
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\val label = match {
+        \\    1 => "one",
+        \\    else => "other",
+        \\};
+    );
+}
+
+test "semantic analysis only allows statement-position match when it evaluates to unit" {
+    var analyzed = try helpers.analyzeProgram(
+        \\match true {
+        \\    true => printInt(1),
+        \\    false => printInt(0),
+        \\};
+    );
+    defer analyzed.deinit();
+
+    try expectAnalyzeError(error.BlockCannotProduceValue,
+        \\match true {
+        \\    true => 1,
+        \\    false => 0,
+        \\};
     );
 }

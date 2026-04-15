@@ -120,6 +120,18 @@ pub const ControlFlowValidator = struct {
                 try self.validateNode(if_expression.then_block, context);
                 try self.validateNode(if_expression.else_block, context);
             },
+            .MatchExpression => |match_expression| {
+                if (match_expression.subject) |subject| {
+                    try self.validateNode(subject, context);
+                }
+                for (match_expression.arms) |arm| {
+                    try self.validateNode(arm.pattern_or_condition, context);
+                    try self.validateNode(arm.body, context);
+                }
+                if (match_expression.else_arm) |else_arm| {
+                    try self.validateNode(else_arm, context);
+                }
+            },
             .ExpressionStatement => |expression_statement| {
                 try self.validateNode(expression_statement.expression, context);
             },
@@ -274,6 +286,67 @@ pub const ControlFlowValidator = struct {
                 }
 
                 if (then_result == .FallsThroughWithoutValue or else_result == .FallsThroughWithoutValue) {
+                    self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+                    return .FallsThroughWithoutValue;
+                }
+
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .MatchExpression => |match_expression| {
+                if (match_expression.subject) |subject| {
+                    const subject_result = try self.validateTerminatesWithValue(subject);
+                    if (subject_result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+
+                var saw_fallthrough_with_value = false;
+                var saw_fallthrough_without_value = false;
+                var any_arm_falls_through = false;
+
+                for (match_expression.arms) |arm| {
+                    const pattern_result = try self.validateTerminatesWithValue(arm.pattern_or_condition);
+                    if (pattern_result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+
+                    const body_result = try self.validateTerminatesWithValue(arm.body);
+                    switch (body_result) {
+                        .Terminates => {},
+                        .FallsThroughWithValue => {
+                            any_arm_falls_through = true;
+                            saw_fallthrough_with_value = true;
+                        },
+                        .FallsThroughWithoutValue => {
+                            any_arm_falls_through = true;
+                            saw_fallthrough_without_value = true;
+                        },
+                    }
+                }
+
+                if (match_expression.else_arm) |else_arm| {
+                    const else_result = try self.validateTerminatesWithValue(else_arm);
+                    switch (else_result) {
+                        .Terminates => {},
+                        .FallsThroughWithValue => {
+                            any_arm_falls_through = true;
+                            saw_fallthrough_with_value = true;
+                        },
+                        .FallsThroughWithoutValue => {
+                            any_arm_falls_through = true;
+                            saw_fallthrough_without_value = true;
+                        },
+                    }
+                }
+
+                if (!any_arm_falls_through) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                if (saw_fallthrough_without_value) {
                     self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
                     return .FallsThroughWithoutValue;
                 }

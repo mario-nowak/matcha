@@ -17,6 +17,7 @@ pub const NodeKind = union(enum) {
     While: While,
     // Expressions-ish nodes
     IfExpression: IfExpression,
+    MatchExpression: MatchExpression,
     CallExpression: CallExpression,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
@@ -101,6 +102,20 @@ pub const IfExpression = struct {
     then_block: *Node,
     else_token: lexing.Token,
     else_block: *Node,
+};
+
+pub const MatchArm = struct {
+    pattern_or_condition: *Node,
+    body: *Node,
+    fat_arrow_token: lexing.Token,
+};
+
+pub const MatchExpression = struct {
+    match_token: lexing.Token,
+    subject: ?*Node,
+    arms: []MatchArm,
+    else_token: ?lexing.Token,
+    else_arm: ?*Node,
 };
 
 pub const ExpressionStatement = struct {

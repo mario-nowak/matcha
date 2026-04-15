@@ -211,3 +211,55 @@ test "parser parses string-typed function definitions" {
     try std.testing.expectEqualStrings("string", function_definition.return_type_annotation.name_token.kind.Identifier);
     try std.testing.expectEqualStrings("string", function_definition.parameters[0].type_annotation.name_token.kind.Identifier);
 }
+
+test "parser parses subjectful match expressions" {
+    const source =
+        \\val message = match true {
+        \\    true => "yes",
+        \\    false => "no",
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const match_expression = switch (declaration.value.kind) {
+        .MatchExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expect(match_expression.subject != null);
+    try std.testing.expectEqual(@as(usize, 2), match_expression.arms.len);
+    try std.testing.expect(match_expression.else_arm == null);
+    try expectNodeTag(match_expression.arms[0].pattern_or_condition, .BooleanLiteral);
+    try expectNodeTag(match_expression.arms[0].body, .StringLiteral);
+}
+
+test "parser parses subjectless match expressions" {
+    const source =
+        \\val sign = match {
+        \\    true => 1,
+        \\    else => 0,
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const match_expression = switch (declaration.value.kind) {
+        .MatchExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expect(match_expression.subject == null);
+    try std.testing.expectEqual(@as(usize, 1), match_expression.arms.len);
+    try std.testing.expect(match_expression.else_arm != null);
+}

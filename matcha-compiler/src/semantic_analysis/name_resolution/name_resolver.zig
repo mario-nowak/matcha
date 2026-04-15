@@ -259,6 +259,18 @@ pub const NameResolver = struct {
                 try self.resolveNode(if_expression.then_block, node_scope, module_scope, context);
                 try self.resolveNode(if_expression.else_block, node_scope, module_scope, context);
             },
+            .MatchExpression => |match_expression| {
+                if (match_expression.subject) |subject| {
+                    try self.resolveNode(subject, node_scope, module_scope, context);
+                }
+                for (match_expression.arms) |arm| {
+                    try self.resolveNode(arm.pattern_or_condition, node_scope, module_scope, context);
+                    try self.resolveNode(arm.body, node_scope, module_scope, context);
+                }
+                if (match_expression.else_arm) |else_arm| {
+                    try self.resolveNode(else_arm, node_scope, module_scope, context);
+                }
+            },
             .ExpressionStatement => |expression_statement| {
                 try self.resolveNode(expression_statement.expression, node_scope, module_scope, context);
             },

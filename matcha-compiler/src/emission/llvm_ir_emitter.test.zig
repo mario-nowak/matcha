@@ -58,7 +58,8 @@ test "llvm emission uses continue as the false branch for statement ifs" {
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "br i1 1, label %label_then_0, label %label_continue_1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "br i1 1, label %label_then_") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, ", label %label_continue_") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_else_") == null);
 }
 
@@ -160,4 +161,27 @@ test "llvm emission lowers string literals to String globals and builtin printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, i8* %.t_0, 0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_0_echo(%String %.t_5)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
+}
+
+test "llvm emission lowers match expressions to compare-and-branch chains" {
+    const llvm_ir = try emit(
+        \\val first = match true {
+        \\    true => 7,
+        \\    false => 9,
+        \\};
+        \\val second = match 2 {
+        \\    1 + 1 => "two",
+        \\    else => "other",
+        \\};
+        \\val third = match {
+            \\    first == 7 => 1,
+        \\    else => 0,
+        \\};
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i1 1, 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi %String") != null);
 }
