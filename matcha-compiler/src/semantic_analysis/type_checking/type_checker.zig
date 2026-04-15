@@ -49,7 +49,7 @@ pub const TypeChecker = struct {
         try self.seedModuleLevelFunctionSignatures(&resolved_program);
 
         for (resolved_program.program.statements) |*statement| {
-            try self.checkNode(
+            _ = try self.checkNode(
                 statement,
                 &resolved_program,
                 exit_behavior_by_node_id,
@@ -120,346 +120,497 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!void {
+    ) TypeError!typing.Type {
         switch (node.kind) {
-            .Declaration => |value_declaration| {
-                try self.checkNode(
-                    value_declaration.value,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const value_type = self.type_by_node_id.get(value_declaration.value.id).?;
-                const annotated_type = if (value_declaration.type_annotation) |type_annotation|
-                    try asType(type_annotation)
-                else
-                    null;
-                if (annotated_type) |annotated| {
-                    if (annotated != value_type) {
-                        std.debug.print(
-                            "Type Error: Value declaration annotation does not match initializer type, expected {any}, got {any}\n",
-                            .{ annotated, value_type },
-                        );
-                        return TypeError.TypeMismatch;
-                    }
-                }
-                const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id).?;
-                self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
-                self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-            },
-            .FunctionDefinition => |function_definition| {
-                try self.checkFunctionDefinition(
-                    node.id,
-                    &function_definition,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                );
-                self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-            },
-            .Return => |return_statement| {
-                if (return_statement.value) |return_value| {
-                    try self.checkNode(
-                        return_value,
-                        resolved_program,
-                        exit_behavior_by_node_id,
-                        .Expression,
-                    );
-                }
-            },
-            .Assignment => |assignment| {
-                try self.checkNode(
-                    assignment.value,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const value_type = self.type_by_node_id.get(assignment.value.id).?;
-                const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id).?;
-                const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
-                if (symbol_type != value_type) {
-                    std.debug.print(
-                        "Type Error: Cannot assign value of type {any} to symbol of type {any}\n",
-                        .{ value_type, symbol_type },
-                    );
-                    return TypeError.TypeMismatch;
-                }
-                self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-            },
-            .Loop => |loop| {
-                try self.checkNode(
-                    loop.body_block,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Statement,
-                );
-            },
-            .While => |while_statement| {
-                try self.checkNode(
-                    while_statement.condition,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const while_condition_type = self.type_by_node_id.get(while_statement.condition.id).?;
-                if (while_condition_type != .Boolean) {
-                    std.debug.print("Type Error: While condition must be of type boolean, got {any}\n", .{while_condition_type});
-                    return TypeError.TypeMismatch;
-                }
-                if (while_statement.update) |update| {
-                    try self.checkNode(
-                        update,
-                        resolved_program,
-                        exit_behavior_by_node_id,
-                        .Statement,
-                    );
-                }
-                try self.checkNode(
-                    while_statement.body_block,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Statement,
-                );
-            },
-            .Leave => {},
-            .Continue => {},
-            .CallExpression => |call_expression| {
-                switch (call_expression.callee.kind) {
-                    .Identifier => {
-                        const callee_symbol_id = resolved_program.symbol_id_by_node_id.get(
-                            call_expression.callee.id,
-                        ) orelse unreachable;
-                        const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-                            callee_symbol_id,
-                        ) orelse unreachable;
-                        if (call_expression.arguments.len != parameter_symbol_ids.len) {
-                            std.debug.print(
-                                "Type Error: Function expected {any} arguments, got {any}\n",
-                                .{ parameter_symbol_ids.len, call_expression.arguments.len },
-                            );
-                            return TypeError.TypeMismatch;
-                        }
-
-                        for (call_expression.arguments, parameter_symbol_ids) |*argument, parameter_symbol_id| {
-                            try self.checkNode(
-                                argument,
-                                resolved_program,
-                                exit_behavior_by_node_id,
-                                .Expression,
-                            );
-                            const argument_type = self.type_by_node_id.get(argument.id) orelse unreachable;
-                            const parameter_type = self.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
-                            if (argument_type != parameter_type) {
-                                std.debug.print(
-                                    "Type Error: Function parameter expected type {any}, got {any}\n",
-                                    .{ parameter_type, argument_type },
-                                );
-                                return TypeError.TypeMismatch;
-                            }
-                        }
-
-                        const function_return_type = self.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
-
-                        self.type_by_node_id.put(node.id, function_return_type) catch unreachable;
-                    },
-                    else => return TypeError.TypeMismatch,
-                }
-            },
-            .BinaryExpression => |binaryExpression| {
-                try self.checkNode(
-                    binaryExpression.left,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                try self.checkNode(
-                    binaryExpression.right,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-
-                const left_expression_type = self.type_by_node_id.get(binaryExpression.left.id).?;
-                const right_expression_type = self.type_by_node_id.get(binaryExpression.right.id).?;
-                if (typing.binary_operator_rules_by_type.get(left_expression_type)) |rules_for_left_type| {
-                    if (rules_for_left_type.get(binaryExpression.operator)) |operator_rule| {
-                        if (operator_rule.argument_type != right_expression_type) {
-                            std.debug.print(
-                                "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
-                                .{ binaryExpression.operator, operator_rule.argument_type, right_expression_type },
-                            );
-                            return TypeError.TypeMismatch;
-                        }
-                        self.type_by_node_id.put(node.id, operator_rule.return_type) catch unreachable;
-                    } else {
-                        std.debug.print(
-                            "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
-                            .{ binaryExpression.operator, left_expression_type },
-                        );
-                        return TypeError.TypeMismatch;
-                    }
-                } else {
-                    std.debug.print(
-                        "Type Error: No binary operator rules exist for left operand type {any}\n",
-                        .{left_expression_type},
-                    );
-                    return TypeError.TypeMismatch;
-                }
-            },
-            .UnaryExpression => |unaryExpression| {
-                try self.checkNode(
-                    unaryExpression.operand,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const operand_type = self.type_by_node_id.get(unaryExpression.operand.id).?;
-                if (typing.unary_operator_rules_by_type.get(operand_type)) |rules_for_operand_type| {
-                    if (rules_for_operand_type.get(unaryExpression.operator)) |operator_rule| {
-                        self.type_by_node_id.put(node.id, operator_rule.return_type) catch unreachable;
-                    } else {
-                        std.debug.print(
-                            "Type Error: Unary operator {any} is not supported for operand type {any}\n",
-                            .{ unaryExpression.operator, operand_type },
-                        );
-                        return TypeError.TypeMismatch;
-                    }
-                } else {
-                    std.debug.print(
-                        "Type Error: No unary operator rules exist for operand type {any}\n",
-                        .{operand_type},
-                    );
-                    return TypeError.TypeMismatch;
-                }
-            },
-            .Block => |block| {
-                if (context == .Expression and block.result == null) {
-                    std.debug.print("Type Error: Block must produce a value in this context\n", .{});
-                    return TypeError.BlockMustProduceValue;
-                }
-                if (context == .Statement and block.result != null) {
-                    std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
-                    return TypeError.BlockCannotProduceValue;
-                }
-
-                for (block.statements) |*statement| {
-                    try self.checkNode(
-                        statement,
-                        resolved_program,
-                        exit_behavior_by_node_id,
-                        .Statement,
-                    );
-                }
-                if (block.result) |result_node| {
-                    try self.checkNode(
-                        result_node,
-                        resolved_program,
-                        exit_behavior_by_node_id,
-                        .Expression,
-                    );
-                    const result_type = self.type_by_node_id.get(result_node.id).?;
-                    self.type_by_node_id.put(node.id, result_type) catch unreachable;
-                } else {
-                    self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-                }
-            },
-            .IntegerLiteral => {
-                self.type_by_node_id.put(node.id, .Integer) catch unreachable;
-            },
-            .BooleanLiteral => {
-                self.type_by_node_id.put(node.id, .Boolean) catch unreachable;
-            },
-            .StringLiteral => {
-                self.type_by_node_id.put(node.id, .String) catch unreachable;
-            },
-            .Identifier => {
-                const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id).?;
-                const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
-                self.type_by_node_id.put(node.id, symbol_type) catch unreachable;
-            },
-            .IfStatement => |if_statement| {
-                try self.checkNode(
-                    if_statement.condition,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const if_condition_type = self.type_by_node_id.get(if_statement.condition.id).?;
-                if (if_condition_type != .Boolean) {
-                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
-                    return TypeError.TypeMismatch;
-                }
-
-                try self.checkNode(
-                    if_statement.then_branch,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Statement,
-                );
-                self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-            },
-            .IfExpression => |if_expression| {
-                try self.checkNode(
-                    if_expression.condition,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Expression,
-                );
-                const if_condition_type = self.type_by_node_id.get(if_expression.condition.id).?;
-                if (if_condition_type != .Boolean) {
-                    std.debug.print("Type Error: If condition must be of type boolean, got {any}\n", .{if_condition_type});
-                    return TypeError.TypeMismatch;
-                }
-
-                try self.checkNode(
-                    if_expression.then_block,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    context,
-                );
-                const then_block_type = self.type_by_node_id.get(if_expression.then_block.id).?;
-
-                try self.checkNode(
-                    if_expression.else_block,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    context,
-                );
-                const else_block_type = self.type_by_node_id.get(if_expression.else_block.id).?;
-
-                if (then_block_type != else_block_type) {
-                    std.debug.print(
-                        "Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n",
-                        .{ then_block_type, else_block_type },
-                    );
-                    return TypeError.TypeMismatch;
-                }
-
-                self.type_by_node_id.put(node.id, then_block_type) catch unreachable;
-            },
-            .MatchExpression => |match_expression| {
-                const match_type = try self.checkMatchExpression(
-                    &match_expression,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    context,
-                );
-                self.type_by_node_id.put(node.id, match_type) catch unreachable;
-            },
-            .ExpressionStatement => |expression_statement| {
-                try self.checkNode(
-                    expression_statement.expression,
-                    resolved_program,
-                    exit_behavior_by_node_id,
-                    .Statement,
-                );
-                const expression_type = self.type_by_node_id.get(expression_statement.expression.id).?;
-                if (expression_type != .Unit) {
-                    std.debug.print("Type Error: Expression statement must evaluate to unit\n", .{});
-                    return TypeError.BlockCannotProduceValue;
-                }
-                self.type_by_node_id.put(node.id, .Unit) catch unreachable;
-            },
+            .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, resolved_program, exit_behavior_by_node_id),
+            .FunctionDefinition => |function_definition| return self.checkFunctionDefinitionNode(node.id, &function_definition, resolved_program, exit_behavior_by_node_id),
+            .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, resolved_program, exit_behavior_by_node_id),
+            .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, resolved_program, exit_behavior_by_node_id),
+            .Loop => |loop| return self.checkLoopNode(node.id, &loop, resolved_program, exit_behavior_by_node_id),
+            .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, resolved_program, exit_behavior_by_node_id),
+            .Leave => return self.checkLeaveNode(node.id),
+            .Continue => return self.checkContinueNode(node.id),
+            .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
+            .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, resolved_program, exit_behavior_by_node_id),
+            .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, resolved_program, exit_behavior_by_node_id),
+            .Block => |block| return self.checkBlockNode(node.id, &block, resolved_program, exit_behavior_by_node_id, context),
+            .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
+            .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
+            .StringLiteral => return self.checkStringLiteralNode(node.id),
+            .Identifier => return self.checkIdentifierNode(node.id, resolved_program),
+            .IfStatement => |if_statement| return self.checkIfStatementNode(node.id, &if_statement, resolved_program, exit_behavior_by_node_id),
+            .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, resolved_program, exit_behavior_by_node_id, context),
+            .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, resolved_program, exit_behavior_by_node_id, context),
+            .ExpressionStatement => |expression_statement| return self.checkExpressionStatementNode(node.id, &expression_statement, resolved_program, exit_behavior_by_node_id),
         }
+    }
+
+    fn checkDeclarationNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        declaration: *const ast.Declaration,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const value_type = try self.checkNode(
+            declaration.value,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        const annotated_type = if (declaration.type_annotation) |type_annotation|
+            try asType(type_annotation)
+        else
+            null;
+        if (annotated_type) |annotated| {
+            if (annotated != value_type) {
+                std.debug.print(
+                    "Type Error: Value declaration annotation does not match initializer type, expected {any}, got {any}\n",
+                    .{ annotated, value_type },
+                );
+                return TypeError.TypeMismatch;
+            }
+        }
+
+        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkFunctionDefinitionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        function_definition: *const ast.FunctionDefinition,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        try self.checkFunctionDefinition(
+            node_id,
+            function_definition,
+            resolved_program,
+            exit_behavior_by_node_id,
+        );
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkReturnNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        return_statement: *const ast.Return,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        if (return_statement.value) |return_value| {
+            _ = try self.checkNode(
+                return_value,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+        }
+
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkAssignmentNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        assignment: *const ast.Assignment,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const value_type = try self.checkNode(
+            assignment.value,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
+        if (symbol_type != value_type) {
+            std.debug.print(
+                "Type Error: Cannot assign value of type {any} to symbol of type {any}\n",
+                .{ value_type, symbol_type },
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkLoopNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        loop: *const ast.Loop,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        _ = try self.checkNode(
+            loop.body_block,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Statement,
+        );
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkWhileNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        while_statement: *const ast.While,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const while_condition_type = try self.checkNode(
+            while_statement.condition,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (while_condition_type != .Boolean) {
+            std.debug.print(
+                "Type Error: While condition must be of type boolean, got {any}\n",
+                .{while_condition_type},
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        if (while_statement.update) |update| {
+            _ = try self.checkNode(
+                update,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Statement,
+            );
+        }
+
+        _ = try self.checkNode(
+            while_statement.body_block,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Statement,
+        );
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkLeaveNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.Type {
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkContinueNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.Type {
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkCallExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        call_expression: *const ast.CallExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        switch (call_expression.callee.kind) {
+            .Identifier => {
+                const callee_symbol_id = resolved_program.symbol_id_by_node_id.get(
+                    call_expression.callee.id,
+                ) orelse unreachable;
+                const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
+                    callee_symbol_id,
+                ) orelse unreachable;
+                if (call_expression.arguments.len != parameter_symbol_ids.len) {
+                    std.debug.print(
+                        "Type Error: Function expected {any} arguments, got {any}\n",
+                        .{ parameter_symbol_ids.len, call_expression.arguments.len },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+
+                for (call_expression.arguments, parameter_symbol_ids) |*argument, parameter_symbol_id| {
+                    const argument_type = try self.checkNode(
+                        argument,
+                        resolved_program,
+                        exit_behavior_by_node_id,
+                        .Expression,
+                    );
+                    const parameter_type = self.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+                    if (argument_type != parameter_type) {
+                        std.debug.print(
+                            "Type Error: Function parameter expected type {any}, got {any}\n",
+                            .{ parameter_type, argument_type },
+                        );
+                        return TypeError.TypeMismatch;
+                    }
+                }
+
+                const function_return_type = self.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+                return self.recordNodeType(node_id, function_return_type);
+            },
+            else => return TypeError.TypeMismatch,
+        }
+    }
+
+    fn checkBinaryExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        binary_expression: *const ast.BinaryExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const left_expression_type = try self.checkNode(
+            binary_expression.left,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        const right_expression_type = try self.checkNode(
+            binary_expression.right,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (typing.binary_operator_rules_by_type.get(left_expression_type)) |rules_for_left_type| {
+            if (rules_for_left_type.get(binary_expression.operator)) |operator_rule| {
+                if (operator_rule.argument_type != right_expression_type) {
+                    std.debug.print(
+                        "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
+                        .{ binary_expression.operator, operator_rule.argument_type, right_expression_type },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+                return self.recordNodeType(node_id, operator_rule.return_type);
+            } else {
+                std.debug.print(
+                    "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
+                    .{ binary_expression.operator, left_expression_type },
+                );
+                return TypeError.TypeMismatch;
+            }
+        } else {
+            std.debug.print(
+                "Type Error: No binary operator rules exist for left operand type {any}\n",
+                .{left_expression_type},
+            );
+            return TypeError.TypeMismatch;
+        }
+    }
+
+    fn checkUnaryExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        unary_expression: *const ast.UnaryExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const operand_type = try self.checkNode(
+            unary_expression.operand,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (typing.unary_operator_rules_by_type.get(operand_type)) |rules_for_operand_type| {
+            if (rules_for_operand_type.get(unary_expression.operator)) |operator_rule| {
+                return self.recordNodeType(node_id, operator_rule.return_type);
+            } else {
+                std.debug.print(
+                    "Type Error: Unary operator {any} is not supported for operand type {any}\n",
+                    .{ unary_expression.operator, operand_type },
+                );
+                return TypeError.TypeMismatch;
+            }
+        } else {
+            std.debug.print(
+                "Type Error: No unary operator rules exist for operand type {any}\n",
+                .{operand_type},
+            );
+            return TypeError.TypeMismatch;
+        }
+    }
+
+    fn checkBlockNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        block: *const ast.Block,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+        context: ValidationContext,
+    ) TypeError!typing.Type {
+        if (context == .Expression and block.result == null) {
+            std.debug.print("Type Error: Block must produce a value in this context\n", .{});
+            return TypeError.BlockMustProduceValue;
+        }
+        if (context == .Statement and block.result != null) {
+            std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
+            return TypeError.BlockCannotProduceValue;
+        }
+
+        for (block.statements) |*statement| {
+            _ = try self.checkNode(
+                statement,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Statement,
+            );
+        }
+        if (block.result) |result_node| {
+            const result_type = try self.checkNode(
+                result_node,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+            return self.recordNodeType(node_id, result_type);
+        }
+
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkIntegerLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.Type {
+        return self.recordNodeType(node_id, .Integer);
+    }
+
+    fn checkBooleanLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.Type {
+        return self.recordNodeType(node_id, .Boolean);
+    }
+
+    fn checkStringLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.Type {
+        return self.recordNodeType(node_id, .String);
+    }
+
+    fn checkIdentifierNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        resolved_program: *const symbols.ResolvedProgram,
+    ) TypeError!typing.Type {
+        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
+        return self.recordNodeType(node_id, symbol_type);
+    }
+
+    fn checkIfStatementNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        if_statement: *const ast.IfStatement,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const if_condition_type = try self.checkNode(
+            if_statement.condition,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (if_condition_type != .Boolean) {
+            std.debug.print(
+                "Type Error: If condition must be of type boolean, got {any}\n",
+                .{if_condition_type},
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        _ = try self.checkNode(
+            if_statement.then_branch,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Statement,
+        );
+        return self.recordNodeType(node_id, .Unit);
+    }
+
+    fn checkIfExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        if_expression: *const ast.IfExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+        context: ValidationContext,
+    ) TypeError!typing.Type {
+        const if_condition_type = try self.checkNode(
+            if_expression.condition,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (if_condition_type != .Boolean) {
+            std.debug.print(
+                "Type Error: If condition must be of type boolean, got {any}\n",
+                .{if_condition_type},
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        const then_block_type = try self.checkNode(
+            if_expression.then_block,
+            resolved_program,
+            exit_behavior_by_node_id,
+            context,
+        );
+        const else_block_type = try self.checkNode(
+            if_expression.else_block,
+            resolved_program,
+            exit_behavior_by_node_id,
+            context,
+        );
+        if (then_block_type != else_block_type) {
+            std.debug.print(
+                "Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n",
+                .{ then_block_type, else_block_type },
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        return self.recordNodeType(node_id, then_block_type);
+    }
+
+    fn checkMatchExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        match_expression: *const ast.MatchExpression,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+        context: ValidationContext,
+    ) TypeError!typing.Type {
+        const match_type = try self.checkMatchExpression(
+            match_expression,
+            resolved_program,
+            exit_behavior_by_node_id,
+            context,
+        );
+        return self.recordNodeType(node_id, match_type);
+    }
+
+    fn checkExpressionStatementNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        expression_statement: *const ast.ExpressionStatement,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.Type {
+        const expression_type = try self.checkNode(
+            expression_statement.expression,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Statement,
+        );
+        if (expression_type != .Unit) {
+            std.debug.print("Type Error: Expression statement must evaluate to unit\n", .{});
+            return TypeError.BlockCannotProduceValue;
+        }
+
+        return self.recordNodeType(node_id, .Unit);
     }
 
     fn checkFunctionDefinitionReturnValue(
@@ -472,7 +623,7 @@ pub const TypeChecker = struct {
         const symbol_id = resolved_program.symbol_id_by_node_id.get(function_node_id).?;
         const function_return_type = try asType(function_definition.return_type_annotation);
 
-        try self.checkNode(
+        const body_expression_type = try self.checkNode(
             function_definition.body_expression,
             resolved_program,
             exit_behavior_by_node_id,
@@ -486,9 +637,6 @@ pub const TypeChecker = struct {
         self.type_by_symbol_id.put(symbol_id, function_return_type) catch unreachable;
 
         const body_exit_behavior = exit_behavior_by_node_id.get(
-            function_definition.body_expression.id,
-        ) orelse unreachable;
-        const body_expression_type = self.type_by_node_id.get(
             function_definition.body_expression.id,
         ) orelse unreachable;
         switch (body_exit_behavior) {
@@ -656,13 +804,12 @@ pub const TypeChecker = struct {
         context: ValidationContext,
     ) TypeError!typing.Type {
         const exhaustiveness_class: ExhaustivenessClass = if (match_expression.subject) |subject| class: {
-            try self.checkNode(
+            const subject_type = try self.checkNode(
                 subject,
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Expression,
             );
-            const subject_type = self.type_by_node_id.get(subject.id) orelse unreachable;
             break :class switch (subject_type) {
                 .Boolean => .Boolean,
                 .Integer => .IntegerOpen,
@@ -682,13 +829,12 @@ pub const TypeChecker = struct {
         for (match_expression.arms) |arm| {
             switch (exhaustiveness_class) {
                 .Subjectless => {
-                    try self.checkNode(
+                    const condition_type = try self.checkNode(
                         arm.pattern_or_condition,
                         resolved_program,
                         exit_behavior_by_node_id,
                         .Expression,
                     );
-                    const condition_type = self.type_by_node_id.get(arm.pattern_or_condition.id) orelse unreachable;
                     if (condition_type != .Boolean) {
                         std.debug.print("Type Error: Subjectless match arm condition must be boolean, got {any}\n", .{condition_type});
                         return TypeError.TypeMismatch;
@@ -712,7 +858,7 @@ pub const TypeChecker = struct {
                 },
                 .IntegerOpen => switch (arm.pattern_or_condition.kind) {
                     .IntegerLiteral => |token| {
-                        try self.checkNode(
+                        _ = try self.checkNode(
                             arm.pattern_or_condition,
                             resolved_program,
                             exit_behavior_by_node_id,
@@ -725,13 +871,12 @@ pub const TypeChecker = struct {
                         integer_patterns.put(value, {}) catch unreachable;
                     },
                     else => {
-                        try self.checkNode(
+                        const pattern_type = try self.checkNode(
                             arm.pattern_or_condition,
                             resolved_program,
                             exit_behavior_by_node_id,
                             .Expression,
                         );
-                        const pattern_type = self.type_by_node_id.get(arm.pattern_or_condition.id) orelse unreachable;
                         if (pattern_type != .Integer) {
                             std.debug.print("Type Error: Integer match arms must be integer expressions in v1\n", .{});
                             return TypeError.TypeMismatch;
@@ -740,13 +885,12 @@ pub const TypeChecker = struct {
                 },
             }
 
-            try self.checkNode(
+            const body_type = try self.checkNode(
                 arm.body,
                 resolved_program,
                 exit_behavior_by_node_id,
                 context,
             );
-            const body_type = self.type_by_node_id.get(arm.body.id) orelse unreachable;
             if (arm_result_type) |expected_type| {
                 if (expected_type != body_type) {
                     std.debug.print(
@@ -761,13 +905,12 @@ pub const TypeChecker = struct {
         }
 
         if (match_expression.else_arm) |else_arm| {
-            try self.checkNode(
+            const else_type = try self.checkNode(
                 else_arm,
                 resolved_program,
                 exit_behavior_by_node_id,
                 context,
             );
-            const else_type = self.type_by_node_id.get(else_arm.id) orelse unreachable;
             if (arm_result_type) |expected_type| {
                 if (expected_type != else_type) {
                     std.debug.print(
@@ -798,5 +941,14 @@ pub const TypeChecker = struct {
         }
 
         return result_type;
+    }
+
+    fn recordNodeType(
+        self: *@This(),
+        node_id: ast.NodeId,
+        node_type: typing.Type,
+    ) typing.Type {
+        self.type_by_node_id.put(node_id, node_type) catch unreachable;
+        return node_type;
     }
 };
