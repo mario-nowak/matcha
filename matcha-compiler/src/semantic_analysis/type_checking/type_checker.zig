@@ -72,6 +72,13 @@ pub const TypeChecker = struct {
                             self.type_by_symbol_id.put(parameter_symbol_id, .Integer) catch unreachable;
                         }
                     },
+                    .BuiltinPrintString => {
+                        self.type_by_symbol_id.put(symbol.id, .Unit) catch unreachable;
+                        const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(symbol.id) orelse unreachable;
+                        for (parameter_symbol_ids) |parameter_symbol_id| {
+                            self.type_by_symbol_id.put(parameter_symbol_id, .String) catch unreachable;
+                        }
+                    },
                 }
             },
             else => {},
@@ -353,6 +360,9 @@ pub const TypeChecker = struct {
             .BooleanLiteral => {
                 self.type_by_node_id.put(node.id, .Boolean) catch unreachable;
             },
+            .StringLiteral => {
+                self.type_by_node_id.put(node.id, .String) catch unreachable;
+            },
             .Identifier => {
                 const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
@@ -581,6 +591,7 @@ pub const TypeChecker = struct {
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
+            .StringLiteral,
             .Leave,
             .Continue,
             => {},
@@ -595,6 +606,8 @@ pub const TypeChecker = struct {
             return .Unit;
         } else if (std.mem.eql(u8, type_name, "int")) {
             return .Integer;
+        } else if (std.mem.eql(u8, type_name, "string")) {
+            return .String;
         } else {
             std.debug.print("Type Error: Unknown type annotation: {s}\n", .{type_name});
             return TypeError.TypeMismatch;

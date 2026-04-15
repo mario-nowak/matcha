@@ -605,6 +605,7 @@ pub const Parser = struct {
         var left_hand_side = switch (token.kind) {
             .IntLiteral => self.createNode(.{ .IntegerLiteral = token }),
             .BooleanLiteral => self.createNode(.{ .BooleanLiteral = token }),
+            .StringLiteral => self.createNode(.{ .StringLiteral = token }),
             .Identifier => self.createNode(.{ .Identifier = token }),
             .If => if_block: {
                 const if_form = try self.parseIfForm(token);

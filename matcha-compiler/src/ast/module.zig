@@ -23,6 +23,7 @@ pub const NodeKind = union(enum) {
     Identifier: lexing.Token,
     IntegerLiteral: lexing.Token,
     BooleanLiteral: lexing.Token,
+    StringLiteral: lexing.Token,
     Block: Block,
 };
 

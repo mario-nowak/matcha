@@ -37,6 +37,7 @@ pub const TokenKind = union(enum) {
     IntLiteral: i64,
     RealLiteral: f64,
     BooleanLiteral: bool,
+    StringLiteral: []const u8,
     //
     EndOfFile,
     Error: struct {
@@ -81,6 +82,7 @@ pub const Token = struct {
             .IntLiteral => |value| try writer.print("IntLiteral({})", .{value}),
             .RealLiteral => |value| try writer.print("RealLiteral({})", .{value}),
             .BooleanLiteral => |value| try writer.print("BooleanLiteral({})", .{value}),
+            .StringLiteral => |value| try writer.print("StringLiteral(\"{s}\")", .{value}),
             .Return => try writer.writeAll("Return"),
             .EndOfFile => try writer.writeAll("EndOfFile"),
             .Error => |err| try writer.print("Error(\"{s}\")", .{err.message}),

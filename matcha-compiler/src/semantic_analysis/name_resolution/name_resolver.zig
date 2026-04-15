@@ -49,6 +49,7 @@ pub const NameResolver = struct {
         var module_scope = try self.buildModuleScope(program);
 
         self.addPrintIntBuiltinDebuggingFunction(&module_scope);
+        self.addPrintStringBuiltinDebuggingFunction(&module_scope);
 
         for (program.statements) |statement| {
             try self.resolveNode(&statement, &root_scope, &module_scope, .{
@@ -78,6 +79,24 @@ pub const NameResolver = struct {
         });
         self.parameter_symbol_ids_by_function_symbol_id.put(
             print_int_symbol.id,
+            self.allocator.dupe(symbols.SymbolId, &.{parameter_symbol.id}) catch unreachable,
+        ) catch unreachable;
+    }
+
+    fn addPrintStringBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
+        const print_string_symbol = self.symbol_table.insertSymbol(.{
+            .name = "printString",
+            .declared_at = null,
+            .kind = .{ .Function = .{ .implementation = .BuiltinPrintString } },
+        });
+        module_scope.insertSymbol(print_string_symbol.name, print_string_symbol.id);
+        const parameter_symbol = self.symbol_table.insertSymbol(.{
+            .name = "value",
+            .declared_at = null,
+            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+        });
+        self.parameter_symbol_ids_by_function_symbol_id.put(
+            print_string_symbol.id,
             self.allocator.dupe(symbols.SymbolId, &.{parameter_symbol.id}) catch unreachable,
         ) catch unreachable;
     }
@@ -245,6 +264,7 @@ pub const NameResolver = struct {
             },
             .IntegerLiteral,
             .BooleanLiteral,
+            .StringLiteral,
             .Leave,
             .Continue,
             => {},

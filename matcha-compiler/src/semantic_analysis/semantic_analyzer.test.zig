@@ -145,3 +145,63 @@ test "semantic analysis rejects loop control outside loops" {
         \\if true { continue; }
     );
 }
+
+test "semantic analysis infers string type for string literals" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val greeting = "hello";
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[0].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try std.testing.expectEqual(.String, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+    try std.testing.expectEqual(.String, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
+test "semantic analysis resolves string type annotation" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val greeting: string = "hello";
+    );
+    defer analyzed.deinit();
+
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try std.testing.expectEqual(.String, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+}
+
+test "semantic analysis type-checks printString with string argument" {
+    var analyzed = try helpers.analyzeProgram(
+        \\printString("hello");
+    );
+    defer analyzed.deinit();
+}
+
+test "semantic analysis rejects printString with integer argument" {
+    try expectAnalyzeError(error.TypeMismatch,
+        \\printString(42);
+    );
+}
+
+test "semantic analysis type-checks string-typed function definitions" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item echo(x: string): string = x;
+    );
+    defer analyzed.deinit();
+
+    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
+        .FunctionDefinition => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(
+        .String,
+        analyzed.typed_program.type_by_node_id.get(function_definition.body_expression.id).?,
+    );
+}
+
+test "semantic analysis rejects assigning integer to string variable" {
+    try expectAnalyzeError(error.TypeMismatch,
+        \\val greeting: string = 42;
+    );
+}

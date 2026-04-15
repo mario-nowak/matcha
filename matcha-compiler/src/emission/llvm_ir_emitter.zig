@@ -10,7 +10,15 @@ const Storage = []const u8;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 const LlvmIrTypeByMatchaType = std.EnumArray(typing.Type, []const u8);
 
+const llvm_string_type_definition = "%String = type { i8*, i64 }";
 const print_int_formatting_string = ".print_int_formatting_string";
+const print_string_newline = ".print_string_newline";
+
+const StringLiteralGlobal = struct {
+    name: []const u8,
+    content: []const u8,
+    len: usize,
+};
 
 const Line = union(enum) {
     instruction: Instruction,
@@ -21,6 +29,7 @@ const llvm_ir_type_by_matcha_type = LlvmIrTypeByMatchaType.init(.{
     .Unit = "void",
     .Boolean = "i1",
     .Integer = "i64",
+    .String = "%String",
 });
 
 const LoopContext = struct {
@@ -66,6 +75,7 @@ pub const SymbolGenerator = struct {
     register_counter: usize,
     storage_counter: usize,
     label_counter: usize,
+    string_literal_counter: usize,
     register_prefix: []const u8,
     storage_prefix: []const u8,
 
@@ -79,9 +89,16 @@ pub const SymbolGenerator = struct {
             .register_counter = 0,
             .storage_counter = 0,
             .label_counter = 0,
+            .string_literal_counter = 0,
             .register_prefix = register_prefix,
             .storage_prefix = storage_prefix,
         };
+    }
+
+    pub fn resetFunctionState(self: *@This()) void {
+        self.register_counter = 0;
+        self.storage_counter = 0;
+        self.label_counter = 0;
     }
 
     pub fn generateRegister(self: *@This()) Register {
@@ -116,6 +133,17 @@ pub const SymbolGenerator = struct {
 
         return label;
     }
+
+    pub fn generateStringLiteralGlobalName(self: *@This()) []const u8 {
+        const global_name = std.fmt.allocPrint(
+            self.allocator,
+            "@.string_literal_{d}",
+            .{self.string_literal_counter},
+        ) catch unreachable;
+        self.string_literal_counter += 1;
+
+        return global_name;
+    }
 };
 
 pub const LlvmIrEmitter = struct {
@@ -123,7 +151,10 @@ pub const LlvmIrEmitter = struct {
     symbol_generator: SymbolGenerator,
     storage_allocation_instructions: std.ArrayList(Instruction),
     lines: std.ArrayList(Line),
+    string_literal_globals: std.ArrayList(StringLiteralGlobal),
+    string_literal_global_name_by_node_id: std.AutoHashMap(ast.NodeId, []const u8),
     needs_printf: bool,
+    needs_write: bool,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -131,17 +162,26 @@ pub const LlvmIrEmitter = struct {
             .symbol_generator = SymbolGenerator.init(allocator, ".t", ".s"),
             .lines = .{},
             .storage_allocation_instructions = .{},
+            .string_literal_globals = .{},
+            .string_literal_global_name_by_node_id = std.AutoHashMap(ast.NodeId, []const u8).init(allocator),
             .needs_printf = false,
+            .needs_write = false,
         };
     }
 
     pub fn deinit(self: *@This()) void {
         self.lines.deinit(self.allocator);
         self.storage_allocation_instructions.deinit(self.allocator);
+        self.string_literal_globals.deinit(self.allocator);
+        self.string_literal_global_name_by_node_id.deinit();
     }
 
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
         self.needs_printf = false;
+        self.needs_write = false;
+        self.symbol_generator.string_literal_counter = 0;
+        self.string_literal_globals.clearRetainingCapacity();
+        self.string_literal_global_name_by_node_id.clearRetainingCapacity();
 
         var user_defined_functions = std.ArrayList([]const u8){};
         defer user_defined_functions.deinit(self.allocator);
@@ -156,42 +196,188 @@ pub const LlvmIrEmitter = struct {
         }
 
         const main_function_ir = self.emitMainFunction(typed_program);
+        const builtin_print_string_ir = if (self.needs_write)
+            self.emitBuiltinPrintStringFunction()
+        else
+            null;
         const builtin_print_int_ir = if (self.needs_printf)
             self.emitBuiltinPrintIntFunction()
         else
-            "";
+            null;
+
+        var sections = std.ArrayList([]const u8){};
+        defer sections.deinit(self.allocator);
+        sections.append(self.allocator, self.renderModulePreamble()) catch unreachable;
+        if (builtin_print_string_ir) |ir| {
+            sections.append(self.allocator, ir) catch unreachable;
+        }
+        if (builtin_print_int_ir) |ir| {
+            sections.append(self.allocator, ir) catch unreachable;
+        }
+        for (user_defined_functions.items) |function_ir| {
+            sections.append(self.allocator, function_ir) catch unreachable;
+        }
+        sections.append(self.allocator, main_function_ir) catch unreachable;
 
         var module_buffer = std.ArrayList(u8){};
         defer module_buffer.deinit(self.allocator);
-        if (self.needs_printf) {
-            module_buffer.writer(self.allocator).print(
-                \\@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
-                \\declare i32 @printf(i8*, ...)
-                \\
-                \\
-            , .{}) catch unreachable;
-        }
-        if (builtin_print_int_ir.len > 0) {
-            module_buffer.writer(self.allocator).print("{s}\n\n", .{builtin_print_int_ir}) catch unreachable;
-        }
-        for (user_defined_functions.items, 0..) |function_ir, index| {
-            module_buffer.writer(self.allocator).print("{s}", .{function_ir}) catch unreachable;
-            if (index + 1 < user_defined_functions.items.len) {
+        for (sections.items, 0..) |section, index| {
+            module_buffer.writer(self.allocator).print("{s}", .{section}) catch unreachable;
+            if (index + 1 < sections.items.len) {
                 module_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
             }
         }
-        if (user_defined_functions.items.len > 0) {
-            module_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
-        }
-        module_buffer.writer(self.allocator).print("{s}\n", .{main_function_ir}) catch unreachable;
+        module_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
 
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_buffer.items}) catch unreachable;
+    }
+
+    fn renderModulePreamble(self: *@This()) []const u8 {
+        var module_preamble_buffer = std.ArrayList(u8){};
+        defer module_preamble_buffer.deinit(self.allocator);
+        module_preamble_buffer.writer(self.allocator).print("{s}", .{llvm_string_type_definition}) catch unreachable;
+
+        const string_literal_globals_ir = self.renderStringLiteralGlobals();
+        if (string_literal_globals_ir.len > 0 or self.needs_write or self.needs_printf) {
+            module_preamble_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
+        }
+        if (string_literal_globals_ir.len > 0) {
+            module_preamble_buffer.writer(self.allocator).print("{s}", .{string_literal_globals_ir}) catch unreachable;
+        }
+        if (self.needs_write) {
+            if (string_literal_globals_ir.len > 0) {
+                module_preamble_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+            }
+            module_preamble_buffer.writer(self.allocator).print(
+                "@{s} = private unnamed_addr constant [1 x i8] c\"\\0A\"",
+                .{print_string_newline},
+            ) catch unreachable;
+        }
+        if (self.needs_printf) {
+            if (string_literal_globals_ir.len > 0 or self.needs_write) {
+                module_preamble_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+            }
+            module_preamble_buffer.writer(self.allocator).print(
+                "@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\"",
+                .{},
+            ) catch unreachable;
+        }
+
+        if (self.needs_write or self.needs_printf) {
+            module_preamble_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
+        }
+        if (self.needs_write) {
+            module_preamble_buffer.writer(self.allocator).print("declare i64 @write(i32, i8*, i64)", .{}) catch unreachable;
+        }
+        if (self.needs_printf) {
+            if (self.needs_write) {
+                module_preamble_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+            }
+            module_preamble_buffer.writer(self.allocator).print("declare i32 @printf(i8*, ...)", .{}) catch unreachable;
+        }
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
+    }
+
+    fn renderStringLiteralGlobals(self: *@This()) []const u8 {
+        var globals_buffer = std.ArrayList(u8){};
+        defer globals_buffer.deinit(self.allocator);
+
+        for (self.string_literal_globals.items, 0..) |string_literal_global, index| {
+            const rendered_content = self.renderLlvmStringLiteralContent(string_literal_global.content);
+            globals_buffer.writer(self.allocator).print(
+                "{s} = private unnamed_addr constant [{d} x i8] c\"{s}\"",
+                .{ string_literal_global.name, string_literal_global.len, rendered_content },
+            ) catch unreachable;
+            if (index + 1 < self.string_literal_globals.items.len) {
+                globals_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+            }
+        }
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{globals_buffer.items}) catch unreachable;
+    }
+
+    fn renderLlvmStringLiteralContent(self: *@This(), content: []const u8) []const u8 {
+        var rendered_content_buffer = std.ArrayList(u8){};
+        defer rendered_content_buffer.deinit(self.allocator);
+
+        // LLVM c"..." literals encode raw bytes, so quotes, backslashes, and
+        // non-printable bytes must be emitted as \XX escapes to preserve content.
+        for (content) |byte| {
+            if (byte >= 0x20 and byte <= 0x7e and byte != '\\' and byte != '"') {
+                rendered_content_buffer.append(self.allocator, byte) catch unreachable;
+                continue;
+            }
+
+            rendered_content_buffer.writer(self.allocator).print("\\{X:0>2}", .{byte}) catch unreachable;
+        }
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{rendered_content_buffer.items}) catch unreachable;
+    }
+
+    fn ensureStringLiteralGlobalName(self: *@This(), node_id: ast.NodeId, content: []const u8) []const u8 {
+        if (self.string_literal_global_name_by_node_id.get(node_id)) |existing_global_name| {
+            return existing_global_name;
+        }
+
+        const global_name = self.symbol_generator.generateStringLiteralGlobalName();
+        self.string_literal_globals.append(self.allocator, .{
+            .name = global_name,
+            .content = content,
+            .len = content.len,
+        }) catch unreachable;
+        self.string_literal_global_name_by_node_id.put(node_id, global_name) catch unreachable;
+
+        return global_name;
+    }
+
+    fn emitStringLiteralPointer(self: *@This(), global_name: []const u8, len: usize) Register {
+        const pointer_register = self.symbol_generator.generateRegister();
+        const pointer_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds [{d} x i8], [{d} x i8]* {s}, i64 0, i64 0",
+            .{ pointer_register, len, len, global_name },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = pointer_instruction }) catch unreachable;
+
+        return pointer_register;
+    }
+
+    fn emitStringValue(self: *@This(), pointer_register: Register, len: usize) Register {
+        const partial_string_register = self.symbol_generator.generateRegister();
+        const partial_string_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = insertvalue %String undef, i8* {s}, 0",
+            .{ partial_string_register, pointer_register },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = partial_string_instruction }) catch unreachable;
+
+        const string_register = self.symbol_generator.generateRegister();
+        const string_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = insertvalue %String {s}, i64 {d}, 1",
+            .{ string_register, partial_string_register, len },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = string_instruction }) catch unreachable;
+
+        return string_register;
+    }
+
+    fn emitStringLiteral(self: *@This(), node: *const ast.Node, content: []const u8, entry_label: Label) EmissionResult {
+        const global_name = self.ensureStringLiteralGlobalName(node.id, content);
+        const pointer_register = self.emitStringLiteralPointer(global_name, content.len);
+        const string_register = self.emitStringValue(pointer_register, content.len);
+
+        return .{
+            .exit_label = entry_label,
+            .register = string_register,
+        };
     }
 
     fn resetCurrentFunctionState(self: *@This()) void {
         self.lines.deinit(self.allocator);
         self.storage_allocation_instructions.deinit(self.allocator);
-        self.symbol_generator = SymbolGenerator.init(self.allocator, ".t", ".s");
+        self.symbol_generator.resetFunctionState();
         self.lines = .{};
         self.storage_allocation_instructions = .{};
     }
@@ -366,10 +552,56 @@ pub const LlvmIrEmitter = struct {
         return self.renderCurrentFunction("builtin_printInt", "void", "i64 %arg_0_value");
     }
 
+    fn emitBuiltinPrintStringFunction(self: *@This()) []const u8 {
+        self.resetCurrentFunctionState();
+
+        const pointer_register = self.symbol_generator.generateRegister();
+        const pointer_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = extractvalue %String %arg_0_value, 0",
+            .{pointer_register},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = pointer_instruction }) catch unreachable;
+
+        const length_register = self.symbol_generator.generateRegister();
+        const length_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = extractvalue %String %arg_0_value, 1",
+            .{length_register},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = length_instruction }) catch unreachable;
+
+        const print_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call i64 @write(i32 1, i8* {s}, i64 {s})",
+            .{ pointer_register, length_register },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = print_instruction }) catch unreachable;
+
+        const newline_pointer_register = self.symbol_generator.generateRegister();
+        const newline_pointer_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds [1 x i8], [1 x i8]* @{s}, i64 0, i64 0",
+            .{ newline_pointer_register, print_string_newline },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = newline_pointer_instruction }) catch unreachable;
+
+        const newline_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call i64 @write(i32 1, i8* {s}, i64 1)",
+            .{newline_pointer_register},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = newline_instruction }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = "ret void" }) catch unreachable;
+
+        return self.renderCurrentFunction("builtin_printString", "void", "%String %arg_0_value");
+    }
+
     fn getLlvmFunctionName(self: *@This(), symbol: symbols.Symbol) []const u8 {
         switch (symbol.kind) {
             .Function => |function_info| switch (function_info.implementation) {
                 .BuiltinPrintInt => return "builtin_printInt",
+                .BuiltinPrintString => return "builtin_printString",
                 .UserDefined => {
                     return std.fmt.allocPrint(
                         self.allocator,
@@ -445,6 +677,7 @@ pub const LlvmIrEmitter = struct {
                     .register = if (token.kind.BooleanLiteral) "1" else "0",
                 };
             },
+            .StringLiteral => |token| return self.emitStringLiteral(node, token.kind.StringLiteral, entry_label),
             .Identifier => {
                 const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
@@ -530,6 +763,8 @@ pub const LlvmIrEmitter = struct {
                 };
                 if (function_info.implementation == .BuiltinPrintInt) {
                     self.needs_printf = true;
+                } else if (function_info.implementation == .BuiltinPrintString) {
+                    self.needs_write = true;
                 }
 
                 const parameter_symbol_ids = typed_program.resolved_program.parameter_symbol_ids_by_function_symbol_id.get(

@@ -152,6 +152,7 @@ pub const ControlFlowValidator = struct {
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
+            .StringLiteral,
             => {},
         }
     }
@@ -331,6 +332,10 @@ pub const ControlFlowValidator = struct {
                 return .FallsThroughWithValue;
             },
             .BooleanLiteral => {
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .StringLiteral => {
                 self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
                 return .FallsThroughWithValue;
             },

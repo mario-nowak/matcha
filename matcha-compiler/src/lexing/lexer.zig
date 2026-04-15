@@ -40,6 +40,9 @@ pub const Lexer = struct {
         }
 
         const currentCharacter = self.source[self.offsetInSource];
+        if (currentCharacter == '"') {
+            return self.lexStringLiteral();
+        }
         if (isAlphabetic(currentCharacter)) {
             return self.lexKeywordOrIdentifier();
         }
@@ -135,6 +138,49 @@ pub const Lexer = struct {
         self.offsetInSource += self.offsetInToken;
 
         return token;
+    }
+
+    fn lexStringLiteral(self: *Lexer) Token {
+        const start_line = self.line;
+        const start_column = self.column;
+        const start_offset = self.offsetInSource;
+
+        // Skip the opening quote
+        self.offsetInSource += 1;
+        self.column += 1;
+
+        while (!self.done()) {
+            const character = self.source[self.offsetInSource];
+            if (character == '"') {
+                const content = self.source[start_offset + 1 .. self.offsetInSource];
+
+                // Skip the closing quote
+                self.offsetInSource += 1;
+                self.column += 1;
+
+                const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+
+                return Token{
+                    .line = start_line,
+                    .column = start_column,
+                    .offsetInSource = start_offset,
+                    .lenInSource = total_length,
+                    .kind = .{ .StringLiteral = content },
+                };
+            }
+            self.offsetInSource += 1;
+            self.column += 1;
+        }
+
+        const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+
+        return Token{
+            .line = start_line,
+            .column = start_column,
+            .offsetInSource = start_offset,
+            .lenInSource = total_length,
+            .kind = .{ .Error = .{ .message = "Unterminated string literal" } },
+        };
     }
 
     fn lexOperator(self: *Lexer) Token {

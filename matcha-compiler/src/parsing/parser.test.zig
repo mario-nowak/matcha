@@ -157,3 +157,57 @@ test "parser keeps block ending with statement if as statement-only block" {
     try std.testing.expect(block.result == null);
     try expectNodeTag(&block.statements[0], .IfStatement);
 }
+
+test "parser parses string literal declarations" {
+    const source =
+        \\val greeting = "hello world";
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectNodeTag(declaration.value, .StringLiteral);
+}
+
+test "parser parses string literals as function arguments" {
+    const source =
+        \\printString("hello");
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
+    const expression_statement = switch (parsed.program.statements[0].kind) {
+        .ExpressionStatement => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const call_expression = switch (expression_statement.expression.kind) {
+        .CallExpression => |call| call,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(@as(usize, 1), call_expression.arguments.len);
+    try expectNodeTag(&call_expression.arguments[0], .StringLiteral);
+}
+
+test "parser parses string-typed function definitions" {
+    const source =
+        \\item echo(x: string): string = x;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
+    const function_definition = switch (parsed.program.statements[0].kind) {
+        .FunctionDefinition => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqualStrings("string", function_definition.return_type_annotation.name_token.kind.Identifier);
+    try std.testing.expectEqualStrings("string", function_definition.parameters[0].type_annotation.name_token.kind.Identifier);
+}
