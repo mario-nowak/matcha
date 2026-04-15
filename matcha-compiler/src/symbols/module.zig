@@ -25,6 +25,7 @@ pub const FunctionInfo = struct {
 pub const Implementation = union(enum) {
     UserDefined,
     BuiltinPrintInt,
+    BuiltinPrintString,
 };
 
 pub const BindingMutability = enum {

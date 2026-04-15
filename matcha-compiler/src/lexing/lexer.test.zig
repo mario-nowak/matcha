@@ -86,3 +86,54 @@ test "lexer distinguishes assign from equality operators" {
         try expectTokenTag(lexer.next(), expected_tag);
     }
 }
+
+test "lexer tokenizes plain string literals" {
+    var lexer = lexing.Lexer.init(
+        \\val greeting = "hello world";
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const expected_tags = [_]TokenTag{
+        .Val,
+        .Identifier,
+        .Assign,
+        .StringLiteral,
+        .Semicolon,
+        .EndOfFile,
+    };
+
+    for (expected_tags) |expected_tag| {
+        try expectTokenTag(lexer.next(), expected_tag);
+    }
+}
+
+test "lexer captures string literal content" {
+    var lexer = lexing.Lexer.init(
+        \\"hello"
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const token = lexer.next();
+    try std.testing.expectEqualStrings("hello", token.kind.StringLiteral);
+}
+
+test "lexer tokenizes multiple strings in sequence" {
+    var lexer = lexing.Lexer.init(
+        \\"first" "second"
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const first = lexer.next();
+    try expectTokenTag(first, .StringLiteral);
+    try std.testing.expectEqualStrings("first", first.kind.StringLiteral);
+
+    const second = lexer.next();
+    try expectTokenTag(second, .StringLiteral);
+    try std.testing.expectEqualStrings("second", second.kind.StringLiteral);
+}

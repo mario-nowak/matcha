@@ -6,6 +6,7 @@ pub const Type = enum {
     Unit,
     Boolean,
     Integer,
+    String,
 };
 
 pub const BinaryOperatorSignature = struct {
@@ -44,6 +45,7 @@ pub const binary_operator_rules_by_type = BinaryOperatorRulesByType.init(.{
         .And = null,
         .Or = null,
     }),
+    .String = null,
 });
 
 pub const UnaryOperatorSignature = struct {
@@ -61,6 +63,7 @@ pub const unary_operator_rules_by_type = UnaryOperatorRulesByType.init(.{
         .Negate = .{ .return_type = .Integer },
         .Not = null,
     }),
+    .String = null,
 });
 
 pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, Type);
