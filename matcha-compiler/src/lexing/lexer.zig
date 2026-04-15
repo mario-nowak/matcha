@@ -188,7 +188,7 @@ pub const Lexer = struct {
         if (self.offsetInSource + 1 < self.source.len) {
             const nextCharacter = self.source[self.offsetInSource + 1];
             const multiCharacterKind: ?TokenKind = switch (character) {
-                '=' => if (nextCharacter == '=') .EqualEqual else null,
+                '=' => if (nextCharacter == '=') .EqualEqual else if (nextCharacter == '>') .FatArrow else null,
                 '!' => if (nextCharacter == '=') .NotEqual else null,
                 '<' => if (nextCharacter == '=') .LessThanOrEqual else null,
                 '>' => if (nextCharacter == '=') .GreaterThanOrEqual else null,
@@ -252,6 +252,7 @@ pub const Lexer = struct {
         if (std.mem.eql(u8, alphanumeric, "var")) return .Var;
         if (std.mem.eql(u8, alphanumeric, "if")) return .If;
         if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
+        if (std.mem.eql(u8, alphanumeric, "match")) return .Match;
         if (std.mem.eql(u8, alphanumeric, "not")) return .Not;
         if (std.mem.eql(u8, alphanumeric, "and")) return .And;
         if (std.mem.eql(u8, alphanumeric, "or")) return .Or;

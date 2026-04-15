@@ -43,6 +43,30 @@ const LoopConstruct = struct {
     body_block: *ast.Block,
 };
 
+const DecisionConstruct = struct {
+    subject: ?*const ast.Node,
+    arms: []const DecisionArm,
+    else_arm: ?*const ast.Node,
+    exhaustive_without_else: bool = false,
+};
+
+const DecisionArm = struct {
+    condition: *const ast.Node,
+    body: *const ast.Node,
+};
+
+const DecisionLabelNames = struct {
+    arm: []const u8,
+    else_arm: []const u8,
+    next: []const u8,
+    continue_label: []const u8,
+};
+
+const PhiIncoming = struct {
+    label: Label,
+    register: Register,
+};
+
 pub const Environment = struct {
     storage_by_symbol_id: StorageBySymbolId,
     loop_context: ?LoopContext,
@@ -727,12 +751,7 @@ pub const LlvmIrEmitter = struct {
                 );
             },
             .Leave => {
-                const branch_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br label %{s}",
-                    .{environment.loop_context.?.leave_label},
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
+                self.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
 
                 return .{
                     .exit_label = null,
@@ -740,12 +759,7 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Continue => {
-                const branch_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br label %{s}",
-                    .{environment.loop_context.?.continue_label},
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
+                self.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
 
                 return .{
                     .exit_label = null,
@@ -958,140 +972,85 @@ pub const LlvmIrEmitter = struct {
                 environment,
             ),
             .IfStatement => |if_statement| {
-                // Emit condition expression
-                const condition_result = self.emitNode(
-                    if_statement.condition,
+                const decision_arms = [_]DecisionArm{.{
+                    .condition = if_statement.condition,
+                    .body = if_statement.then_branch,
+                }};
+                return self.emitDecisionConstruct(
+                    node,
+                    .{
+                        .subject = null,
+                        .arms = &decision_arms,
+                        .else_arm = null,
+                    },
+                    .{
+                        .arm = "then",
+                        .else_arm = "else",
+                        .next = "next",
+                        .continue_label = "continue",
+                    },
                     entry_label,
                     typed_program,
                     environment,
                 );
-
-                const then_label = self.symbol_generator.generateLabel("then");
-                const continue_label = self.symbol_generator.generateLabel("continue");
-                const branch_continue_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br label %{s}",
-                    .{continue_label},
-                ) catch unreachable;
-
-                // Emit branch instruction
-                const branch_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br i1 {s}, label %{s}, label %{s}",
-                    .{ condition_result.register.?, then_label, continue_label },
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
-
-                // "then" path
-                self.emitLabel(then_label);
-                const then_result = self.emitNode(if_statement.then_branch, then_label, typed_program, environment);
-                if (then_result.exit_label) |_| {
-                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
-                }
-
-                self.emitLabel(continue_label);
-
-                return .{
-                    .exit_label = continue_label,
-                    .register = null,
-                };
             },
             .IfExpression => |if_expression| {
-                // Emit condition expression
-                const condition_result = self.emitNode(
-                    if_expression.condition,
+                const decision_arms = [_]DecisionArm{.{
+                    .condition = if_expression.condition,
+                    .body = if_expression.then_block,
+                }};
+                return self.emitDecisionConstruct(
+                    node,
+                    .{
+                        .subject = null,
+                        .arms = &decision_arms,
+                        .else_arm = if_expression.else_block,
+                    },
+                    .{
+                        .arm = "then",
+                        .else_arm = "else",
+                        .next = "next",
+                        .continue_label = "continue",
+                    },
                     entry_label,
                     typed_program,
                     environment,
                 );
+            },
+            .MatchExpression => |match_expression| {
+                var decision_arms = std.ArrayList(DecisionArm){};
+                defer decision_arms.deinit(self.allocator);
+                for (match_expression.arms) |arm| {
+                    decision_arms.append(self.allocator, .{
+                        .condition = arm.pattern_or_condition,
+                        .body = arm.body,
+                    }) catch unreachable;
+                }
 
-                const then_label = self.symbol_generator.generateLabel("then");
-                const else_label = self.symbol_generator.generateLabel("else");
-                const continue_label = self.symbol_generator.generateLabel("continue");
-                const branch_continue_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br label %{s}",
-                    .{continue_label},
-                ) catch unreachable;
+                const exhaustive_without_else = if (match_expression.subject) |subject|
+                    match_expression.else_arm == null and
+                        typed_program.type_by_node_id.get(subject.id).? == .Boolean
+                else
+                    false;
 
-                // Emit branch instruction
-                const branch_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "br i1 {s}, label %{s}, label %{s}",
-                    .{ condition_result.register.?, then_label, else_label },
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
-
-                // "then" path
-                self.emitLabel(then_label);
-                const then_result = self.emitNode(
-                    if_expression.then_block,
-                    then_label,
+                return self.emitDecisionConstruct(
+                    node,
+                    .{
+                        .subject = match_expression.subject,
+                        .arms = decision_arms.items,
+                        .else_arm = match_expression.else_arm,
+                        .exhaustive_without_else = exhaustive_without_else,
+                    },
+                    .{
+                        .arm = "match_arm",
+                        .else_arm = "match_else",
+                        .next = "match_next",
+                        .continue_label = "match_continue",
+                    },
+                    entry_label,
                     typed_program,
                     environment,
                 );
-                const then_falls_through = then_result.exit_label != null;
-                if (then_falls_through) {
-                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
-                }
-
-                // "else" path
-                self.emitLabel(else_label);
-                const else_result = self.emitNode(
-                    if_expression.else_block,
-                    else_label,
-                    typed_program,
-                    environment,
-                );
-                const else_falls_through = else_result.exit_label != null;
-                if (else_falls_through) {
-                    self.lines.append(self.allocator, .{ .instruction = branch_continue_instruction }) catch unreachable;
-                }
-
-                if (!then_falls_through and !else_falls_through) {
-                    return .{
-                        .exit_label = null,
-                        .register = null,
-                    };
-                }
-
-                // "continue" path
-                self.emitLabel(continue_label);
-                const result_type = typed_program.type_by_node_id.get(node.id).?;
-                if (result_type == .Unit) {
-                    return .{
-                        .exit_label = continue_label,
-                        .register = null,
-                    };
-                } else {
-                    const result_register = self.symbol_generator.generateRegister();
-                    const instruction_type = llvm_ir_type_by_matcha_type.get(result_type);
-                    if (then_falls_through and else_falls_through) {
-                        const phi_instruction = std.fmt.allocPrint(
-                            self.allocator,
-                            "{s} = phi {s} [{s}, %{s}], [{s}, %{s}]",
-                            .{
-                                result_register,
-                                instruction_type,
-                                then_result.register.?,
-                                then_result.exit_label.?,
-                                else_result.register.?,
-                                else_result.exit_label.?,
-                            },
-                        ) catch unreachable;
-                        self.lines.append(self.allocator, .{ .instruction = phi_instruction }) catch unreachable;
-
-                        return .{
-                            .exit_label = continue_label,
-                            .register = result_register,
-                        };
-                    }
-
-                    return .{
-                        .exit_label = continue_label,
-                        .register = if (then_falls_through) then_result.register else else_result.register,
-                    };
-                }
             },
             .ExpressionStatement => |expression_statement| {
                 const emission_result = self.emitNode(
@@ -1107,6 +1066,205 @@ pub const LlvmIrEmitter = struct {
                 };
             },
         }
+    }
+
+    fn emitDecisionConstruct(
+        self: *@This(),
+        node: *const ast.Node,
+        decision_construct: DecisionConstruct,
+        label_names: DecisionLabelNames,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        var current_label = entry_label;
+        var subject_register: ?Register = null;
+        var subject_type: ?typing.Type = null;
+
+        if (decision_construct.subject) |subject| {
+            const subject_result = self.emitNode(subject, current_label, typed_program, environment);
+            if (subject_result.exit_label == null) {
+                return .{ .exit_label = null, .register = null };
+            }
+            current_label = subject_result.exit_label.?;
+            subject_register = subject_result.register;
+            subject_type = typed_program.type_by_node_id.get(subject.id).?;
+        }
+
+        const result_type = typed_program.type_by_node_id.get(node.id).?;
+        const continue_label = self.symbol_generator.generateLabel(label_names.continue_label);
+        var incoming_values = std.ArrayList(PhiIncoming){};
+        defer incoming_values.deinit(self.allocator);
+        var continue_reachable = false;
+
+        const else_label = if (decision_construct.else_arm != null)
+            self.symbol_generator.generateLabel(label_names.else_arm)
+        else
+            null;
+
+        if (decision_construct.arms.len == 0 and decision_construct.else_arm != null) {
+            const else_arm = decision_construct.else_arm.?;
+            const else_result = self.emitNode(else_arm, current_label, typed_program, environment);
+            if (else_result.exit_label) |exit_label| {
+                continue_reachable = true;
+                if (result_type != .Unit) {
+                    incoming_values.append(self.allocator, .{
+                        .label = exit_label,
+                        .register = else_result.register.?,
+                    }) catch unreachable;
+                }
+                self.emitBranchInstruction(null, &.{continue_label});
+            } else {
+                return .{ .exit_label = null, .register = null };
+            }
+        } else {
+            for (decision_construct.arms, 0..) |arm, index| {
+                const arm_label = self.symbol_generator.generateLabel(label_names.arm);
+                const is_last_arm = index + 1 == decision_construct.arms.len;
+                const false_branches_to_continue = is_last_arm and
+                    else_label == null and
+                    !decision_construct.exhaustive_without_else;
+                const false_label = if (!is_last_arm)
+                    self.symbol_generator.generateLabel(label_names.next)
+                else if (else_label) |label|
+                    label
+                else if (decision_construct.exhaustive_without_else)
+                    null
+                else
+                    continue_label;
+
+                if (false_branches_to_continue) {
+                    continue_reachable = true;
+                }
+
+                if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
+                    self.emitBranchInstruction(null, &.{arm_label});
+                } else if (decision_construct.subject != null) {
+                    const pattern_result = self.emitNode(
+                        arm.condition,
+                        current_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (pattern_result.exit_label == null) {
+                        return .{ .exit_label = null, .register = null };
+                    }
+                    current_label = pattern_result.exit_label.?;
+
+                    const comparison_register = self.symbol_generator.generateRegister();
+                    const comparison_instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "{s} = icmp eq {s} {s}, {s}",
+                        .{
+                            comparison_register,
+                            llvm_ir_type_by_matcha_type.get(subject_type.?),
+                            subject_register.?,
+                            pattern_result.register.?,
+                        },
+                    ) catch unreachable;
+                    self.lines.append(self.allocator, .{ .instruction = comparison_instruction }) catch unreachable;
+
+                    self.emitBranchInstruction(comparison_register, &.{ arm_label, false_label.? });
+                } else {
+                    const condition_result = self.emitNode(
+                        arm.condition,
+                        current_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (condition_result.exit_label == null) {
+                        return .{ .exit_label = null, .register = null };
+                    }
+                    current_label = condition_result.exit_label.?;
+
+                    self.emitBranchInstruction(condition_result.register.?, &.{ arm_label, false_label.? });
+                }
+
+                self.emitLabel(arm_label);
+                const arm_result = self.emitNode(arm.body, arm_label, typed_program, environment);
+                if (arm_result.exit_label) |exit_label| {
+                    continue_reachable = true;
+                    if (result_type != .Unit) {
+                        incoming_values.append(self.allocator, .{
+                            .label = exit_label,
+                            .register = arm_result.register.?,
+                        }) catch unreachable;
+                    }
+                    self.emitBranchInstruction(null, &.{continue_label});
+                }
+
+                if (false_label) |next_label| {
+                    self.emitLabel(next_label);
+                    current_label = next_label;
+                } else {
+                    current_label = arm_label;
+                }
+            }
+
+            if (decision_construct.else_arm) |else_arm| {
+                const else_result = self.emitNode(else_arm, current_label, typed_program, environment);
+                if (else_result.exit_label) |exit_label| {
+                    continue_reachable = true;
+                    if (result_type != .Unit) {
+                        incoming_values.append(self.allocator, .{
+                            .label = exit_label,
+                            .register = else_result.register.?,
+                        }) catch unreachable;
+                    }
+                    self.emitBranchInstruction(null, &.{continue_label});
+                }
+            }
+        }
+
+        if (!continue_reachable) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        self.emitLabel(continue_label);
+        if (result_type == .Unit) {
+            return .{
+                .exit_label = continue_label,
+                .register = null,
+            };
+        }
+        if (incoming_values.items.len == 0) {
+            return .{ .exit_label = null, .register = null };
+        }
+        if (incoming_values.items.len == 1) {
+            return .{
+                .exit_label = continue_label,
+                .register = incoming_values.items[0].register,
+            };
+        }
+
+        var phi_incoming_buffer = std.ArrayList(u8){};
+        defer phi_incoming_buffer.deinit(self.allocator);
+        for (incoming_values.items, 0..) |incoming, index| {
+            if (index > 0) {
+                phi_incoming_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+            }
+            phi_incoming_buffer.writer(self.allocator).print(
+                "[{s}, %{s}]",
+                .{ incoming.register, incoming.label },
+            ) catch unreachable;
+        }
+
+        const result_register = self.symbol_generator.generateRegister();
+        const phi_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = phi {s} {s}",
+            .{
+                result_register,
+                llvm_ir_type_by_matcha_type.get(result_type),
+                phi_incoming_buffer.items,
+            },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = phi_instruction }) catch unreachable;
+
+        return .{
+            .exit_label = continue_label,
+            .register = result_register,
+        };
     }
 
     fn emitLoopConstruct(
@@ -1127,12 +1285,7 @@ pub const LlvmIrEmitter = struct {
         environment.loop_context = loop_context;
 
         // Loop header
-        const branch_to_header_instruction = std.fmt.allocPrint(
-            self.allocator,
-            "br label %{s}",
-            .{loop_header_label},
-        ) catch unreachable;
-        self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+        self.emitBranchInstruction(null, &.{loop_header_label});
         self.emitLabel(loop_header_label);
         if (loop_construct.condition) |condition| {
             const condition_result = self.emitNode(
@@ -1148,19 +1301,9 @@ pub const LlvmIrEmitter = struct {
                     .register = null,
                 };
             }
-            const branch_instruction = std.fmt.allocPrint(
-                self.allocator,
-                "br i1 {s}, label %{s}, label %{s}",
-                .{ condition_result.register.?, loop_body_label, loop_exit_label },
-            ) catch unreachable;
-            self.lines.append(self.allocator, .{ .instruction = branch_instruction }) catch unreachable;
+            self.emitBranchInstruction(condition_result.register.?, &.{ loop_body_label, loop_exit_label });
         } else {
-            const branch_to_body_instruction = std.fmt.allocPrint(
-                self.allocator,
-                "br label %{s}",
-                .{loop_body_label},
-            ) catch unreachable;
-            self.lines.append(self.allocator, .{ .instruction = branch_to_body_instruction }) catch unreachable;
+            self.emitBranchInstruction(null, &.{loop_body_label});
         }
 
         // Loop body
@@ -1168,22 +1311,17 @@ pub const LlvmIrEmitter = struct {
         const body_result = self.emitBlock(loop_construct.body_block.*, loop_body_label, typed_program, environment);
 
         // Loop continue
-        const branch_to_continue_instruction = std.fmt.allocPrint(
-            self.allocator,
-            "br label %{s}",
-            .{loop_continue_label},
-        ) catch unreachable;
         if (body_result.exit_label != null) {
-            self.lines.append(self.allocator, .{ .instruction = branch_to_continue_instruction }) catch unreachable;
+            self.emitBranchInstruction(null, &.{loop_continue_label});
         }
         self.emitLabel(loop_continue_label);
         if (loop_construct.update) |update| {
             const update_result = self.emitNode(update, loop_continue_label, typed_program, environment);
             if (update_result.exit_label != null) {
-                self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+                self.emitBranchInstruction(null, &.{loop_header_label});
             }
         } else {
-            self.lines.append(self.allocator, .{ .instruction = branch_to_header_instruction }) catch unreachable;
+            self.emitBranchInstruction(null, &.{loop_header_label});
         }
 
         self.emitLabel(loop_exit_label);
@@ -1238,6 +1376,23 @@ pub const LlvmIrEmitter = struct {
 
     fn emitLabel(self: *@This(), label: Label) void {
         self.lines.append(self.allocator, .{ .label = label }) catch unreachable;
+    }
+
+    fn emitBranchInstruction(self: *@This(), condition_register: ?Register, labels: []const Label) void {
+        const instruction = switch (labels.len) {
+            1 => std.fmt.allocPrint(
+                self.allocator,
+                "br label %{s}",
+                .{labels[0]},
+            ) catch unreachable,
+            2 => std.fmt.allocPrint(
+                self.allocator,
+                "br i1 {s}, label %{s}, label %{s}",
+                .{ condition_register orelse unreachable, labels[0], labels[1] },
+            ) catch unreachable,
+            else => unreachable,
+        };
+        self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
     }
 
     fn emitAlloca(self: *@This(), storage: Storage, llvm_ir_type: []const u8) void {
