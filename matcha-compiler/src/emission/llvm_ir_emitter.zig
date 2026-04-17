@@ -1194,7 +1194,9 @@ pub const LlvmIrEmitter = struct {
                 }
 
                 if (false_label) |next_label| {
-                    self.emitLabel(next_label);
+                    if (!false_branches_to_continue) {
+                        self.emitLabel(next_label);
+                    }
                     current_label = next_label;
                 } else {
                     current_label = arm_label;
