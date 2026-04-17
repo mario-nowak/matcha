@@ -1,0 +1,22 @@
+min_version = "2026.4.15"
+
+[tools]
+zig = "0.15.1"
+
+[tools."http:llvm"]
+version = "20.1.8"
+platforms.macos-arm64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-macOS-ARM64.tar.xz", bin_path = "LLVM-20.1.8-macOS-ARM64/bin" }
+platforms.linux-arm64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-Linux-ARM64.tar.xz", bin_path = "LLVM-20.1.8-Linux-ARM64/bin" }
+platforms.linux-x64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-Linux-X64.tar.xz", bin_path = "LLVM-20.1.8-Linux-X64/bin" }
+
+[tasks.check]
+description = "Check that the Matcha compiler compiles"
+run = "zig build check"
+
+[tasks.build]
+description = "Build the Matcha compiler"
+run = "zig build"
+
+[tasks.test]
+description = "Run Matcha compiler tests"
+run = "zig build test"
