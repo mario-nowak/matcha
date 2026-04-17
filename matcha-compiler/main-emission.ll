@@ -1,5 +1,18 @@
+%String = type { i8*, i64 }
+
 @.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
+
 declare i32 @printf(i8*, ...)
+
+define void @builtin_printInt(i64 %arg_0_value) {
+entry:
+
+    %.t_0 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
+    call i32 (i8*, ...) @printf(i8* %.t_0, i64 %arg_0_value)
+    ret void
+
+}
+
 define i32 @main() {
 entry:
     %.s_0 = alloca i64
@@ -67,58 +80,58 @@ entry:
     store i64 %.t_16, i64* %.s_4
     store i1 0, i1* %.s_5
     %.t_17 = load i1, i1* %.s_5
-    br i1 %.t_17, label %label_then_0, label %label_continue_1
-label_then_0:
+    br i1 %.t_17, label %label_then_1, label %label_continue_0
+label_then_1:
     store i64 4, i64* %.s_6
-    br label %label_continue_1
-label_continue_1:
+    br label %label_continue_0
+label_continue_0:
     %.t_18 = load i1, i1* %.s_5
-    br i1 %.t_18, label %label_then_2, label %label_else_3
-label_then_2:
+    br i1 %.t_18, label %label_then_4, label %label_else_3
+label_then_4:
     store i64 3, i64* %.s_7
-    br label %label_continue_4
+    br label %label_continue_2
 label_else_3:
     store i64 5, i64* %.s_8
-    br label %label_continue_4
-label_continue_4:
+    br label %label_continue_2
+label_continue_2:
     %.t_19 = load i1, i1* %.s_5
-    br i1 %.t_19, label %label_then_5, label %label_else_6
-label_then_5:
-    br label %label_continue_7
+    br i1 %.t_19, label %label_then_7, label %label_else_6
+label_then_7:
+    br label %label_continue_5
 label_else_6:
-    br label %label_continue_7
-label_continue_7:
-    %.t_20 = phi i64 [3, %label_then_5], [4, %label_else_6]
+    br label %label_continue_5
+label_continue_5:
+    %.t_20 = phi i64 [3, %label_then_7], [4, %label_else_6]
     store i64 %.t_20, i64* %.s_9
-    br i1 1, label %label_then_8, label %label_else_9
-label_then_8:
-    br i1 0, label %label_then_11, label %label_else_12
-label_then_11:
-    br label %label_continue_13
+    br i1 1, label %label_then_10, label %label_else_9
+label_then_10:
+    br i1 0, label %label_then_13, label %label_else_12
+label_then_13:
+    br label %label_continue_11
 label_else_12:
-    br label %label_continue_13
-label_continue_13:
-    %.t_21 = phi i64 [1, %label_then_11], [2, %label_else_12]
-    br label %label_continue_10
+    br label %label_continue_11
+label_continue_11:
+    %.t_21 = phi i64 [1, %label_then_13], [2, %label_else_12]
+    br label %label_continue_8
 label_else_9:
-    br label %label_continue_10
-label_continue_10:
-    %.t_22 = phi i64 [%.t_21, %label_continue_13], [3, %label_else_9]
+    br label %label_continue_8
+label_continue_8:
+    %.t_22 = phi i64 [%.t_21, %label_continue_11], [3, %label_else_9]
     store i64 %.t_22, i64* %.s_10
-    br i1 1, label %label_then_14, label %label_else_15
-label_then_14:
-    br i1 0, label %label_then_17, label %label_else_18
-label_then_17:
-    br label %label_continue_19
+    br i1 1, label %label_then_16, label %label_else_15
+label_then_16:
+    br i1 0, label %label_then_19, label %label_else_18
+label_then_19:
+    br label %label_continue_17
 label_else_18:
-    br label %label_continue_19
-label_continue_19:
-    %.t_23 = phi i64 [1, %label_then_17], [2, %label_else_18]
-    br label %label_continue_16
+    br label %label_continue_17
+label_continue_17:
+    %.t_23 = phi i64 [1, %label_then_19], [2, %label_else_18]
+    br label %label_continue_14
 label_else_15:
-    br label %label_continue_16
-label_continue_16:
-    %.t_24 = phi i64 [%.t_23, %label_continue_19], [3, %label_else_15]
+    br label %label_continue_14
+label_continue_14:
+    %.t_24 = phi i64 [%.t_23, %label_continue_17], [3, %label_else_15]
     %.t_25 = add i64 %.t_24, 4
     store i64 %.t_25, i64* %.s_11
     store i1 1, i1* %.s_12
@@ -139,13 +152,13 @@ label_continue_16:
     %.t_33 = add i64 %.t_31, %.t_32
     %.t_34 = load i1, i1* %.s_19
     %.t_35 = xor i1 %.t_34, 1
-    br i1 %.t_35, label %label_then_20, label %label_else_21
-label_then_20:
-    br label %label_continue_22
+    br i1 %.t_35, label %label_then_22, label %label_else_21
+label_then_22:
+    br label %label_continue_20
 label_else_21:
-    br label %label_continue_22
-label_continue_22:
-    %.t_36 = phi i64 [1, %label_then_20], [2, %label_else_21]
+    br label %label_continue_20
+label_continue_20:
+    %.t_36 = phi i64 [1, %label_then_22], [2, %label_else_21]
     %.t_37 = add i64 %.t_33, %.t_36
     store i64 %.t_37, i64* %.s_20
     store i1 1, i1* %.s_21
@@ -159,44 +172,42 @@ label_continue_22:
     %.t_43 = and i1 %.t_41, %.t_42
     store i1 %.t_43, i1* %.s_24
     %.t_44 = load i1, i1* %.s_23
-    br i1 %.t_44, label %label_then_23, label %label_else_24
-label_then_23:
+    br i1 %.t_44, label %label_then_25, label %label_else_24
+label_then_25:
     %.t_45 = load i1, i1* %.s_24
-    br i1 %.t_45, label %label_then_26, label %label_else_27
-label_then_26:
-    br label %label_continue_28
+    br i1 %.t_45, label %label_then_28, label %label_else_27
+label_then_28:
+    br label %label_continue_26
 label_else_27:
-    br label %label_continue_28
-label_continue_28:
-    %.t_46 = phi i64 [2, %label_then_26], [1, %label_else_27]
-    br label %label_continue_25
+    br label %label_continue_26
+label_continue_26:
+    %.t_46 = phi i64 [2, %label_then_28], [1, %label_else_27]
+    br label %label_continue_23
 label_else_24:
-    br label %label_continue_25
-label_continue_25:
-    %.t_47 = phi i64 [%.t_46, %label_continue_28], [0, %label_else_24]
+    br label %label_continue_23
+label_continue_23:
+    %.t_47 = phi i64 [%.t_46, %label_continue_26], [0, %label_else_24]
     store i64 %.t_47, i64* %.s_25
     %.t_48 = load i64, i64* %.s_25
     %.t_49 = icmp sge i64 %.t_48, 1
     store i1 %.t_49, i1* %.s_26
     %.t_50 = load i1, i1* %.s_26
-    br i1 %.t_50, label %label_then_29, label %label_else_30
-label_then_29:
-    br label %label_continue_31
+    br i1 %.t_50, label %label_then_31, label %label_else_30
+label_then_31:
+    br label %label_continue_29
 label_else_30:
-    br label %label_continue_31
-label_continue_31:
-    %.t_51 = phi i64 [1, %label_then_29], [0, %label_else_30]
+    br label %label_continue_29
+label_continue_29:
+    %.t_51 = phi i64 [1, %label_then_31], [0, %label_else_30]
     store i64 %.t_51, i64* %.s_27
     store i64 10, i64* %.s_28
     %.t_52 = load i64, i64* %.s_28
-    %.t_53 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_53, i64 %.t_52)
-    %.t_54 = load i64, i64* %.s_28
-    %.t_55 = mul i64 %.t_54, 2
-    store i64 %.t_55, i64* %.s_28
-    %.t_56 = load i64, i64* %.s_28
-    %.t_57 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_57, i64 %.t_56)
+    call void @builtin_printInt(i64 %.t_52)
+    %.t_53 = load i64, i64* %.s_28
+    %.t_54 = mul i64 %.t_53, 2
+    store i64 %.t_54, i64* %.s_28
+    %.t_55 = load i64, i64* %.s_28
+    call void @builtin_printInt(i64 %.t_55)
     store i64 6, i64* %.s_29
     store i64 0, i64* %.s_30
     store i64 0, i64* %.s_31
@@ -204,49 +215,47 @@ label_continue_31:
 label_loop_header_32:
     br label %label_loop_body_33
 label_loop_body_33:
-    %.t_58 = load i64, i64* %.s_31
-    %.t_59 = load i64, i64* %.s_29
-    %.t_60 = icmp sge i64 %.t_58, %.t_59
-    br i1 %.t_60, label %label_then_36, label %label_continue_37
-label_then_36:
+    %.t_56 = load i64, i64* %.s_31
+    %.t_57 = load i64, i64* %.s_29
+    %.t_58 = icmp sge i64 %.t_56, %.t_57
+    br i1 %.t_58, label %label_then_37, label %label_continue_36
+label_then_37:
     br label %label_loop_exit_35
-label_continue_37:
+label_continue_36:
     store i64 1, i64* %.s_32
     br label %label_loop_header_38
 label_loop_header_38:
     br label %label_loop_body_39
 label_loop_body_39:
-    %.t_61 = load i64, i64* %.s_30
+    %.t_59 = load i64, i64* %.s_30
+    %.t_60 = load i64, i64* %.s_32
+    %.t_61 = add i64 %.t_59, %.t_60
+    store i64 %.t_61, i64* %.s_30
     %.t_62 = load i64, i64* %.s_32
-    %.t_63 = add i64 %.t_61, %.t_62
-    store i64 %.t_63, i64* %.s_30
+    %.t_63 = add i64 %.t_62, 1
+    store i64 %.t_63, i64* %.s_32
     %.t_64 = load i64, i64* %.s_32
-    %.t_65 = add i64 %.t_64, 1
-    store i64 %.t_65, i64* %.s_32
-    %.t_66 = load i64, i64* %.s_32
-    %.t_67 = load i64, i64* %.s_31
-    %.t_68 = add i64 %.t_67, 1
-    %.t_69 = icmp sgt i64 %.t_66, %.t_68
-    br i1 %.t_69, label %label_then_42, label %label_continue_43
-label_then_42:
+    %.t_65 = load i64, i64* %.s_31
+    %.t_66 = add i64 %.t_65, 1
+    %.t_67 = icmp sgt i64 %.t_64, %.t_66
+    br i1 %.t_67, label %label_then_43, label %label_continue_42
+label_then_43:
     br label %label_loop_exit_41
-label_continue_43:
+label_continue_42:
     br label %label_loop_continue_40
 label_loop_continue_40:
     br label %label_loop_header_38
 label_loop_exit_41:
-    %.t_70 = load i64, i64* %.s_31
-    %.t_71 = add i64 %.t_70, 1
-    store i64 %.t_71, i64* %.s_31
+    %.t_68 = load i64, i64* %.s_31
+    %.t_69 = add i64 %.t_68, 1
+    store i64 %.t_69, i64* %.s_31
     br label %label_loop_continue_34
 label_loop_continue_34:
     br label %label_loop_header_32
 label_loop_exit_35:
-    %.t_72 = load i64, i64* %.s_30
-    %.t_73 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_73, i64 %.t_72)
-    %.t_74 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_74, i64 0)
+    %.t_70 = load i64, i64* %.s_30
+    call void @builtin_printInt(i64 %.t_70)
+    call void @builtin_printInt(i64 0)
     store i64 5, i64* %.s_33
     store i1 0, i1* %.s_34
     store i64 0, i64* %.s_35
@@ -255,66 +264,62 @@ label_loop_exit_35:
 label_loop_header_44:
     br label %label_loop_body_45
 label_loop_body_45:
-    %.t_75 = load i64, i64* %.s_36
-    %.t_76 = load i64, i64* %.s_33
-    %.t_77 = icmp sge i64 %.t_75, %.t_76
-    br i1 %.t_77, label %label_then_48, label %label_continue_49
-label_then_48:
+    %.t_71 = load i64, i64* %.s_36
+    %.t_72 = load i64, i64* %.s_33
+    %.t_73 = icmp sge i64 %.t_71, %.t_72
+    br i1 %.t_73, label %label_then_49, label %label_continue_48
+label_then_49:
     br label %label_loop_exit_47
-label_continue_49:
-    %.t_78 = load i1, i1* %.s_34
-    br i1 %.t_78, label %label_then_50, label %label_else_51
-label_then_50:
-    %.t_79 = load i64, i64* %.s_36
-    %.t_80 = add i64 %.t_79, 1
-    store i64 %.t_80, i64* %.s_36
-    %.t_81 = load i1, i1* %.s_34
-    %.t_82 = xor i1 %.t_81, 1
-    store i1 %.t_82, i1* %.s_34
+label_continue_48:
+    %.t_74 = load i1, i1* %.s_34
+    br i1 %.t_74, label %label_then_52, label %label_else_51
+label_then_52:
+    %.t_75 = load i64, i64* %.s_36
+    %.t_76 = add i64 %.t_75, 1
+    store i64 %.t_76, i64* %.s_36
+    %.t_77 = load i1, i1* %.s_34
+    %.t_78 = xor i1 %.t_77, 1
+    store i1 %.t_78, i1* %.s_34
     br label %label_loop_continue_46
 label_else_51:
-    %.t_83 = load i64, i64* %.s_35
-    %.t_84 = load i64, i64* %.s_36
-    %.t_85 = add i64 %.t_83, %.t_84
-    store i64 %.t_85, i64* %.s_35
-    %.t_86 = load i64, i64* %.s_35
-    %.t_87 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_87, i64 %.t_86)
-    br label %label_continue_52
-label_continue_52:
-    %.t_88 = load i64, i64* %.s_36
-    %.t_89 = add i64 %.t_88, 1
-    store i64 %.t_89, i64* %.s_36
-    %.t_90 = load i1, i1* %.s_34
-    %.t_91 = xor i1 %.t_90, 1
-    store i1 %.t_91, i1* %.s_34
+    %.t_79 = load i64, i64* %.s_35
+    %.t_80 = load i64, i64* %.s_36
+    %.t_81 = add i64 %.t_79, %.t_80
+    store i64 %.t_81, i64* %.s_35
+    %.t_82 = load i64, i64* %.s_35
+    call void @builtin_printInt(i64 %.t_82)
+    br label %label_continue_50
+label_continue_50:
+    %.t_83 = load i64, i64* %.s_36
+    %.t_84 = add i64 %.t_83, 1
+    store i64 %.t_84, i64* %.s_36
+    %.t_85 = load i1, i1* %.s_34
+    %.t_86 = xor i1 %.t_85, 1
+    store i1 %.t_86, i1* %.s_34
     br label %label_loop_continue_46
 label_loop_continue_46:
     br label %label_loop_header_44
 label_loop_exit_47:
-    %.t_92 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_92, i64 0)
-    %.t_93 = load i64, i64* %.s_35
-    %.t_94 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_94, i64 %.t_93)
+    call void @builtin_printInt(i64 0)
+    %.t_87 = load i64, i64* %.s_35
+    call void @builtin_printInt(i64 %.t_87)
     store i64 1, i64* %.s_37
-    %.t_95 = load i64, i64* %.s_37
-    %.t_96 = icmp sle i64 %.t_95, 10
-    br i1 %.t_96, label %label_then_53, label %label_continue_54
-label_then_53:
-    %.t_97 = load i64, i64* %.s_37
-    %.t_98 = add i64 %.t_97, 1
-    store i64 %.t_98, i64* %.s_37
-    br label %label_continue_54
-label_continue_54:
-    %.t_99 = load i64, i64* %.s_37
-    %.t_100 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_100, i64 %.t_99)
+    %.t_88 = load i64, i64* %.s_37
+    %.t_89 = icmp sle i64 %.t_88, 10
+    br i1 %.t_89, label %label_then_54, label %label_continue_53
+label_then_54:
+    %.t_90 = load i64, i64* %.s_37
+    %.t_91 = add i64 %.t_90, 1
+    store i64 %.t_91, i64* %.s_37
+    br label %label_continue_53
+label_continue_53:
+    %.t_92 = load i64, i64* %.s_37
+    call void @builtin_printInt(i64 %.t_92)
     store i1 1, i1* %.s_38
     br label %label_loop_header_55
 label_loop_header_55:
-    %.t_101 = load i1, i1* %.s_38
-    br i1 %.t_101, label %label_loop_body_56, label %label_loop_exit_58
+    %.t_93 = load i1, i1* %.s_38
+    br i1 %.t_93, label %label_loop_body_56, label %label_loop_exit_58
 label_loop_body_56:
     store i1 0, i1* %.s_38
     br label %label_loop_continue_57
@@ -324,20 +329,19 @@ label_loop_exit_58:
     store i64 0, i64* %.s_39
     br label %label_loop_header_59
 label_loop_header_59:
-    %.t_102 = load i64, i64* %.s_39
-    %.t_103 = icmp slt i64 %.t_102, 10
-    br i1 %.t_103, label %label_loop_body_60, label %label_loop_exit_62
+    %.t_94 = load i64, i64* %.s_39
+    %.t_95 = icmp slt i64 %.t_94, 10
+    br i1 %.t_95, label %label_loop_body_60, label %label_loop_exit_62
 label_loop_body_60:
-    %.t_104 = load i64, i64* %.s_39
-    %.t_105 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_105, i64 %.t_104)
-    %.t_106 = load i64, i64* %.s_39
-    %.t_107 = add i64 %.t_106, 1
-    store i64 %.t_107, i64* %.s_39
+    %.t_96 = load i64, i64* %.s_39
+    call void @builtin_printInt(i64 %.t_96)
+    %.t_97 = load i64, i64* %.s_39
+    %.t_98 = add i64 %.t_97, 1
+    store i64 %.t_98, i64* %.s_39
     br label %label_loop_continue_61
 label_loop_continue_61:
     br label %label_loop_header_59
 label_loop_exit_62:
-
     ret i32 0
+
 }

@@ -1,4 +1,7 @@
+%String = type { i8*, i64 }
+
 @.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
+
 declare i32 @printf(i8*, ...)
 
 define void @builtin_printInt(i64 %arg_0_value) {
@@ -28,8 +31,8 @@ entry:
     store i64 %arg_0_parameter, i64* %.s_0
     %.t_0 = load i64, i64* %.s_0
     %.t_1 = icmp sge i64 %.t_0, 0
-    br i1 %.t_1, label %label_then_0, label %label_else_1
-label_then_0:
+    br i1 %.t_1, label %label_then_2, label %label_else_1
+label_then_2:
     ret i1 1
 label_else_1:
     ret i1 0
@@ -43,10 +46,10 @@ entry:
     store i64 %arg_0_parameter, i64* %.s_0
     %.t_0 = load i64, i64* %.s_0
     %.t_1 = icmp eq i64 %.t_0, 0
-    br i1 %.t_1, label %label_then_0, label %label_continue_1
-label_then_0:
+    br i1 %.t_1, label %label_then_1, label %label_continue_0
+label_then_1:
     ret void
-label_continue_1:
+label_continue_0:
     ret void
 
 }
