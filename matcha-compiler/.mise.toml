@@ -20,3 +20,11 @@ run = "zig build"
 [tasks.test]
 description = "Run Matcha compiler tests"
 run = "zig build test"
+
+[tasks.jit]
+description = "Compile a .mt file and execute the emitted LLVM IR"
+usage = 'arg "<file>" help="Path to the .mt source file"'
+run = '''
+zig build run -- "$usage_file"
+lli "${usage_file%.mt}-emission.ll"
+'''
