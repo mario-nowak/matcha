@@ -1,13 +1,13 @@
 min_version = "2026.4.15"
 
+[env]
+_.path = [
+  "/opt/homebrew/opt/llvm@20/bin",
+  "/usr/local/opt/llvm@20/bin",
+]
+
 [tools]
 zig = "0.15.1"
-
-[tools."http:llvm"]
-version = "20.1.8"
-platforms.macos-arm64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-macOS-ARM64.tar.xz", bin_path = "LLVM-20.1.8-macOS-ARM64/bin" }
-platforms.linux-arm64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-Linux-ARM64.tar.xz", bin_path = "LLVM-20.1.8-Linux-ARM64/bin" }
-platforms.linux-x64 = { url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-Linux-X64.tar.xz", bin_path = "LLVM-20.1.8-Linux-X64/bin" }
 
 [tasks.check]
 description = "Check that the Matcha compiler compiles"
