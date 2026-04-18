@@ -2,75 +2,143 @@ const std = @import("std");
 const symbols = @import("symbols");
 const ast = @import("ast");
 
-pub const Type = enum {
+pub const TypeId = u32;
+pub const StructureTypeId = u32;
+pub const TaggedUnionTypeId = u32;
+
+pub const Type = union(enum) {
     Unit,
     Boolean,
     Integer,
     String,
+
+    Structure: StructureTypeId,
+    Array: TypeId,
+    TaggedUnion: TaggedUnionTypeId,
+};
+
+pub const TypeStore = struct {
+    allocator: std.mem.Allocator,
+    types: std.ArrayList(Type),
+    unit_type_id: TypeId,
+    boolean_type_id: TypeId,
+    integer_type_id: TypeId,
+    string_type_id: TypeId,
+
+    pub fn init(allocator: std.mem.Allocator) @This() {
+        var store = @This(){
+            .allocator = allocator,
+            .types = .{},
+            .unit_type_id = undefined,
+            .boolean_type_id = undefined,
+            .integer_type_id = undefined,
+            .string_type_id = undefined,
+        };
+
+        store.unit_type_id = store.addType(.Unit);
+        store.boolean_type_id = store.addType(.Boolean);
+        store.integer_type_id = store.addType(.Integer);
+        store.string_type_id = store.addType(.String);
+
+        return store;
+    }
+
+    pub fn addType(self: *@This(), matcha_type: Type) TypeId {
+        const type_id: TypeId = @intCast(self.types.items.len);
+        self.types.append(self.allocator, matcha_type) catch unreachable;
+        return type_id;
+    }
+
+    pub fn getType(self: *const @This(), type_id: TypeId) Type {
+        return self.types.items[type_id];
+    }
+};
+
+pub const StructureType = struct {
+    name: []const u8,
+    fields: []Field,
+};
+
+pub const Field = struct {
+    name: []const u8,
+    type_id: TypeId,
 };
 
 pub const BinaryOperatorSignature = struct {
-    argument_type: Type,
-    return_type: Type,
+    argument_type_id: TypeId,
+    return_type_id: TypeId,
 };
 pub const BinaryOperatorRules = std.EnumArray(ast.BinaryOperator, ?BinaryOperatorSignature);
-pub const BinaryOperatorRulesByType = std.EnumArray(Type, ?BinaryOperatorRules);
-pub const binary_operator_rules_by_type = BinaryOperatorRulesByType.init(.{
-    .Unit = null,
-    .Boolean = BinaryOperatorRules.init(.{
-        .And = .{ .argument_type = .Boolean, .return_type = .Boolean },
-        .Or = .{ .argument_type = .Boolean, .return_type = .Boolean },
-        .Equal = .{ .argument_type = .Boolean, .return_type = .Boolean },
-        .NotEqual = .{ .argument_type = .Boolean, .return_type = .Boolean },
-        .LessThan = null,
-        .LessThanOrEqual = null,
-        .GreaterThan = null,
-        .GreaterThanOrEqual = null,
-        .Add = null,
-        .Subtract = null,
-        .Multiply = null,
-        .Divide = null,
-    }),
-    .Integer = BinaryOperatorRules.init(.{
-        .Add = .{ .argument_type = .Integer, .return_type = .Integer },
-        .Subtract = .{ .argument_type = .Integer, .return_type = .Integer },
-        .Multiply = .{ .argument_type = .Integer, .return_type = .Integer },
-        .Divide = .{ .argument_type = .Integer, .return_type = .Integer },
-        .Equal = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .NotEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .LessThan = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .LessThanOrEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .GreaterThan = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .GreaterThanOrEqual = .{ .argument_type = .Integer, .return_type = .Boolean },
-        .And = null,
-        .Or = null,
-    }),
-    .String = null,
-});
+
+pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: TypeId) ?BinaryOperatorRules {
+    return switch (type_store.getType(operand_type_id)) {
+        .Boolean => BinaryOperatorRules.init(.{
+            .And = .{ .argument_type_id = type_store.boolean_type_id, .return_type_id = type_store.boolean_type_id },
+            .Or = .{ .argument_type_id = type_store.boolean_type_id, .return_type_id = type_store.boolean_type_id },
+            .Equal = .{ .argument_type_id = type_store.boolean_type_id, .return_type_id = type_store.boolean_type_id },
+            .NotEqual = .{ .argument_type_id = type_store.boolean_type_id, .return_type_id = type_store.boolean_type_id },
+            .LessThan = null,
+            .LessThanOrEqual = null,
+            .GreaterThan = null,
+            .GreaterThanOrEqual = null,
+            .Add = null,
+            .Subtract = null,
+            .Multiply = null,
+            .Divide = null,
+        }),
+        .Integer => BinaryOperatorRules.init(.{
+            .Add = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.integer_type_id },
+            .Subtract = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.integer_type_id },
+            .Multiply = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.integer_type_id },
+            .Divide = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.integer_type_id },
+            .Equal = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .NotEqual = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .LessThan = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .LessThanOrEqual = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .GreaterThan = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .GreaterThanOrEqual = .{ .argument_type_id = type_store.integer_type_id, .return_type_id = type_store.boolean_type_id },
+            .And = null,
+            .Or = null,
+        }),
+        .Unit,
+        .String,
+        .Structure,
+        .Array,
+        .TaggedUnion,
+        => null,
+    };
+}
 
 pub const UnaryOperatorSignature = struct {
-    return_type: Type,
+    return_type_id: TypeId,
 };
 pub const UnaryOperatorRules = std.EnumArray(ast.UnaryOperator, ?UnaryOperatorSignature);
-pub const UnaryOperatorRulesByType = std.EnumArray(Type, ?UnaryOperatorRules);
-pub const unary_operator_rules_by_type = UnaryOperatorRulesByType.init(.{
-    .Unit = null,
-    .Boolean = UnaryOperatorRules.init(.{
-        .Negate = null,
-        .Not = .{ .return_type = .Boolean },
-    }),
-    .Integer = UnaryOperatorRules.init(.{
-        .Negate = .{ .return_type = .Integer },
-        .Not = null,
-    }),
-    .String = null,
-});
 
-pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, Type);
-pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, Type);
+pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: TypeId) ?UnaryOperatorRules {
+    return switch (type_store.getType(operand_type_id)) {
+        .Boolean => UnaryOperatorRules.init(.{
+            .Negate = null,
+            .Not = .{ .return_type_id = type_store.boolean_type_id },
+        }),
+        .Integer => UnaryOperatorRules.init(.{
+            .Negate = .{ .return_type_id = type_store.integer_type_id },
+            .Not = null,
+        }),
+        .Unit,
+        .String,
+        .Structure,
+        .Array,
+        .TaggedUnion,
+        => null,
+    };
+}
+
+pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
+pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
 
 pub const TypedProgram = struct {
     resolved_program: symbols.ResolvedProgram,
+    type_store: TypeStore,
     type_by_symbol_id: TypeBySymbolId,
     type_by_node_id: TypeByNodeId,
 };

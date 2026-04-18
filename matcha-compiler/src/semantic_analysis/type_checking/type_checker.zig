@@ -26,12 +26,14 @@ const TypeError = error{
 
 pub const TypeChecker = struct {
     allocator: std.mem.Allocator,
+    type_store: typing.TypeStore,
     type_by_symbol_id: typing.TypeBySymbolId,
     type_by_node_id: typing.TypeByNodeId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
+            .type_store = typing.TypeStore.init(allocator),
             .type_by_symbol_id = typing.TypeBySymbolId.init(allocator),
             .type_by_node_id = typing.TypeByNodeId.init(allocator),
         };
@@ -42,6 +44,7 @@ pub const TypeChecker = struct {
         resolved_program: symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypedProgram {
+        self.type_store = typing.TypeStore.init(self.allocator);
         self.type_by_symbol_id = typing.TypeBySymbolId.init(self.allocator);
         self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
         const context: ValidationContext = .Statement;
@@ -59,6 +62,7 @@ pub const TypeChecker = struct {
 
         return .{
             .resolved_program = resolved_program,
+            .type_store = self.type_store,
             .type_by_symbol_id = self.type_by_symbol_id,
             .type_by_node_id = self.type_by_node_id,
         };
@@ -74,17 +78,17 @@ pub const TypeChecker = struct {
                 switch (function_info.implementation) {
                     .UserDefined => {},
                     .BuiltinPrintInt => {
-                        self.type_by_symbol_id.put(symbol.id, .Unit) catch unreachable;
+                        self.type_by_symbol_id.put(symbol.id, self.type_store.unit_type_id) catch unreachable;
                         const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(symbol.id) orelse unreachable;
                         for (parameter_symbol_ids) |parameter_symbol_id| {
-                            self.type_by_symbol_id.put(parameter_symbol_id, .Integer) catch unreachable;
+                            self.type_by_symbol_id.put(parameter_symbol_id, self.type_store.integer_type_id) catch unreachable;
                         }
                     },
                     .BuiltinPrintString => {
-                        self.type_by_symbol_id.put(symbol.id, .Unit) catch unreachable;
+                        self.type_by_symbol_id.put(symbol.id, self.type_store.unit_type_id) catch unreachable;
                         const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(symbol.id) orelse unreachable;
                         for (parameter_symbol_ids) |parameter_symbol_id| {
-                            self.type_by_symbol_id.put(parameter_symbol_id, .String) catch unreachable;
+                            self.type_by_symbol_id.put(parameter_symbol_id, self.type_store.string_type_id) catch unreachable;
                         }
                     },
                 }
@@ -98,14 +102,14 @@ pub const TypeChecker = struct {
                     const function_symbol_id = resolved_program.symbol_id_by_node_id.get(
                         statement.id,
                     ) orelse unreachable;
-                    const function_return_type = try asType(function_definition.return_type_annotation);
+                    const function_return_type = try self.resolveTypeAnnotation(function_definition.return_type_annotation);
                     self.type_by_symbol_id.put(function_symbol_id, function_return_type) catch unreachable;
 
                     const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
                         function_symbol_id,
                     ) orelse unreachable;
                     for (function_definition.parameters, parameter_symbol_ids) |*parameter, symbol_id| {
-                        const parameter_type = try asType(parameter.type_annotation);
+                        const parameter_type = try self.resolveTypeAnnotation(parameter.type_annotation);
                         self.type_by_symbol_id.put(symbol_id, parameter_type) catch unreachable;
                     }
                 },
@@ -120,7 +124,7 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         switch (node.kind) {
             .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, resolved_program, exit_behavior_by_node_id),
             .FunctionDefinition => |function_definition| return self.checkFunctionDefinitionNode(node.id, &function_definition, resolved_program, exit_behavior_by_node_id),
@@ -151,7 +155,7 @@ pub const TypeChecker = struct {
         declaration: *const ast.Declaration,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const value_type = try self.checkNode(
             declaration.value,
             resolved_program,
@@ -159,14 +163,14 @@ pub const TypeChecker = struct {
             .Expression,
         );
         const annotated_type = if (declaration.type_annotation) |type_annotation|
-            try asType(type_annotation)
+            try self.resolveTypeAnnotation(type_annotation)
         else
             null;
         if (annotated_type) |annotated| {
             if (annotated != value_type) {
                 std.debug.print(
                     "Type Error: Value declaration annotation does not match initializer type, expected {any}, got {any}\n",
-                    .{ annotated, value_type },
+                    .{ self.getType(annotated), self.getType(value_type) },
                 );
                 return TypeError.TypeMismatch;
             }
@@ -174,7 +178,7 @@ pub const TypeChecker = struct {
 
         const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
         self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkFunctionDefinitionNode(
@@ -183,14 +187,14 @@ pub const TypeChecker = struct {
         function_definition: *const ast.FunctionDefinition,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         try self.checkFunctionDefinition(
             node_id,
             function_definition,
             resolved_program,
             exit_behavior_by_node_id,
         );
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkReturnNode(
@@ -199,7 +203,7 @@ pub const TypeChecker = struct {
         return_statement: *const ast.Return,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         if (return_statement.value) |return_value| {
             _ = try self.checkNode(
                 return_value,
@@ -209,7 +213,7 @@ pub const TypeChecker = struct {
             );
         }
 
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkAssignmentNode(
@@ -218,7 +222,7 @@ pub const TypeChecker = struct {
         assignment: *const ast.Assignment,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const value_type = try self.checkNode(
             assignment.value,
             resolved_program,
@@ -230,12 +234,12 @@ pub const TypeChecker = struct {
         if (symbol_type != value_type) {
             std.debug.print(
                 "Type Error: Cannot assign value of type {any} to symbol of type {any}\n",
-                .{ value_type, symbol_type },
+                .{ self.getType(value_type), self.getType(symbol_type) },
             );
             return TypeError.TypeMismatch;
         }
 
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkLoopNode(
@@ -244,14 +248,14 @@ pub const TypeChecker = struct {
         loop: *const ast.Loop,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         _ = try self.checkNode(
             loop.body_block,
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
         );
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkWhileNode(
@@ -260,17 +264,17 @@ pub const TypeChecker = struct {
         while_statement: *const ast.While,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const while_condition_type = try self.checkNode(
             while_statement.condition,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (while_condition_type != .Boolean) {
+        if (while_condition_type != self.type_store.boolean_type_id) {
             std.debug.print(
                 "Type Error: While condition must be of type boolean, got {any}\n",
-                .{while_condition_type},
+                .{self.getType(while_condition_type)},
             );
             return TypeError.TypeMismatch;
         }
@@ -290,21 +294,21 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Statement,
         );
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkLeaveNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.Type {
-        return self.recordNodeType(node_id, .Unit);
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkContinueNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.Type {
-        return self.recordNodeType(node_id, .Unit);
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkCallExpressionNode(
@@ -313,7 +317,7 @@ pub const TypeChecker = struct {
         call_expression: *const ast.CallExpression,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         switch (call_expression.callee.kind) {
             .Identifier => {
                 const callee_symbol_id = resolved_program.symbol_id_by_node_id.get(
@@ -341,7 +345,7 @@ pub const TypeChecker = struct {
                     if (argument_type != parameter_type) {
                         std.debug.print(
                             "Type Error: Function parameter expected type {any}, got {any}\n",
-                            .{ parameter_type, argument_type },
+                            .{ self.getType(parameter_type), self.getType(argument_type) },
                         );
                         return TypeError.TypeMismatch;
                     }
@@ -360,7 +364,7 @@ pub const TypeChecker = struct {
         binary_expression: *const ast.BinaryExpression,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const left_expression_type = try self.checkNode(
             binary_expression.left,
             resolved_program,
@@ -373,27 +377,31 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (typing.binary_operator_rules_by_type.get(left_expression_type)) |rules_for_left_type| {
+        if (typing.getBinaryOperatorRules(&self.type_store, left_expression_type)) |rules_for_left_type| {
             if (rules_for_left_type.get(binary_expression.operator)) |operator_rule| {
-                if (operator_rule.argument_type != right_expression_type) {
+                if (operator_rule.argument_type_id != right_expression_type) {
                     std.debug.print(
                         "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
-                        .{ binary_expression.operator, operator_rule.argument_type, right_expression_type },
+                        .{
+                            binary_expression.operator,
+                            self.getType(operator_rule.argument_type_id),
+                            self.getType(right_expression_type),
+                        },
                     );
                     return TypeError.TypeMismatch;
                 }
-                return self.recordNodeType(node_id, operator_rule.return_type);
+                return self.recordNodeType(node_id, operator_rule.return_type_id);
             } else {
                 std.debug.print(
                     "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
-                    .{ binary_expression.operator, left_expression_type },
+                    .{ binary_expression.operator, self.getType(left_expression_type) },
                 );
                 return TypeError.TypeMismatch;
             }
         } else {
             std.debug.print(
                 "Type Error: No binary operator rules exist for left operand type {any}\n",
-                .{left_expression_type},
+                .{self.getType(left_expression_type)},
             );
             return TypeError.TypeMismatch;
         }
@@ -405,27 +413,27 @@ pub const TypeChecker = struct {
         unary_expression: *const ast.UnaryExpression,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const operand_type = try self.checkNode(
             unary_expression.operand,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (typing.unary_operator_rules_by_type.get(operand_type)) |rules_for_operand_type| {
+        if (typing.getUnaryOperatorRules(&self.type_store, operand_type)) |rules_for_operand_type| {
             if (rules_for_operand_type.get(unary_expression.operator)) |operator_rule| {
-                return self.recordNodeType(node_id, operator_rule.return_type);
+                return self.recordNodeType(node_id, operator_rule.return_type_id);
             } else {
                 std.debug.print(
                     "Type Error: Unary operator {any} is not supported for operand type {any}\n",
-                    .{ unary_expression.operator, operand_type },
+                    .{ unary_expression.operator, self.getType(operand_type) },
                 );
                 return TypeError.TypeMismatch;
             }
         } else {
             std.debug.print(
                 "Type Error: No unary operator rules exist for operand type {any}\n",
-                .{operand_type},
+                .{self.getType(operand_type)},
             );
             return TypeError.TypeMismatch;
         }
@@ -438,7 +446,7 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         if (context == .Expression and block.result == null) {
             std.debug.print("Type Error: Block must produce a value in this context\n", .{});
             return TypeError.BlockMustProduceValue;
@@ -466,35 +474,35 @@ pub const TypeChecker = struct {
             return self.recordNodeType(node_id, result_type);
         }
 
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkIntegerLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.Type {
-        return self.recordNodeType(node_id, .Integer);
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.integer_type_id);
     }
 
     fn checkBooleanLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.Type {
-        return self.recordNodeType(node_id, .Boolean);
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.boolean_type_id);
     }
 
     fn checkStringLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.Type {
-        return self.recordNodeType(node_id, .String);
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.string_type_id);
     }
 
     fn checkIdentifierNode(
         self: *@This(),
         node_id: ast.NodeId,
         resolved_program: *const symbols.ResolvedProgram,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
         const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
         return self.recordNodeType(node_id, symbol_type);
@@ -506,17 +514,17 @@ pub const TypeChecker = struct {
         if_statement: *const ast.IfStatement,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const if_condition_type = try self.checkNode(
             if_statement.condition,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (if_condition_type != .Boolean) {
+        if (if_condition_type != self.type_store.boolean_type_id) {
             std.debug.print(
                 "Type Error: If condition must be of type boolean, got {any}\n",
-                .{if_condition_type},
+                .{self.getType(if_condition_type)},
             );
             return TypeError.TypeMismatch;
         }
@@ -527,7 +535,7 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Statement,
         );
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkIfExpressionNode(
@@ -537,17 +545,17 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const if_condition_type = try self.checkNode(
             if_expression.condition,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (if_condition_type != .Boolean) {
+        if (if_condition_type != self.type_store.boolean_type_id) {
             std.debug.print(
                 "Type Error: If condition must be of type boolean, got {any}\n",
-                .{if_condition_type},
+                .{self.getType(if_condition_type)},
             );
             return TypeError.TypeMismatch;
         }
@@ -567,7 +575,7 @@ pub const TypeChecker = struct {
         if (then_block_type != else_block_type) {
             std.debug.print(
                 "Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n",
-                .{ then_block_type, else_block_type },
+                .{ self.getType(then_block_type), self.getType(else_block_type) },
             );
             return TypeError.TypeMismatch;
         }
@@ -582,7 +590,7 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const match_type = try self.checkMatchExpression(
             match_expression,
             resolved_program,
@@ -598,19 +606,19 @@ pub const TypeChecker = struct {
         expression_statement: *const ast.ExpressionStatement,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const expression_type = try self.checkNode(
             expression_statement.expression,
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
         );
-        if (expression_type != .Unit) {
+        if (expression_type != self.type_store.unit_type_id) {
             std.debug.print("Type Error: Expression statement must evaluate to unit\n", .{});
             return TypeError.BlockCannotProduceValue;
         }
 
-        return self.recordNodeType(node_id, .Unit);
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkFunctionDefinitionReturnValue(
@@ -621,7 +629,7 @@ pub const TypeChecker = struct {
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!void {
         const symbol_id = resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const function_return_type = try asType(function_definition.return_type_annotation);
+        const function_return_type = try self.resolveTypeAnnotation(function_definition.return_type_annotation);
 
         const body_expression_type = try self.checkNode(
             function_definition.body_expression,
@@ -643,10 +651,10 @@ pub const TypeChecker = struct {
             // This is okay, all control flow paths return and we validated that all return statements return the correct type
             .Terminates => {},
             .FallsThroughWithoutValue => {
-                if (function_return_type != .Unit) {
+                if (function_return_type != self.type_store.unit_type_id) {
                     std.debug.print(
                         "Type Error: Function with non-unit return type {any} has control flow path that falls through without returning a value\n",
-                        .{function_return_type},
+                        .{self.getType(function_return_type)},
                     );
                     return TypeError.TypeMismatch;
                 }
@@ -655,7 +663,7 @@ pub const TypeChecker = struct {
                 if (function_return_type != body_expression_type) {
                     std.debug.print(
                         "Type Error: Function with return type {any} has control flow path that falls through with value of type {any}\n",
-                        .{ function_return_type, body_expression_type },
+                        .{ self.getType(function_return_type), self.getType(body_expression_type) },
                     );
                     return TypeError.TypeMismatch;
                 }
@@ -675,7 +683,7 @@ pub const TypeChecker = struct {
             function_symbol_id,
         ).?;
         for (function_definition.parameters, parameter_symbol_ids) |*parameter, symbol_id| {
-            const parameter_type = try asType(parameter.type_annotation);
+            const parameter_type = try self.resolveTypeAnnotation(parameter.type_annotation);
             self.type_by_symbol_id.put(symbol_id, parameter_type) catch unreachable;
         }
 
@@ -690,7 +698,7 @@ pub const TypeChecker = struct {
     fn checkReturnStatementsMatchType(
         self: *@This(),
         node: *const ast.Node,
-        function_return_type: typing.Type,
+        function_return_type: typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
     ) TypeError!void {
         switch (node.kind) {
@@ -700,15 +708,15 @@ pub const TypeChecker = struct {
                     if (return_value_type != function_return_type) {
                         std.debug.print(
                             "Type Error: Return statement in function with return type {any} has return value of type {any}\n",
-                            .{ function_return_type, return_value_type },
+                            .{ self.getType(function_return_type), self.getType(return_value_type) },
                         );
                         return TypeError.TypeMismatch;
                     }
                 } else {
-                    if (function_return_type != .Unit) {
+                    if (function_return_type != self.type_store.unit_type_id) {
                         std.debug.print(
                             "Type Error: Return statement with no value in function with non-unit return type {any}\n",
-                            .{function_return_type},
+                            .{self.getType(function_return_type)},
                         );
                         return TypeError.TypeMismatch;
                     }
@@ -780,16 +788,16 @@ pub const TypeChecker = struct {
         }
     }
 
-    fn asType(typeAnnotation: ast.TypeAnnotation) !typing.Type {
+    fn resolveTypeAnnotation(self: *const @This(), typeAnnotation: ast.TypeAnnotation) !typing.TypeId {
         const type_name = typeAnnotation.name_token.kind.Identifier;
         if (std.mem.eql(u8, type_name, "boolean")) {
-            return .Boolean;
+            return self.type_store.boolean_type_id;
         } else if (std.mem.eql(u8, type_name, "unit")) {
-            return .Unit;
+            return self.type_store.unit_type_id;
         } else if (std.mem.eql(u8, type_name, "int")) {
-            return .Integer;
+            return self.type_store.integer_type_id;
         } else if (std.mem.eql(u8, type_name, "string")) {
-            return .String;
+            return self.type_store.string_type_id;
         } else {
             std.debug.print("Type Error: Unknown type annotation: {s}\n", .{type_name});
             return TypeError.TypeMismatch;
@@ -802,7 +810,7 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
-    ) TypeError!typing.Type {
+    ) TypeError!typing.TypeId {
         const exhaustiveness_class: ExhaustivenessClass = if (match_expression.subject) |subject| class: {
             const subject_type = try self.checkNode(
                 subject,
@@ -810,11 +818,11 @@ pub const TypeChecker = struct {
                 exit_behavior_by_node_id,
                 .Expression,
             );
-            break :class switch (subject_type) {
+            break :class switch (self.getType(subject_type)) {
                 .Boolean => .Boolean,
                 .Integer => .IntegerOpen,
                 else => {
-                    std.debug.print("Type Error: Match subject must be boolean or integer in v1, got {any}\n", .{subject_type});
+                    std.debug.print("Type Error: Match subject must be boolean or integer in v1, got {any}\n", .{self.getType(subject_type)});
                     return TypeError.TypeMismatch;
                 },
             };
@@ -825,7 +833,7 @@ pub const TypeChecker = struct {
         var integer_patterns = std.AutoHashMap(i64, void).init(self.allocator);
         defer integer_patterns.deinit();
 
-        var arm_result_type: ?typing.Type = null;
+        var arm_result_type: ?typing.TypeId = null;
         for (match_expression.arms) |arm| {
             switch (exhaustiveness_class) {
                 .Subjectless => {
@@ -835,8 +843,8 @@ pub const TypeChecker = struct {
                         exit_behavior_by_node_id,
                         .Expression,
                     );
-                    if (condition_type != .Boolean) {
-                        std.debug.print("Type Error: Subjectless match arm condition must be boolean, got {any}\n", .{condition_type});
+                    if (condition_type != self.type_store.boolean_type_id) {
+                        std.debug.print("Type Error: Subjectless match arm condition must be boolean, got {any}\n", .{self.getType(condition_type)});
                         return TypeError.TypeMismatch;
                     }
                 },
@@ -849,7 +857,7 @@ pub const TypeChecker = struct {
                             if (saw_false) return TypeError.DuplicateMatchArm;
                             saw_false = true;
                         }
-                        self.type_by_node_id.put(arm.pattern_or_condition.id, .Boolean) catch unreachable;
+                        self.type_by_node_id.put(arm.pattern_or_condition.id, self.type_store.boolean_type_id) catch unreachable;
                     },
                     else => {
                         std.debug.print("Type Error: Boolean match arms must use boolean literals in v1\n", .{});
@@ -877,7 +885,7 @@ pub const TypeChecker = struct {
                             exit_behavior_by_node_id,
                             .Expression,
                         );
-                        if (pattern_type != .Integer) {
+                        if (pattern_type != self.type_store.integer_type_id) {
                             std.debug.print("Type Error: Integer match arms must be integer expressions in v1\n", .{});
                             return TypeError.TypeMismatch;
                         }
@@ -895,7 +903,7 @@ pub const TypeChecker = struct {
                 if (expected_type != body_type) {
                     std.debug.print(
                         "Type Error: Match arms must all produce the same type, expected {any}, got {any}\n",
-                        .{ expected_type, body_type },
+                        .{ self.getType(expected_type), self.getType(body_type) },
                     );
                     return TypeError.TypeMismatch;
                 }
@@ -915,7 +923,7 @@ pub const TypeChecker = struct {
                 if (expected_type != else_type) {
                     std.debug.print(
                         "Type Error: Match else arm must produce the same type as other arms, expected {any}, got {any}\n",
-                        .{ expected_type, else_type },
+                        .{ self.getType(expected_type), self.getType(else_type) },
                     );
                     return TypeError.TypeMismatch;
                 }
@@ -934,8 +942,8 @@ pub const TypeChecker = struct {
             return TypeError.NonExhaustiveMatch;
         }
 
-        const result_type = arm_result_type orelse .Unit;
-        if (context == .Statement and result_type != .Unit) {
+        const result_type = arm_result_type orelse self.type_store.unit_type_id;
+        if (context == .Statement and result_type != self.type_store.unit_type_id) {
             std.debug.print("Type Error: Match expression used as statement must evaluate to unit\n", .{});
             return TypeError.BlockCannotProduceValue;
         }
@@ -946,9 +954,13 @@ pub const TypeChecker = struct {
     fn recordNodeType(
         self: *@This(),
         node_id: ast.NodeId,
-        node_type: typing.Type,
-    ) typing.Type {
+        node_type: typing.TypeId,
+    ) typing.TypeId {
         self.type_by_node_id.put(node_id, node_type) catch unreachable;
         return node_type;
+    }
+
+    fn getType(self: *const @This(), type_id: typing.TypeId) typing.Type {
+        return self.type_store.getType(type_id);
     }
 };
