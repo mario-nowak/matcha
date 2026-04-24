@@ -5,9 +5,11 @@ const scope = @import("scope.zig");
 
 pub const NameResolutionError = error{
     UndefinedIdentifier,
+    InvalidTypeAnnotation,
     ValueAlreadyDeclared,
     CannotAssignToImmutable,
     FunctionAlreadyDefined,
+    StructureAlreadyDefined,
 };
 
 const ModuleShadowing = enum {
@@ -23,14 +25,16 @@ pub const NameResolver = struct {
     allocator: std.mem.Allocator,
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
-    parameter_symbol_ids_by_function_symbol_id: symbols.ParameterSymbolIdsByFunctionSymbolId,
+    resolved_item_by_symbol_id: symbols.ResolvedItemBySymbolId,
+    type_reference_by_type_annotation_id: symbols.TypeReferenceByTypeAnnotationId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
             .symbol_table = symbols.SymbolTable.init(allocator),
             .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
-            .parameter_symbol_ids_by_function_symbol_id = symbols.ParameterSymbolIdsByFunctionSymbolId.init(allocator),
+            .resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(allocator),
+            .type_reference_by_type_annotation_id = symbols.TypeReferenceByTypeAnnotationId.init(allocator),
         };
     }
 
@@ -44,7 +48,8 @@ pub const NameResolver = struct {
         var root_scope = scope.Scope.init(self.allocator, null);
         self.symbol_table = symbols.SymbolTable.init(self.allocator);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.allocator);
-        self.parameter_symbol_ids_by_function_symbol_id = symbols.ParameterSymbolIdsByFunctionSymbolId.init(self.allocator);
+        self.resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(self.allocator);
+        self.type_reference_by_type_annotation_id = symbols.TypeReferenceByTypeAnnotationId.init(self.allocator);
 
         var module_scope = try self.buildModuleScope(program);
 
@@ -61,7 +66,8 @@ pub const NameResolver = struct {
             .program = program.*,
             .symbol_id_by_node_id = self.symbol_id_by_node_id,
             .symbol_table = self.symbol_table,
-            .parameter_symbol_ids_by_function_symbol_id = self.parameter_symbol_ids_by_function_symbol_id,
+            .resolved_item_by_symbol_id = self.resolved_item_by_symbol_id,
+            .type_reference_by_type_annotation_id = self.type_reference_by_type_annotation_id,
         };
     }
 
@@ -77,10 +83,19 @@ pub const NameResolver = struct {
             .declared_at = null,
             .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
         });
-        self.parameter_symbol_ids_by_function_symbol_id.put(
-            print_int_symbol.id,
-            self.allocator.dupe(symbols.SymbolId, &.{parameter_symbol.id}) catch unreachable,
-        ) catch unreachable;
+        self.appendResolvedItem(.{
+            .Function = .{
+                .symbol_id = print_int_symbol.id,
+                .name = print_int_symbol.name,
+                .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
+                    .symbol_id = parameter_symbol.id,
+                    .name = parameter_symbol.name,
+                    .type_reference = .{ .Builtin = .Integer },
+                }}) catch unreachable,
+                .return_type_reference = .{ .Builtin = .Unit },
+                .implementation = .builtin,
+            },
+        });
     }
 
     fn addPrintStringBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
@@ -95,10 +110,19 @@ pub const NameResolver = struct {
             .declared_at = null,
             .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
         });
-        self.parameter_symbol_ids_by_function_symbol_id.put(
-            print_string_symbol.id,
-            self.allocator.dupe(symbols.SymbolId, &.{parameter_symbol.id}) catch unreachable,
-        ) catch unreachable;
+        self.appendResolvedItem(.{
+            .Function = .{
+                .symbol_id = print_string_symbol.id,
+                .name = print_string_symbol.name,
+                .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
+                    .symbol_id = parameter_symbol.id,
+                    .name = parameter_symbol.name,
+                    .type_reference = .{ .Builtin = .String },
+                }}) catch unreachable,
+                .return_type_reference = .{ .Builtin = .Unit },
+                .implementation = .builtin,
+            },
+        });
     }
 
     fn buildModuleScope(self: *@This(), program: *const ast.Program) NameResolutionError!scope.ModuleScope {
@@ -123,6 +147,27 @@ pub const NameResolver = struct {
                         function_name,
                         function_symbol.id,
                     );
+                },
+                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                    .StructureDefinition => |_| {
+                        const structure_name = item_definition.identifier_token.kind.Identifier;
+                        module_scope.validateNotInScope(structure_name) catch {
+                            std.debug.print("Semantic Error: Structure already defined in module scope: {s}\n", .{structure_name});
+                            return NameResolutionError.StructureAlreadyDefined;
+                        };
+
+                        const structure_symbol = self.symbol_table.insertSymbol(.{
+                            .name = structure_name,
+                            .declared_at = item_definition.item_token,
+                            .kind = .{ .Structure = {} },
+                        });
+                        self.symbol_id_by_node_id.put(statement.id, structure_symbol.id) catch unreachable;
+                        module_scope.insertSymbol(
+                            structure_name,
+                            structure_symbol.id,
+                        );
+                    },
+                    .FunctionDefinition => unreachable,
                 },
                 else => {},
             }
@@ -160,6 +205,9 @@ pub const NameResolver = struct {
                 }
 
                 try self.resolveNode(declaration.value, node_scope, module_scope, context);
+                if (declaration.type_annotation) |type_annotation| {
+                    _ = try self.resolveTypeReference(type_annotation, module_scope);
+                }
 
                 const declaration_symbol = self.symbol_table.insertSymbol(.{
                     .name = declaration_name,
@@ -177,7 +225,13 @@ pub const NameResolver = struct {
                 node_scope.insertSymbol(declaration_name, declaration_symbol.id);
             },
             .FunctionDefinition => |function_definition| {
-                try self.resolveFunctionDefinition(&function_definition, module_scope);
+                try self.resolveFunctionDefinition(node.id, &function_definition, module_scope);
+            },
+            .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .FunctionDefinition => unreachable,
+                .StructureDefinition => |structure_definition| {
+                    try self.resolveStructureDefinition(node.id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
+                },
             },
             .Return => |return_statement| {
                 if (return_statement.value) |value| {
@@ -301,11 +355,12 @@ pub const NameResolver = struct {
 
     fn resolveFunctionDefinition(
         self: *@This(),
+        node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         var function_scope = scope.Scope.init(self.allocator, null);
-        var parameter_symbol_ids = std.ArrayList(symbols.SymbolId){};
+        var resolved_parameters = std.ArrayList(symbols.ResolvedParameter){};
 
         for (function_definition.parameters) |*parameter| {
             const parameter_name = parameter.name.kind.Identifier;
@@ -319,19 +374,104 @@ pub const NameResolver = struct {
                 .declared_at = parameter.name,
                 .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Mutable } },
             });
-            parameter_symbol_ids.append(self.allocator, parameter_symbol.id) catch unreachable;
             function_scope.insertSymbol(parameter.name.kind.Identifier, parameter_symbol.id);
+            resolved_parameters.append(self.allocator, .{
+                .symbol_id = parameter_symbol.id,
+                .name = parameter_name,
+                .type_reference = try self.resolveTypeReference(parameter.type_annotation, module_scope),
+            }) catch unreachable;
         }
 
         const function_name = function_definition.identifier_token.kind.Identifier;
         const function_symbol_id = module_scope.lookupSymbol(function_name) orelse unreachable;
-        self.parameter_symbol_ids_by_function_symbol_id.put(
-            function_symbol_id,
-            parameter_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
-        ) catch unreachable;
+        const resolved_function = symbols.ResolvedFunction{
+            .symbol_id = function_symbol_id,
+            .name = function_name,
+            .parameters = resolved_parameters.toOwnedSlice(self.allocator) catch unreachable,
+            .return_type_reference = try self.resolveTypeReference(function_definition.return_type_annotation, module_scope),
+            .implementation = .{
+                .user_defined = .{
+                    .node_id = node_id,
+                    .body_node_id = function_definition.body_expression.id,
+                },
+            },
+        };
+        self.appendResolvedItem(.{ .Function = resolved_function });
 
         try self.resolveNode(function_definition.body_expression, &function_scope, module_scope, .{
             .module_shadowing = .Allowed,
         });
+    }
+
+    fn resolveStructureDefinition(
+        self: *@This(),
+        node_id: ast.NodeId,
+        structure_name: []const u8,
+        structure_definition: *const ast.Structure,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!void {
+        const structure_symbol_id = module_scope.lookupSymbol(structure_name) orelse unreachable;
+        var resolved_fields = std.ArrayList(symbols.ResolvedStructureField){};
+        for (structure_definition.fields) |field| {
+            resolved_fields.append(self.allocator, .{
+                .name = field.name.kind.Identifier,
+                .type_reference = try self.resolveTypeReference(field.type_annotation, module_scope),
+            }) catch unreachable;
+        }
+
+        self.appendResolvedItem(.{
+            .Structure = .{
+                .symbol_id = structure_symbol_id,
+                .name = structure_name,
+                .fields = resolved_fields.toOwnedSlice(self.allocator) catch unreachable,
+                .node_id = node_id,
+            },
+        });
+    }
+
+    fn resolveTypeReference(
+        self: *@This(),
+        type_annotation: ast.TypeAnnotation,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!symbols.ResolvedTypeReference {
+        const type_name = type_annotation.name_token.kind.Identifier;
+        const resolved_type_reference: symbols.ResolvedTypeReference = if (builtinTypeFromName(type_name)) |builtin_type|
+            .{ .Builtin = builtin_type }
+        else block: {
+            const symbol_id = module_scope.lookupSymbol(type_name) orelse {
+                std.debug.print("Semantic Error: Unknown type annotation: {s}\n", .{type_name});
+                return NameResolutionError.UndefinedIdentifier;
+            };
+            const symbol = self.symbol_table.getSymbol(symbol_id);
+            switch (symbol.kind) {
+                .Structure => break :block symbols.ResolvedTypeReference{ .Symbol = symbol_id },
+                else => {
+                    std.debug.print("Semantic Error: Type annotation must reference a structure, got: {s}\n", .{type_name});
+                    return NameResolutionError.InvalidTypeAnnotation;
+                },
+            }
+        };
+
+        self.type_reference_by_type_annotation_id.put(
+            type_annotation.id,
+            resolved_type_reference,
+        ) catch unreachable;
+        return resolved_type_reference;
+    }
+
+    fn appendResolvedItem(self: *@This(), item: symbols.ResolvedItem) void {
+        const symbol_id = switch (item) {
+            .Function => |function| function.symbol_id,
+            .Structure => |structure| structure.symbol_id,
+        };
+        self.resolved_item_by_symbol_id.put(symbol_id, item) catch unreachable;
+    }
+
+    fn builtinTypeFromName(name: []const u8) ?symbols.BuiltinType {
+        if (std.mem.eql(u8, name, "unit")) return .Unit;
+        if (std.mem.eql(u8, name, "boolean")) return .Boolean;
+        if (std.mem.eql(u8, name, "int")) return .Integer;
+        if (std.mem.eql(u8, name, "string")) return .String;
+        return null;
     }
 };

@@ -20,6 +20,7 @@ pub const Type = union(enum) {
 pub const TypeStore = struct {
     allocator: std.mem.Allocator,
     types: std.ArrayList(Type),
+    structure_types: std.ArrayList(StructureType),
     unit_type_id: TypeId,
     boolean_type_id: TypeId,
     integer_type_id: TypeId,
@@ -33,6 +34,7 @@ pub const TypeStore = struct {
             .boolean_type_id = undefined,
             .integer_type_id = undefined,
             .string_type_id = undefined,
+            .structure_types = .{},
         };
 
         store.unit_type_id = store.addType(.Unit);
@@ -47,6 +49,12 @@ pub const TypeStore = struct {
         const type_id: TypeId = @intCast(self.types.items.len);
         self.types.append(self.allocator, matcha_type) catch unreachable;
         return type_id;
+    }
+
+    pub fn addStructureType(self: *@This(), structure_type: StructureType) StructureTypeId {
+        const structure_type_id: StructureTypeId = @intCast(self.structure_types.items.len);
+        self.structure_types.append(self.allocator, structure_type) catch unreachable;
+        return self.addType(.{ .Structure = structure_type_id });
     }
 
     pub fn getType(self: *const @This(), type_id: TypeId) Type {

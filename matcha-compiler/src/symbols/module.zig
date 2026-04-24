@@ -16,6 +16,7 @@ pub const SymbolKind = union(enum) {
         binding_mutability: BindingMutability,
     },
     Function: FunctionInfo,
+    Structure,
 };
 
 pub const FunctionInfo = struct {
@@ -74,11 +75,64 @@ pub const SymbolTable = struct {
 };
 
 pub const SymbolIdByNodeId = std.AutoHashMap(ast.NodeId, SymbolId);
-pub const ParameterSymbolIdsByFunctionSymbolId = std.AutoHashMap(SymbolId, []const SymbolId);
+
+pub const BuiltinType = enum {
+    Unit,
+    Boolean,
+    Integer,
+    String,
+};
+
+pub const ResolvedTypeReference = union(enum) {
+    Builtin: BuiltinType,
+    Symbol: SymbolId,
+};
+
+pub const TypeReferenceByTypeAnnotationId = std.AutoHashMap(ast.TypeAnnotationId, ResolvedTypeReference);
+
+pub const ResolvedParameter = struct {
+    symbol_id: SymbolId,
+    name: []const u8,
+    type_reference: ResolvedTypeReference,
+};
+
+pub const ResolvedFunction = struct {
+    symbol_id: SymbolId,
+    name: []const u8,
+    parameters: []ResolvedParameter,
+    return_type_reference: ResolvedTypeReference,
+    implementation: union(enum) {
+        user_defined: struct {
+            node_id: ast.NodeId,
+            body_node_id: ast.NodeId,
+        },
+        builtin,
+    },
+};
+
+pub const ResolvedStructureField = struct {
+    name: []const u8,
+    type_reference: ResolvedTypeReference,
+};
+
+pub const ResolvedStructure = struct {
+    symbol_id: SymbolId,
+    name: []const u8,
+    fields: []ResolvedStructureField,
+    node_id: ast.NodeId,
+};
+
+pub const ResolvedItem = union(enum) {
+    Function: ResolvedFunction,
+    Structure: ResolvedStructure,
+};
+
+pub const ResolvedItemBySymbolId = std.AutoHashMap(SymbolId, ResolvedItem);
 
 pub const ResolvedProgram = struct {
     program: ast.Program,
     symbol_table: SymbolTable,
     symbol_id_by_node_id: SymbolIdByNodeId,
-    parameter_symbol_ids_by_function_symbol_id: ParameterSymbolIdsByFunctionSymbolId,
+    resolved_item_by_symbol_id: ResolvedItemBySymbolId,
+    type_reference_by_type_annotation_id: TypeReferenceByTypeAnnotationId,
 };

@@ -49,7 +49,7 @@ pub const TypeChecker = struct {
         self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
         const context: ValidationContext = .Statement;
 
-        try self.seedModuleLevelFunctionSignatures(&resolved_program);
+        try self.seedModuleLevelItemTypes(&resolved_program);
 
         for (resolved_program.program.statements) |*statement| {
             _ = try self.checkNode(
@@ -68,52 +68,46 @@ pub const TypeChecker = struct {
         };
     }
 
-    fn seedModuleLevelFunctionSignatures(
+    fn seedModuleLevelItemTypes(
         self: *@This(),
         resolved_program: *const symbols.ResolvedProgram,
     ) TypeError!void {
-        var iterator = resolved_program.symbol_table.entries.valueIterator();
-        while (iterator.next()) |symbol| switch (symbol.*.kind) {
-            .Function => |function_info| {
-                switch (function_info.implementation) {
-                    .UserDefined => {},
-                    .BuiltinPrintInt => {
-                        self.type_by_symbol_id.put(symbol.id, self.type_store.unit_type_id) catch unreachable;
-                        const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(symbol.id) orelse unreachable;
-                        for (parameter_symbol_ids) |parameter_symbol_id| {
-                            self.type_by_symbol_id.put(parameter_symbol_id, self.type_store.integer_type_id) catch unreachable;
-                        }
-                    },
-                    .BuiltinPrintString => {
-                        self.type_by_symbol_id.put(symbol.id, self.type_store.unit_type_id) catch unreachable;
-                        const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(symbol.id) orelse unreachable;
-                        for (parameter_symbol_ids) |parameter_symbol_id| {
-                            self.type_by_symbol_id.put(parameter_symbol_id, self.type_store.string_type_id) catch unreachable;
-                        }
-                    },
-                }
-            },
-            else => {},
-        };
+        var resolved_items_iterator = resolved_program.resolved_item_by_symbol_id.valueIterator();
+        while (resolved_items_iterator.next()) |item| {
+            switch (item.*) {
+                .Function => {},
+                .Structure => |structure| {
+                    const structure_type_id: typing.StructureTypeId = @intCast(self.type_store.structure_types.items.len);
+                    const type_id = self.type_store.addType(.{ .Structure = structure_type_id });
+                    self.type_by_symbol_id.put(structure.symbol_id, type_id) catch unreachable;
+                },
+            }
+        }
 
-        for (resolved_program.program.statements) |*statement| {
-            switch (statement.kind) {
-                .FunctionDefinition => |function_definition| {
-                    const function_symbol_id = resolved_program.symbol_id_by_node_id.get(
-                        statement.id,
-                    ) orelse unreachable;
-                    const function_return_type = try self.resolveTypeAnnotation(function_definition.return_type_annotation);
-                    self.type_by_symbol_id.put(function_symbol_id, function_return_type) catch unreachable;
-
-                    const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-                        function_symbol_id,
-                    ) orelse unreachable;
-                    for (function_definition.parameters, parameter_symbol_ids) |*parameter, symbol_id| {
-                        const parameter_type = try self.resolveTypeAnnotation(parameter.type_annotation);
-                        self.type_by_symbol_id.put(symbol_id, parameter_type) catch unreachable;
+        resolved_items_iterator = resolved_program.resolved_item_by_symbol_id.valueIterator();
+        while (resolved_items_iterator.next()) |item| {
+            switch (item.*) {
+                .Function => |function| {
+                    const function_return_type = self.resolveTypeReference(function.return_type_reference);
+                    self.type_by_symbol_id.put(function.symbol_id, function_return_type) catch unreachable;
+                    for (function.parameters) |parameter| {
+                        const parameter_type = self.resolveTypeReference(parameter.type_reference);
+                        self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
                     }
                 },
-                else => {},
+                .Structure => |structure| {
+                    var fields = std.ArrayList(typing.Field){};
+                    for (structure.fields) |field| {
+                        fields.append(self.allocator, .{
+                            .name = field.name,
+                            .type_id = self.resolveTypeReference(field.type_reference),
+                        }) catch unreachable;
+                    }
+                    self.type_store.structure_types.append(self.allocator, .{
+                        .name = structure.name,
+                        .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+                    }) catch unreachable;
+                },
             }
         }
     }
@@ -128,6 +122,7 @@ pub const TypeChecker = struct {
         switch (node.kind) {
             .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, resolved_program, exit_behavior_by_node_id),
             .FunctionDefinition => |function_definition| return self.checkFunctionDefinitionNode(node.id, &function_definition, resolved_program, exit_behavior_by_node_id),
+            .ItemDefinition => |item_definition| return self.checkItemDefinitionNode(node.id, &item_definition, resolved_program, exit_behavior_by_node_id),
             .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, resolved_program, exit_behavior_by_node_id),
             .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, resolved_program, exit_behavior_by_node_id),
             .Loop => |loop| return self.checkLoopNode(node.id, &loop, resolved_program, exit_behavior_by_node_id),
@@ -149,6 +144,19 @@ pub const TypeChecker = struct {
         }
     }
 
+    fn checkItemDefinitionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        item_definition: *const ast.ItemDefinition,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        _ = item_definition;
+        _ = resolved_program;
+        _ = exit_behavior_by_node_id;
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
+    }
+
     fn checkDeclarationNode(
         self: *@This(),
         node_id: ast.NodeId,
@@ -163,7 +171,7 @@ pub const TypeChecker = struct {
             .Expression,
         );
         const annotated_type = if (declaration.type_annotation) |type_annotation|
-            try self.resolveTypeAnnotation(type_annotation)
+            self.resolveTypeAnnotation(type_annotation, resolved_program)
         else
             null;
         if (annotated_type) |annotated| {
@@ -323,25 +331,23 @@ pub const TypeChecker = struct {
                 const callee_symbol_id = resolved_program.symbol_id_by_node_id.get(
                     call_expression.callee.id,
                 ) orelse unreachable;
-                const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-                    callee_symbol_id,
-                ) orelse unreachable;
-                if (call_expression.arguments.len != parameter_symbol_ids.len) {
+                const resolved_function = self.getResolvedFunction(callee_symbol_id, resolved_program);
+                if (call_expression.arguments.len != resolved_function.parameters.len) {
                     std.debug.print(
                         "Type Error: Function expected {any} arguments, got {any}\n",
-                        .{ parameter_symbol_ids.len, call_expression.arguments.len },
+                        .{ resolved_function.parameters.len, call_expression.arguments.len },
                     );
                     return TypeError.TypeMismatch;
                 }
 
-                for (call_expression.arguments, parameter_symbol_ids) |*argument, parameter_symbol_id| {
+                for (call_expression.arguments, resolved_function.parameters) |*argument, parameter| {
                     const argument_type = try self.checkNode(
                         argument,
                         resolved_program,
                         exit_behavior_by_node_id,
                         .Expression,
                     );
-                    const parameter_type = self.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+                    const parameter_type = self.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
                     if (argument_type != parameter_type) {
                         std.debug.print(
                             "Type Error: Function parameter expected type {any}, got {any}\n",
@@ -629,7 +635,8 @@ pub const TypeChecker = struct {
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!void {
         const symbol_id = resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const function_return_type = try self.resolveTypeAnnotation(function_definition.return_type_annotation);
+        const resolved_function = self.getResolvedFunction(symbol_id, resolved_program);
+        const function_return_type = self.resolveTypeReference(resolved_function.return_type_reference);
 
         const body_expression_type = try self.checkNode(
             function_definition.body_expression,
@@ -679,12 +686,10 @@ pub const TypeChecker = struct {
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!void {
         const function_symbol_id = resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const parameter_symbol_ids = resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-            function_symbol_id,
-        ).?;
-        for (function_definition.parameters, parameter_symbol_ids) |*parameter, symbol_id| {
-            const parameter_type = try self.resolveTypeAnnotation(parameter.type_annotation);
-            self.type_by_symbol_id.put(symbol_id, parameter_type) catch unreachable;
+        const resolved_function = self.getResolvedFunction(function_symbol_id, resolved_program);
+        for (resolved_function.parameters) |parameter| {
+            const parameter_type = self.resolveTypeReference(parameter.type_reference);
+            self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
         }
 
         try self.checkFunctionDefinitionReturnValue(
@@ -778,6 +783,7 @@ pub const TypeChecker = struct {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
             },
             .FunctionDefinition => unreachable,
+            .ItemDefinition => {},
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
@@ -788,20 +794,40 @@ pub const TypeChecker = struct {
         }
     }
 
-    fn resolveTypeAnnotation(self: *const @This(), typeAnnotation: ast.TypeAnnotation) !typing.TypeId {
-        const type_name = typeAnnotation.name_token.kind.Identifier;
-        if (std.mem.eql(u8, type_name, "boolean")) {
-            return self.type_store.boolean_type_id;
-        } else if (std.mem.eql(u8, type_name, "unit")) {
-            return self.type_store.unit_type_id;
-        } else if (std.mem.eql(u8, type_name, "int")) {
-            return self.type_store.integer_type_id;
-        } else if (std.mem.eql(u8, type_name, "string")) {
-            return self.type_store.string_type_id;
-        } else {
-            std.debug.print("Type Error: Unknown type annotation: {s}\n", .{type_name});
-            return TypeError.TypeMismatch;
-        }
+    fn resolveTypeAnnotation(
+        self: *const @This(),
+        type_annotation: ast.TypeAnnotation,
+        resolved_program: *const symbols.ResolvedProgram,
+    ) typing.TypeId {
+        const type_reference = resolved_program.type_reference_by_type_annotation_id.get(type_annotation.id) orelse unreachable;
+        return self.resolveTypeReference(type_reference);
+    }
+
+    fn resolveTypeReference(
+        self: *const @This(),
+        type_reference: symbols.ResolvedTypeReference,
+    ) typing.TypeId {
+        return switch (type_reference) {
+            .Builtin => |builtin| switch (builtin) {
+                .Unit => self.type_store.unit_type_id,
+                .Boolean => self.type_store.boolean_type_id,
+                .Integer => self.type_store.integer_type_id,
+                .String => self.type_store.string_type_id,
+            },
+            .Symbol => |symbol_id| self.type_by_symbol_id.get(symbol_id) orelse unreachable,
+        };
+    }
+
+    fn getResolvedFunction(
+        self: *const @This(),
+        function_symbol_id: symbols.SymbolId,
+        resolved_program: *const symbols.ResolvedProgram,
+    ) symbols.ResolvedFunction {
+        _ = self;
+        return switch (resolved_program.resolved_item_by_symbol_id.get(function_symbol_id) orelse unreachable) {
+            .Function => |function| function,
+            else => unreachable,
+        };
     }
 
     fn checkMatchExpression(

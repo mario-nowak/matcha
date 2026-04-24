@@ -19,6 +19,11 @@ const StringLiteralGlobal = struct {
     len: usize,
 };
 
+const LlvmTypeDefinition = struct {
+    name: []const u8,
+    types: []const u8,
+};
+
 const Line = union(enum) {
     instruction: Instruction,
     label: Label,
@@ -160,6 +165,34 @@ pub const SymbolGenerator = struct {
 
         return global_name;
     }
+
+    pub fn generateFunctionName(self: *@This(), symbol: symbols.Symbol) []const u8 {
+        switch (symbol.kind) {
+            .Function => |function_info| switch (function_info.implementation) {
+                .BuiltinPrintInt => return "builtin_printInt",
+                .BuiltinPrintString => return "builtin_printString",
+                .UserDefined => {
+                    return std.fmt.allocPrint(
+                        self.allocator,
+                        "matcha_function_{d}_{s}",
+                        .{ symbol.id, symbol.name },
+                    ) catch unreachable;
+                },
+            },
+            else => unreachable,
+        }
+    }
+
+    pub fn generateStructureName(self: *@This(), symbol: symbols.Symbol) []const u8 {
+        switch (symbol.kind) {
+            .Structure => return std.fmt.allocPrint(
+                self.allocator,
+                "matcha_structure_{d}_{s}",
+                .{ symbol.id, symbol.name },
+            ) catch unreachable,
+            else => unreachable,
+        }
+    }
 };
 
 pub const LlvmIrEmitter = struct {
@@ -169,6 +202,7 @@ pub const LlvmIrEmitter = struct {
     lines: std.ArrayList(Line),
     string_literal_globals: std.ArrayList(StringLiteralGlobal),
     string_literal_global_name_by_node_id: std.AutoHashMap(ast.NodeId, []const u8),
+    llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
     needs_printf: bool,
     needs_write: bool,
 
@@ -180,6 +214,7 @@ pub const LlvmIrEmitter = struct {
             .storage_allocation_instructions = .{},
             .string_literal_globals = .{},
             .string_literal_global_name_by_node_id = std.AutoHashMap(ast.NodeId, []const u8).init(allocator),
+            .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
             .needs_printf = false,
             .needs_write = false,
         };
@@ -190,6 +225,7 @@ pub const LlvmIrEmitter = struct {
         self.storage_allocation_instructions.deinit(self.allocator);
         self.string_literal_globals.deinit(self.allocator);
         self.string_literal_global_name_by_node_id.deinit();
+        self.llvm_matcha_type_by_type_id.deinit();
     }
 
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
@@ -201,11 +237,16 @@ pub const LlvmIrEmitter = struct {
 
         var user_defined_functions = std.ArrayList([]const u8){};
         defer user_defined_functions.deinit(self.allocator);
+        const user_defined_types = self.emitStructureDefinitions(typed_program);
         for (typed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
                 .FunctionDefinition => {
                     const function_ir = self.emitFunctionDefinition(statement, typed_program);
                     user_defined_functions.append(self.allocator, function_ir) catch unreachable;
+                },
+                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                    .StructureDefinition => {},
+                    .FunctionDefinition => unreachable,
                 },
                 else => {},
             }
@@ -224,6 +265,9 @@ pub const LlvmIrEmitter = struct {
         var sections = std.ArrayList([]const u8){};
         defer sections.deinit(self.allocator);
         sections.append(self.allocator, self.renderModulePreamble()) catch unreachable;
+        if (user_defined_types.len > 0) {
+            sections.append(self.allocator, user_defined_types) catch unreachable;
+        }
         if (builtin_print_string_ir) |ir| {
             sections.append(self.allocator, ir) catch unreachable;
         }
@@ -254,7 +298,7 @@ pub const LlvmIrEmitter = struct {
             .Boolean => "i1",
             .Integer => "i64",
             .String => "%String",
-            .Structure,
+            .Structure => "ptr",
             .Array,
             .TaggedUnion,
             => |unsupported_type| std.debug.panic(
@@ -262,6 +306,31 @@ pub const LlvmIrEmitter = struct {
                 .{ unsupported_type, type_id },
             ),
         };
+    }
+
+    fn typeIdFromResolvedTypeReference(
+        typed_program: *const typing.TypedProgram,
+        type_reference: symbols.ResolvedTypeReference,
+    ) typing.TypeId {
+        return switch (type_reference) {
+            .Builtin => |builtin_type| switch (builtin_type) {
+                .Unit => typed_program.type_store.unit_type_id,
+                .Boolean => typed_program.type_store.boolean_type_id,
+                .Integer => typed_program.type_store.integer_type_id,
+                .String => typed_program.type_store.string_type_id,
+            },
+            .Symbol => |symbol_id| typed_program.type_by_symbol_id.get(symbol_id) orelse unreachable,
+        };
+    }
+
+    fn llvmIrTypeFromResolvedTypeReference(
+        typed_program: *const typing.TypedProgram,
+        type_reference: symbols.ResolvedTypeReference,
+    ) []const u8 {
+        return llvmIrType(
+            &typed_program.type_store,
+            typeIdFromResolvedTypeReference(typed_program, type_reference),
+        );
     }
 
     fn renderModulePreamble(self: *@This()) []const u8 {
@@ -497,25 +566,25 @@ pub const LlvmIrEmitter = struct {
 
         const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node.id) orelse unreachable;
         const function_symbol = typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
+        const resolved_function = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(function_symbol_id) orelse unreachable) {
+            .Function => |function| function,
+            else => unreachable,
+        };
         const function_return_type_id = typed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_llvm_ir_type = llvmIrType(&typed_program.type_store, function_return_type_id);
-        const parameter_symbol_ids = typed_program.resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-            function_symbol_id,
-        ) orelse unreachable;
 
         var parameter_list_buffer = std.ArrayList(u8){};
         defer parameter_list_buffer.deinit(self.allocator);
         var environment = Environment.init(self.allocator, null, function_return_type_id);
         defer environment.deinit();
 
-        for (parameter_symbol_ids, 0..) |parameter_symbol_id, index| {
-            const parameter_symbol = typed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
-            const parameter_type_id = typed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+        for (resolved_function.parameters, 0..) |parameter, index| {
+            const parameter_type_id = typed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = llvmIrType(&typed_program.type_store, parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,
                 "%arg_{d}_{s}",
-                .{ index, parameter_symbol.name },
+                .{ index, parameter.name },
             ) catch unreachable;
 
             if (index > 0) {
@@ -529,7 +598,7 @@ pub const LlvmIrEmitter = struct {
             const storage = self.symbol_generator.generateStorage();
             self.emitAlloca(storage, parameter_llvm_ir_type);
             self.emitStore(parameter_register, storage, parameter_llvm_ir_type);
-            environment.storage_by_symbol_id.put(parameter_symbol_id, storage) catch unreachable;
+            environment.storage_by_symbol_id.put(parameter.symbol_id, storage) catch unreachable;
         }
 
         const body_result = self.emitNode(
@@ -556,7 +625,7 @@ pub const LlvmIrEmitter = struct {
         }
 
         return self.renderCurrentFunction(
-            self.getLlvmFunctionName(function_symbol),
+            self.symbol_generator.generateFunctionName(function_symbol),
             function_return_llvm_ir_type,
             parameter_list_buffer.items,
         );
@@ -627,23 +696,6 @@ pub const LlvmIrEmitter = struct {
         self.lines.append(self.allocator, .{ .instruction = "ret void" }) catch unreachable;
 
         return self.renderCurrentFunction("builtin_printString", "void", "%String %arg_0_value");
-    }
-
-    fn getLlvmFunctionName(self: *@This(), symbol: symbols.Symbol) []const u8 {
-        switch (symbol.kind) {
-            .Function => |function_info| switch (function_info.implementation) {
-                .BuiltinPrintInt => return "builtin_printInt",
-                .BuiltinPrintString => return "builtin_printString",
-                .UserDefined => {
-                    return std.fmt.allocPrint(
-                        self.allocator,
-                        "matcha_{d}_{s}",
-                        .{ symbol.id, symbol.name },
-                    ) catch unreachable;
-                },
-            },
-            else => unreachable,
-        }
     }
 
     fn emitNode(
@@ -792,9 +844,10 @@ pub const LlvmIrEmitter = struct {
                     self.needs_write = true;
                 }
 
-                const parameter_symbol_ids = typed_program.resolved_program.parameter_symbol_ids_by_function_symbol_id.get(
-                    callee_symbol_id,
-                ) orelse unreachable;
+                const resolved_function = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(callee_symbol_id) orelse unreachable) {
+                    .Function => |function| function,
+                    else => unreachable,
+                };
                 var current_label = entry_label;
                 var argument_registers = std.ArrayList(Register){};
                 defer argument_registers.deinit(self.allocator);
@@ -821,8 +874,8 @@ pub const LlvmIrEmitter = struct {
 
                 var argument_list_buffer = std.ArrayList(u8){};
                 defer argument_list_buffer.deinit(self.allocator);
-                for (parameter_symbol_ids, argument_registers.items, 0..) |parameter_symbol_id, argument_register, index| {
-                    const parameter_type_id = typed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+                for (resolved_function.parameters, argument_registers.items, 0..) |parameter, argument_register, index| {
+                    const parameter_type_id = typed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
                     if (index > 0) {
                         argument_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
                     }
@@ -835,7 +888,7 @@ pub const LlvmIrEmitter = struct {
                     ) catch unreachable;
                 }
 
-                const function_name = self.getLlvmFunctionName(callee_symbol);
+                const function_name = self.symbol_generator.generateFunctionName(callee_symbol);
                 const function_return_type_id = typed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
                 const function_return_llvm_ir_type = llvmIrType(&typed_program.type_store, function_return_type_id);
                 if (function_return_type_id == typed_program.type_store.unit_type_id) {
@@ -1076,7 +1129,81 @@ pub const LlvmIrEmitter = struct {
                     .register = null,
                 };
             },
+            .ItemDefinition => {
+                return .{
+                    .exit_label = entry_label,
+                    .register = null,
+                };
+            },
         }
+    }
+
+    fn emitStructureDefinitions(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
+        var structure_definitions_buffer = std.ArrayList(u8){};
+        defer structure_definitions_buffer.deinit(self.allocator);
+
+        var has_structure_definition = false;
+        for (typed_program.resolved_program.program.statements) |*statement| {
+            const item_definition = switch (statement.kind) {
+                .ItemDefinition => |item_definition| item_definition,
+                else => continue,
+            };
+            switch (item_definition.item) {
+                .StructureDefinition => {},
+                .FunctionDefinition => unreachable,
+            }
+
+            const structure_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
+            const resolved_structure = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(structure_symbol_id) orelse unreachable) {
+                .Structure => |structure| structure,
+                .Function => unreachable,
+            };
+
+            if (has_structure_definition) {
+                structure_definitions_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+            }
+            structure_definitions_buffer.writer(self.allocator).print(
+                "{s}",
+                .{self.emitStructureDefinition(resolved_structure, typed_program)},
+            ) catch unreachable;
+            has_structure_definition = true;
+        }
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definitions_buffer.items}) catch unreachable;
+    }
+
+    fn emitStructureDefinition(
+        self: *@This(),
+        resolved_structure: symbols.ResolvedStructure,
+        typed_program: *const typing.TypedProgram,
+    ) []const u8 {
+        const structure_symbol = typed_program.resolved_program.symbol_table.getSymbol(resolved_structure.symbol_id);
+        const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
+
+        var structure_definition_buffer = std.ArrayList(u8){};
+        defer structure_definition_buffer.deinit(self.allocator);
+
+        structure_definition_buffer.writer(self.allocator).print(
+            "%{s} = type {{",
+            .{structure_llvm_type_name},
+        ) catch unreachable;
+        for (resolved_structure.fields, 0..) |field, index| {
+            if (index == 0) {
+                structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
+            } else {
+                structure_definition_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+            }
+            structure_definition_buffer.writer(self.allocator).print(
+                "{s}",
+                .{llvmIrTypeFromResolvedTypeReference(typed_program, field.type_reference)},
+            ) catch unreachable;
+        }
+        if (resolved_structure.fields.len > 0) {
+            structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
+        }
+        structure_definition_buffer.writer(self.allocator).print("}}", .{}) catch unreachable;
+
+        return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definition_buffer.items}) catch unreachable;
     }
 
     fn emitDecisionConstruct(

@@ -2,10 +2,12 @@ const std = @import("std");
 const lexing = @import("lexing");
 
 pub const NodeId = u32;
+pub const TypeAnnotationId = u32;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
     Declaration: Declaration,
+    ItemDefinition: ItemDefinition,
     FunctionDefinition: FunctionDefinition,
     Return: Return,
     IfStatement: IfStatement,
@@ -31,6 +33,27 @@ pub const NodeKind = union(enum) {
 pub const Node = struct {
     id: NodeId,
     kind: NodeKind,
+};
+
+pub const ItemDefinition = struct {
+    item_token: lexing.Token,
+    identifier_token: lexing.Token,
+    item: Item,
+};
+
+pub const Item = union(enum) {
+    FunctionDefinition: FunctionDefinition,
+    StructureDefinition: Structure,
+};
+
+pub const Structure = struct {
+    structure_token: lexing.Token,
+    fields: []Field,
+};
+
+pub const Field = struct {
+    name: lexing.Token,
+    type_annotation: TypeAnnotation,
 };
 
 pub const Declaration = struct {
@@ -170,6 +193,7 @@ pub const Block = struct {
 };
 
 pub const TypeAnnotation = struct {
+    id: TypeAnnotationId,
     name_token: lexing.Token,
 };
 

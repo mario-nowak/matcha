@@ -4,7 +4,8 @@ pub const ast = @import("ast");
 pub const ControlFlowValidationError = error{
     LeaveUsedOutsideOfLoop,
     ContinueUsedOutsideOfLoop,
-    FunctionDefinitionInsideBlock,
+    FunctionDefinitionInNonTopLevel,
+    ItemDefinitionInNonTopLevel,
     NotAllPathsReturnValue,
     ReturnWithoutValueInNonUnitFunction,
     ReturnUsedOutsideOfFunction,
@@ -58,8 +59,8 @@ pub const ControlFlowValidator = struct {
             },
             .FunctionDefinition => |function_definition| {
                 if (context.scope_depth > 0) {
-                    std.debug.print("Semantic Error: Function definitions are not allowed inside blocks\n", .{});
-                    return ControlFlowValidationError.FunctionDefinitionInsideBlock;
+                    std.debug.print("Semantic Error: Function definitions are only allowed at the top level\n", .{});
+                    return ControlFlowValidationError.FunctionDefinitionInNonTopLevel;
                 }
                 const function_context = ControlFlowValidationContext{
                     .loop_depth = 0,
@@ -68,6 +69,12 @@ pub const ControlFlowValidator = struct {
                 };
                 try self.validateNode(function_definition.body_expression, &function_context);
                 try self.validateFunctionReturnsValue(&function_definition);
+            },
+            .ItemDefinition => {
+                if (context.scope_depth > 0) {
+                    std.debug.print("Semantic Error: Item definitions are only allowed at the top level\n", .{});
+                    return ControlFlowValidationError.ItemDefinitionInNonTopLevel;
+                }
             },
             .Return => |return_statement| {
                 if (!context.in_function) {
@@ -213,7 +220,8 @@ pub const ControlFlowValidator = struct {
                 self.exit_behavior_by_node_id.put(declaration.value.id, result) catch unreachable;
                 return result;
             },
-            .FunctionDefinition => return ControlFlowValidationError.FunctionDefinitionInsideBlock,
+            .FunctionDefinition => return ControlFlowValidationError.FunctionDefinitionInNonTopLevel,
+            .ItemDefinition => return ControlFlowValidationError.ItemDefinitionInNonTopLevel,
             .IfStatement => |if_statement| {
                 const condition_result = try self.validateTerminatesWithValue(if_statement.condition);
                 if (condition_result == .Terminates) {

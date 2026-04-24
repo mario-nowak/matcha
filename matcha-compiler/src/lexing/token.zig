@@ -14,6 +14,7 @@ pub const TokenKind = union(enum) {
     While,
     Item,
     Return,
+    Structure,
     // Punctuation
     LeftParenthesis,
     RightParenthesis,
@@ -34,6 +35,7 @@ pub const TokenKind = union(enum) {
     Asterisk,
     Slash,
     Comma,
+    Dot,
     //
     Identifier: []const u8,
     IntLiteral: i64,
