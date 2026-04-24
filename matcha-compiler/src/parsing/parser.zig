@@ -258,7 +258,7 @@ pub const Parser = struct {
             .ItemDefinition = .{
                 .item_token = item_token,
                 .identifier_token = identifier_token,
-                .item = .{ .StructureDefinition = structure },
+                .item = .{ .Structure = structure },
             },
         });
     }
@@ -394,12 +394,16 @@ pub const Parser = struct {
         }
 
         return self.createNode(.{
-            .FunctionDefinition = .{
+            .ItemDefinition = .{
                 .item_token = item_token,
                 .identifier_token = identifier_token,
-                .parameters = parameters.toOwnedSlice(self.allocator) catch unreachable,
-                .return_type_annotation = return_type_annotation,
-                .body_expression = body_expression,
+                .item = .{
+                    .Function = .{
+                        .parameters = parameters.toOwnedSlice(self.allocator) catch unreachable,
+                        .return_type_annotation = return_type_annotation,
+                        .body_expression = body_expression,
+                    },
+                },
             },
         });
     }

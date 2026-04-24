@@ -27,6 +27,17 @@ fn expectUnaryExpression(node: *const ast.Node, expected_operator: ast.UnaryOper
     return unary_expression;
 }
 
+fn expectFunctionItem(node: *const ast.Node) !ast.Function {
+    const item_definition = switch (node.kind) {
+        .ItemDefinition => |item| item,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    return switch (item_definition.item) {
+        .Function => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
 test "parser distinguishes statement ifs from expression ifs" {
     const source =
         \\if true { val scoped = 1; }
@@ -204,10 +215,7 @@ test "parser parses string-typed function definitions" {
     defer parsed.deinit();
 
     try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
-    const function_definition = switch (parsed.program.statements[0].kind) {
-        .FunctionDefinition => |definition| definition,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const function_definition = try expectFunctionItem(&parsed.program.statements[0]);
     try std.testing.expectEqualStrings("string", function_definition.return_type_annotation.name_token.kind.Identifier);
     try std.testing.expectEqualStrings("string", function_definition.parameters[0].type_annotation.name_token.kind.Identifier);
 }

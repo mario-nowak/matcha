@@ -130,26 +130,26 @@ pub const NameResolver = struct {
 
         for (program.statements) |*statement| {
             switch (statement.kind) {
-                .FunctionDefinition => |function_definition| {
-                    const function_name = function_definition.identifier_token.kind.Identifier;
-                    module_scope.validateNotInScope(function_name) catch {
-                        std.debug.print("Semantic Error: Function already defined in module scope: {s}\n", .{function_name});
-                        return NameResolutionError.FunctionAlreadyDefined;
-                    };
-
-                    const function_symbol = self.symbol_table.insertSymbol(.{
-                        .name = function_name,
-                        .declared_at = function_definition.item_token,
-                        .kind = .{ .Function = .{ .implementation = .UserDefined } },
-                    });
-                    self.symbol_id_by_node_id.put(statement.id, function_symbol.id) catch unreachable;
-                    module_scope.insertSymbol(
-                        function_name,
-                        function_symbol.id,
-                    );
-                },
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
-                    .StructureDefinition => |_| {
+                    .Function => |_| {
+                        const function_name = item_definition.identifier_token.kind.Identifier;
+                        module_scope.validateNotInScope(function_name) catch {
+                            std.debug.print("Semantic Error: Function already defined in module scope: {s}\n", .{function_name});
+                            return NameResolutionError.FunctionAlreadyDefined;
+                        };
+
+                        const function_symbol = self.symbol_table.insertSymbol(.{
+                            .name = function_name,
+                            .declared_at = item_definition.item_token,
+                            .kind = .{ .Function = .{ .implementation = .UserDefined } },
+                        });
+                        self.symbol_id_by_node_id.put(statement.id, function_symbol.id) catch unreachable;
+                        module_scope.insertSymbol(
+                            function_name,
+                            function_symbol.id,
+                        );
+                    },
+                    .Structure => |_| {
                         const structure_name = item_definition.identifier_token.kind.Identifier;
                         module_scope.validateNotInScope(structure_name) catch {
                             std.debug.print("Semantic Error: Structure already defined in module scope: {s}\n", .{structure_name});
@@ -167,7 +167,6 @@ pub const NameResolver = struct {
                             structure_symbol.id,
                         );
                     },
-                    .FunctionDefinition => unreachable,
                 },
                 else => {},
             }
@@ -224,12 +223,16 @@ pub const NameResolver = struct {
                 self.symbol_id_by_node_id.put(node.id, declaration_symbol.id) catch unreachable;
                 node_scope.insertSymbol(declaration_name, declaration_symbol.id);
             },
-            .FunctionDefinition => |function_definition| {
-                try self.resolveFunctionDefinition(node.id, &function_definition, module_scope);
-            },
             .ItemDefinition => |item_definition| switch (item_definition.item) {
-                .FunctionDefinition => unreachable,
-                .StructureDefinition => |structure_definition| {
+                .Function => |function_definition| {
+                    try self.resolveFunctionDefinition(
+                        node.id,
+                        item_definition.identifier_token.kind.Identifier,
+                        &function_definition,
+                        module_scope,
+                    );
+                },
+                .Structure => |structure_definition| {
                     try self.resolveStructureDefinition(node.id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
                 },
             },
@@ -356,7 +359,8 @@ pub const NameResolver = struct {
     fn resolveFunctionDefinition(
         self: *@This(),
         node_id: ast.NodeId,
-        function_definition: *const ast.FunctionDefinition,
+        function_name: []const u8,
+        function_definition: *const ast.Function,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         var function_scope = scope.Scope.init(self.allocator, null);
@@ -382,7 +386,6 @@ pub const NameResolver = struct {
             }) catch unreachable;
         }
 
-        const function_name = function_definition.identifier_token.kind.Identifier;
         const function_symbol_id = module_scope.lookupSymbol(function_name) orelse unreachable;
         const resolved_function = symbols.ResolvedFunction{
             .symbol_id = function_symbol_id,

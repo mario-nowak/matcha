@@ -119,9 +119,9 @@ test "llvm emission emits user-defined functions and calls them from main" {
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define i64 @matcha_0_identity(i64 %arg_0_value)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define i64 @matcha_function_0_identity(i64 %arg_0_value)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 %arg_0_value, i64* %.s_0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_0_identity(i64 42)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_function_0_identity(i64 42)") != null);
 }
 
 test "llvm emission lowers printInt as a real llvm function" {
@@ -134,7 +134,7 @@ test "llvm emission lowers printInt as a real llvm function" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i32 @printf") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printInt(i64 %arg_0_value)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @builtin_printInt(i64 %.t_0)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_0_logValue(i64 7)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_function_0_logValue(i64 7)") != null);
 }
 
 test "llvm emission lowers string literals to String globals and builtin printString" {
@@ -155,11 +155,11 @@ test "llvm emission lowers string literals to String globals and builtin printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @write(i32 1, i8* %.t_0, i64 %.t_1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds [1 x i8], [1 x i8]* @.print_string_newline, i64 0, i64 0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @write(i32 1, i8* %.t_2, i64 1)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define %String @matcha_0_echo(%String %arg_0_x)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define %String @matcha_function_0_echo(%String %arg_0_x)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, %String* %.s_0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, i8* %.t_0, 0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_0_echo(%String %.t_5)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_function_0_echo(%String %.t_5)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
