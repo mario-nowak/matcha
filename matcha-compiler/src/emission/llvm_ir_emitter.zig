@@ -240,13 +240,16 @@ pub const LlvmIrEmitter = struct {
         const user_defined_types = self.emitStructureDefinitions(typed_program);
         for (typed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .FunctionDefinition => {
-                    const function_ir = self.emitFunctionDefinition(statement, typed_program);
-                    user_defined_functions.append(self.allocator, function_ir) catch unreachable;
-                },
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
-                    .StructureDefinition => {},
-                    .FunctionDefinition => unreachable,
+                    .Function => |function_definition| {
+                        const function_ir = self.emitFunctionDefinition(
+                            statement.id,
+                            &function_definition,
+                            typed_program,
+                        );
+                        user_defined_functions.append(self.allocator, function_ir) catch unreachable;
+                    },
+                    .Structure => {},
                 },
                 else => {},
             }
@@ -535,7 +538,7 @@ pub const LlvmIrEmitter = struct {
 
         for (typed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .FunctionDefinition => continue,
+                .ItemDefinition => continue,
                 else => {},
             }
 
@@ -554,17 +557,13 @@ pub const LlvmIrEmitter = struct {
 
     fn emitFunctionDefinition(
         self: *@This(),
-        function_node: *const ast.Node,
+        function_node_id: ast.NodeId,
+        function_definition: *const ast.Function,
         typed_program: *const typing.TypedProgram,
     ) []const u8 {
-        const function_definition = switch (function_node.kind) {
-            .FunctionDefinition => |function_definition| function_definition,
-            else => unreachable,
-        };
-
         self.resetCurrentFunctionState();
 
-        const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node.id) orelse unreachable;
+        const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
         const function_symbol = typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
         const resolved_function = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(function_symbol_id) orelse unreachable) {
             .Function => |function| function,
@@ -706,12 +705,6 @@ pub const LlvmIrEmitter = struct {
         environment: *Environment,
     ) EmissionResult {
         switch (node.kind) {
-            .FunctionDefinition => {
-                return .{
-                    .exit_label = entry_label,
-                    .register = null,
-                };
-            },
             .Return => |return_statement| {
                 if (return_statement.value) |return_value| {
                     const value_result = self.emitNode(
@@ -1149,8 +1142,8 @@ pub const LlvmIrEmitter = struct {
                 else => continue,
             };
             switch (item_definition.item) {
-                .StructureDefinition => {},
-                .FunctionDefinition => unreachable,
+                .Structure => {},
+                .Function => continue,
             }
 
             const structure_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;

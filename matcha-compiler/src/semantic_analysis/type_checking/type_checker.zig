@@ -121,7 +121,6 @@ pub const TypeChecker = struct {
     ) TypeError!typing.TypeId {
         switch (node.kind) {
             .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, resolved_program, exit_behavior_by_node_id),
-            .FunctionDefinition => |function_definition| return self.checkFunctionDefinitionNode(node.id, &function_definition, resolved_program, exit_behavior_by_node_id),
             .ItemDefinition => |item_definition| return self.checkItemDefinitionNode(node.id, &item_definition, resolved_program, exit_behavior_by_node_id),
             .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, resolved_program, exit_behavior_by_node_id),
             .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, resolved_program, exit_behavior_by_node_id),
@@ -151,9 +150,15 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
-        _ = item_definition;
-        _ = resolved_program;
-        _ = exit_behavior_by_node_id;
+        switch (item_definition.item) {
+            .Function => |function_definition| try self.checkFunctionDefinition(
+                node_id,
+                &function_definition,
+                resolved_program,
+                exit_behavior_by_node_id,
+            ),
+            .Structure => {},
+        }
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -186,22 +191,6 @@ pub const TypeChecker = struct {
 
         const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
         self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
-        return self.recordNodeType(node_id, self.type_store.unit_type_id);
-    }
-
-    fn checkFunctionDefinitionNode(
-        self: *@This(),
-        node_id: ast.NodeId,
-        function_definition: *const ast.FunctionDefinition,
-        resolved_program: *const symbols.ResolvedProgram,
-        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!typing.TypeId {
-        try self.checkFunctionDefinition(
-            node_id,
-            function_definition,
-            resolved_program,
-            exit_behavior_by_node_id,
-        );
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -630,7 +619,7 @@ pub const TypeChecker = struct {
     fn checkFunctionDefinitionReturnValue(
         self: *@This(),
         function_node_id: ast.NodeId,
-        function_definition: *const ast.FunctionDefinition,
+        function_definition: *const ast.Function,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!void {
@@ -681,7 +670,7 @@ pub const TypeChecker = struct {
     fn checkFunctionDefinition(
         self: *@This(),
         function_node_id: ast.NodeId,
-        function_definition: *const ast.FunctionDefinition,
+        function_definition: *const ast.Function,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!void {
@@ -782,7 +771,6 @@ pub const TypeChecker = struct {
             .UnaryExpression => |unary_expression| {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
             },
-            .FunctionDefinition => unreachable,
             .ItemDefinition => {},
             .Identifier,
             .IntegerLiteral,

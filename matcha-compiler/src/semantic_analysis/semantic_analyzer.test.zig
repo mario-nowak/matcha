@@ -1,5 +1,6 @@
 const std = @import("std");
 const helpers = @import("../test_helpers.zig");
+const ast = @import("ast");
 const typing = @import("typing");
 
 const TestError = error{UnexpectedNodeKind};
@@ -23,6 +24,17 @@ fn expectAnalyzeError(expected: anyerror, source: []const u8) !void {
     );
 
     try std.testing.expectError(expected, analyzer.validateProgram(&parsed.program));
+}
+
+fn expectFunctionItem(node: *const ast.Node) !ast.Function {
+    const item_definition = switch (node.kind) {
+        .ItemDefinition => |item| item,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    return switch (item_definition.item) {
+        .Function => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
 }
 
 test "semantic analysis assigns expected types to if forms and comparisons" {
@@ -92,10 +104,7 @@ test "semantic analysis resolves parameter references inside function bodies" {
     );
     defer analyzed.deinit();
 
-    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
-        .FunctionDefinition => |definition| definition,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const function_definition = try expectFunctionItem(&analyzed.parsed.program.statements[0]);
 
     try expectType(
         .Integer,
@@ -110,10 +119,7 @@ test "semantic analysis allows if expression as expression-bodied function body"
     );
     defer analyzed.deinit();
 
-    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
-        .FunctionDefinition => |definition| definition,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const function_definition = try expectFunctionItem(&analyzed.parsed.program.statements[0]);
 
     try expectType(
         .Integer,
@@ -131,10 +137,7 @@ test "semantic analysis allows match expression as expression-bodied function bo
     );
     defer analyzed.deinit();
 
-    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
-        .FunctionDefinition => |definition| definition,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const function_definition = try expectFunctionItem(&analyzed.parsed.program.statements[0]);
 
     try expectType(
         .Integer,
@@ -235,10 +238,7 @@ test "semantic analysis type-checks string-typed function definitions" {
     );
     defer analyzed.deinit();
 
-    const function_definition = switch (analyzed.parsed.program.statements[0].kind) {
-        .FunctionDefinition => |definition| definition,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const function_definition = try expectFunctionItem(&analyzed.parsed.program.statements[0]);
     try expectType(
         .String,
         &analyzed.typed_program,

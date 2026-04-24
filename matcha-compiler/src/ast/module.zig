@@ -8,7 +8,6 @@ pub const NodeKind = union(enum) {
     // Statements-ish nodes
     Declaration: Declaration,
     ItemDefinition: ItemDefinition,
-    FunctionDefinition: FunctionDefinition,
     Return: Return,
     IfStatement: IfStatement,
     ExpressionStatement: ExpressionStatement,
@@ -42,8 +41,8 @@ pub const ItemDefinition = struct {
 };
 
 pub const Item = union(enum) {
-    FunctionDefinition: FunctionDefinition,
-    StructureDefinition: Structure,
+    Function: Function,
+    Structure: Structure,
 };
 
 pub const Structure = struct {
@@ -64,9 +63,7 @@ pub const Declaration = struct {
     binding_mutability: BindingMutability,
 };
 
-pub const FunctionDefinition = struct {
-    item_token: lexing.Token,
-    identifier_token: lexing.Token,
+pub const Function = struct {
     parameters: []Parameter,
     return_type_annotation: TypeAnnotation,
     body_expression: *Node,

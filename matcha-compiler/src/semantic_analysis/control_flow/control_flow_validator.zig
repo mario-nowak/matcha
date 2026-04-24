@@ -4,7 +4,6 @@ pub const ast = @import("ast");
 pub const ControlFlowValidationError = error{
     LeaveUsedOutsideOfLoop,
     ContinueUsedOutsideOfLoop,
-    FunctionDefinitionInNonTopLevel,
     ItemDefinitionInNonTopLevel,
     NotAllPathsReturnValue,
     ReturnWithoutValueInNonUnitFunction,
@@ -57,23 +56,22 @@ pub const ControlFlowValidator = struct {
             .Declaration => |declaration| {
                 try self.validateNode(declaration.value, context);
             },
-            .FunctionDefinition => |function_definition| {
-                if (context.scope_depth > 0) {
-                    std.debug.print("Semantic Error: Function definitions are only allowed at the top level\n", .{});
-                    return ControlFlowValidationError.FunctionDefinitionInNonTopLevel;
-                }
-                const function_context = ControlFlowValidationContext{
-                    .loop_depth = 0,
-                    .scope_depth = 0,
-                    .in_function = true,
-                };
-                try self.validateNode(function_definition.body_expression, &function_context);
-                try self.validateFunctionReturnsValue(&function_definition);
-            },
-            .ItemDefinition => {
+            .ItemDefinition => |item_definition| {
                 if (context.scope_depth > 0) {
                     std.debug.print("Semantic Error: Item definitions are only allowed at the top level\n", .{});
                     return ControlFlowValidationError.ItemDefinitionInNonTopLevel;
+                }
+                switch (item_definition.item) {
+                    .Function => |function_definition| {
+                        const function_context = ControlFlowValidationContext{
+                            .loop_depth = 0,
+                            .scope_depth = 0,
+                            .in_function = true,
+                        };
+                        try self.validateNode(function_definition.body_expression, &function_context);
+                        try self.validateFunctionReturnsValue(&function_definition);
+                    },
+                    .Structure => {},
                 }
             },
             .Return => |return_statement| {
@@ -176,7 +174,7 @@ pub const ControlFlowValidator = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_definition: *const ast.Function) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = std.mem.eql(
             u8,
@@ -220,7 +218,6 @@ pub const ControlFlowValidator = struct {
                 self.exit_behavior_by_node_id.put(declaration.value.id, result) catch unreachable;
                 return result;
             },
-            .FunctionDefinition => return ControlFlowValidationError.FunctionDefinitionInNonTopLevel,
             .ItemDefinition => return ControlFlowValidationError.ItemDefinitionInNonTopLevel,
             .IfStatement => |if_statement| {
                 const condition_result = try self.validateTerminatesWithValue(if_statement.condition);
