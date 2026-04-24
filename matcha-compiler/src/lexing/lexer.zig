@@ -231,6 +231,7 @@ pub const Lexer = struct {
                 '<' => .LessThan,
                 '>' => .GreaterThan,
                 ',' => .Comma,
+                '.' => .Dot,
                 else => .{ .Error = .{ .message = "Unrecognized character" } },
             },
         };
@@ -262,6 +263,7 @@ pub const Lexer = struct {
         if (std.mem.eql(u8, alphanumeric, "while")) return .While;
         if (std.mem.eql(u8, alphanumeric, "item")) return .Item;
         if (std.mem.eql(u8, alphanumeric, "return")) return .Return;
+        if (std.mem.eql(u8, alphanumeric, "structure")) return .Structure;
         return null;
     }
 

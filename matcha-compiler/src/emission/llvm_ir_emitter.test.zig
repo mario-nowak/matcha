@@ -163,6 +163,17 @@ test "llvm emission lowers string literals to String globals and builtin printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
+test "llvm emission emits structure definitions as payload types" {
+    const llvm_ir = try emit(
+        \\item Point = structure { x: int, y: int }
+        \\item User = structure { name: string, friend: User, location: Point }
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_0_Point = type { i64, i64 }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_1_User = type { %String, ptr, ptr }") != null);
+}
+
 test "llvm emission lowers match expressions to compare-and-branch chains" {
     const llvm_ir = try emit(
         \\val first = match true {

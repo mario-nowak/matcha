@@ -16,6 +16,7 @@ pub const Parser = struct {
     lexer: lexing.Lexer,
     allocator: std.mem.Allocator,
     next_node_id: ast.NodeId = 0,
+    next_type_annotation_id: ast.TypeAnnotationId = 0,
 
     pub const ParserError = error{
         MissingClosingParenthesis,
@@ -32,6 +33,7 @@ pub const Parser = struct {
         ExpectedCommaOrClosingParenthesis,
         ExpectedColon,
         ExpectedFatArrow,
+        StructureWithoutFields,
     };
 
     const ParseState = struct {
@@ -54,6 +56,15 @@ pub const Parser = struct {
         const id = self.next_node_id;
         self.next_node_id += 1;
         return .{ .id = id, .kind = kind };
+    }
+
+    fn createTypeAnnotation(self: *Parser, name_token: lexing.Token) ast.TypeAnnotation {
+        const id = self.next_type_annotation_id;
+        self.next_type_annotation_id += 1;
+        return .{
+            .id = id,
+            .name_token = name_token,
+        };
     }
 
     pub fn parse(self: *Parser) !ast.Program {
@@ -192,7 +203,7 @@ pub const Parser = struct {
             .Declaration = .{
                 .val_token = val_or_var_token,
                 .name = identifierToken,
-                .type_annotation = if (type_annotation) |typeToken| .{ .name_token = typeToken } else null,
+                .type_annotation = if (type_annotation) |typeToken| self.createTypeAnnotation(typeToken) else null,
                 .value = value,
                 .binding_mutability = switch (val_or_var_token.kind) {
                     .Val => ast.BindingMutability.Immutable,
@@ -218,8 +229,98 @@ pub const Parser = struct {
         if (post_identifier_token.kind == .LeftParenthesis) {
             return try self.parseFunctionDefinition(item_token, identifier_token);
         }
+        if (post_identifier_token.kind != .Assign) {
+            std.debug.print("Expected left parenthesis or equal sign after item name, got: {any}\n", .{post_identifier_token});
+            return ParserError.ExpectedEqualSign;
+        }
+        _ = self.lexer.next(); // consume equal sign
 
-        return ParserError.ExpectedOpeningParenthesis;
+        const post_assign_token = self.lexer.peek();
+        if (post_assign_token.kind != .Structure) {
+            std.debug.print("Expected 'structure' keyword after item name and equal sign, got: {any}\n", .{post_assign_token});
+            return ParserError.ExpectedIdentifier;
+        }
+
+        return self.parseStructureDefinition(item_token, identifier_token);
+    }
+
+    fn parseStructureDefinition(
+        self: *@This(),
+        item_token: lexing.Token,
+        identifier_token: lexing.Token,
+    ) ParserError!ast.Node {
+        const structure = try self.parseStructure();
+        const semicolon_token = self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            return ParserError.ExpectedSemicolon;
+        }
+        return self.createNode(.{
+            .ItemDefinition = .{
+                .item_token = item_token,
+                .identifier_token = identifier_token,
+                .item = .{ .StructureDefinition = structure },
+            },
+        });
+    }
+
+    fn parseStructure(
+        self: *@This(),
+    ) ParserError!ast.Structure {
+        const structure_token = self.lexer.next();
+        if (structure_token.kind != .Structure) {
+            unreachable;
+        }
+
+        const left_brace_token = self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            return ParserError.ExpectedLeftBrace;
+        }
+
+        var fields = std.ArrayList(ast.Field){};
+        while (true) {
+            const next_token = self.lexer.peek();
+            if (next_token.kind == .RightBrace) {
+                _ = self.lexer.next();
+                break;
+            }
+
+            const field_name_token = self.lexer.next();
+            if (field_name_token.kind != .Identifier) {
+                return ParserError.ExpectedIdentifier;
+            }
+
+            const colon_token = self.lexer.next();
+            if (colon_token.kind != .Colon) {
+                return ParserError.ExpectedColon;
+            }
+
+            const type_annotation_token = self.lexer.next();
+            if (type_annotation_token.kind != .Identifier) {
+                return ParserError.ExpectedTypeAnnotation;
+            }
+
+            fields.append(self.allocator, .{
+                .name = field_name_token,
+                .type_annotation = self.createTypeAnnotation(type_annotation_token),
+            }) catch unreachable;
+
+            const post_field_token = self.lexer.peek();
+            if (post_field_token.kind == .Comma) {
+                _ = self.lexer.next(); // consume comma and continue to next field
+            } else if (post_field_token.kind != .RightBrace) {
+                return ParserError.ExpectedCommaOrClosingParenthesis;
+            }
+        }
+
+        if (fields.items.len == 0) {
+            std.debug.print("Structures must have at least one field\n", .{});
+            return ParserError.StructureWithoutFields;
+        }
+
+        return .{
+            .structure_token = structure_token,
+            .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+        };
     }
 
     fn parseFunctionDefinition(
@@ -253,7 +354,7 @@ pub const Parser = struct {
 
             parameters.append(self.allocator, .{
                 .name = parameter_name_token,
-                .type_annotation = .{ .name_token = type_annotation_token },
+                .type_annotation = self.createTypeAnnotation(type_annotation_token),
             }) catch unreachable;
 
             const post_parameter_token = self.lexer.peek();
@@ -277,7 +378,7 @@ pub const Parser = struct {
         if (return_type_token.kind != .Identifier) {
             return ParserError.ExpectedTypeAnnotation;
         }
-        const return_type_annotation = ast.TypeAnnotation{ .name_token = return_type_token };
+        const return_type_annotation = self.createTypeAnnotation(return_type_token);
 
         const assign_token = self.lexer.next();
         if (assign_token.kind != .Assign) {
