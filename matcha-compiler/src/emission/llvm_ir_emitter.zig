@@ -339,6 +339,10 @@ pub const LlvmIrEmitter = struct {
     fn renderModulePreamble(self: *@This()) []const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
         defer module_preamble_buffer.deinit(self.allocator);
+
+        const runtime_symbol_declarations = @This().emitRuntimeSymbolDeclarations();
+        module_preamble_buffer.writer(self.allocator).print("{s}", .{runtime_symbol_declarations}) catch unreachable;
+
         module_preamble_buffer.writer(self.allocator).print("{s}", .{llvm_string_type_definition}) catch unreachable;
 
         const string_literal_globals_ir = self.renderStringLiteralGlobals();
@@ -381,6 +385,17 @@ pub const LlvmIrEmitter = struct {
         }
 
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
+    }
+
+    fn emitRuntimeSymbolDeclarations() []const u8 {
+        const runtime_symbol_declarations =
+            \\declare void @matcha_initiate_garbage_collector()
+            \\declare ptr @matcha_allocate(i64)
+            \\declare ptr @matcha_allocate_atomic(i64)
+            \\
+        ;
+
+        return runtime_symbol_declarations;
     }
 
     fn renderStringLiteralGlobals(self: *@This()) []const u8 {
@@ -1128,7 +1143,82 @@ pub const LlvmIrEmitter = struct {
                     .register = null,
                 };
             },
+            .StructureConstruction => |structure_construction| return self.emitStructureConstruction(
+                node,
+                &structure_construction,
+                entry_label,
+                typed_program,
+                environment,
+            ),
         }
+    }
+
+    fn emitStructureConstruction(
+        self: *@This(),
+        node: *const ast.Node,
+        structure_construction: *const ast.StructureConstruction,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const structure_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
+        const structure_symbol = typed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
+        const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
+        const structure_type_id = switch (typed_program.type_store.getType(typed_program.type_by_symbol_id.get(structure_symbol_id) orelse unreachable)) {
+            .Structure => |id| id,
+            else => unreachable,
+        };
+        const structure_type = typed_program.type_store.structure_types.items[structure_type_id];
+        const structure_construction_layout = typed_program.structure_construction_layout_by_node_id.get(
+            node.id,
+        ) orelse unreachable;
+
+        const memory_register = self.symbol_generator.generateRegister();
+        self.lines.append(
+            self.allocator,
+            .{ .instruction = std.fmt.allocPrint(
+                self.allocator,
+                "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
+                .{ memory_register, structure_llvm_type_name },
+            ) catch unreachable },
+        ) catch unreachable;
+
+        var current_label: Label = entry_label;
+        for (structure_construction.fields, structure_construction_layout.field_indices) |field, field_index| {
+            const structure_field = structure_type.fields[@intCast(field_index)];
+            const field_value_result = self.emitNode(
+                field.value,
+                current_label,
+                typed_program,
+                environment,
+            );
+            if (field_value_result.exit_label == null) {
+                return .{
+                    .exit_label = null,
+                    .register = null,
+                };
+            }
+            current_label = field_value_result.exit_label.?;
+
+            const field_pointer_register = self.symbol_generator.generateRegister();
+            self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                self.allocator,
+                "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
+                .{ field_pointer_register, structure_llvm_type_name, memory_register, field_index },
+            ) catch unreachable }) catch unreachable;
+
+            const field_llvm_ir_type = llvmIrType(&typed_program.type_store, structure_field.type_id);
+            self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                self.allocator,
+                "store {s} {s}, ptr {s}",
+                .{ field_llvm_ir_type, field_value_result.register orelse unreachable, field_pointer_register },
+            ) catch unreachable }) catch unreachable;
+        }
+
+        return .{
+            .exit_label = current_label,
+            .register = memory_register,
+        };
     }
 
     fn emitStructureDefinitions(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
@@ -1540,8 +1630,8 @@ pub const LlvmIrEmitter = struct {
     fn emitStore(self: *@This(), value_register: Register, storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
-            "store {s} {s}, {s}* {s}",
-            .{ llvm_ir_type, value_register, llvm_ir_type, storage },
+            "store {s} {s}, ptr {s}",
+            .{ llvm_ir_type, value_register, storage },
         ) catch unreachable;
         self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
     }
@@ -1549,8 +1639,8 @@ pub const LlvmIrEmitter = struct {
     fn emitLoad(self: *@This(), result_register: Register, storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = load {s}, {s}* {s}",
-            .{ result_register, llvm_ir_type, llvm_ir_type, storage },
+            "{s} = load {s}, ptr {s}",
+            .{ result_register, llvm_ir_type, storage },
         ) catch unreachable;
         self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
     }

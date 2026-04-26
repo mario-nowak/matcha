@@ -158,6 +158,18 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_root_module,
     });
 
+    const runtime_root_module = b.createModule(.{
+        .root_source_file = b.path("runtime/matcha_runtime.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const runtime = b.addLibrary(.{
+        .name = "matcha_runtime",
+        .root_module = runtime_root_module,
+        .linkage = .static,
+    });
+    b.installArtifact(runtime);
+
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden

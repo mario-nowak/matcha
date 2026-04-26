@@ -169,6 +169,24 @@ test "parser keeps block ending with statement if as statement-only block" {
     try expectNodeTag(&block.statements[0], .IfStatement);
 }
 
+test "parser treats bare identifier while conditions as conditions, not structure construction" {
+    const source =
+        \\while is_ready {
+        \\    continue;
+        \\}
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const while_statement = switch (parsed.program.statements[0].kind) {
+        .While => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try expectNodeTag(while_statement.condition, .Identifier);
+}
+
 test "parser parses string literal declarations" {
     const source =
         \\val greeting = "hello world";
@@ -245,6 +263,55 @@ test "parser parses subjectful match expressions" {
     try std.testing.expect(match_expression.else_arm == null);
     try expectNodeTag(match_expression.arms[0].pattern_or_condition, .BooleanLiteral);
     try expectNodeTag(match_expression.arms[0].body, .StringLiteral);
+}
+
+test "parser treats bare identifier match subjects as subjects, not structure construction" {
+    const source =
+        \\val message = match is_happy {
+        \\    true => "yes",
+        \\    false => "no",
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const match_expression = switch (declaration.value.kind) {
+        .MatchExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expect(match_expression.subject != null);
+    try expectNodeTag(match_expression.subject.?, .Identifier);
+    try std.testing.expectEqual(@as(usize, 2), match_expression.arms.len);
+}
+
+test "parser allows parenthesized structure construction as a match subject" {
+    const source =
+        \\val result = match (Point { x = 1, y = 2 }) {
+        \\    else => 0,
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const match_expression = switch (declaration.value.kind) {
+        .MatchExpression => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expect(match_expression.subject != null);
+    try expectNodeTag(match_expression.subject.?, .StructureConstruction);
+    try std.testing.expect(match_expression.else_arm != null);
 }
 
 test "parser parses subjectless match expressions" {

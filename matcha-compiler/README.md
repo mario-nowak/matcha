@@ -5,7 +5,7 @@ Local macOS setup:
 1. Install LLVM 20 with Homebrew:
 
 ```sh
-brew install llvm@20
+brew install llvm@20 bdw-gc
 ```
 
 2. Trust this repository's `mise` configuration:

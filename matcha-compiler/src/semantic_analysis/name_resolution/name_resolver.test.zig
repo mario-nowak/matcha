@@ -37,7 +37,7 @@ fn parseProgram(source: []const u8) !ParsedProgram {
 
 test "name resolution emits resolved items for structures and functions" {
     var parsed = try parseProgram(
-        \\item User = structure { name: string, friend: User }
+        \\item User = structure { name: string, friend: User };
         \\item greet(user: User): string = "hi";
     );
     defer parsed.deinit();
@@ -89,7 +89,7 @@ test "name resolution emits resolved items for structures and functions" {
 
 test "name resolution resolves declaration type annotations into side table" {
     var parsed = try parseProgram(
-        \\item User = structure { name: string }
+        \\item User = structure { name: string };
         \\val user: User = 1;
     );
     defer parsed.deinit();
@@ -111,8 +111,8 @@ test "name resolution resolves declaration type annotations into side table" {
 
 test "name resolution resolves forward structure references in field type annotations" {
     var parsed = try parseProgram(
-        \\item User = structure { organization: Organization, name: string }
-        \\item Organization = structure { owner: User }
+        \\item User = structure { organization: Organization, name: string };
+        \\item Organization = structure { owner: User };
     );
     defer parsed.deinit();
 
@@ -148,7 +148,7 @@ test "name resolution resolves forward structure references in field type annota
 test "name resolution rejects function symbols in type annotations" {
     var parsed = try parseProgram(
         \\item helper(): int = 1;
-        \\item User = structure { bad: helper }
+        \\item User = structure { bad: helper };
     );
     defer parsed.deinit();
 

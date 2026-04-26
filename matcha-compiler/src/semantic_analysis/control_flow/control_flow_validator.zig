@@ -94,6 +94,11 @@ pub const ControlFlowValidator = struct {
                 };
                 try self.validateNode(loop.body_block, &loop_context);
             },
+            .StructureConstruction => |structure_construction| {
+                for (structure_construction.fields) |field| {
+                    try self.validateNode(field.value, context);
+                }
+            },
             .While => |while_statement| {
                 try self.validateNode(while_statement.condition, context);
                 if (while_statement.update) |update| {
@@ -228,6 +233,17 @@ pub const ControlFlowValidator = struct {
                 _ = try self.validateTerminatesWithValue(if_statement.then_branch);
                 self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
                 return .FallsThroughWithoutValue;
+            },
+            .StructureConstruction => |structure_construction| {
+                for (structure_construction.fields) |field| {
+                    const result = try self.validateTerminatesWithValue(field.value);
+                    if (result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
             },
             .ExpressionStatement => |expression_statement| {
                 const result = try self.validateTerminatesWithValue(expression_statement.expression);
