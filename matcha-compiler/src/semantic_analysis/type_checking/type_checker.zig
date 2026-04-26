@@ -29,6 +29,7 @@ pub const TypeChecker = struct {
     type_store: typing.TypeStore,
     type_by_symbol_id: typing.TypeBySymbolId,
     type_by_node_id: typing.TypeByNodeId,
+    structure_construction_layout_by_node_id: typing.StructureConstructionLayoutByNodeId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -36,6 +37,7 @@ pub const TypeChecker = struct {
             .type_store = typing.TypeStore.init(allocator),
             .type_by_symbol_id = typing.TypeBySymbolId.init(allocator),
             .type_by_node_id = typing.TypeByNodeId.init(allocator),
+            .structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(allocator),
         };
     }
 
@@ -47,6 +49,7 @@ pub const TypeChecker = struct {
         self.type_store = typing.TypeStore.init(self.allocator);
         self.type_by_symbol_id = typing.TypeBySymbolId.init(self.allocator);
         self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
+        self.structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(self.allocator);
         const context: ValidationContext = .Statement;
 
         try self.seedModuleLevelItemTypes(&resolved_program);
@@ -65,6 +68,7 @@ pub const TypeChecker = struct {
             .type_store = self.type_store,
             .type_by_symbol_id = self.type_by_symbol_id,
             .type_by_node_id = self.type_by_node_id,
+            .structure_construction_layout_by_node_id = self.structure_construction_layout_by_node_id,
         };
     }
 
@@ -78,6 +82,11 @@ pub const TypeChecker = struct {
                 .Function => {},
                 .Structure => |structure| {
                     const structure_type_id: typing.StructureTypeId = @intCast(self.type_store.structure_types.items.len);
+                    self.type_store.structure_types.append(self.allocator, .{
+                        .name = structure.name,
+                        .fields = &.{},
+                        .field_index_by_name = std.StringHashMap(u32).init(self.allocator),
+                    }) catch unreachable;
                     const type_id = self.type_store.addType(.{ .Structure = structure_type_id });
                     self.type_by_symbol_id.put(structure.symbol_id, type_id) catch unreachable;
                 },
@@ -96,17 +105,27 @@ pub const TypeChecker = struct {
                     }
                 },
                 .Structure => |structure| {
+                    const type_id = self.type_by_symbol_id.get(structure.symbol_id).?;
+                    const structure_type_id = switch (self.type_store.getType(type_id)) {
+                        .Structure => |id| id,
+                        else => unreachable,
+                    };
+
                     var fields = std.ArrayList(typing.Field){};
-                    for (structure.fields) |field| {
+                    var field_index_by_name = std.StringHashMap(u32).init(self.allocator);
+                    for (structure.fields, 0..) |field, index| {
                         fields.append(self.allocator, .{
                             .name = field.name,
                             .type_id = self.resolveTypeReference(field.type_reference),
                         }) catch unreachable;
+                        field_index_by_name.put(field.name, @intCast(index)) catch unreachable;
                     }
-                    self.type_store.structure_types.append(self.allocator, .{
+
+                    self.type_store.structure_types.items[structure_type_id] = .{
                         .name = structure.name,
                         .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
-                    }) catch unreachable;
+                        .field_index_by_name = field_index_by_name,
+                    };
                 },
             }
         }
@@ -131,6 +150,7 @@ pub const TypeChecker = struct {
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, resolved_program, exit_behavior_by_node_id),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, resolved_program, exit_behavior_by_node_id),
+            .StructureConstruction => |structure_construction| return self.checkStructureConstructionNode(node.id, &structure_construction, resolved_program, exit_behavior_by_node_id),
             .Block => |block| return self.checkBlockNode(node.id, &block, resolved_program, exit_behavior_by_node_id, context),
             .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
             .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
@@ -160,6 +180,89 @@ pub const TypeChecker = struct {
             .Structure => {},
         }
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
+    }
+
+    fn checkStructureConstructionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        structure_construction: *const ast.StructureConstruction,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const structure_symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const type_id = self.type_by_symbol_id.get(structure_symbol_id).?;
+        const structure_construction_type = self.type_store.getType(type_id);
+        const structure_type_id = switch (structure_construction_type) {
+            .Structure => |structure_type_id| structure_type_id,
+            else => {
+                std.debug.print(
+                    "Type Error: Expected structure type for structure construction, got {any}\n",
+                    .{self.getType(type_id)},
+                );
+                return TypeError.TypeMismatch;
+            },
+        };
+        const structure_type = self.type_store.structure_types.items[structure_type_id];
+
+        var unique_field_names = std.StringHashMap(bool).init(self.allocator);
+        defer unique_field_names.deinit();
+        var field_indices = std.ArrayList(u32){};
+        defer field_indices.deinit(self.allocator);
+
+        for (structure_construction.fields) |field| {
+            const field_name = field.name.kind.Identifier;
+            const existing_field_name = unique_field_names.get(field_name);
+            if (existing_field_name) |_| {
+                std.debug.print(
+                    "Type Error: Duplicate field name in structure construction: {s}\n",
+                    .{field_name},
+                );
+                return TypeError.TypeMismatch;
+            }
+            unique_field_names.put(field_name, true) catch unreachable;
+
+            const field_index = structure_type.field_index_by_name.get(field_name) orelse {
+                std.debug.print(
+                    "Type Error: No field named {s} exists on structure type {s}\n",
+                    .{ field_name, structure_type.name },
+                );
+                return TypeError.TypeMismatch;
+            };
+            const structure_type_field = structure_type.fields[@intCast(field_index)];
+            const field_value_type_id = try self.checkNode(
+                field.value,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+
+            if (structure_type_field.type_id != field_value_type_id) {
+                std.debug.print(
+                    "Type Error: Field {s} of structure type {s} expected type {any}, got {any}\n",
+                    .{ field_name, structure_type.name, self.getType(structure_type_field.type_id), self.getType(field_value_type_id) },
+                );
+                return TypeError.TypeMismatch;
+            }
+
+            field_indices.append(self.allocator, field_index) catch unreachable;
+        }
+
+        for (structure_type.fields) |field| {
+            const field_exists_in_construction = unique_field_names.get(field.name);
+            if (field_exists_in_construction == null) {
+                std.debug.print(
+                    "Type Error: Field {s} of structure type {s} is missing in structure construction\n",
+                    .{ field.name, structure_type.name },
+                );
+                return TypeError.TypeMismatch;
+            }
+        }
+
+        self.structure_construction_layout_by_node_id.put(node_id, .{
+            .field_indices = field_indices.toOwnedSlice(self.allocator) catch unreachable,
+        }) catch unreachable;
+
+        return self.recordNodeType(node_id, type_id);
     }
 
     fn checkDeclarationNode(
@@ -770,6 +873,11 @@ pub const TypeChecker = struct {
             },
             .UnaryExpression => |unary_expression| {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
+            },
+            .StructureConstruction => |structure_construction| {
+                for (structure_construction.fields) |field| {
+                    try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
+                }
             },
             .ItemDefinition => {},
             .Identifier,

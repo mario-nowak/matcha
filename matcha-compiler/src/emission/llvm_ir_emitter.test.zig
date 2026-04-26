@@ -82,8 +82,8 @@ test "llvm emission stores and loads mutable variables" {
     defer std.testing.allocator.free(llvm_ir);
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca i64") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, i64*") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, i64*") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store void") == null);
 }
 
@@ -98,7 +98,7 @@ test "llvm emission routes while continue through the update clause" {
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_body_1:\n    br label %label_loop_continue_2") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_body_1:\n    br label %label_loop_header_0") == null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_continue_2:\n    %.t_2 = load i64, i64* %.s_0\n    %.t_3 = add i64 %.t_2, 1\n    store i64 %.t_3, i64* %.s_0\n    br label %label_loop_header_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_continue_2:\n    %.t_2 = load i64, ptr %.s_0\n    %.t_3 = add i64 %.t_2, 1\n    store i64 %.t_3, ptr %.s_0\n    br label %label_loop_header_0") != null);
 }
 
 test "llvm emission returns from main without implicit printing" {
@@ -120,7 +120,7 @@ test "llvm emission emits user-defined functions and calls them from main" {
     defer std.testing.allocator.free(llvm_ir);
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define i64 @matcha_function_0_identity(i64 %arg_0_value)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 %arg_0_value, i64* %.s_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 %arg_0_value, ptr %.s_0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_function_0_identity(i64 42)") != null);
 }
 
@@ -157,7 +157,7 @@ test "llvm emission lowers string literals to String globals and builtin printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @write(i32 1, i8* %.t_2, i64 1)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define %String @matcha_function_0_echo(%String %arg_0_x)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, %String* %.s_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr %.s_0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, i8* %.t_0, 0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_function_0_echo(%String %.t_5)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
@@ -165,13 +165,29 @@ test "llvm emission lowers string literals to String globals and builtin printSt
 
 test "llvm emission emits structure definitions as payload types" {
     const llvm_ir = try emit(
-        \\item Point = structure { x: int, y: int }
-        \\item User = structure { name: string, friend: User, location: Point }
+        \\item Point = structure { x: int, y: int };
+        \\item User = structure { name: string, friend: User, location: Point };
     );
     defer std.testing.allocator.free(llvm_ir);
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_0_Point = type { i64, i64 }") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_1_User = type { %String, ptr, ptr }") != null);
+}
+
+test "llvm emission lowers structure construction" {
+    const llvm_ir = try emit(
+        \\item Point = structure { x: int, y: int };
+        \\val point = Point { y = 2, x = 1 };
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_allocate(i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_0_Point = type { i64, i64 }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 2, ptr %.t_1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
 }
 
 test "llvm emission lowers match expressions to compare-and-branch chains" {

@@ -27,6 +27,7 @@ pub const NodeKind = union(enum) {
     BooleanLiteral: lexing.Token,
     StringLiteral: lexing.Token,
     Block: Block,
+    StructureConstruction: StructureConstruction,
 };
 
 pub const Node = struct {
@@ -187,6 +188,17 @@ pub const Block = struct {
     statements: []Node,
     result: ?*Node,
     right_brace: lexing.Token,
+};
+
+pub const StructureConstruction = struct {
+    structure_name: lexing.Token,
+    fields: []StructureConstructionField,
+};
+
+pub const StructureConstructionField = struct {
+    name: lexing.Token,
+    assign_token: lexing.Token,
+    value: *Node,
 };
 
 pub const TypeAnnotation = struct {

@@ -282,6 +282,29 @@ test "semantic analysis type-checks subjectless and integer matches with else" {
     defer analyzed.deinit();
 }
 
+test "semantic analysis records structure construction layout in source order" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure { x: int, y: int };
+        \\val point = Point { y = 2, x = 1 };
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[1].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const structure_construction = switch (declaration.value.kind) {
+        .StructureConstruction => |construction| construction,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    _ = structure_construction;
+
+    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(declaration.value.id).?;
+    try std.testing.expectEqual(@as(usize, 2), construction_layout.field_indices.len);
+    try std.testing.expectEqual(@as(u32, 1), construction_layout.field_indices[0]);
+    try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
+}
+
 test "semantic analysis rejects non-exhaustive boolean and integer matches without else" {
     try expectAnalyzeError(error.NonExhaustiveMatch,
         \\val label = match true {

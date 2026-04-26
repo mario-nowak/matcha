@@ -331,6 +331,9 @@ pub const NameResolver = struct {
             .ExpressionStatement => |expression_statement| {
                 try self.resolveNode(expression_statement.expression, node_scope, module_scope, context);
             },
+            .StructureConstruction => |*structure_construction| {
+                try self.resolveStructureConstruction(node.id, structure_construction, node_scope, module_scope, context);
+            },
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
@@ -354,6 +357,28 @@ pub const NameResolver = struct {
         };
 
         return symbol_id;
+    }
+
+    fn resolveStructureConstruction(
+        self: *@This(),
+        node_id: ast.NodeId,
+        structure_construction: *const ast.StructureConstruction,
+        node_scope: *scope.Scope,
+        module_scope: *scope.ModuleScope,
+        context: ResolutionContext,
+    ) NameResolutionError!void {
+        const structure_name = structure_construction.structure_name.kind.Identifier;
+        const symbol_id = module_scope.lookupSymbol(structure_name) orelse {
+            std.debug.print(
+                "Semantic Error: Undefined structure in structure construction: {s}\n",
+                .{structure_name},
+            );
+            return NameResolutionError.UndefinedIdentifier;
+        };
+        self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
+        for (structure_construction.fields) |field| {
+            try self.resolveNode(field.value, node_scope, module_scope, context);
+        }
     }
 
     fn resolveFunctionDefinition(

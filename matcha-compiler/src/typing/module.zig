@@ -64,12 +64,17 @@ pub const TypeStore = struct {
 
 pub const StructureType = struct {
     name: []const u8,
-    fields: []Field,
+    fields: []const Field,
+    field_index_by_name: std.StringHashMap(u32),
 };
 
 pub const Field = struct {
     name: []const u8,
     type_id: TypeId,
+};
+
+pub const StructureConstructionLayout = struct {
+    field_indices: []const u32,
 };
 
 pub const BinaryOperatorSignature = struct {
@@ -143,10 +148,12 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
 
 pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
 pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
+pub const StructureConstructionLayoutByNodeId = std.AutoHashMap(ast.NodeId, StructureConstructionLayout);
 
 pub const TypedProgram = struct {
     resolved_program: symbols.ResolvedProgram,
     type_store: TypeStore,
     type_by_symbol_id: TypeBySymbolId,
     type_by_node_id: TypeByNodeId,
+    structure_construction_layout_by_node_id: StructureConstructionLayoutByNodeId,
 };

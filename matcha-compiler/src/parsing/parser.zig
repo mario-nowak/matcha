@@ -34,10 +34,13 @@ pub const Parser = struct {
         ExpectedColon,
         ExpectedFatArrow,
         StructureWithoutFields,
+        ExpectedAssign,
+        ExpectedCommaOrRightBrace,
     };
 
     const ParseState = struct {
         current_binding_power: f64 = 0.0,
+        allow_structure_construction: bool = true,
     };
 
     const OperatorInfo = struct {
@@ -470,7 +473,10 @@ pub const Parser = struct {
         }
 
         const condition = self.allocator.create(ast.Node) catch unreachable;
-        condition.* = try self.parseExpression(.{ .current_binding_power = 0.0 });
+        condition.* = try self.parseExpression(.{
+            .current_binding_power = 0.0,
+            .allow_structure_construction = false,
+        });
 
         var update: ?*ast.Node = null;
         var post_condition_token = self.lexer.peek();
@@ -546,7 +552,10 @@ pub const Parser = struct {
         }
 
         const condition = self.allocator.create(ast.Node) catch unreachable;
-        condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
+        condition.* = try self.parseExpression(.{
+            .current_binding_power = 0,
+            .allow_structure_construction = false,
+        });
 
         const then_branch_left_brace_token = self.lexer.next();
         if (then_branch_left_brace_token.kind != .LeftBrace) {
@@ -601,7 +610,10 @@ pub const Parser = struct {
         const post_match_token = self.lexer.peek();
         if (post_match_token.kind != .LeftBrace) {
             const subject_node = self.allocator.create(ast.Node) catch unreachable;
-            subject_node.* = try self.parseExpression(.{ .current_binding_power = 0 });
+            subject_node.* = try self.parseExpression(.{
+                .current_binding_power = 0,
+                .allow_structure_construction = false,
+            });
             subject = subject_node;
         }
 
@@ -792,7 +804,14 @@ pub const Parser = struct {
             .IntLiteral => self.createNode(.{ .IntegerLiteral = token }),
             .BooleanLiteral => self.createNode(.{ .BooleanLiteral = token }),
             .StringLiteral => self.createNode(.{ .StringLiteral = token }),
-            .Identifier => self.createNode(.{ .Identifier = token }),
+            .Identifier => block: {
+                const post_identifier_token = self.lexer.peek();
+                if (state.allow_structure_construction and post_identifier_token.kind == .LeftBrace) {
+                    break :block try self.parseStructureConstruction(token);
+                } else {
+                    break :block self.createNode(.{ .Identifier = token });
+                }
+            },
             .If => if_block: {
                 const if_form = try self.parseIfForm(token);
                 break :if_block switch (if_form) {
@@ -807,7 +826,10 @@ pub const Parser = struct {
             .LeftBrace => try self.parseBlock(token),
             .Minus => block: {
                 const operand = self.allocator.create(ast.Node) catch unreachable;
-                operand.* = try self.parseExpression(.{ .current_binding_power = 10 });
+                operand.* = try self.parseExpression(.{
+                    .current_binding_power = 10,
+                    .allow_structure_construction = state.allow_structure_construction,
+                });
 
                 break :block self.createNode(.{
                     .UnaryExpression = .{
@@ -819,7 +841,10 @@ pub const Parser = struct {
             },
             .Not => block: {
                 const operand = self.allocator.create(ast.Node) catch unreachable;
-                operand.* = try self.parseExpression(.{ .current_binding_power = 10 });
+                operand.* = try self.parseExpression(.{
+                    .current_binding_power = 10,
+                    .allow_structure_construction = state.allow_structure_construction,
+                });
 
                 break :block self.createNode(.{
                     .UnaryExpression = .{
@@ -897,7 +922,10 @@ pub const Parser = struct {
                 // our current operator.
                 _ = self.lexer.next();
                 const right_hand_side = self.allocator.create(ast.Node) catch unreachable;
-                right_hand_side.* = try self.parseExpression(.{ .current_binding_power = operator.right_binding_power });
+                right_hand_side.* = try self.parseExpression(.{
+                    .current_binding_power = operator.right_binding_power,
+                    .allow_structure_construction = state.allow_structure_construction,
+                });
 
                 const left_hand_side_pointer = self.allocator.create(ast.Node) catch unreachable;
                 left_hand_side_pointer.* = left_hand_side;
@@ -930,6 +958,55 @@ pub const Parser = struct {
                 return left_hand_side;
             }
         }
+    }
+
+    fn parseStructureConstruction(self: *@This(), structure_name: lexing.Token) ParserError!ast.Node {
+        const left_brace_token = self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            return ParserError.ExpectedLeftBrace;
+        }
+
+        var fields = std.ArrayList(ast.StructureConstructionField){};
+        while (true) {
+            const next_token = self.lexer.peek();
+            if (next_token.kind == .RightBrace) {
+                _ = self.lexer.next();
+                break;
+            }
+
+            const field_name_token = self.lexer.next();
+            if (field_name_token.kind != .Identifier) {
+                return ParserError.ExpectedIdentifier;
+            }
+
+            const assign_token = self.lexer.next();
+            if (assign_token.kind != .Assign) {
+                return ParserError.ExpectedAssign;
+            }
+
+            const value_expression = self.allocator.create(ast.Node) catch unreachable;
+            value_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+            fields.append(self.allocator, .{
+                .name = field_name_token,
+                .assign_token = assign_token,
+                .value = value_expression,
+            }) catch unreachable;
+
+            const post_field_token = self.lexer.peek();
+            if (post_field_token.kind == .Comma) {
+                _ = self.lexer.next(); // consume comma and continue to next field
+            } else if (post_field_token.kind != .RightBrace) {
+                return ParserError.ExpectedCommaOrRightBrace;
+            }
+        }
+
+        return self.createNode(.{
+            .StructureConstruction = .{
+                .structure_name = structure_name,
+                .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+            },
+        });
     }
 
     pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) ParserError!ast.Node {
