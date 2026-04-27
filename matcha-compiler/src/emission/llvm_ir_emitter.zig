@@ -926,6 +926,13 @@ pub const LlvmIrEmitter = struct {
                     .register = result_register,
                 };
             },
+            .FieldAccess => |field_access| return self.emitFieldAccess(
+                node,
+                &field_access,
+                entry_label,
+                typed_program,
+                environment,
+            ),
             .BinaryExpression => |binary_expression| {
                 const left_result = self.emitNode(
                     binary_expression.left,
@@ -1020,17 +1027,28 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Assignment => |assignment| {
-                const value_result = self.emitNode(
-                    assignment.value,
+                const target_pointer_result = self.emitAssignmentTargetPointer(
+                    assignment.target,
                     entry_label,
                     typed_program,
                     environment,
                 );
-                const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-                const storage = environment.storage_by_symbol_id.get(symbol_id).?;
-                const value_type_id = typed_program.type_by_node_id.get(assignment.value.id).?;
+                if (target_pointer_result.exit_label == null) {
+                    return .{
+                        .exit_label = null,
+                        .register = null,
+                    };
+                }
+
+                const value_result = self.emitNode(
+                    assignment.value,
+                    target_pointer_result.exit_label.?,
+                    typed_program,
+                    environment,
+                );
+                const value_type_id = typed_program.type_by_node_id.get(assignment.target.id).?;
                 const llvm_ir_type = llvmIrType(&typed_program.type_store, value_type_id);
-                self.emitStore(value_result.register.?, storage, llvm_ir_type);
+                self.emitStore(value_result.register.?, target_pointer_result.register.?, llvm_ir_type);
 
                 return .{
                     .exit_label = value_result.exit_label,
@@ -1153,6 +1171,109 @@ pub const LlvmIrEmitter = struct {
         }
     }
 
+    fn emitFieldAccess(
+        self: *@This(),
+        node: *const ast.Node,
+        field_access: *const ast.FieldAccess,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const field_pointer_result = self.emitFieldAccessPointer(
+            field_access,
+            entry_label,
+            typed_program,
+            environment,
+        );
+        if (field_pointer_result.exit_label == null) {
+            return .{
+                .exit_label = null,
+                .register = null,
+            };
+        }
+
+        const field_register = self.symbol_generator.generateRegister();
+        self.emitLoad(
+            field_register,
+            field_pointer_result.register.?,
+            llvmIrType(&typed_program.type_store, typed_program.type_by_node_id.get(node.id).?),
+        );
+
+        return .{
+            .exit_label = field_pointer_result.exit_label,
+            .register = field_register,
+        };
+    }
+
+    fn emitAssignmentTargetPointer(
+        self: *@This(),
+        target: *const ast.Node,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        switch (target.kind) {
+            .Identifier => {
+                const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(target.id).?;
+                return .{
+                    .exit_label = entry_label,
+                    .register = environment.storage_by_symbol_id.get(symbol_id).?,
+                };
+            },
+            .FieldAccess => |field_access| return self.emitFieldAccessPointer(
+                &field_access,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            else => unreachable,
+        }
+    }
+
+    fn emitFieldAccessPointer(
+        self: *@This(),
+        field_access: *const ast.FieldAccess,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const base_result = self.emitNode(
+            field_access.base,
+            entry_label,
+            typed_program,
+            environment,
+        );
+        if (base_result.exit_label == null) {
+            return .{
+                .exit_label = null,
+                .register = null,
+            };
+        }
+
+        const base_type_id = typed_program.type_by_node_id.get(field_access.base.id) orelse unreachable;
+        const structure_type_id = switch (typed_program.type_store.getType(base_type_id)) {
+            .Structure => |id| id,
+            else => unreachable,
+        };
+        const structure_type = typed_program.type_store.structure_types.items[structure_type_id];
+        const field_name = field_access.field_name_token.kind.Identifier;
+        const field_index = structure_type.field_index_by_name.get(field_name) orelse unreachable;
+        const structure_symbol = self.getStructureSymbolForTypeId(typed_program, base_type_id);
+        const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
+
+        const field_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
+            .{ field_pointer_register, structure_llvm_type_name, base_result.register orelse unreachable, field_index },
+        ) catch unreachable }) catch unreachable;
+
+        return .{
+            .exit_label = base_result.exit_label,
+            .register = field_pointer_register,
+        };
+    }
+
     fn emitStructureConstruction(
         self: *@This(),
         node: *const ast.Node,
@@ -1219,6 +1340,29 @@ pub const LlvmIrEmitter = struct {
             .exit_label = current_label,
             .register = memory_register,
         };
+    }
+
+    fn getStructureSymbolForTypeId(
+        self: *@This(),
+        typed_program: *const typing.TypedProgram,
+        type_id: typing.TypeId,
+    ) symbols.Symbol {
+        _ = self;
+
+        var iterator = typed_program.type_by_symbol_id.iterator();
+        while (iterator.next()) |entry| {
+            if (entry.value_ptr.* != type_id) {
+                continue;
+            }
+
+            const symbol = typed_program.resolved_program.symbol_table.getSymbol(entry.key_ptr.*);
+            switch (symbol.kind) {
+                .Structure => return symbol,
+                else => continue,
+            }
+        }
+
+        unreachable;
     }
 
     fn emitStructureDefinitions(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {

@@ -305,6 +305,65 @@ test "semantic analysis records structure construction layout in source order" {
     try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
 }
 
+test "semantic analysis type-checks structure field access" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure { x: int, y: int };
+        \\val point = Point { x = 1, y = 2 };
+        \\val x = point.x;
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[2].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
+test "semantic analysis type-checks mutable structure field assignment" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure { x: int, y: int };
+        \\var point = Point { x = 1, y = 2 };
+        \\point.x = 3;
+        \\val x = point.x;
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[3].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
+test "semantic analysis rejects invalid structure field access" {
+    try expectAnalyzeError(error.TypeMismatch,
+        \\val x = 1.x;
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\item Point = structure { x: int, y: int };
+        \\val point = Point { x = 1, y = 2 };
+        \\val z = point.z;
+    );
+}
+
+test "semantic analysis rejects immutable and mismatched structure field assignment" {
+    try expectAnalyzeError(error.CannotAssignToImmutable,
+        \\item Point = structure { x: int, y: int };
+        \\val point = Point { x = 1, y = 2 };
+        \\point.x = 3;
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\item Point = structure { x: int, y: int };
+        \\var point = Point { x = 1, y = 2 };
+        \\point.x = false;
+    );
+}
+
 test "semantic analysis rejects non-exhaustive boolean and integer matches without else" {
     try expectAnalyzeError(error.NonExhaustiveMatch,
         \\val label = match true {
