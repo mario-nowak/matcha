@@ -38,6 +38,22 @@ fn expectFunctionItem(node: *const ast.Node) !ast.Function {
     };
 }
 
+fn expectFieldAccess(node: *const ast.Node, expected_field_name: []const u8) !ast.FieldAccess {
+    const field_access = switch (node.kind) {
+        .FieldAccess => |expression| expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqualStrings(expected_field_name, field_access.field_name_token.kind.Identifier);
+    return field_access;
+}
+
+fn expectAssignment(node: *const ast.Node) !ast.Assignment {
+    return switch (node.kind) {
+        .Assignment => |assignment| assignment,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
 test "parser distinguishes statement ifs from expression ifs" {
     const source =
         \\if true { val scoped = 1; }
@@ -236,6 +252,60 @@ test "parser parses string-typed function definitions" {
     const function_definition = try expectFunctionItem(&parsed.program.statements[0]);
     try std.testing.expectEqualStrings("string", function_definition.return_type_annotation.name_token.kind.Identifier);
     try std.testing.expectEqualStrings("string", function_definition.parameters[0].type_annotation.name_token.kind.Identifier);
+}
+
+test "parser parses structure field access expressions" {
+    const source =
+        \\val x = point.x;
+        \\val y = user.location.x;
+        \\val z = (Point { x = 1, y = 2 }).x;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const x_declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const point_x = try expectFieldAccess(x_declaration.value, "x");
+    try expectNodeTag(point_x.base, .Identifier);
+
+    const y_declaration = switch (parsed.program.statements[1].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const user_location_x = try expectFieldAccess(y_declaration.value, "x");
+    const user_location = try expectFieldAccess(user_location_x.base, "location");
+    try expectNodeTag(user_location.base, .Identifier);
+
+    const z_declaration = switch (parsed.program.statements[2].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const constructed_point_x = try expectFieldAccess(z_declaration.value, "x");
+    try expectNodeTag(constructed_point_x.base, .StructureConstruction);
+}
+
+test "parser parses structure field assignment statements" {
+    const source =
+        \\point.x = 3;
+        \\user.location.x = 4;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
+    const point_x = try expectFieldAccess(first_assignment.target, "x");
+    try expectNodeTag(point_x.base, .Identifier);
+    try expectNodeTag(first_assignment.value, .IntegerLiteral);
+
+    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
+    const user_location_x = try expectFieldAccess(second_assignment.target, "x");
+    const user_location = try expectFieldAccess(user_location_x.base, "location");
+    try expectNodeTag(user_location.base, .Identifier);
+    try expectNodeTag(second_assignment.value, .IntegerLiteral);
 }
 
 test "parser parses subjectful match expressions" {

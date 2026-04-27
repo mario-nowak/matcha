@@ -8,6 +8,7 @@ pub const NameResolutionError = error{
     InvalidTypeAnnotation,
     ValueAlreadyDeclared,
     CannotAssignToImmutable,
+    InvalidAssignmentTarget,
     FunctionAlreadyDefined,
     StructureAlreadyDefined,
 };
@@ -242,28 +243,7 @@ pub const NameResolver = struct {
                 }
             },
             .Assignment => |assignment| {
-                const assignment_identifier = assignment.identifier_token.kind.Identifier;
-                const symbol_id = try NameResolver.getSymbolIdForName(assignment_identifier, node_scope, module_scope);
-                const symbol = self.symbol_table.getSymbol(symbol_id);
-
-                switch (symbol.kind) {
-                    .Binding => |binding| {
-                        if (binding.binding_mutability == symbols.BindingMutability.Immutable) {
-                            std.debug.print(
-                                "Semantic Error: Cannot assign to immutable variable: {s}\n",
-                                .{assignment_identifier},
-                            );
-                            return NameResolutionError.CannotAssignToImmutable;
-                        }
-                    },
-                    else => {
-                        std.debug.print(
-                            "Semantic Error: Cannot assign to non-binding symbol: {s}\n",
-                            .{assignment_identifier},
-                        );
-                        return NameResolutionError.UndefinedIdentifier;
-                    },
-                }
+                const symbol_id = try self.resolveAssignmentTarget(assignment.target, node_scope, module_scope);
                 self.symbol_id_by_node_id.put(node.id, symbol_id) catch unreachable;
                 try self.resolveNode(assignment.value, node_scope, module_scope, context);
             },
@@ -292,6 +272,9 @@ pub const NameResolver = struct {
             },
             .UnaryExpression => |unaryExpression| {
                 try self.resolveNode(unaryExpression.operand, node_scope, module_scope, context);
+            },
+            .FieldAccess => |field_access| {
+                try self.resolveNode(field_access.base, node_scope, module_scope, context);
             },
             .Identifier => |identifier| {
                 const identifier_name = identifier.kind.Identifier;
@@ -357,6 +340,50 @@ pub const NameResolver = struct {
         };
 
         return symbol_id;
+    }
+
+    fn resolveAssignmentTarget(
+        self: *@This(),
+        target: *const ast.Node,
+        node_scope: *scope.Scope,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!symbols.SymbolId {
+        switch (target.kind) {
+            .Identifier => |identifier| {
+                const assignment_identifier = identifier.kind.Identifier;
+                const symbol_id = try NameResolver.getSymbolIdForName(assignment_identifier, node_scope, module_scope);
+                const symbol = self.symbol_table.getSymbol(symbol_id);
+
+                switch (symbol.kind) {
+                    .Binding => |binding| {
+                        if (binding.binding_mutability == symbols.BindingMutability.Immutable) {
+                            std.debug.print(
+                                "Semantic Error: Cannot assign to immutable variable: {s}\n",
+                                .{assignment_identifier},
+                            );
+                            return NameResolutionError.CannotAssignToImmutable;
+                        }
+                    },
+                    else => {
+                        std.debug.print(
+                            "Semantic Error: Cannot assign to non-binding symbol: {s}\n",
+                            .{assignment_identifier},
+                        );
+                        return NameResolutionError.UndefinedIdentifier;
+                    },
+                }
+
+                self.symbol_id_by_node_id.put(target.id, symbol_id) catch unreachable;
+                return symbol_id;
+            },
+            .FieldAccess => |field_access| {
+                return try self.resolveAssignmentTarget(field_access.base, node_scope, module_scope);
+            },
+            else => {
+                std.debug.print("Semantic Error: Invalid assignment target\n", .{});
+                return NameResolutionError.InvalidAssignmentTarget;
+            },
+        }
     }
 
     fn resolveStructureConstruction(

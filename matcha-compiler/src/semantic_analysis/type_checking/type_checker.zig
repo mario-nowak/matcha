@@ -148,6 +148,7 @@ pub const TypeChecker = struct {
             .Leave => return self.checkLeaveNode(node.id),
             .Continue => return self.checkContinueNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
+            .FieldAccess => |field_access| return self.checkFieldAccessNode(node.id, &field_access, resolved_program, exit_behavior_by_node_id),
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, resolved_program, exit_behavior_by_node_id),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, resolved_program, exit_behavior_by_node_id),
             .StructureConstruction => |structure_construction| return self.checkStructureConstructionNode(node.id, &structure_construction, resolved_program, exit_behavior_by_node_id),
@@ -323,18 +324,22 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
+        const target_type = try self.checkNode(
+            assignment.target,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
         const value_type = try self.checkNode(
             assignment.value,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
-        if (symbol_type != value_type) {
+        if (target_type != value_type) {
             std.debug.print(
-                "Type Error: Cannot assign value of type {any} to symbol of type {any}\n",
-                .{ self.getType(value_type), self.getType(symbol_type) },
+                "Type Error: Cannot assign value of type {any} to target of type {any}\n",
+                .{ self.getType(value_type), self.getType(target_type) },
             );
             return TypeError.TypeMismatch;
         }
@@ -454,6 +459,42 @@ pub const TypeChecker = struct {
             },
             else => return TypeError.TypeMismatch,
         }
+    }
+
+    fn checkFieldAccessNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        field_access: *const ast.FieldAccess,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const base_type_id = try self.checkNode(
+            field_access.base,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        const structure_type_id = switch (self.type_store.getType(base_type_id)) {
+            .Structure => |id| id,
+            else => {
+                std.debug.print(
+                    "Type Error: Cannot access field {s} on non-structure type {any}\n",
+                    .{ field_access.field_name_token.kind.Identifier, self.getType(base_type_id) },
+                );
+                return TypeError.TypeMismatch;
+            },
+        };
+        const structure_type = self.type_store.structure_types.items[structure_type_id];
+        const field_name = field_access.field_name_token.kind.Identifier;
+        const field_index = structure_type.field_index_by_name.get(field_name) orelse {
+            std.debug.print(
+                "Type Error: No field named {s} exists on structure type {s}\n",
+                .{ field_name, structure_type.name },
+            );
+            return TypeError.TypeMismatch;
+        };
+
+        return self.recordNodeType(node_id, structure_type.fields[@intCast(field_index)].type_id);
     }
 
     fn checkBinaryExpressionNode(
@@ -859,6 +900,7 @@ pub const TypeChecker = struct {
                 }
             },
             .Assignment => |assignment| {
+                try self.checkReturnStatementsMatchType(assignment.target, function_return_type, resolved_program);
                 try self.checkReturnStatementsMatchType(assignment.value, function_return_type, resolved_program);
             },
             .Declaration => |declaration| {
@@ -873,6 +915,9 @@ pub const TypeChecker = struct {
             },
             .UnaryExpression => |unary_expression| {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
+            },
+            .FieldAccess => |field_access| {
+                try self.checkReturnStatementsMatchType(field_access.base, function_return_type, resolved_program);
             },
             .StructureConstruction => |structure_construction| {
                 for (structure_construction.fields) |field| {

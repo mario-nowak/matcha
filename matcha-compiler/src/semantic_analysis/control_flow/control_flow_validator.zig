@@ -84,6 +84,7 @@ pub const ControlFlowValidator = struct {
                 }
             },
             .Assignment => |assignment| {
+                try self.validateNode(assignment.target, context);
                 try self.validateNode(assignment.value, context);
             },
             .Loop => |loop| {
@@ -157,6 +158,9 @@ pub const ControlFlowValidator = struct {
             },
             .UnaryExpression => |unary_expression| {
                 try self.validateNode(unary_expression.operand, context);
+            },
+            .FieldAccess => |field_access| {
+                try self.validateNode(field_access.base, context);
             },
             .Block => |block| {
                 const block_context = ControlFlowValidationContext{
@@ -256,6 +260,12 @@ pub const ControlFlowValidator = struct {
                 }
             },
             .Assignment => |assignment| {
+                const target_result = try self.validateTerminatesWithValue(assignment.target);
+                if (target_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+
                 const result = try self.validateTerminatesWithValue(assignment.value);
                 self.exit_behavior_by_node_id.put(assignment.value.id, result) catch unreachable;
                 return result;
@@ -411,6 +421,15 @@ pub const ControlFlowValidator = struct {
             .UnaryExpression => |unary_expression| {
                 const operand_result = try self.validateTerminatesWithValue(unary_expression.operand);
                 if (operand_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .FieldAccess => |field_access| {
+                const base_result = try self.validateTerminatesWithValue(field_access.base);
+                if (base_result == .Terminates) {
                     self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
                     return .Terminates;
                 }

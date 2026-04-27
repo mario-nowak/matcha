@@ -20,6 +20,7 @@ pub const NodeKind = union(enum) {
     IfExpression: IfExpression,
     MatchExpression: MatchExpression,
     CallExpression: CallExpression,
+    FieldAccess: FieldAccess,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
     Identifier: lexing.Token,
@@ -81,7 +82,7 @@ pub const Return = struct {
 };
 
 pub const Assignment = struct {
-    identifier_token: lexing.Token,
+    target: *Node,
     assignment_token: lexing.Token,
     value: *Node,
 };
@@ -148,6 +149,12 @@ pub const CallExpression = struct {
     left_parenthesis: lexing.Token,
     arguments: []Node,
     right_parenthesis: lexing.Token,
+};
+
+pub const FieldAccess = struct {
+    base: *Node,
+    dot_token: lexing.Token,
+    field_name_token: lexing.Token,
 };
 
 pub const BinaryOperator = enum {

@@ -36,11 +36,28 @@ item Point = structure {
     y: int,
 };
 
+item NestedPoint = structure {
+    point1: Point,
+    point2: Point,
+};
 
 
+var my_point = Point { x = 4, y = 5 };
 
-val my_point = Point { x = 4, y = 5 };
+my_point.y = 2;
 
+var nested_point = NestedPoint {
+    point1 = my_point,
+    point2 = Point { x = 3, y = 6 },
+};
+
+printString("Printing points");
+my_point.x = 110;
+nested_point.point1.x = 330;
+printInt(nested_point.point1.x);
+printInt(nested_point.point2.y);
+
+printString("Printing the while loop now");
 while z < 10 {
     z = z + 1;
     printInt(z);

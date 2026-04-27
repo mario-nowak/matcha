@@ -508,10 +508,8 @@ pub const Parser = struct {
     }
 
     fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) ParserError!ast.Node {
-        const identifier_token = self.lexer.next();
-        if (identifier_token.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
-        }
+        const target = self.allocator.create(ast.Node) catch unreachable;
+        target.* = try self.parseAssignmentTargetExpression();
 
         const assignment_token = self.lexer.next();
         if (assignment_token.kind != .Assign) {
@@ -530,7 +528,7 @@ pub const Parser = struct {
 
         return self.createNode(.{
             .Assignment = .{
-                .identifier_token = identifier_token,
+                .target = target,
                 .assignment_token = assignment_token,
                 .value = value,
             },
@@ -541,9 +539,30 @@ pub const Parser = struct {
         var lookahead = self.lexer;
         if (lookahead.peek().kind != .Identifier) return false;
 
-        // Advance only the copied lexer to inspect the following token.
         _ = lookahead.next();
+        while (lookahead.peek().kind == .Dot) {
+            _ = lookahead.next();
+            if (lookahead.peek().kind != .Identifier) {
+                return false;
+            }
+            _ = lookahead.next();
+        }
+
         return lookahead.peek().kind == .Assign;
+    }
+
+    fn parseAssignmentTargetExpression(self: *@This()) ParserError!ast.Node {
+        const identifier_token = self.lexer.next();
+        if (identifier_token.kind != .Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+
+        var target = self.createNode(.{ .Identifier = identifier_token });
+        while (self.lexer.peek().kind == .Dot) {
+            target = try self.parseFieldAccessExpression(target);
+        }
+
+        return target;
     }
 
     fn parseIfForm(self: *Parser, if_token: lexing.Token) ParserError!ParsedIf {
@@ -877,6 +896,11 @@ pub const Parser = struct {
                 continue;
             }
 
+            if (next_token.kind == .Dot) {
+                left_hand_side = try self.parseFieldAccessExpression(left_hand_side);
+                continue;
+            }
+
             const operator = switch (next_token.kind) {
                 .Or => OperatorInfo{
                     .left_binding_power = 1.0,
@@ -1043,5 +1067,28 @@ pub const Parser = struct {
             const argument = try self.parseExpression(.{ .current_binding_power = 0.0 });
             arguments.append(self.allocator, argument) catch unreachable;
         }
+    }
+
+    fn parseFieldAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
+        const dot_token = self.lexer.next();
+        if (dot_token.kind != .Dot) {
+            unreachable;
+        }
+
+        const field_name_token = self.lexer.next();
+        if (field_name_token.kind != .Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+
+        const base = self.allocator.create(ast.Node) catch unreachable;
+        base.* = left_hand_side;
+
+        return self.createNode(.{
+            .FieldAccess = .{
+                .base = base,
+                .dot_token = dot_token,
+                .field_name_token = field_name_token,
+            },
+        });
     }
 };
