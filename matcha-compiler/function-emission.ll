@@ -1,3 +1,6 @@
+declare void @matcha_initiate_garbage_collector()
+declare ptr @matcha_allocate(i64)
+declare ptr @matcha_allocate_atomic(i64)
 %String = type { i8*, i64 }
 
 @.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
@@ -13,23 +16,23 @@ entry:
 
 }
 
-define i64 @matcha_0_myFunction(i64 %arg_0_parameter) {
+define i64 @matcha_function_0_myFunction(i64 %arg_0_parameter) {
 entry:
     %.s_0 = alloca i64
 
-    store i64 %arg_0_parameter, i64* %.s_0
-    %.t_0 = load i64, i64* %.s_0
+    store i64 %arg_0_parameter, ptr %.s_0
+    %.t_0 = load i64, ptr %.s_0
     %.t_1 = mul i64 %.t_0, 2
     ret i64 %.t_1
 
 }
 
-define i1 @matcha_1_myFunctionWithComplexBody(i64 %arg_0_parameter) {
+define i1 @matcha_function_1_myFunctionWithComplexBody(i64 %arg_0_parameter) {
 entry:
     %.s_0 = alloca i64
 
-    store i64 %arg_0_parameter, i64* %.s_0
-    %.t_0 = load i64, i64* %.s_0
+    store i64 %arg_0_parameter, ptr %.s_0
+    %.t_0 = load i64, ptr %.s_0
     %.t_1 = icmp sge i64 %.t_0, 0
     br i1 %.t_1, label %label_then_2, label %label_else_1
 label_then_2:
@@ -39,12 +42,12 @@ label_else_1:
 
 }
 
-define void @matcha_2_myFunctionToTestControlFlowValidation(i64 %arg_0_parameter) {
+define void @matcha_function_2_myFunctionToTestControlFlowValidation(i64 %arg_0_parameter) {
 entry:
     %.s_0 = alloca i64
 
-    store i64 %arg_0_parameter, i64* %.s_0
-    %.t_0 = load i64, i64* %.s_0
+    store i64 %arg_0_parameter, ptr %.s_0
+    %.t_0 = load i64, ptr %.s_0
     %.t_1 = icmp eq i64 %.t_0, 0
     br i1 %.t_1, label %label_then_1, label %label_continue_0
 label_then_1:
@@ -54,7 +57,7 @@ label_continue_0:
 
 }
 
-define i64 @matcha_3_g() {
+define i64 @matcha_function_3_g() {
 entry:
 
     %.t_0 = add i64 3, 2
@@ -62,12 +65,12 @@ entry:
 
 }
 
-define i64 @matcha_4_f(i64 %arg_0_g) {
+define i64 @matcha_function_4_f(i64 %arg_0_g) {
 entry:
     %.s_0 = alloca i64
 
-    store i64 %arg_0_g, i64* %.s_0
-    %.t_0 = load i64, i64* %.s_0
+    store i64 %arg_0_g, ptr %.s_0
+    %.t_0 = load i64, ptr %.s_0
     ret i64 %.t_0
 
 }
@@ -75,10 +78,10 @@ entry:
 define i32 @main() {
 entry:
 
-    call void @matcha_2_myFunctionToTestControlFlowValidation(i64 3)
-    %.t_0 = call i64 @matcha_4_f(i64 3)
+    call void @matcha_function_2_myFunctionToTestControlFlowValidation(i64 3)
+    %.t_0 = call i64 @matcha_function_4_f(i64 3)
     call void @builtin_printInt(i64 %.t_0)
-    %.t_1 = call i64 @matcha_3_g()
+    %.t_1 = call i64 @matcha_function_3_g()
     call void @builtin_printInt(i64 %.t_1)
     ret i32 0
 

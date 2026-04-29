@@ -107,6 +107,8 @@ test "llvm emission returns from main without implicit printing" {
     );
     defer std.testing.allocator.free(llvm_ir);
 
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@matcha_print_int") == null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@matcha_print_string") == null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i32 @printf") == null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.str") == null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "ret i32 0") != null);
@@ -124,20 +126,20 @@ test "llvm emission emits user-defined functions and calls them from main" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_function_0_identity(i64 42)") != null);
 }
 
-test "llvm emission lowers printInt as a real llvm function" {
+test "llvm emission lowers printInt to a runtime call" {
     const llvm_ir = try emit(
         \\item logValue(value: int): unit = printInt(value);
         \\logValue(7);
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i32 @printf") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printInt(i64 %arg_0_value)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @builtin_printInt(i64 %.t_0)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_print_int(i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printInt") == null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_print_int(i64 %.t_0)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_function_0_logValue(i64 7)") != null);
 }
 
-test "llvm emission lowers string literals to String globals and builtin printString" {
+test "llvm emission lowers string literals to String globals and runtime printString calls" {
     const llvm_ir = try emit(
         \\item echo(x: string): string = x;
         \\printString("hello");
@@ -148,18 +150,15 @@ test "llvm emission lowers string literals to String globals and builtin printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%String = type { i8*, i64 }") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.string_literal_0 = private unnamed_addr constant [5 x i8] c\"hello\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.string_literal_1 = private unnamed_addr constant [5 x i8] c\"world\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.print_string_newline = private unnamed_addr constant [1 x i8] c\"\\0A\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i64 @write(i32, i8*, i64)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printString(%String %arg_0_value)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String %arg_0_value, 0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @write(i32 1, i8* %.t_0, i64 %.t_1)") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds [1 x i8], [1 x i8]* @.print_string_newline, i64 0, i64 0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @write(i32 1, i8* %.t_2, i64 1)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_print_string(ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define void @builtin_printString") == null);
+    try std.testing.expectEqual(@as(usize, 4), std.mem.count(u8, llvm_ir, "extractvalue %String "));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, llvm_ir, "call void @matcha_print_string(ptr "));
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define %String @matcha_function_0_echo(%String %arg_0_x)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr %.s_0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, i8* %.t_0, 0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_function_0_echo(%String %.t_5)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_function_0_echo(%String ") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
@@ -229,7 +228,7 @@ test "llvm emission lowers match expressions to compare-and-branch chains" {
         \\    else => "other",
         \\};
         \\val third = match {
-            \\    first == 7 => 1,
+        \\    first == 7 => 1,
         \\    else => 0,
         \\};
     );
