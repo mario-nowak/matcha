@@ -219,6 +219,33 @@ test "semantic analysis resolves string type annotation" {
     try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
 }
 
+test "semantic analysis resolves array types in function signatures" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item identity(values: int[]): int[] = values;
+    );
+    defer analyzed.deinit();
+
+    const function_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
+        analyzed.parsed.program.statements[0].id,
+    ).?;
+    const resolved_function = switch (analyzed.typed_program.resolved_program.resolved_item_by_symbol_id.get(function_symbol_id).?) {
+        .Function => |function| function,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const expected_array_type = typing.Type{ .Array = analyzed.typed_program.type_store.integer_type_id };
+
+    try expectType(
+        expected_array_type,
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_symbol_id.get(function_symbol_id).?,
+    );
+    try expectType(
+        expected_array_type,
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_symbol_id.get(resolved_function.parameters[0].symbol_id).?,
+    );
+}
+
 test "semantic analysis type-checks printString with string argument" {
     var analyzed = try helpers.analyzeProgram(
         \\printString("hello");

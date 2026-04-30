@@ -86,9 +86,10 @@ pub const BuiltinType = enum {
 pub const ResolvedTypeReference = union(enum) {
     Builtin: BuiltinType,
     Symbol: SymbolId,
+    Array: *ResolvedTypeReference,
 };
 
-pub const TypeReferenceByTypeAnnotationId = std.AutoHashMap(ast.TypeAnnotationId, ResolvedTypeReference);
+pub const AnnotatedTypeReferenceBySymbolId = std.AutoHashMap(SymbolId, ResolvedTypeReference);
 
 pub const ResolvedParameter = struct {
     symbol_id: SymbolId,
@@ -134,5 +135,5 @@ pub const ResolvedProgram = struct {
     symbol_table: SymbolTable,
     symbol_id_by_node_id: SymbolIdByNodeId,
     resolved_item_by_symbol_id: ResolvedItemBySymbolId,
-    type_reference_by_type_annotation_id: TypeReferenceByTypeAnnotationId,
+    annotated_type_reference_by_symbol_id: AnnotatedTypeReferenceBySymbolId,
 };

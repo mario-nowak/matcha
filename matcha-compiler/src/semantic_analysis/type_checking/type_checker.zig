@@ -279,8 +279,9 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Expression,
         );
-        const annotated_type = if (declaration.type_annotation) |type_annotation|
-            self.resolveTypeAnnotation(type_annotation, resolved_program)
+        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const annotated_type = if (resolved_program.annotated_type_reference_by_symbol_id.get(symbol_id)) |type_reference|
+            self.resolveTypeReference(type_reference)
         else
             null;
         if (annotated_type) |annotated| {
@@ -293,7 +294,6 @@ pub const TypeChecker = struct {
             }
         }
 
-        const symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
         self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -935,17 +935,8 @@ pub const TypeChecker = struct {
         }
     }
 
-    fn resolveTypeAnnotation(
-        self: *const @This(),
-        type_annotation: ast.TypeAnnotation,
-        resolved_program: *const symbols.ResolvedProgram,
-    ) typing.TypeId {
-        const type_reference = resolved_program.type_reference_by_type_annotation_id.get(type_annotation.id) orelse unreachable;
-        return self.resolveTypeReference(type_reference);
-    }
-
     fn resolveTypeReference(
-        self: *const @This(),
+        self: *@This(),
         type_reference: symbols.ResolvedTypeReference,
     ) typing.TypeId {
         return switch (type_reference) {
@@ -956,6 +947,9 @@ pub const TypeChecker = struct {
                 .String => self.type_store.string_type_id,
             },
             .Symbol => |symbol_id| self.type_by_symbol_id.get(symbol_id) orelse unreachable,
+            .Array => |element_type_reference| self.type_store.getOrCreateArrayType(
+                self.resolveTypeReference(element_type_reference.*),
+            ),
         };
     }
 

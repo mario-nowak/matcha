@@ -21,6 +21,7 @@ pub const TypeStore = struct {
     allocator: std.mem.Allocator,
     types: std.ArrayList(Type),
     structure_types: std.ArrayList(StructureType),
+    array_type_id_by_element_type_id: std.AutoHashMap(TypeId, TypeId),
     unit_type_id: TypeId,
     boolean_type_id: TypeId,
     integer_type_id: TypeId,
@@ -30,6 +31,7 @@ pub const TypeStore = struct {
         var store = @This(){
             .allocator = allocator,
             .types = .{},
+            .array_type_id_by_element_type_id = std.AutoHashMap(TypeId, TypeId).init(allocator),
             .unit_type_id = undefined,
             .boolean_type_id = undefined,
             .integer_type_id = undefined,
@@ -55,6 +57,20 @@ pub const TypeStore = struct {
         const structure_type_id: StructureTypeId = @intCast(self.structure_types.items.len);
         self.structure_types.append(self.allocator, structure_type) catch unreachable;
         return self.addType(.{ .Structure = structure_type_id });
+    }
+
+    pub fn getArrayType(self: *const @This(), element_type_id: TypeId) ?TypeId {
+        return self.array_type_id_by_element_type_id.get(element_type_id);
+    }
+
+    pub fn getOrCreateArrayType(self: *@This(), element_type_id: TypeId) TypeId {
+        if (self.array_type_id_by_element_type_id.get(element_type_id)) |existing_type_id| {
+            return existing_type_id;
+        }
+
+        const type_id = self.addType(.{ .Array = element_type_id });
+        self.array_type_id_by_element_type_id.put(element_type_id, type_id) catch unreachable;
+        return type_id;
     }
 
     pub fn getType(self: *const @This(), type_id: TypeId) Type {

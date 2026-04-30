@@ -66,7 +66,7 @@ test "lexer keeps keyword prefixes inside identifiers" {
 
 test "lexer distinguishes assign from equality operators" {
     var lexer = lexing.Lexer.init(
-        "= => == != < <= > >=",
+        "= => == != < <= > >= [ ]",
         std.heap.page_allocator,
     );
     defer lexer.deinit();
@@ -80,6 +80,8 @@ test "lexer distinguishes assign from equality operators" {
         .LessThanOrEqual,
         .GreaterThan,
         .GreaterThanOrEqual,
+        .LeftBracket,
+        .RightBracket,
         .EndOfFile,
     };
 
