@@ -250,8 +250,42 @@ test "parser parses string-typed function definitions" {
 
     try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
     const function_definition = try expectFunctionItem(&parsed.program.statements[0]);
-    try std.testing.expectEqualStrings("string", function_definition.return_type_annotation.name_token.kind.Identifier);
-    try std.testing.expectEqualStrings("string", function_definition.parameters[0].type_annotation.name_token.kind.Identifier);
+    switch (function_definition.return_type_annotation.*) {
+        .Named => |return_type_annotation| try std.testing.expectEqualStrings("string", return_type_annotation.name_token.kind.Identifier),
+        else => return TestError.UnexpectedNodeKind,
+    }
+    switch (function_definition.parameters[0].type_annotation.*) {
+        .Named => |parameter_type_annotation| try std.testing.expectEqualStrings("string", parameter_type_annotation.name_token.kind.Identifier),
+        else => return TestError.UnexpectedNodeKind,
+    }
+}
+
+test "parser parses array-typed function definitions" {
+    const source =
+        \\item echo(xs: string[]): string[] = xs;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), parsed.program.statements.len);
+    const function_definition = try expectFunctionItem(&parsed.program.statements[0]);
+
+    switch (function_definition.return_type_annotation.*) {
+        .Array => |return_type_annotation| switch (return_type_annotation.element_type.*) {
+            .Named => |named_type_expression| try std.testing.expectEqualStrings("string", named_type_expression.name_token.kind.Identifier),
+            else => return TestError.UnexpectedNodeKind,
+        },
+        else => return TestError.UnexpectedNodeKind,
+    }
+
+    switch (function_definition.parameters[0].type_annotation.*) {
+        .Array => |parameter_type_annotation| switch (parameter_type_annotation.element_type.*) {
+            .Named => |named_type_expression| try std.testing.expectEqualStrings("string", named_type_expression.name_token.kind.Identifier),
+            else => return TestError.UnexpectedNodeKind,
+        },
+        else => return TestError.UnexpectedNodeKind,
+    }
 }
 
 test "parser parses structure field access expressions" {

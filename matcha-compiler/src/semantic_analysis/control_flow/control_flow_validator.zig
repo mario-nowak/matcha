@@ -1,5 +1,6 @@
 pub const std = @import("std");
 pub const ast = @import("ast");
+const type_expressions = @import("type_expressions");
 
 pub const ControlFlowValidationError = error{
     LeaveUsedOutsideOfLoop,
@@ -185,11 +186,7 @@ pub const ControlFlowValidator = struct {
 
     pub fn validateFunctionReturnsValue(self: *@This(), function_definition: *const ast.Function) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
-        const is_unit_function = std.mem.eql(
-            u8,
-            function_definition.return_type_annotation.name_token.kind.Identifier,
-            "unit",
-        );
+        const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {
             std.debug.print("Semantic Error: Not all paths in the function return a value\n", .{});
             return ControlFlowValidationError.NotAllPathsReturnValue;
@@ -455,3 +452,14 @@ pub const ControlFlowValidator = struct {
         }
     }
 };
+
+fn isUnitTypeExpression(type_expression: *const type_expressions.TypeExpression) bool {
+    return switch (type_expression.*) {
+        .Named => |named_type_expression| std.mem.eql(
+            u8,
+            named_type_expression.name_token.kind.Identifier,
+            "unit",
+        ),
+        .Array => false,
+    };
+}

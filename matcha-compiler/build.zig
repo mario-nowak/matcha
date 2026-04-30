@@ -26,11 +26,20 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const type_expressions_module = b.addModule("type_expressions", .{
+        .root_source_file = b.path("src/type_expressions/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "lexing", .module = lexing_module },
+        },
+    });
+
     const ast_module = b.addModule("ast", .{
         .root_source_file = b.path("src/ast/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
         },
     });
 
@@ -40,6 +49,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
         },
     });
 
@@ -68,6 +78,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
         },
     });
 
@@ -102,6 +113,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "parsing", .module = parsing_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },

@@ -1,6 +1,7 @@
 const std = @import("std");
 const ast = @import("ast");
 const symbols = @import("symbols");
+const type_expressions = @import("type_expressions");
 const scope = @import("scope.zig");
 
 pub const NameResolutionError = error{
@@ -27,7 +28,7 @@ pub const NameResolver = struct {
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
     resolved_item_by_symbol_id: symbols.ResolvedItemBySymbolId,
-    type_reference_by_type_annotation_id: symbols.TypeReferenceByTypeAnnotationId,
+    annotated_type_reference_by_symbol_id: symbols.AnnotatedTypeReferenceBySymbolId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -35,7 +36,7 @@ pub const NameResolver = struct {
             .symbol_table = symbols.SymbolTable.init(allocator),
             .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
             .resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(allocator),
-            .type_reference_by_type_annotation_id = symbols.TypeReferenceByTypeAnnotationId.init(allocator),
+            .annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(allocator),
         };
     }
 
@@ -50,7 +51,7 @@ pub const NameResolver = struct {
         self.symbol_table = symbols.SymbolTable.init(self.allocator);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.allocator);
         self.resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(self.allocator);
-        self.type_reference_by_type_annotation_id = symbols.TypeReferenceByTypeAnnotationId.init(self.allocator);
+        self.annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(self.allocator);
 
         var module_scope = try self.buildModuleScope(program);
 
@@ -68,7 +69,7 @@ pub const NameResolver = struct {
             .symbol_id_by_node_id = self.symbol_id_by_node_id,
             .symbol_table = self.symbol_table,
             .resolved_item_by_symbol_id = self.resolved_item_by_symbol_id,
-            .type_reference_by_type_annotation_id = self.type_reference_by_type_annotation_id,
+            .annotated_type_reference_by_symbol_id = self.annotated_type_reference_by_symbol_id,
         };
     }
 
@@ -205,9 +206,10 @@ pub const NameResolver = struct {
                 }
 
                 try self.resolveNode(declaration.value, node_scope, module_scope, context);
-                if (declaration.type_annotation) |type_annotation| {
-                    _ = try self.resolveTypeReference(type_annotation, module_scope);
-                }
+                const annotated_type_reference = if (declaration.type_annotation) |type_annotation|
+                    try self.resolveTypeExpression(type_annotation, module_scope)
+                else
+                    null;
 
                 const declaration_symbol = self.symbol_table.insertSymbol(.{
                     .name = declaration_name,
@@ -223,6 +225,12 @@ pub const NameResolver = struct {
                 });
                 self.symbol_id_by_node_id.put(node.id, declaration_symbol.id) catch unreachable;
                 node_scope.insertSymbol(declaration_name, declaration_symbol.id);
+                if (annotated_type_reference) |type_reference| {
+                    self.annotated_type_reference_by_symbol_id.put(
+                        declaration_symbol.id,
+                        type_reference,
+                    ) catch unreachable;
+                }
             },
             .ItemDefinition => |item_definition| switch (item_definition.item) {
                 .Function => |function_definition| {
@@ -434,7 +442,7 @@ pub const NameResolver = struct {
             resolved_parameters.append(self.allocator, .{
                 .symbol_id = parameter_symbol.id,
                 .name = parameter_name,
-                .type_reference = try self.resolveTypeReference(parameter.type_annotation, module_scope),
+                .type_reference = try self.resolveTypeExpression(parameter.type_annotation, module_scope),
             }) catch unreachable;
         }
 
@@ -443,7 +451,7 @@ pub const NameResolver = struct {
             .symbol_id = function_symbol_id,
             .name = function_name,
             .parameters = resolved_parameters.toOwnedSlice(self.allocator) catch unreachable,
-            .return_type_reference = try self.resolveTypeReference(function_definition.return_type_annotation, module_scope),
+            .return_type_reference = try self.resolveTypeExpression(function_definition.return_type_annotation, module_scope),
             .implementation = .{
                 .user_defined = .{
                     .node_id = node_id,
@@ -470,7 +478,7 @@ pub const NameResolver = struct {
         for (structure_definition.fields) |field| {
             resolved_fields.append(self.allocator, .{
                 .name = field.name.kind.Identifier,
-                .type_reference = try self.resolveTypeReference(field.type_annotation, module_scope),
+                .type_reference = try self.resolveTypeExpression(field.type_annotation, module_scope),
             }) catch unreachable;
         }
 
@@ -484,34 +492,38 @@ pub const NameResolver = struct {
         });
     }
 
-    fn resolveTypeReference(
+    fn resolveTypeExpression(
         self: *@This(),
-        type_annotation: ast.TypeAnnotation,
+        type_expression: *const type_expressions.TypeExpression,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!symbols.ResolvedTypeReference {
-        const type_name = type_annotation.name_token.kind.Identifier;
-        const resolved_type_reference: symbols.ResolvedTypeReference = if (builtinTypeFromName(type_name)) |builtin_type|
-            .{ .Builtin = builtin_type }
-        else block: {
-            const symbol_id = module_scope.lookupSymbol(type_name) orelse {
-                std.debug.print("Semantic Error: Unknown type annotation: {s}\n", .{type_name});
-                return NameResolutionError.UndefinedIdentifier;
-            };
-            const symbol = self.symbol_table.getSymbol(symbol_id);
-            switch (symbol.kind) {
-                .Structure => break :block symbols.ResolvedTypeReference{ .Symbol = symbol_id },
-                else => {
-                    std.debug.print("Semantic Error: Type annotation must reference a structure, got: {s}\n", .{type_name});
-                    return NameResolutionError.InvalidTypeAnnotation;
-                },
-            }
-        };
+        return switch (type_expression.*) {
+            .Named => |named_type_expression| block: {
+                const type_name = named_type_expression.name_token.kind.Identifier;
+                break :block if (builtinTypeFromName(type_name)) |builtin_type|
+                    .{ .Builtin = builtin_type }
+                else named_type_reference: {
+                    const symbol_id = module_scope.lookupSymbol(type_name) orelse {
+                        std.debug.print("Semantic Error: Unknown type annotation: {s}\n", .{type_name});
+                        return NameResolutionError.UndefinedIdentifier;
+                    };
+                    const symbol = self.symbol_table.getSymbol(symbol_id);
+                    switch (symbol.kind) {
+                        .Structure => break :named_type_reference symbols.ResolvedTypeReference{ .Symbol = symbol_id },
+                        else => {
+                            std.debug.print("Semantic Error: Type annotation must reference a structure, got: {s}\n", .{type_name});
+                            return NameResolutionError.InvalidTypeAnnotation;
+                        },
+                    }
+                };
+            },
+            .Array => |array_type_expression| block: {
+                const array_type_reference = self.allocator.create(symbols.ResolvedTypeReference) catch unreachable;
+                array_type_reference.* = try self.resolveTypeExpression(array_type_expression.element_type, module_scope);
 
-        self.type_reference_by_type_annotation_id.put(
-            type_annotation.id,
-            resolved_type_reference,
-        ) catch unreachable;
-        return resolved_type_reference;
+                break :block .{ .Array = array_type_reference };
+            },
+        };
     }
 
     fn appendResolvedItem(self: *@This(), item: symbols.ResolvedItem) void {

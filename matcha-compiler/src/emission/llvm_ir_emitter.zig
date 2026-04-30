@@ -309,6 +309,9 @@ pub const LlvmIrEmitter = struct {
                 .String => typed_program.type_store.string_type_id,
             },
             .Symbol => |symbol_id| typed_program.type_by_symbol_id.get(symbol_id) orelse unreachable,
+            .Array => |element_type_reference| typed_program.type_store.getArrayType(
+                typeIdFromResolvedTypeReference(typed_program, element_type_reference.*),
+            ) orelse unreachable,
         };
     }
 

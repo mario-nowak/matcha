@@ -1,8 +1,8 @@
 const std = @import("std");
 const lexing = @import("lexing");
+const type_expressions = @import("type_expressions");
 
 pub const NodeId = u32;
-pub const TypeAnnotationId = u32;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
@@ -54,26 +54,26 @@ pub const Structure = struct {
 
 pub const Field = struct {
     name: lexing.Token,
-    type_annotation: TypeAnnotation,
+    type_annotation: *type_expressions.TypeExpression,
 };
 
 pub const Declaration = struct {
     val_token: lexing.Token,
     name: lexing.Token,
-    type_annotation: ?TypeAnnotation,
+    type_annotation: ?*type_expressions.TypeExpression,
     value: *Node,
     binding_mutability: BindingMutability,
 };
 
 pub const Function = struct {
     parameters: []Parameter,
-    return_type_annotation: TypeAnnotation,
+    return_type_annotation: *type_expressions.TypeExpression,
     body_expression: *Node,
 };
 
 pub const Parameter = struct {
     name: lexing.Token,
-    type_annotation: TypeAnnotation,
+    type_annotation: *type_expressions.TypeExpression,
 };
 
 pub const Return = struct {
@@ -206,11 +206,6 @@ pub const StructureConstructionField = struct {
     name: lexing.Token,
     assign_token: lexing.Token,
     value: *Node,
-};
-
-pub const TypeAnnotation = struct {
-    id: TypeAnnotationId,
-    name_token: lexing.Token,
 };
 
 pub const Program = struct {

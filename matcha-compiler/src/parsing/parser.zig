@@ -1,6 +1,9 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const ast = @import("ast");
+const type_expressions = @import("type_expressions");
+
+const TypeExpressionParser = @import("type_expression_parser.zig").TypeExpressionParser;
 
 pub const ParsedIf = union(enum) {
     statement: ast.Node,
@@ -16,27 +19,8 @@ pub const Parser = struct {
     lexer: lexing.Lexer,
     allocator: std.mem.Allocator,
     next_node_id: ast.NodeId = 0,
-    next_type_annotation_id: ast.TypeAnnotationId = 0,
 
-    pub const ParserError = error{
-        MissingClosingParenthesis,
-        ExpectedOpeningParenthesis,
-        ExpectedIdentifier,
-        ExpectedEqualSign,
-        ExpectedSemicolon,
-        ExpectedColonOrEqualSign,
-        ExpectedTypeAnnotation,
-        ExpectedLeftBrace,
-        ExpectedIf,
-        ExpectedMatch,
-        UnexpectedElse,
-        ExpectedCommaOrClosingParenthesis,
-        ExpectedColon,
-        ExpectedFatArrow,
-        StructureWithoutFields,
-        ExpectedAssign,
-        ExpectedCommaOrRightBrace,
-    };
+    pub const ParserError = @import("parse_error.zig").ParseError;
 
     const ParseState = struct {
         current_binding_power: f64 = 0.0,
@@ -59,15 +43,6 @@ pub const Parser = struct {
         const id = self.next_node_id;
         self.next_node_id += 1;
         return .{ .id = id, .kind = kind };
-    }
-
-    fn createTypeAnnotation(self: *Parser, name_token: lexing.Token) ast.TypeAnnotation {
-        const id = self.next_type_annotation_id;
-        self.next_type_annotation_id += 1;
-        return .{
-            .id = id,
-            .name_token = name_token,
-        };
     }
 
     pub fn parse(self: *Parser) !ast.Program {
@@ -176,19 +151,16 @@ pub const Parser = struct {
         }
 
         const colon_or_equal_token = self.lexer.next();
-        const type_annotation: ?lexing.Token = switch (colon_or_equal_token.kind) {
+        const type_annotation: ?*type_expressions.TypeExpression = switch (colon_or_equal_token.kind) {
             .Colon => block: {
-                const next_token = self.lexer.next();
-                if (next_token.kind != .Identifier) {
-                    return ParserError.ExpectedTypeAnnotation;
-                }
+                const parsed_type_annotation = try self.parseTypeAnnotation();
 
                 const equalToken = self.lexer.next();
                 if (equalToken.kind != .Assign) {
                     return ParserError.ExpectedEqualSign;
                 }
 
-                break :block next_token;
+                break :block parsed_type_annotation;
             },
             .Assign => null,
             else => return ParserError.ExpectedColonOrEqualSign,
@@ -206,7 +178,7 @@ pub const Parser = struct {
             .Declaration = .{
                 .val_token = val_or_var_token,
                 .name = identifierToken,
-                .type_annotation = if (type_annotation) |typeToken| self.createTypeAnnotation(typeToken) else null,
+                .type_annotation = type_annotation,
                 .value = value,
                 .binding_mutability = switch (val_or_var_token.kind) {
                     .Val => ast.BindingMutability.Immutable,
@@ -297,14 +269,11 @@ pub const Parser = struct {
                 return ParserError.ExpectedColon;
             }
 
-            const type_annotation_token = self.lexer.next();
-            if (type_annotation_token.kind != .Identifier) {
-                return ParserError.ExpectedTypeAnnotation;
-            }
+            const type_annotation = try self.parseTypeAnnotation();
 
             fields.append(self.allocator, .{
                 .name = field_name_token,
-                .type_annotation = self.createTypeAnnotation(type_annotation_token),
+                .type_annotation = type_annotation,
             }) catch unreachable;
 
             const post_field_token = self.lexer.peek();
@@ -350,14 +319,11 @@ pub const Parser = struct {
                 return ParserError.ExpectedColonOrEqualSign;
             }
 
-            const type_annotation_token = self.lexer.next();
-            if (type_annotation_token.kind != .Identifier) {
-                return ParserError.ExpectedTypeAnnotation;
-            }
+            const type_annotation = try self.parseTypeAnnotation();
 
             parameters.append(self.allocator, .{
                 .name = parameter_name_token,
-                .type_annotation = self.createTypeAnnotation(type_annotation_token),
+                .type_annotation = type_annotation,
             }) catch unreachable;
 
             const post_parameter_token = self.lexer.peek();
@@ -377,11 +343,7 @@ pub const Parser = struct {
             return ParserError.ExpectedColon;
         }
 
-        const return_type_token = self.lexer.next();
-        if (return_type_token.kind != .Identifier) {
-            return ParserError.ExpectedTypeAnnotation;
-        }
-        const return_type_annotation = self.createTypeAnnotation(return_type_token);
+        const return_type_annotation = try self.parseTypeAnnotation();
 
         const assign_token = self.lexer.next();
         if (assign_token.kind != .Assign) {
@@ -409,6 +371,11 @@ pub const Parser = struct {
                 },
             },
         });
+    }
+
+    fn parseTypeAnnotation(self: *@This()) ParserError!*type_expressions.TypeExpression {
+        var type_expression_parser = TypeExpressionParser.init(&self.lexer, self.allocator);
+        return type_expression_parser.parse();
     }
 
     fn parseReturnStatement(self: *@This()) ParserError!ast.Node {

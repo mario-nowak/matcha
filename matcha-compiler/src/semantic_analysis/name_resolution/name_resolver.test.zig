@@ -90,7 +90,7 @@ test "name resolution emits resolved items for structures and functions" {
 test "name resolution resolves declaration type annotations into side table" {
     var parsed = try parseProgram(
         \\item User = structure { name: string };
-        \\val user: User = 1;
+        \\val users: User[] = 1;
     );
     defer parsed.deinit();
 
@@ -102,9 +102,70 @@ test "name resolution resolves declaration type annotations into side table" {
         else => return error.UnexpectedNodeKind,
     };
     const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
+    const declaration_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
 
-    switch (resolved_program.type_reference_by_type_annotation_id.get(declaration.type_annotation.?.id).?) {
-        .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
+    _ = declaration;
+
+    switch (resolved_program.annotated_type_reference_by_symbol_id.get(declaration_symbol_id).?) {
+        .Array => |element_type_reference| switch (element_type_reference.*) {
+            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
+            else => return error.UnexpectedTypeReferenceKind,
+        },
+        else => return error.UnexpectedTypeReferenceKind,
+    }
+}
+
+test "name resolution resolves array type expressions recursively" {
+    var parsed = try parseProgram(
+        \\item User = structure { friends: User[], labels: string[][] };
+        \\item echo(users: User[]): string[] = "hi";
+    );
+    defer parsed.deinit();
+
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+
+    const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
+    const echo_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
+
+    const user_structure = switch (resolved_program.resolved_item_by_symbol_id.get(user_symbol_id).?) {
+        .Structure => |structure| structure,
+        else => return error.UnexpectedItemKind,
+    };
+    const echo_function = switch (resolved_program.resolved_item_by_symbol_id.get(echo_symbol_id).?) {
+        .Function => |function| function,
+        else => return error.UnexpectedItemKind,
+    };
+
+    switch (user_structure.fields[0].type_reference) {
+        .Array => |element_type_reference| switch (element_type_reference.*) {
+            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
+            else => return error.UnexpectedTypeReferenceKind,
+        },
+        else => return error.UnexpectedTypeReferenceKind,
+    }
+    switch (user_structure.fields[1].type_reference) {
+        .Array => |outer_element_type_reference| switch (outer_element_type_reference.*) {
+            .Array => |inner_element_type_reference| switch (inner_element_type_reference.*) {
+                .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
+                else => return error.UnexpectedTypeReferenceKind,
+            },
+            else => return error.UnexpectedTypeReferenceKind,
+        },
+        else => return error.UnexpectedTypeReferenceKind,
+    }
+    switch (echo_function.parameters[0].type_reference) {
+        .Array => |element_type_reference| switch (element_type_reference.*) {
+            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
+            else => return error.UnexpectedTypeReferenceKind,
+        },
+        else => return error.UnexpectedTypeReferenceKind,
+    }
+    switch (echo_function.return_type_reference) {
+        .Array => |element_type_reference| switch (element_type_reference.*) {
+            .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
+            else => return error.UnexpectedTypeReferenceKind,
+        },
         else => return error.UnexpectedTypeReferenceKind,
     }
 }
