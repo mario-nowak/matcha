@@ -17,4 +17,6 @@ pub const ParseError = error{
     ExpectedAssign,
     ExpectedCommaOrRightBrace,
     ExpectedRightBracket,
+    ArrayLiteralMustNotBeEmpty,
+    ExpectedCommaOrRightBracket,
 };

@@ -37,3 +37,14 @@ export fn matcha_print_string(ptr: [*]const u8, len: usize) void {
     writeStdout(ptr[0..len]);
     writeStdout("\n");
 }
+
+export fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i64, length: usize) noreturn {
+    var buffer: [256]u8 = undefined;
+    const formatted = std.fmt.bufPrint(
+        &buffer,
+        "panic: array index out of bounds at line {d}, column {d}: index {d}, length {d}\n",
+        .{ line, column, index, length },
+    ) catch unreachable;
+    writeStdout(formatted);
+    std.process.exit(1);
+}

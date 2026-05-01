@@ -161,6 +161,8 @@ pub const TypeChecker = struct {
             .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, resolved_program, exit_behavior_by_node_id, context),
             .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, resolved_program, exit_behavior_by_node_id, context),
             .ExpressionStatement => |expression_statement| return self.checkExpressionStatementNode(node.id, &expression_statement, resolved_program, exit_behavior_by_node_id),
+            .ArrayLiteral => |array_literal| return self.checkArrayLiteralNode(node.id, &array_literal, resolved_program, exit_behavior_by_node_id),
+            .IndexAccess => |index_access| return self.checkIndexAccessNode(node.id, &index_access, resolved_program, exit_behavior_by_node_id),
         }
     }
 
@@ -739,6 +741,86 @@ pub const TypeChecker = struct {
         return self.recordNodeType(node_id, match_type);
     }
 
+    fn checkArrayLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        array_literal: *const ast.ArrayLiteral,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        if (array_literal.elements.len == 0) {
+            std.debug.print("Type Error: Empty array literals are not supported in v1\n", .{});
+            return TypeError.TypeMismatch;
+        }
+
+        const first_element_type = try self.checkNode(
+            &array_literal.elements[0],
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+
+        for (array_literal.elements[1..]) |*element| {
+            const element_type = try self.checkNode(
+                element,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+            if (element_type != first_element_type) {
+                std.debug.print(
+                    "Type Error: Array literal elements must all have the same type, expected {any}, got {any}\n",
+                    .{ self.getType(first_element_type), self.getType(element_type) },
+                );
+                return TypeError.TypeMismatch;
+            }
+        }
+
+        const array_type_id = self.type_store.getOrCreateArrayType(first_element_type);
+        return self.recordNodeType(node_id, array_type_id);
+    }
+
+    fn checkIndexAccessNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        index_access: *const ast.IndexAccess,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const base_type_id = try self.checkNode(
+            index_access.base,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        const element_type_id = switch (self.type_store.getType(base_type_id)) {
+            .Array => |element_type_id| element_type_id,
+            else => {
+                std.debug.print(
+                    "Type Error: Cannot index into non-array type {any}\n",
+                    .{self.getType(base_type_id)},
+                );
+                return TypeError.TypeMismatch;
+            },
+        };
+
+        const index_type_id = try self.checkNode(
+            index_access.index,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
+        if (index_type_id != self.type_store.integer_type_id) {
+            std.debug.print(
+                "Type Error: Array index must be of type int, got {any}\n",
+                .{self.getType(index_type_id)},
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        return self.recordNodeType(node_id, element_type_id);
+    }
+
     fn checkExpressionStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
@@ -923,6 +1005,15 @@ pub const TypeChecker = struct {
                 for (structure_construction.fields) |field| {
                     try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
                 }
+            },
+            .ArrayLiteral => |array_literal| {
+                for (array_literal.elements) |*element| {
+                    try self.checkReturnStatementsMatchType(element, function_return_type, resolved_program);
+                }
+            },
+            .IndexAccess => |index_access| {
+                try self.checkReturnStatementsMatchType(index_access.base, function_return_type, resolved_program);
+                try self.checkReturnStatementsMatchType(index_access.index, function_return_type, resolved_program);
             },
             .ItemDefinition => {},
             .Identifier,

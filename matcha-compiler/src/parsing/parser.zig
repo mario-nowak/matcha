@@ -808,6 +808,7 @@ pub const Parser = struct {
                 };
             },
             .Match => try self.parseMatchExpression(token),
+            .LeftBracket => try self.parseArrayLiteral(token),
             .LeftParenthesis => try self.parseExpression(.{ .current_binding_power = 0 }),
             .LeftBrace => try self.parseBlock(token),
             .Minus => block: {
@@ -865,6 +866,11 @@ pub const Parser = struct {
 
             if (next_token.kind == .Dot) {
                 left_hand_side = try self.parseFieldAccessExpression(left_hand_side);
+                continue;
+            }
+
+            if (next_token.kind == .LeftBracket) {
+                left_hand_side = try self.parseIndexAccessExpression(left_hand_side);
                 continue;
             }
 
@@ -1034,6 +1040,75 @@ pub const Parser = struct {
             const argument = try self.parseExpression(.{ .current_binding_power = 0.0 });
             arguments.append(self.allocator, argument) catch unreachable;
         }
+    }
+
+    fn parseArrayLiteral(self: *@This(), left_bracket_token: lexing.Token) ParserError!ast.Node {
+        if (left_bracket_token.kind != .LeftBracket) {
+            unreachable;
+        }
+
+        if (self.lexer.peek().kind == .RightBracket) {
+            return ParserError.ArrayLiteralMustNotBeEmpty;
+        }
+
+        var elements = std.ArrayList(ast.Node){};
+        while (true) {
+            const element = try self.parseExpression(.{ .current_binding_power = 0 });
+            elements.append(self.allocator, element) catch unreachable;
+
+            const post_element_token = self.lexer.peek();
+            if (post_element_token.kind == .Comma) {
+                _ = self.lexer.next();
+                if (self.lexer.peek().kind == .RightBracket) {
+                    break;
+                }
+                continue;
+            }
+            if (post_element_token.kind == .RightBracket) {
+                break;
+            }
+            return ParserError.ExpectedCommaOrRightBracket;
+        }
+
+        const right_bracket_token = self.lexer.next();
+        if (right_bracket_token.kind != .RightBracket) {
+            return ParserError.ExpectedRightBracket;
+        }
+
+        return self.createNode(.{
+            .ArrayLiteral = .{
+                .left_bracket = left_bracket_token,
+                .elements = elements.toOwnedSlice(self.allocator) catch unreachable,
+                .right_bracket = right_bracket_token,
+            },
+        });
+    }
+
+    fn parseIndexAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
+        const left_bracket_token = self.lexer.next();
+        if (left_bracket_token.kind != .LeftBracket) {
+            unreachable;
+        }
+
+        const index = self.allocator.create(ast.Node) catch unreachable;
+        index.* = try self.parseExpression(.{ .current_binding_power = 0 });
+
+        const right_bracket_token = self.lexer.next();
+        if (right_bracket_token.kind != .RightBracket) {
+            return ParserError.ExpectedRightBracket;
+        }
+
+        const base = self.allocator.create(ast.Node) catch unreachable;
+        base.* = left_hand_side;
+
+        return self.createNode(.{
+            .IndexAccess = .{
+                .base = base,
+                .left_bracket = left_bracket_token,
+                .index = index,
+                .right_bracket = right_bracket_token,
+            },
+        });
     }
 
     fn parseFieldAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {

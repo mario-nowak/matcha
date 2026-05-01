@@ -163,6 +163,15 @@ pub const ControlFlowValidator = struct {
             .FieldAccess => |field_access| {
                 try self.validateNode(field_access.base, context);
             },
+            .ArrayLiteral => |array_literal| {
+                for (array_literal.elements) |*element| {
+                    try self.validateNode(element, context);
+                }
+            },
+            .IndexAccess => |index_access| {
+                try self.validateNode(index_access.base, context);
+                try self.validateNode(index_access.index, context);
+            },
             .Block => |block| {
                 const block_context = ControlFlowValidationContext{
                     .loop_depth = context.loop_depth,
@@ -427,6 +436,31 @@ pub const ControlFlowValidator = struct {
             .FieldAccess => |field_access| {
                 const base_result = try self.validateTerminatesWithValue(field_access.base);
                 if (base_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .ArrayLiteral => |array_literal| {
+                for (array_literal.elements) |*element| {
+                    const element_result = try self.validateTerminatesWithValue(element);
+                    if (element_result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .IndexAccess => |index_access| {
+                const base_result = try self.validateTerminatesWithValue(index_access.base);
+                if (base_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+                const index_result = try self.validateTerminatesWithValue(index_access.index);
+                if (index_result == .Terminates) {
                     self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
                     return .Terminates;
                 }
