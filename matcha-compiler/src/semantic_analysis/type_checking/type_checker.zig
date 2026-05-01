@@ -30,6 +30,7 @@ pub const TypeChecker = struct {
     type_by_symbol_id: typing.TypeBySymbolId,
     type_by_node_id: typing.TypeByNodeId,
     structure_construction_layout_by_node_id: typing.StructureConstructionLayoutByNodeId,
+    member_access_by_node_id: typing.MemberAccessByNodeId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -38,6 +39,7 @@ pub const TypeChecker = struct {
             .type_by_symbol_id = typing.TypeBySymbolId.init(allocator),
             .type_by_node_id = typing.TypeByNodeId.init(allocator),
             .structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(allocator),
+            .member_access_by_node_id = typing.MemberAccessByNodeId.init(allocator),
         };
     }
 
@@ -50,6 +52,7 @@ pub const TypeChecker = struct {
         self.type_by_symbol_id = typing.TypeBySymbolId.init(self.allocator);
         self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
         self.structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(self.allocator);
+        self.member_access_by_node_id = typing.MemberAccessByNodeId.init(self.allocator);
         const context: ValidationContext = .Statement;
 
         try self.seedModuleLevelItemTypes(&resolved_program);
@@ -69,6 +72,7 @@ pub const TypeChecker = struct {
             .type_by_symbol_id = self.type_by_symbol_id,
             .type_by_node_id = self.type_by_node_id,
             .structure_construction_layout_by_node_id = self.structure_construction_layout_by_node_id,
+            .member_access_by_node_id = self.member_access_by_node_id,
         };
     }
 
@@ -148,7 +152,7 @@ pub const TypeChecker = struct {
             .Leave => return self.checkLeaveNode(node.id),
             .Continue => return self.checkContinueNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
-            .FieldAccess => |field_access| return self.checkFieldAccessNode(node.id, &field_access, resolved_program, exit_behavior_by_node_id),
+            .MemberAccess => |member_access| return self.checkMemberAccessNode(node.id, &member_access, resolved_program, exit_behavior_by_node_id),
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, resolved_program, exit_behavior_by_node_id),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, resolved_program, exit_behavior_by_node_id),
             .StructureConstruction => |structure_construction| return self.checkStructureConstructionNode(node.id, &structure_construction, resolved_program, exit_behavior_by_node_id),
@@ -338,6 +342,17 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Expression,
         );
+        if (assignment.target.kind == .MemberAccess) {
+            if (self.member_access_by_node_id.get(assignment.target.id)) |member_access| {
+                switch (member_access) {
+                    .ArrayLength => {
+                        std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
+                        return TypeError.TypeMismatch;
+                    },
+                    .StructureField => {},
+                }
+            }
+        }
         if (target_type != value_type) {
             std.debug.print(
                 "Type Error: Cannot assign value of type {any} to target of type {any}\n",
@@ -463,40 +478,54 @@ pub const TypeChecker = struct {
         }
     }
 
-    fn checkFieldAccessNode(
+    fn checkMemberAccessNode(
         self: *@This(),
         node_id: ast.NodeId,
-        field_access: *const ast.FieldAccess,
+        member_access: *const ast.MemberAccess,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
         const base_type_id = try self.checkNode(
-            field_access.base,
+            member_access.base,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        const structure_type_id = switch (self.type_store.getType(base_type_id)) {
-            .Structure => |id| id,
-            else => {
+        const member_name = member_access.member_name_token.kind.Identifier;
+        switch (self.type_store.getType(base_type_id)) {
+            .Structure => |structure_type_id| {
+                const structure_type = self.type_store.structure_types.items[structure_type_id];
+                const field_index = structure_type.field_index_by_name.get(member_name) orelse {
+                    std.debug.print(
+                        "Type Error: No member named {s} exists on structure type {s}\n",
+                        .{ member_name, structure_type.name },
+                    );
+                    return TypeError.TypeMismatch;
+                };
+
+                self.recordMemberAccess(node_id, .{ .StructureField = .{ .field_index = field_index } });
+                return self.recordNodeType(node_id, structure_type.fields[@intCast(field_index)].type_id);
+            },
+            .Array => {
+                if (std.mem.eql(u8, member_name, "length")) {
+                    self.recordMemberAccess(node_id, .ArrayLength);
+                    return self.recordNodeType(node_id, self.type_store.integer_type_id);
+                }
+
                 std.debug.print(
-                    "Type Error: Cannot access field {s} on non-structure type {any}\n",
-                    .{ field_access.field_name_token.kind.Identifier, self.getType(base_type_id) },
+                    "Type Error: No member named {s} exists on array type\n",
+                    .{member_name},
                 );
                 return TypeError.TypeMismatch;
             },
-        };
-        const structure_type = self.type_store.structure_types.items[structure_type_id];
-        const field_name = field_access.field_name_token.kind.Identifier;
-        const field_index = structure_type.field_index_by_name.get(field_name) orelse {
-            std.debug.print(
-                "Type Error: No field named {s} exists on structure type {s}\n",
-                .{ field_name, structure_type.name },
-            );
-            return TypeError.TypeMismatch;
-        };
-
-        return self.recordNodeType(node_id, structure_type.fields[@intCast(field_index)].type_id);
+            else => {
+                std.debug.print(
+                    "Type Error: Cannot access member {s} on type {any}\n",
+                    .{ member_name, self.getType(base_type_id) },
+                );
+                return TypeError.TypeMismatch;
+            },
+        }
     }
 
     fn checkBinaryExpressionNode(
@@ -998,8 +1027,8 @@ pub const TypeChecker = struct {
             .UnaryExpression => |unary_expression| {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
             },
-            .FieldAccess => |field_access| {
-                try self.checkReturnStatementsMatchType(field_access.base, function_return_type, resolved_program);
+            .MemberAccess => |member_access| {
+                try self.checkReturnStatementsMatchType(member_access.base, function_return_type, resolved_program);
             },
             .StructureConstruction => |structure_construction| {
                 for (structure_construction.fields) |field| {
@@ -1210,6 +1239,14 @@ pub const TypeChecker = struct {
     ) typing.TypeId {
         self.type_by_node_id.put(node_id, node_type) catch unreachable;
         return node_type;
+    }
+
+    fn recordMemberAccess(
+        self: *@This(),
+        node_id: ast.NodeId,
+        member_access: typing.MemberAccess,
+    ) void {
+        self.member_access_by_node_id.put(node_id, member_access) catch unreachable;
     }
 
     fn getType(self: *const @This(), type_id: typing.TypeId) typing.Type {

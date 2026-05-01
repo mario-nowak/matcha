@@ -160,8 +160,8 @@ pub const ControlFlowValidator = struct {
             .UnaryExpression => |unary_expression| {
                 try self.validateNode(unary_expression.operand, context);
             },
-            .FieldAccess => |field_access| {
-                try self.validateNode(field_access.base, context);
+            .MemberAccess => |member_access| {
+                try self.validateNode(member_access.base, context);
             },
             .ArrayLiteral => |array_literal| {
                 for (array_literal.elements) |*element| {
@@ -433,8 +433,8 @@ pub const ControlFlowValidator = struct {
                 self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
                 return .FallsThroughWithValue;
             },
-            .FieldAccess => |field_access| {
-                const base_result = try self.validateTerminatesWithValue(field_access.base);
+            .MemberAccess => |member_access| {
+                const base_result = try self.validateTerminatesWithValue(member_access.base);
                 if (base_result == .Terminates) {
                     self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
                     return .Terminates;

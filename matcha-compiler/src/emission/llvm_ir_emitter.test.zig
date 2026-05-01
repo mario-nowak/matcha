@@ -189,7 +189,7 @@ test "llvm emission lowers structure construction" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
 }
 
-test "llvm emission lowers structure field access to gep plus load" {
+test "llvm emission lowers structure member access to gep plus load" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int, y: int };
         \\val point = Point { x = 1, y = 2 };
@@ -215,6 +215,17 @@ test "llvm emission lowers mutable structure field assignment to gep plus store"
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load ptr, ptr %.s_0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 3, ptr %.t_4") != null);
+}
+
+test "llvm emission lowers array length member access to extractvalue" {
+    const llvm_ir = try emit(
+        \\val numbers = [1, 2, 3];
+        \\val length = numbers.length;
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, ptr }") != null);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, llvm_ir, "extractvalue %Array "));
 }
 
 test "llvm emission lowers match expressions to compare-and-branch chains" {
