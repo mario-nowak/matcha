@@ -10,8 +10,10 @@ const Storage = []const u8;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 
 const llvm_string_type_definition = "%String = type { i8*, i64 }";
+const llvm_array_type_definition = "%Array = type { i64, ptr }";
 const runtime_print_int_function_name = "matcha_print_int";
 const runtime_print_string_function_name = "matcha_print_string";
+const runtime_panic_index_out_of_bounds_function_name = "matcha_panic_index_out_of_bounds";
 
 const StringLiteralGlobal = struct {
     name: []const u8,
@@ -205,6 +207,7 @@ pub const LlvmIrEmitter = struct {
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
     needs_print_int: bool,
     needs_print_string: bool,
+    needs_panic_index_out_of_bounds: bool,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -217,6 +220,7 @@ pub const LlvmIrEmitter = struct {
             .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
             .needs_print_int = false,
             .needs_print_string = false,
+            .needs_panic_index_out_of_bounds = false,
         };
     }
 
@@ -231,6 +235,7 @@ pub const LlvmIrEmitter = struct {
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
         self.needs_print_int = false;
         self.needs_print_string = false;
+        self.needs_panic_index_out_of_bounds = false;
         self.symbol_generator.string_literal_counter = 0;
         self.string_literal_globals.clearRetainingCapacity();
         self.string_literal_global_name_by_node_id.clearRetainingCapacity();
@@ -288,9 +293,8 @@ pub const LlvmIrEmitter = struct {
             .Integer => "i64",
             .String => "%String",
             .Structure => "ptr",
-            .Array,
-            .TaggedUnion,
-            => |unsupported_type| std.debug.panic(
+            .Array => "%Array",
+            .TaggedUnion => |unsupported_type| std.debug.panic(
                 "LLVM IR emitter only supports builtin types for now, got {any} (type id {d})",
                 .{ unsupported_type, type_id },
             ),
@@ -331,8 +335,8 @@ pub const LlvmIrEmitter = struct {
 
         const runtime_symbol_declarations = self.emitRuntimeSymbolDeclarations();
         module_preamble_buffer.writer(self.allocator).print(
-            "{s}\n\n{s}",
-            .{ runtime_symbol_declarations, llvm_string_type_definition },
+            "{s}\n\n{s}\n{s}",
+            .{ runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
         ) catch unreachable;
 
         const string_literal_globals_ir = self.renderStringLiteralGlobals();
@@ -365,6 +369,12 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(ptr, i64)",
                 .{runtime_print_string_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_panic_index_out_of_bounds) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(i64, i64, i64, i64) noreturn",
+                .{runtime_panic_index_out_of_bounds_function_name},
             ) catch unreachable;
         }
 
@@ -1108,6 +1118,20 @@ pub const LlvmIrEmitter = struct {
                 typed_program,
                 environment,
             ),
+            .ArrayLiteral => |array_literal| return self.emitArrayLiteral(
+                node,
+                &array_literal,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            .IndexAccess => |index_access| return self.emitIndexAccess(
+                node,
+                &index_access,
+                entry_label,
+                typed_program,
+                environment,
+            ),
         }
     }
 
@@ -1279,6 +1303,170 @@ pub const LlvmIrEmitter = struct {
         return .{
             .exit_label = current_label,
             .register = memory_register,
+        };
+    }
+
+    fn emitArrayLiteral(
+        self: *@This(),
+        node: *const ast.Node,
+        array_literal: *const ast.ArrayLiteral,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const array_type_id = typed_program.type_by_node_id.get(node.id) orelse unreachable;
+        const element_type_id = switch (typed_program.type_store.getType(array_type_id)) {
+            .Array => |id| id,
+            else => unreachable,
+        };
+        const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
+        const length = array_literal.elements.len;
+
+        const data_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64))",
+            .{ data_register, element_llvm_type, length },
+        ) catch unreachable }) catch unreachable;
+
+        var current_label: Label = entry_label;
+        for (array_literal.elements, 0..) |*element, index| {
+            const element_result = self.emitNode(element, current_label, typed_program, environment);
+            if (element_result.exit_label == null) {
+                return .{ .exit_label = null, .register = null };
+            }
+            current_label = element_result.exit_label.?;
+
+            const element_pointer_register = self.symbol_generator.generateRegister();
+            self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                self.allocator,
+                "{s} = getelementptr inbounds {s}, ptr {s}, i64 {d}",
+                .{ element_pointer_register, element_llvm_type, data_register, index },
+            ) catch unreachable }) catch unreachable;
+
+            self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                self.allocator,
+                "store {s} {s}, ptr {s}",
+                .{ element_llvm_type, element_result.register orelse unreachable, element_pointer_register },
+            ) catch unreachable }) catch unreachable;
+        }
+
+        const partial_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = insertvalue %Array undef, i64 {d}, 0",
+            .{ partial_register, length },
+        ) catch unreachable }) catch unreachable;
+
+        const array_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = insertvalue %Array {s}, ptr {s}, 1",
+            .{ array_register, partial_register, data_register },
+        ) catch unreachable }) catch unreachable;
+
+        return .{
+            .exit_label = current_label,
+            .register = array_register,
+        };
+    }
+
+    fn emitIndexAccess(
+        self: *@This(),
+        node: *const ast.Node,
+        index_access: *const ast.IndexAccess,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const base_result = self.emitNode(index_access.base, entry_label, typed_program, environment);
+        if (base_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const index_result = self.emitNode(index_access.index, base_result.exit_label.?, typed_program, environment);
+        if (index_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const base_type_id = typed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+        const element_type_id = switch (typed_program.type_store.getType(base_type_id)) {
+            .Array => |id| id,
+            else => unreachable,
+        };
+        const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
+
+        const length_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = extractvalue %Array {s}, 0",
+            .{ length_register, base_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const data_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = extractvalue %Array {s}, 1",
+            .{ data_register, base_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const negative_check_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = icmp slt i64 {s}, 0",
+            .{ negative_check_register, index_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const overflow_check_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = icmp sge i64 {s}, {s}",
+            .{ overflow_check_register, index_result.register orelse unreachable, length_register },
+        ) catch unreachable }) catch unreachable;
+
+        const out_of_bounds_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = or i1 {s}, {s}",
+            .{ out_of_bounds_register, negative_check_register, overflow_check_register },
+        ) catch unreachable }) catch unreachable;
+
+        const panic_label = self.symbol_generator.generateLabel("index_panic");
+        const ok_label = self.symbol_generator.generateLabel("index_ok");
+        self.emitBranchInstruction(out_of_bounds_register, &.{ panic_label, ok_label });
+
+        self.emitLabel(panic_label);
+        self.needs_panic_index_out_of_bounds = true;
+        const line = index_access.left_bracket.line;
+        const column = index_access.left_bracket.column;
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i64 {d}, i64 {d}, i64 {s}, i64 {s})",
+            .{
+                runtime_panic_index_out_of_bounds_function_name,
+                line,
+                column,
+                index_result.register orelse unreachable,
+                length_register,
+            },
+        ) catch unreachable }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = "unreachable" }) catch unreachable;
+
+        self.emitLabel(ok_label);
+        const element_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
+            .{ element_pointer_register, element_llvm_type, data_register, index_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const result_register = self.symbol_generator.generateRegister();
+        self.emitLoad(result_register, element_pointer_register, element_llvm_type);
+
+        _ = node;
+        return .{
+            .exit_label = ok_label,
+            .register = result_register,
         };
     }
 

@@ -29,6 +29,8 @@ pub const NodeKind = union(enum) {
     StringLiteral: lexing.Token,
     Block: Block,
     StructureConstruction: StructureConstruction,
+    ArrayLiteral: ArrayLiteral,
+    IndexAccess: IndexAccess,
 };
 
 pub const Node = struct {
@@ -206,6 +208,19 @@ pub const StructureConstructionField = struct {
     name: lexing.Token,
     assign_token: lexing.Token,
     value: *Node,
+};
+
+pub const ArrayLiteral = struct {
+    left_bracket: lexing.Token,
+    elements: []Node,
+    right_bracket: lexing.Token,
+};
+
+pub const IndexAccess = struct {
+    base: *Node,
+    left_bracket: lexing.Token,
+    index: *Node,
+    right_bracket: lexing.Token,
 };
 
 pub const Program = struct {
