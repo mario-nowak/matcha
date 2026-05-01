@@ -876,9 +876,9 @@ pub const LlvmIrEmitter = struct {
                     .register = result_register,
                 };
             },
-            .FieldAccess => |field_access| return self.emitFieldAccess(
+            .MemberAccess => |member_access| return self.emitMemberAccess(
                 node,
-                &field_access,
+                &member_access,
                 entry_label,
                 typed_program,
                 environment,
@@ -1135,37 +1135,66 @@ pub const LlvmIrEmitter = struct {
         }
     }
 
-    fn emitFieldAccess(
+    fn emitMemberAccess(
         self: *@This(),
         node: *const ast.Node,
-        field_access: *const ast.FieldAccess,
+        member_access: *const ast.MemberAccess,
         entry_label: Label,
         typed_program: *const typing.TypedProgram,
         environment: *Environment,
     ) EmissionResult {
-        const field_pointer_result = self.emitFieldAccessPointer(
-            field_access,
+        const resolved_member_access = typed_program.member_access_by_node_id.get(node.id) orelse unreachable;
+        switch (resolved_member_access) {
+            .ArrayLength => {
+                const base_result = self.emitNode(
+                    member_access.base,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (base_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
+
+                const length_register = self.symbol_generator.generateRegister();
+                self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = extractvalue %Array {s}, 0",
+                    .{ length_register, base_result.register orelse unreachable },
+                ) catch unreachable }) catch unreachable;
+
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = length_register,
+                };
+            },
+            .StructureField => {},
+        }
+
+        const member_pointer_result = self.emitMemberAccessPointer(
+            node.id,
+            member_access,
             entry_label,
             typed_program,
             environment,
         );
-        if (field_pointer_result.exit_label == null) {
+        if (member_pointer_result.exit_label == null) {
             return .{
                 .exit_label = null,
                 .register = null,
             };
         }
 
-        const field_register = self.symbol_generator.generateRegister();
+        const member_register = self.symbol_generator.generateRegister();
         self.emitLoad(
-            field_register,
-            field_pointer_result.register.?,
+            member_register,
+            member_pointer_result.register.?,
             llvmIrType(&typed_program.type_store, typed_program.type_by_node_id.get(node.id).?),
         );
 
         return .{
-            .exit_label = field_pointer_result.exit_label,
-            .register = field_register,
+            .exit_label = member_pointer_result.exit_label,
+            .register = member_register,
         };
     }
 
@@ -1184,8 +1213,9 @@ pub const LlvmIrEmitter = struct {
                     .register = environment.storage_by_symbol_id.get(symbol_id).?,
                 };
             },
-            .FieldAccess => |field_access| return self.emitFieldAccessPointer(
-                &field_access,
+            .MemberAccess => |member_access| return self.emitMemberAccessPointer(
+                target.id,
+                &member_access,
                 entry_label,
                 typed_program,
                 environment,
@@ -1194,15 +1224,16 @@ pub const LlvmIrEmitter = struct {
         }
     }
 
-    fn emitFieldAccessPointer(
+    fn emitMemberAccessPointer(
         self: *@This(),
-        field_access: *const ast.FieldAccess,
+        node_id: ast.NodeId,
+        member_access: *const ast.MemberAccess,
         entry_label: Label,
         typed_program: *const typing.TypedProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(
-            field_access.base,
+            member_access.base,
             entry_label,
             typed_program,
             environment,
@@ -1214,14 +1245,17 @@ pub const LlvmIrEmitter = struct {
             };
         }
 
-        const base_type_id = typed_program.type_by_node_id.get(field_access.base.id) orelse unreachable;
-        const structure_type_id = switch (typed_program.type_store.getType(base_type_id)) {
-            .Structure => |id| id,
-            else => unreachable,
+        const resolved_member_access = typed_program.member_access_by_node_id.get(node_id) orelse unreachable;
+        const field_index = switch (resolved_member_access) {
+            .StructureField => |structure_field| structure_field.field_index,
+            .ArrayLength => unreachable,
         };
-        const structure_type = typed_program.type_store.structure_types.items[structure_type_id];
-        const field_name = field_access.field_name_token.kind.Identifier;
-        const field_index = structure_type.field_index_by_name.get(field_name) orelse unreachable;
+
+        const base_type_id = typed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
+        switch (typed_program.type_store.getType(base_type_id)) {
+            .Structure => {},
+            else => unreachable,
+        }
         const structure_symbol = self.getStructureSymbolForTypeId(typed_program, base_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
 

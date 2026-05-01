@@ -526,7 +526,7 @@ pub const Parser = struct {
 
         var target = self.createNode(.{ .Identifier = identifier_token });
         while (self.lexer.peek().kind == .Dot) {
-            target = try self.parseFieldAccessExpression(target);
+            target = try self.parseMemberAccessExpression(target);
         }
 
         return target;
@@ -865,7 +865,7 @@ pub const Parser = struct {
             }
 
             if (next_token.kind == .Dot) {
-                left_hand_side = try self.parseFieldAccessExpression(left_hand_side);
+                left_hand_side = try self.parseMemberAccessExpression(left_hand_side);
                 continue;
             }
 
@@ -1111,14 +1111,14 @@ pub const Parser = struct {
         });
     }
 
-    fn parseFieldAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
+    fn parseMemberAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
         const dot_token = self.lexer.next();
         if (dot_token.kind != .Dot) {
             unreachable;
         }
 
-        const field_name_token = self.lexer.next();
-        if (field_name_token.kind != .Identifier) {
+        const member_name_token = self.lexer.next();
+        if (member_name_token.kind != .Identifier) {
             return ParserError.ExpectedIdentifier;
         }
 
@@ -1126,10 +1126,10 @@ pub const Parser = struct {
         base.* = left_hand_side;
 
         return self.createNode(.{
-            .FieldAccess = .{
+            .MemberAccess = .{
                 .base = base,
                 .dot_token = dot_token,
-                .field_name_token = field_name_token,
+                .member_name_token = member_name_token,
             },
         });
     }

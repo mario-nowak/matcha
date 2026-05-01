@@ -332,7 +332,7 @@ test "semantic analysis records structure construction layout in source order" {
     try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
 }
 
-test "semantic analysis type-checks structure field access" {
+test "semantic analysis type-checks structure member access" {
     var analyzed = try helpers.analyzeProgram(
         \\item Point = structure { x: int, y: int };
         \\val point = Point { x = 1, y = 2 };
@@ -347,6 +347,32 @@ test "semantic analysis type-checks structure field access" {
     const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+    const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
+    switch (member_access) {
+        .StructureField => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),
+        else => return TestError.UnexpectedNodeKind,
+    }
+}
+
+test "semantic analysis type-checks array length member access" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val numbers = [1, 2, 3];
+        \\val length = numbers.length;
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[1].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+    const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
+    switch (member_access) {
+        .ArrayLength => {},
+        else => return TestError.UnexpectedNodeKind,
+    }
 }
 
 test "semantic analysis type-checks mutable structure field assignment" {
@@ -365,7 +391,7 @@ test "semantic analysis type-checks mutable structure field assignment" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
 }
 
-test "semantic analysis rejects invalid structure field access" {
+test "semantic analysis rejects invalid structure member access" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val x = 1.x;
     );
@@ -388,6 +414,11 @@ test "semantic analysis rejects immutable and mismatched structure field assignm
         \\item Point = structure { x: int, y: int };
         \\var point = Point { x = 1, y = 2 };
         \\point.x = false;
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\var numbers = [1, 2, 3];
+        \\numbers.length = 4;
     );
 }
 

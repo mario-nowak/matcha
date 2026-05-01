@@ -281,8 +281,8 @@ pub const NameResolver = struct {
             .UnaryExpression => |unaryExpression| {
                 try self.resolveNode(unaryExpression.operand, node_scope, module_scope, context);
             },
-            .FieldAccess => |field_access| {
-                try self.resolveNode(field_access.base, node_scope, module_scope, context);
+            .MemberAccess => |member_access| {
+                try self.resolveNode(member_access.base, node_scope, module_scope, context);
             },
             .Identifier => |identifier| {
                 const identifier_name = identifier.kind.Identifier;
@@ -393,8 +393,8 @@ pub const NameResolver = struct {
                 self.symbol_id_by_node_id.put(target.id, symbol_id) catch unreachable;
                 return symbol_id;
             },
-            .FieldAccess => |field_access| {
-                return try self.resolveAssignmentTarget(field_access.base, node_scope, module_scope);
+            .MemberAccess => |member_access| {
+                return try self.resolveAssignmentTarget(member_access.base, node_scope, module_scope);
             },
             else => {
                 std.debug.print("Semantic Error: Invalid assignment target\n", .{});

@@ -38,13 +38,13 @@ fn expectFunctionItem(node: *const ast.Node) !ast.Function {
     };
 }
 
-fn expectFieldAccess(node: *const ast.Node, expected_field_name: []const u8) !ast.FieldAccess {
-    const field_access = switch (node.kind) {
-        .FieldAccess => |expression| expression,
+fn expectMemberAccess(node: *const ast.Node, expected_member_name: []const u8) !ast.MemberAccess {
+    const member_access = switch (node.kind) {
+        .MemberAccess => |expression| expression,
         else => return TestError.UnexpectedNodeKind,
     };
-    try std.testing.expectEqualStrings(expected_field_name, field_access.field_name_token.kind.Identifier);
-    return field_access;
+    try std.testing.expectEqualStrings(expected_member_name, member_access.member_name_token.kind.Identifier);
+    return member_access;
 }
 
 fn expectAssignment(node: *const ast.Node) !ast.Assignment {
@@ -288,7 +288,7 @@ test "parser parses array-typed function definitions" {
     }
 }
 
-test "parser parses structure field access expressions" {
+test "parser parses structure member access expressions" {
     const source =
         \\val x = point.x;
         \\val y = user.location.x;
@@ -302,26 +302,26 @@ test "parser parses structure field access expressions" {
         .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const point_x = try expectFieldAccess(x_declaration.value, "x");
+    const point_x = try expectMemberAccess(x_declaration.value, "x");
     try expectNodeTag(point_x.base, .Identifier);
 
     const y_declaration = switch (parsed.program.statements[1].kind) {
         .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const user_location_x = try expectFieldAccess(y_declaration.value, "x");
-    const user_location = try expectFieldAccess(user_location_x.base, "location");
+    const user_location_x = try expectMemberAccess(y_declaration.value, "x");
+    const user_location = try expectMemberAccess(user_location_x.base, "location");
     try expectNodeTag(user_location.base, .Identifier);
 
     const z_declaration = switch (parsed.program.statements[2].kind) {
         .Declaration => |value_declaration| value_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
-    const constructed_point_x = try expectFieldAccess(z_declaration.value, "x");
+    const constructed_point_x = try expectMemberAccess(z_declaration.value, "x");
     try expectNodeTag(constructed_point_x.base, .StructureConstruction);
 }
 
-test "parser parses structure field assignment statements" {
+test "parser parses structure member assignment statements" {
     const source =
         \\point.x = 3;
         \\user.location.x = 4;
@@ -331,13 +331,13 @@ test "parser parses structure field assignment statements" {
     defer parsed.deinit();
 
     const first_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const point_x = try expectFieldAccess(first_assignment.target, "x");
+    const point_x = try expectMemberAccess(first_assignment.target, "x");
     try expectNodeTag(point_x.base, .Identifier);
     try expectNodeTag(first_assignment.value, .IntegerLiteral);
 
     const second_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const user_location_x = try expectFieldAccess(second_assignment.target, "x");
-    const user_location = try expectFieldAccess(user_location_x.base, "location");
+    const user_location_x = try expectMemberAccess(second_assignment.target, "x");
+    const user_location = try expectMemberAccess(user_location_x.base, "location");
     try expectNodeTag(user_location.base, .Identifier);
     try expectNodeTag(second_assignment.value, .IntegerLiteral);
 }
