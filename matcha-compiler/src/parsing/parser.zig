@@ -476,7 +476,7 @@ pub const Parser = struct {
 
     fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) ParserError!ast.Node {
         const target = self.allocator.create(ast.Node) catch unreachable;
-        target.* = try self.parseAssignmentTargetExpression();
+        target.* = try self.parsePlaceExpression();
 
         const assignment_token = self.lexer.next();
         if (assignment_token.kind != .Assign) {
@@ -507,26 +507,48 @@ pub const Parser = struct {
         if (lookahead.peek().kind != .Identifier) return false;
 
         _ = lookahead.next();
-        while (lookahead.peek().kind == .Dot) {
-            _ = lookahead.next();
-            if (lookahead.peek().kind != .Identifier) {
-                return false;
+        while (true) {
+            switch (lookahead.peek().kind) {
+                .Dot => {
+                    _ = lookahead.next();
+                    if (lookahead.peek().kind != .Identifier) {
+                        return false;
+                    }
+                    _ = lookahead.next();
+                },
+                .LeftBracket => {
+                    _ = lookahead.next();
+                    var bracket_depth: usize = 1;
+                    while (bracket_depth > 0) {
+                        const next_token = lookahead.next();
+                        switch (next_token.kind) {
+                            .LeftBracket => bracket_depth += 1,
+                            .RightBracket => bracket_depth -= 1,
+                            .EndOfFile, .Semicolon => return false,
+                            else => {},
+                        }
+                    }
+                },
+                else => break,
             }
-            _ = lookahead.next();
         }
 
         return lookahead.peek().kind == .Assign;
     }
 
-    fn parseAssignmentTargetExpression(self: *@This()) ParserError!ast.Node {
+    fn parsePlaceExpression(self: *@This()) ParserError!ast.Node {
         const identifier_token = self.lexer.next();
         if (identifier_token.kind != .Identifier) {
             return ParserError.ExpectedIdentifier;
         }
 
         var target = self.createNode(.{ .Identifier = identifier_token });
-        while (self.lexer.peek().kind == .Dot) {
-            target = try self.parseMemberAccessExpression(target);
+        while (true) {
+            switch (self.lexer.peek().kind) {
+                .Dot => target = try self.parseMemberAccessExpression(target),
+                .LeftBracket => target = try self.parseIndexAccessExpression(target),
+                else => break,
+            }
         }
 
         return target;

@@ -403,13 +403,25 @@ test "semantic analysis rejects invalid structure member access" {
     );
 }
 
-test "semantic analysis rejects immutable and mismatched structure field assignment" {
-    try expectAnalyzeError(error.CannotAssignToImmutable,
+test "semantic analysis allows member and indexed assignment through val bindings" {
+    var analyzed = try helpers.analyzeProgram(
         \\item Point = structure { x: int, y: int };
         \\val point = Point { x = 1, y = 2 };
         \\point.x = 3;
+        \\val numbers = [1, 2, 3];
+        \\numbers[0] = 4;
     );
+    defer analyzed.deinit();
+}
 
+test "semantic analysis rejects rebinding of immutable bindings" {
+    try expectAnalyzeError(error.CannotAssignToImmutable,
+        \\val answer = 1;
+        \\answer = 2;
+    );
+}
+
+test "semantic analysis rejects mismatched and read-only place assignment" {
     try expectAnalyzeError(error.TypeMismatch,
         \\item Point = structure { x: int, y: int };
         \\var point = Point { x = 1, y = 2 };
