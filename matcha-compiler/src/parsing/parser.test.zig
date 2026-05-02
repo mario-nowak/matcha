@@ -342,6 +342,36 @@ test "parser parses structure member assignment statements" {
     try expectNodeTag(second_assignment.value, .IntegerLiteral);
 }
 
+test "parser parses indexed and mixed place assignment statements" {
+    const source =
+        \\numbers[0] = 4;
+        \\user.points[i].x = 1;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const indexed_assignment = try expectAssignment(&parsed.program.statements[0]);
+    const indexed_target = switch (indexed_assignment.target.kind) {
+        .IndexAccess => |index_access| index_access,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectNodeTag(indexed_target.base, .Identifier);
+    try expectNodeTag(indexed_target.index, .IntegerLiteral);
+    try expectNodeTag(indexed_assignment.value, .IntegerLiteral);
+
+    const mixed_assignment = try expectAssignment(&parsed.program.statements[1]);
+    const points_i_x = try expectMemberAccess(mixed_assignment.target, "x");
+    const points_i = switch (points_i_x.base.kind) {
+        .IndexAccess => |index_access| index_access,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const user_points = try expectMemberAccess(points_i.base, "points");
+    try expectNodeTag(user_points.base, .Identifier);
+    try expectNodeTag(points_i.index, .Identifier);
+    try expectNodeTag(mixed_assignment.value, .IntegerLiteral);
+}
+
 test "parser parses subjectful match expressions" {
     const source =
         \\val message = match true {

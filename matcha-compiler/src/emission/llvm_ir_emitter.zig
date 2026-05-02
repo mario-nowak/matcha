@@ -977,13 +977,13 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .Assignment => |assignment| {
-                const target_pointer_result = self.emitAssignmentTargetPointer(
+                const place_result = self.emitPlace(
                     assignment.target,
                     entry_label,
                     typed_program,
                     environment,
                 );
-                if (target_pointer_result.exit_label == null) {
+                if (place_result.exit_label == null) {
                     return .{
                         .exit_label = null,
                         .register = null,
@@ -992,13 +992,13 @@ pub const LlvmIrEmitter = struct {
 
                 const value_result = self.emitNode(
                     assignment.value,
-                    target_pointer_result.exit_label.?,
+                    place_result.exit_label.?,
                     typed_program,
                     environment,
                 );
                 const value_type_id = typed_program.type_by_node_id.get(assignment.target.id).?;
                 const llvm_ir_type = llvmIrType(&typed_program.type_store, value_type_id);
-                self.emitStore(value_result.register.?, target_pointer_result.register.?, llvm_ir_type);
+                self.emitStore(value_result.register.?, place_result.register.?, llvm_ir_type);
 
                 return .{
                     .exit_label = value_result.exit_label,
@@ -1198,7 +1198,7 @@ pub const LlvmIrEmitter = struct {
         };
     }
 
-    fn emitAssignmentTargetPointer(
+    fn emitPlace(
         self: *@This(),
         target: *const ast.Node,
         entry_label: Label,
@@ -1216,6 +1216,12 @@ pub const LlvmIrEmitter = struct {
             .MemberAccess => |member_access| return self.emitMemberAccessPointer(
                 target.id,
                 &member_access,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            .IndexAccess => |index_access| return self.emitIndexAccessPointer(
+                &index_access,
                 entry_label,
                 typed_program,
                 environment,
@@ -1413,6 +1419,40 @@ pub const LlvmIrEmitter = struct {
         typed_program: *const typing.TypedProgram,
         environment: *Environment,
     ) EmissionResult {
+        _ = node;
+        const pointer_result = self.emitIndexAccessPointer(
+            index_access,
+            entry_label,
+            typed_program,
+            environment,
+        );
+        if (pointer_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const base_type_id = typed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+        const element_type_id = switch (typed_program.type_store.getType(base_type_id)) {
+            .Array => |id| id,
+            else => unreachable,
+        };
+        const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
+
+        const result_register = self.symbol_generator.generateRegister();
+        self.emitLoad(result_register, pointer_result.register orelse unreachable, element_llvm_type);
+
+        return .{
+            .exit_label = pointer_result.exit_label,
+            .register = result_register,
+        };
+    }
+
+    fn emitIndexAccessPointer(
+        self: *@This(),
+        index_access: *const ast.IndexAccess,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
         const base_result = self.emitNode(index_access.base, entry_label, typed_program, environment);
         if (base_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
@@ -1494,13 +1534,9 @@ pub const LlvmIrEmitter = struct {
             .{ element_pointer_register, element_llvm_type, data_register, index_result.register orelse unreachable },
         ) catch unreachable }) catch unreachable;
 
-        const result_register = self.symbol_generator.generateRegister();
-        self.emitLoad(result_register, element_pointer_register, element_llvm_type);
-
-        _ = node;
         return .{
             .exit_label = ok_label,
-            .register = result_register,
+            .register = element_pointer_register,
         };
     }
 

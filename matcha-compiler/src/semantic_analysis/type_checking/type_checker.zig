@@ -22,6 +22,12 @@ const TypeError = error{
     TypeMismatch,
     NonExhaustiveMatch,
     DuplicateMatchArm,
+    CannotAssignToImmutable,
+    InvalidAssignmentTarget,
+};
+
+const PlaceInfo = struct {
+    type_id: typing.TypeId,
 };
 
 pub const TypeChecker = struct {
@@ -330,11 +336,10 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
-        const target_type = try self.checkNode(
+        const place = try self.checkPlaceNode(
             assignment.target,
             resolved_program,
             exit_behavior_by_node_id,
-            .Expression,
         );
         const value_type = try self.checkNode(
             assignment.value,
@@ -342,8 +347,62 @@ pub const TypeChecker = struct {
             exit_behavior_by_node_id,
             .Expression,
         );
-        if (assignment.target.kind == .MemberAccess) {
-            if (self.member_access_by_node_id.get(assignment.target.id)) |member_access| {
+        if (place.type_id != value_type) {
+            std.debug.print(
+                "Type Error: Cannot assign value of type {any} to target of type {any}\n",
+                .{ self.getType(value_type), self.getType(place.type_id) },
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
+    }
+
+    fn checkPlaceNode(
+        self: *@This(),
+        node: *const ast.Node,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!PlaceInfo {
+        switch (node.kind) {
+            .Identifier => |identifier| {
+                const symbol_id = resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
+                const symbol = resolved_program.symbol_table.getSymbol(symbol_id);
+                switch (symbol.kind) {
+                    .Binding => |binding| {
+                        if (binding.binding_mutability == symbols.BindingMutability.Immutable) {
+                            std.debug.print(
+                                "Semantic Error: Cannot assign to immutable variable: {s}\n",
+                                .{identifier.kind.Identifier},
+                            );
+                            return TypeError.CannotAssignToImmutable;
+                        }
+                    },
+                    else => {
+                        std.debug.print(
+                            "Semantic Error: Cannot assign to non-binding symbol: {s}\n",
+                            .{identifier.kind.Identifier},
+                        );
+                        return TypeError.InvalidAssignmentTarget;
+                    },
+                }
+
+                const type_id = try self.checkNode(
+                    node,
+                    resolved_program,
+                    exit_behavior_by_node_id,
+                    .Expression,
+                );
+                return .{ .type_id = type_id };
+            },
+            .MemberAccess => {
+                const type_id = try self.checkNode(
+                    node,
+                    resolved_program,
+                    exit_behavior_by_node_id,
+                    .Expression,
+                );
+                const member_access = self.member_access_by_node_id.get(node.id) orelse unreachable;
                 switch (member_access) {
                     .ArrayLength => {
                         std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
@@ -351,17 +410,22 @@ pub const TypeChecker = struct {
                     },
                     .StructureField => {},
                 }
-            }
+                return .{ .type_id = type_id };
+            },
+            .IndexAccess => {
+                const type_id = try self.checkNode(
+                    node,
+                    resolved_program,
+                    exit_behavior_by_node_id,
+                    .Expression,
+                );
+                return .{ .type_id = type_id };
+            },
+            else => {
+                std.debug.print("Semantic Error: Invalid assignment target\n", .{});
+                return TypeError.InvalidAssignmentTarget;
+            },
         }
-        if (target_type != value_type) {
-            std.debug.print(
-                "Type Error: Cannot assign value of type {any} to target of type {any}\n",
-                .{ self.getType(value_type), self.getType(target_type) },
-            );
-            return TypeError.TypeMismatch;
-        }
-
-        return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkLoopNode(

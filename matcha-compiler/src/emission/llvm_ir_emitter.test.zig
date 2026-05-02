@@ -217,6 +217,21 @@ test "llvm emission lowers mutable structure field assignment to gep plus store"
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 3, ptr %.t_4") != null);
 }
 
+test "llvm emission lowers indexed assignment to bounds-checked store" {
+    const llvm_ir = try emit(
+        \\val numbers = [1, 2, 3];
+        \\numbers[0] = 4;
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, ptr }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_panic_index_out_of_bounds") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp slt i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp sge i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds i64, ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr") != null);
+}
+
 test "llvm emission lowers array length member access to extractvalue" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
