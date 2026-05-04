@@ -21,11 +21,17 @@ const ResolutionContext = struct {
     module_shadowing: ModuleShadowing,
 };
 
+const FunctionResolutionTarget = struct {
+    node_id: ast.NodeId,
+    symbol: symbols.Symbol,
+};
+
 pub const NameResolver = struct {
     allocator: std.mem.Allocator,
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
-    resolved_item_by_symbol_id: symbols.ResolvedItemBySymbolId,
+    resolved_function_by_symbol_id: symbols.ResolvedFunctionBySymbolId,
+    resolved_structure_by_symbol_id: symbols.ResolvedStructureBySymbolId,
     annotated_type_reference_by_symbol_id: symbols.AnnotatedTypeReferenceBySymbolId,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
@@ -33,7 +39,8 @@ pub const NameResolver = struct {
             .allocator = allocator,
             .symbol_table = symbols.SymbolTable.init(allocator),
             .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
-            .resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(allocator),
+            .resolved_function_by_symbol_id = symbols.ResolvedFunctionBySymbolId.init(allocator),
+            .resolved_structure_by_symbol_id = symbols.ResolvedStructureBySymbolId.init(allocator),
             .annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(allocator),
         };
     }
@@ -48,7 +55,8 @@ pub const NameResolver = struct {
         var root_scope = scope.Scope.init(self.allocator, null);
         self.symbol_table = symbols.SymbolTable.init(self.allocator);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.allocator);
-        self.resolved_item_by_symbol_id = symbols.ResolvedItemBySymbolId.init(self.allocator);
+        self.resolved_function_by_symbol_id = symbols.ResolvedFunctionBySymbolId.init(self.allocator);
+        self.resolved_structure_by_symbol_id = symbols.ResolvedStructureBySymbolId.init(self.allocator);
         self.annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(self.allocator);
 
         var module_scope = try self.buildModuleScope(program);
@@ -66,7 +74,8 @@ pub const NameResolver = struct {
             .program = program.*,
             .symbol_id_by_node_id = self.symbol_id_by_node_id,
             .symbol_table = self.symbol_table,
-            .resolved_item_by_symbol_id = self.resolved_item_by_symbol_id,
+            .resolved_function_by_symbol_id = self.resolved_function_by_symbol_id,
+            .resolved_structure_by_symbol_id = self.resolved_structure_by_symbol_id,
             .annotated_type_reference_by_symbol_id = self.annotated_type_reference_by_symbol_id,
         };
     }
@@ -83,18 +92,16 @@ pub const NameResolver = struct {
             .declared_at = null,
             .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
         });
-        self.appendResolvedItem(.{
-            .Function = .{
-                .symbol_id = print_int_symbol.id,
-                .name = print_int_symbol.name,
-                .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
-                    .symbol_id = parameter_symbol.id,
-                    .name = parameter_symbol.name,
-                    .type_reference = .{ .Builtin = .Integer },
-                }}) catch unreachable,
-                .return_type_reference = .{ .Builtin = .Unit },
-                .implementation = .builtin,
-            },
+        self.appendResolvedFunction(.{
+            .symbol_id = print_int_symbol.id,
+            .name = print_int_symbol.name,
+            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
+                .symbol_id = parameter_symbol.id,
+                .name = parameter_symbol.name,
+                .type_reference = .{ .Builtin = .Integer },
+            }}) catch unreachable,
+            .return_type_reference = .{ .Builtin = .Unit },
+            .implementation = .builtin,
         });
     }
 
@@ -110,18 +117,16 @@ pub const NameResolver = struct {
             .declared_at = null,
             .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
         });
-        self.appendResolvedItem(.{
-            .Function = .{
-                .symbol_id = print_string_symbol.id,
-                .name = print_string_symbol.name,
-                .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
-                    .symbol_id = parameter_symbol.id,
-                    .name = parameter_symbol.name,
-                    .type_reference = .{ .Builtin = .String },
-                }}) catch unreachable,
-                .return_type_reference = .{ .Builtin = .Unit },
-                .implementation = .builtin,
-            },
+        self.appendResolvedFunction(.{
+            .symbol_id = print_string_symbol.id,
+            .name = print_string_symbol.name,
+            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
+                .symbol_id = parameter_symbol.id,
+                .name = parameter_symbol.name,
+                .type_reference = .{ .Builtin = .String },
+            }}) catch unreachable,
+            .return_type_reference = .{ .Builtin = .Unit },
+            .implementation = .builtin,
         });
     }
 
@@ -232,12 +237,19 @@ pub const NameResolver = struct {
             },
             .ItemDefinition => |item_definition| switch (item_definition.item) {
                 .Function => |function_definition| {
-                    try self.resolveFunctionDefinition(
-                        node.id,
+                    const function_symbol_id = module_scope.lookupSymbol(
                         item_definition.identifier_token.kind.Identifier,
+                    ) orelse unreachable;
+                    const function_symbol = self.symbol_table.getSymbol(function_symbol_id);
+                    const resolved_function = try self.resolveFunction(
+                        .{
+                            .node_id = node.id,
+                            .symbol = function_symbol,
+                        },
                         &function_definition,
                         module_scope,
                     );
+                    self.appendResolvedFunction(resolved_function);
                 },
                 .Structure => |structure_definition| {
                     try self.resolveStructureDefinition(node.id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
@@ -378,13 +390,12 @@ pub const NameResolver = struct {
         }
     }
 
-    fn resolveFunctionDefinition(
+    fn resolveFunction(
         self: *@This(),
-        node_id: ast.NodeId,
-        function_name: []const u8,
+        target: FunctionResolutionTarget,
         function_definition: *const ast.Function,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) NameResolutionError!symbols.ResolvedFunction {
         var function_scope = scope.Scope.init(self.allocator, null);
         var resolved_parameters = std.ArrayList(symbols.ResolvedParameter){};
 
@@ -408,24 +419,24 @@ pub const NameResolver = struct {
             }) catch unreachable;
         }
 
-        const function_symbol_id = module_scope.lookupSymbol(function_name) orelse unreachable;
         const resolved_function = symbols.ResolvedFunction{
-            .symbol_id = function_symbol_id,
-            .name = function_name,
+            .symbol_id = target.symbol.id,
+            .name = target.symbol.name,
             .parameters = resolved_parameters.toOwnedSlice(self.allocator) catch unreachable,
             .return_type_reference = try self.resolveTypeExpression(function_definition.return_type_annotation, module_scope),
             .implementation = .{
                 .user_defined = .{
-                    .node_id = node_id,
+                    .node_id = target.node_id,
                     .body_node_id = function_definition.body_expression.id,
                 },
             },
         };
-        self.appendResolvedItem(.{ .Function = resolved_function });
 
         try self.resolveNode(function_definition.body_expression, &function_scope, module_scope, .{
             .module_shadowing = .Allowed,
         });
+
+        return resolved_function;
     }
 
     fn resolveStructureDefinition(
@@ -436,6 +447,7 @@ pub const NameResolver = struct {
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         const structure_symbol_id = module_scope.lookupSymbol(structure_name) orelse unreachable;
+
         var resolved_fields = std.ArrayList(symbols.ResolvedStructureField){};
         for (structure_definition.fields) |field| {
             resolved_fields.append(self.allocator, .{
@@ -444,13 +456,40 @@ pub const NameResolver = struct {
             }) catch unreachable;
         }
 
-        self.appendResolvedItem(.{
-            .Structure = .{
-                .symbol_id = structure_symbol_id,
-                .name = structure_name,
-                .fields = resolved_fields.toOwnedSlice(self.allocator) catch unreachable,
-                .node_id = node_id,
-            },
+        var function_symbol_ids = std.ArrayList(symbols.SymbolId){};
+        for (structure_definition.function_definitions) |*node| {
+            switch (node.kind) {
+                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                    .Function => |function_definition| {
+                        const method_symbol = self.symbol_table.insertSymbol(.{
+                            .name = item_definition.identifier_token.kind.Identifier,
+                            .declared_at = item_definition.item_token,
+                            .kind = .{ .Function = .{ .implementation = .UserDefined } },
+                        });
+                        self.symbol_id_by_node_id.put(node.id, method_symbol.id) catch unreachable;
+                        const resolved_function = try self.resolveFunction(
+                            .{
+                                .node_id = node.id,
+                                .symbol = method_symbol,
+                            },
+                            &function_definition,
+                            module_scope,
+                        );
+                        self.appendResolvedFunction(resolved_function);
+                        function_symbol_ids.append(self.allocator, method_symbol.id) catch unreachable;
+                    },
+                    else => unreachable,
+                },
+                else => unreachable,
+            }
+        }
+
+        self.appendResolvedStructure(.{
+            .symbol_id = structure_symbol_id,
+            .name = structure_name,
+            .fields = resolved_fields.toOwnedSlice(self.allocator) catch unreachable,
+            .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
+            .node_id = node_id,
         });
     }
 
@@ -488,12 +527,12 @@ pub const NameResolver = struct {
         };
     }
 
-    fn appendResolvedItem(self: *@This(), item: symbols.ResolvedItem) void {
-        const symbol_id = switch (item) {
-            .Function => |function| function.symbol_id,
-            .Structure => |structure| structure.symbol_id,
-        };
-        self.resolved_item_by_symbol_id.put(symbol_id, item) catch unreachable;
+    fn appendResolvedFunction(self: *@This(), function: symbols.ResolvedFunction) void {
+        self.resolved_function_by_symbol_id.put(function.symbol_id, function) catch unreachable;
+    }
+
+    fn appendResolvedStructure(self: *@This(), structure: symbols.ResolvedStructure) void {
+        self.resolved_structure_by_symbol_id.put(structure.symbol_id, structure) catch unreachable;
     }
 
     fn builtinTypeFromName(name: []const u8) ?symbols.BuiltinType {

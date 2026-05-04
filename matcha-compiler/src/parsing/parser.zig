@@ -251,6 +251,7 @@ pub const Parser = struct {
             return ParserError.ExpectedLeftBrace;
         }
 
+        var function_definitions = std.ArrayList(ast.Node){};
         var fields = std.ArrayList(ast.Field){};
         while (true) {
             const next_token = self.lexer.peek();
@@ -259,28 +260,46 @@ pub const Parser = struct {
                 break;
             }
 
-            const field_name_token = self.lexer.next();
-            if (field_name_token.kind != .Identifier) {
-                return ParserError.ExpectedIdentifier;
-            }
+            const field_name_or_item_token = self.lexer.peek();
+            switch (field_name_or_item_token.kind) {
+                .Identifier => {
+                    const field_name_token = self.lexer.next();
+                    if (field_name_token.kind != .Identifier) {
+                        return ParserError.ExpectedIdentifier;
+                    }
 
-            const colon_token = self.lexer.next();
-            if (colon_token.kind != .Colon) {
-                return ParserError.ExpectedColon;
-            }
+                    const colon_token = self.lexer.next();
+                    if (colon_token.kind != .Colon) {
+                        return ParserError.ExpectedColon;
+                    }
 
-            const type_annotation = try self.parseTypeAnnotation();
+                    const type_annotation = try self.parseTypeAnnotation();
 
-            fields.append(self.allocator, .{
-                .name = field_name_token,
-                .type_annotation = type_annotation,
-            }) catch unreachable;
+                    fields.append(self.allocator, .{
+                        .name = field_name_token,
+                        .type_annotation = type_annotation,
+                    }) catch unreachable;
 
-            const post_field_token = self.lexer.peek();
-            if (post_field_token.kind == .Comma) {
-                _ = self.lexer.next(); // consume comma and continue to next field
-            } else if (post_field_token.kind != .RightBrace) {
-                return ParserError.ExpectedCommaOrClosingParenthesis;
+                    const post_field_token = self.lexer.peek();
+                    if (post_field_token.kind == .Semicolon) {
+                        _ = self.lexer.next(); // consume semicolon and continue to next field
+                    } else if (post_field_token.kind != .RightBrace) {
+                        return ParserError.ExpectedSemicolon;
+                    }
+                },
+                .Item => {
+                    const item = try self.parseItem();
+                    switch (item.kind) {
+                        .ItemDefinition => |item_definition| {
+                            switch (item_definition.item) {
+                                .Function => function_definitions.append(self.allocator, item) catch unreachable,
+                                else => return ParserError.ExpectedFunctionDefinitionInStructure,
+                            }
+                        },
+                        else => unreachable,
+                    }
+                },
+                else => return ParserError.ExpectedIdentifierOrItem,
             }
         }
 
@@ -292,6 +311,7 @@ pub const Parser = struct {
         return .{
             .structure_token = structure_token,
             .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+            .function_definitions = function_definitions.toOwnedSlice(self.allocator) catch unreachable,
         };
     }
 

@@ -52,6 +52,7 @@ pub const Item = union(enum) {
 pub const Structure = struct {
     structure_token: lexing.Token,
     fields: []Field,
+    function_definitions: []Node,
 };
 
 pub const Field = struct {

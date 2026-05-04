@@ -32,13 +32,13 @@ printInt(aaa);
 val is_happy = true;
 
 item Point = structure {
-    x: int,
-    y: int,
+    x: int;
+    y: int;
 };
 
 item NestedPoint = structure {
-    point1: Point,
-    point2: Point,
+    point1: Point;
+    point2: Point;
 };
 
 

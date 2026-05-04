@@ -120,20 +120,18 @@ pub const ResolvedStructure = struct {
     symbol_id: SymbolId,
     name: []const u8,
     fields: []ResolvedStructureField,
+    function_symbol_ids: []SymbolId,
     node_id: ast.NodeId,
 };
 
-pub const ResolvedItem = union(enum) {
-    Function: ResolvedFunction,
-    Structure: ResolvedStructure,
-};
-
-pub const ResolvedItemBySymbolId = std.AutoHashMap(SymbolId, ResolvedItem);
+pub const ResolvedFunctionBySymbolId = std.AutoHashMap(SymbolId, ResolvedFunction);
+pub const ResolvedStructureBySymbolId = std.AutoHashMap(SymbolId, ResolvedStructure);
 
 pub const ResolvedProgram = struct {
     program: ast.Program,
     symbol_table: SymbolTable,
     symbol_id_by_node_id: SymbolIdByNodeId,
-    resolved_item_by_symbol_id: ResolvedItemBySymbolId,
+    resolved_function_by_symbol_id: ResolvedFunctionBySymbolId,
+    resolved_structure_by_symbol_id: ResolvedStructureBySymbolId,
     annotated_type_reference_by_symbol_id: AnnotatedTypeReferenceBySymbolId,
 };
