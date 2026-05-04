@@ -168,8 +168,28 @@ pub const SymbolGenerator = struct {
         return global_name;
     }
 
-    pub fn generateFunctionName(self: *@This(), symbol: symbols.Symbol) []const u8 {
-        switch (symbol.kind) {
+    pub fn generateStructureFunctionName(
+        self: *@This(),
+        structure_symbol: symbols.Symbol,
+        function_symbol: symbols.Symbol,
+    ) []const u8 {
+        return std.fmt.allocPrint(
+            self.allocator,
+            "matcha_structure_{d}_{s}__function_{d}_{s}",
+            .{
+                structure_symbol.id,
+                structure_symbol.name,
+                function_symbol.id,
+                function_symbol.name,
+            },
+        ) catch unreachable;
+    }
+
+    pub fn generateFunctionName(
+        self: *@This(),
+        function_symbol: symbols.Symbol,
+    ) []const u8 {
+        switch (function_symbol.kind) {
             .Function => |function_info| switch (function_info.implementation) {
                 .BuiltinPrintInt => return runtime_print_int_function_name,
                 .BuiltinPrintString => return runtime_print_string_function_name,
@@ -177,7 +197,7 @@ pub const SymbolGenerator = struct {
                     return std.fmt.allocPrint(
                         self.allocator,
                         "matcha_function_{d}_{s}",
-                        .{ symbol.id, symbol.name },
+                        .{ function_symbol.id, function_symbol.name },
                     ) catch unreachable;
                 },
             },
@@ -247,9 +267,17 @@ pub const LlvmIrEmitter = struct {
             switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
                     .Function => |function_definition| {
+                        const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(
+                            statement.id,
+                        ) orelse unreachable;
+                        const resolved_function = typed_program.resolved_program.resolved_function_by_symbol_id.get(
+                            function_symbol_id,
+                        ) orelse unreachable;
                         const function_ir = self.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
+                            &resolved_function,
+                            null,
                             typed_program,
                         );
                         user_defined_functions.append(self.allocator, function_ir) catch unreachable;
@@ -557,16 +585,14 @@ pub const LlvmIrEmitter = struct {
         self: *@This(),
         function_node_id: ast.NodeId,
         function_definition: *const ast.Function,
+        resolved_function: *const symbols.ResolvedFunction,
+        owning_structure_symbol: ?symbols.Symbol,
         typed_program: *const typing.TypedProgram,
     ) []const u8 {
         self.resetCurrentFunctionState();
 
         const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
         const function_symbol = typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
-        const resolved_function = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(function_symbol_id) orelse unreachable) {
-            .Function => |function| function,
-            else => unreachable,
-        };
         const function_return_type_id = typed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_llvm_ir_type = llvmIrType(&typed_program.type_store, function_return_type_id);
 
@@ -622,7 +648,10 @@ pub const LlvmIrEmitter = struct {
         }
 
         return self.renderCurrentFunction(
-            self.symbol_generator.generateFunctionName(function_symbol),
+            if (owning_structure_symbol) |structure_symbol|
+                self.symbol_generator.generateStructureFunctionName(structure_symbol, function_symbol)
+            else
+                self.symbol_generator.generateFunctionName(function_symbol),
             function_return_llvm_ir_type,
             parameter_list_buffer.items,
         );
@@ -788,10 +817,7 @@ pub const LlvmIrEmitter = struct {
                     else => unreachable,
                 };
 
-                const resolved_function = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(callee_symbol_id) orelse unreachable) {
-                    .Function => |function| function,
-                    else => unreachable,
-                };
+                const resolved_function = typed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
                 var current_label = entry_label;
                 var argument_registers = std.ArrayList(Register){};
                 defer argument_registers.deinit(self.allocator);
@@ -1569,20 +1595,17 @@ pub const LlvmIrEmitter = struct {
 
         var has_structure_definition = false;
         for (typed_program.resolved_program.program.statements) |*statement| {
-            const item_definition = switch (statement.kind) {
-                .ItemDefinition => |item_definition| item_definition,
+            const structure_definition = switch (statement.kind) {
+                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                    .Structure => |structure| structure,
+                    else => continue,
+                },
                 else => continue,
             };
-            switch (item_definition.item) {
-                .Structure => {},
-                .Function => continue,
-            }
 
             const structure_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
-            const resolved_structure = switch (typed_program.resolved_program.resolved_item_by_symbol_id.get(structure_symbol_id) orelse unreachable) {
-                .Structure => |structure| structure,
-                .Function => unreachable,
-            };
+            const structure_symbol = typed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
+            const resolved_structure = typed_program.resolved_program.resolved_structure_by_symbol_id.get(structure_symbol_id) orelse unreachable;
 
             if (has_structure_definition) {
                 structure_definitions_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
@@ -1592,6 +1615,28 @@ pub const LlvmIrEmitter = struct {
                 .{self.emitStructureDefinition(resolved_structure, typed_program)},
             ) catch unreachable;
             has_structure_definition = true;
+
+            for (structure_definition.function_definitions) |function_definition_node| {
+                const function_definition = switch (function_definition_node.kind) {
+                    .ItemDefinition => |item_definition| switch (item_definition.item) {
+                        .Function => |function| function,
+                        else => unreachable,
+                    },
+                    else => unreachable,
+                };
+                const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(
+                    function_definition_node.id,
+                ) orelse unreachable;
+                const resolved_function = typed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
+                const function_definition_emission = self.emitFunctionDefinition(
+                    function_definition_node.id,
+                    &function_definition,
+                    &resolved_function,
+                    structure_symbol,
+                    typed_program,
+                );
+                structure_definitions_buffer.writer(self.allocator).print("\n{s}", .{function_definition_emission}) catch unreachable;
+            }
         }
 
         return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definitions_buffer.items}) catch unreachable;

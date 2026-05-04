@@ -228,10 +228,7 @@ test "semantic analysis resolves array types in function signatures" {
     const function_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
         analyzed.parsed.program.statements[0].id,
     ).?;
-    const resolved_function = switch (analyzed.typed_program.resolved_program.resolved_item_by_symbol_id.get(function_symbol_id).?) {
-        .Function => |function| function,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const resolved_function = analyzed.typed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id).?;
     const expected_array_type = typing.Type{ .Array = analyzed.typed_program.type_store.integer_type_id };
 
     try expectType(
@@ -311,7 +308,7 @@ test "semantic analysis type-checks subjectless and integer matches with else" {
 
 test "semantic analysis records structure construction layout in source order" {
     var analyzed = try helpers.analyzeProgram(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { y = 2, x = 1 };
     );
     defer analyzed.deinit();
@@ -334,7 +331,7 @@ test "semantic analysis records structure construction layout in source order" {
 
 test "semantic analysis type-checks structure member access" {
     var analyzed = try helpers.analyzeProgram(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
         \\val x = point.x;
     );
@@ -377,7 +374,7 @@ test "semantic analysis type-checks array length member access" {
 
 test "semantic analysis type-checks mutable structure field assignment" {
     var analyzed = try helpers.analyzeProgram(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\var point = Point { x = 1, y = 2 };
         \\point.x = 3;
         \\val x = point.x;
@@ -397,7 +394,7 @@ test "semantic analysis rejects invalid structure member access" {
     );
 
     try expectAnalyzeError(error.TypeMismatch,
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
         \\val z = point.z;
     );
@@ -405,7 +402,7 @@ test "semantic analysis rejects invalid structure member access" {
 
 test "semantic analysis allows member and indexed assignment through val bindings" {
     var analyzed = try helpers.analyzeProgram(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
         \\point.x = 3;
         \\val numbers = [1, 2, 3];
@@ -423,7 +420,7 @@ test "semantic analysis rejects rebinding of immutable bindings" {
 
 test "semantic analysis rejects mismatched and read-only place assignment" {
     try expectAnalyzeError(error.TypeMismatch,
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\var point = Point { x = 1, y = 2 };
         \\point.x = false;
     );

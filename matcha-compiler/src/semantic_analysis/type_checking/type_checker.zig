@@ -86,58 +86,55 @@ pub const TypeChecker = struct {
         self: *@This(),
         resolved_program: *const symbols.ResolvedProgram,
     ) TypeError!void {
-        var resolved_items_iterator = resolved_program.resolved_item_by_symbol_id.valueIterator();
-        while (resolved_items_iterator.next()) |item| {
-            switch (item.*) {
-                .Function => {},
-                .Structure => |structure| {
-                    const structure_type_id: typing.StructureTypeId = @intCast(self.type_store.structure_types.items.len);
-                    self.type_store.structure_types.append(self.allocator, .{
-                        .name = structure.name,
-                        .fields = &.{},
-                        .field_index_by_name = std.StringHashMap(u32).init(self.allocator),
-                    }) catch unreachable;
-                    const type_id = self.type_store.addType(.{ .Structure = structure_type_id });
-                    self.type_by_symbol_id.put(structure.symbol_id, type_id) catch unreachable;
-                },
-            }
+        var resolved_structures_iterator = resolved_program.resolved_structure_by_symbol_id.valueIterator();
+        while (resolved_structures_iterator.next()) |structure| {
+            const structure_type_id: typing.StructureTypeId = @intCast(self.type_store.structure_types.items.len);
+            self.type_store.structure_types.append(self.allocator, .{
+                .name = structure.name,
+                .fields = &.{},
+                .field_index_by_name = std.StringHashMap(u32).init(self.allocator),
+            }) catch unreachable;
+            const type_id = self.type_store.addType(.{ .Structure = structure_type_id });
+            self.type_by_symbol_id.put(structure.symbol_id, type_id) catch unreachable;
         }
 
-        resolved_items_iterator = resolved_program.resolved_item_by_symbol_id.valueIterator();
-        while (resolved_items_iterator.next()) |item| {
-            switch (item.*) {
-                .Function => |function| {
-                    const function_return_type = self.resolveTypeReference(function.return_type_reference);
-                    self.type_by_symbol_id.put(function.symbol_id, function_return_type) catch unreachable;
-                    for (function.parameters) |parameter| {
-                        const parameter_type = self.resolveTypeReference(parameter.type_reference);
-                        self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
-                    }
-                },
-                .Structure => |structure| {
-                    const type_id = self.type_by_symbol_id.get(structure.symbol_id).?;
-                    const structure_type_id = switch (self.type_store.getType(type_id)) {
-                        .Structure => |id| id,
-                        else => unreachable,
-                    };
+        var resolved_functions_iterator = resolved_program.resolved_function_by_symbol_id.valueIterator();
+        while (resolved_functions_iterator.next()) |function| {
+            self.seedFunctionTypes(function.*);
+        }
 
-                    var fields = std.ArrayList(typing.Field){};
-                    var field_index_by_name = std.StringHashMap(u32).init(self.allocator);
-                    for (structure.fields, 0..) |field, index| {
-                        fields.append(self.allocator, .{
-                            .name = field.name,
-                            .type_id = self.resolveTypeReference(field.type_reference),
-                        }) catch unreachable;
-                        field_index_by_name.put(field.name, @intCast(index)) catch unreachable;
-                    }
+        resolved_structures_iterator = resolved_program.resolved_structure_by_symbol_id.valueIterator();
+        while (resolved_structures_iterator.next()) |structure| {
+            const type_id = self.type_by_symbol_id.get(structure.symbol_id).?;
+            const structure_type_id = switch (self.type_store.getType(type_id)) {
+                .Structure => |id| id,
+                else => unreachable,
+            };
 
-                    self.type_store.structure_types.items[structure_type_id] = .{
-                        .name = structure.name,
-                        .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
-                        .field_index_by_name = field_index_by_name,
-                    };
-                },
+            var fields = std.ArrayList(typing.Field){};
+            var field_index_by_name = std.StringHashMap(u32).init(self.allocator);
+            for (structure.fields, 0..) |field, index| {
+                fields.append(self.allocator, .{
+                    .name = field.name,
+                    .type_id = self.resolveTypeReference(field.type_reference),
+                }) catch unreachable;
+                field_index_by_name.put(field.name, @intCast(index)) catch unreachable;
             }
+
+            self.type_store.structure_types.items[structure_type_id] = .{
+                .name = structure.name,
+                .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+                .field_index_by_name = field_index_by_name,
+            };
+        }
+    }
+
+    fn seedFunctionTypes(self: *@This(), function: symbols.ResolvedFunction) void {
+        const function_return_type = self.resolveTypeReference(function.return_type_reference);
+        self.type_by_symbol_id.put(function.symbol_id, function_return_type) catch unreachable;
+        for (function.parameters) |parameter| {
+            const parameter_type = self.resolveTypeReference(parameter.type_reference);
+            self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
         }
     }
 
@@ -190,7 +187,23 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
             ),
-            .Structure => {},
+            .Structure => |structure_definition| {
+                for (structure_definition.function_definitions) |*function_definition_node| {
+                    const method_definition = switch (function_definition_node.kind) {
+                        .ItemDefinition => |method_item_definition| switch (method_item_definition.item) {
+                            .Function => |function| function,
+                            else => unreachable,
+                        },
+                        else => unreachable,
+                    };
+                    try self.checkFunctionDefinition(
+                        function_definition_node.id,
+                        &method_definition,
+                        resolved_program,
+                        exit_behavior_by_node_id,
+                    );
+                }
+            },
         }
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -1143,10 +1156,7 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
     ) symbols.ResolvedFunction {
         _ = self;
-        return switch (resolved_program.resolved_item_by_symbol_id.get(function_symbol_id) orelse unreachable) {
-            .Function => |function| function,
-            else => unreachable,
-        };
+        return resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
     }
 
     fn checkMatchExpression(

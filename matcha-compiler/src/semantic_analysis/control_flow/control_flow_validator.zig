@@ -72,7 +72,11 @@ pub const ControlFlowValidator = struct {
                         try self.validateNode(function_definition.body_expression, &function_context);
                         try self.validateFunctionReturnsValue(&function_definition);
                     },
-                    .Structure => {},
+                    .Structure => |structure| {
+                        for (structure.function_definitions) |*function_definition_node| {
+                            try self.validateNode(function_definition_node, context);
+                        }
+                    },
                 }
             },
             .Return => |return_statement| {

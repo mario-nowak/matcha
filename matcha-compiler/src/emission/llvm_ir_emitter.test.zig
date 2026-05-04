@@ -164,8 +164,8 @@ test "llvm emission lowers string literals to String globals and runtime printSt
 
 test "llvm emission emits structure definitions as payload types" {
     const llvm_ir = try emit(
-        \\item Point = structure { x: int, y: int };
-        \\item User = structure { name: string, friend: User, location: Point };
+        \\item Point = structure { x: int; y: int; };
+        \\item User = structure { name: string; friend: User; location: Point; };
     );
     defer std.testing.allocator.free(llvm_ir);
 
@@ -175,7 +175,7 @@ test "llvm emission emits structure definitions as payload types" {
 
 test "llvm emission lowers structure construction" {
     const llvm_ir = try emit(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { y = 2, x = 1 };
     );
     defer std.testing.allocator.free(llvm_ir);
@@ -191,7 +191,7 @@ test "llvm emission lowers structure construction" {
 
 test "llvm emission lowers structure member access to gep plus load" {
     const llvm_ir = try emit(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
         \\val x = point.x;
     );
@@ -205,7 +205,7 @@ test "llvm emission lowers structure member access to gep plus load" {
 
 test "llvm emission lowers mutable structure field assignment to gep plus store" {
     const llvm_ir = try emit(
-        \\item Point = structure { x: int, y: int };
+        \\item Point = structure { x: int; y: int; };
         \\var point = Point { x = 1, y = 2 };
         \\point.x = 3;
     );

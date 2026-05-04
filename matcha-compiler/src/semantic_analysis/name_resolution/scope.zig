@@ -39,3 +39,5 @@ pub const Scope = struct {
 };
 
 pub const ModuleScope = Scope;
+
+pub const StructureScope = Scope;
