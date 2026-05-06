@@ -93,6 +93,7 @@ pub const TypeChecker = struct {
                 .name = structure.name,
                 .fields = &.{},
                 .field_index_by_name = std.StringHashMap(u32).init(self.allocator),
+                .function_symbol_id_by_name = std.StringHashMap(symbols.SymbolId).init(self.allocator),
             }) catch unreachable;
             const type_id = self.type_store.addType(.{ .Structure = structure_type_id });
             self.type_by_symbol_id.put(structure.symbol_id, type_id) catch unreachable;
@@ -113,6 +114,7 @@ pub const TypeChecker = struct {
 
             var fields = std.ArrayList(typing.Field){};
             var field_index_by_name = std.StringHashMap(u32).init(self.allocator);
+            var function_symbol_id_by_name = std.StringHashMap(symbols.SymbolId).init(self.allocator);
             for (structure.fields, 0..) |field, index| {
                 fields.append(self.allocator, .{
                     .name = field.name,
@@ -120,20 +122,34 @@ pub const TypeChecker = struct {
                 }) catch unreachable;
                 field_index_by_name.put(field.name, @intCast(index)) catch unreachable;
             }
+            for (structure.function_symbol_ids) |function_symbol_id| {
+                const function_symbol = resolved_program.symbol_table.getSymbol(function_symbol_id);
+                function_symbol_id_by_name.put(function_symbol.name, function_symbol_id) catch unreachable;
+            }
 
             self.type_store.structure_types.items[structure_type_id] = .{
                 .name = structure.name,
                 .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
                 .field_index_by_name = field_index_by_name,
+                .function_symbol_id_by_name = function_symbol_id_by_name,
             };
         }
     }
 
     fn seedFunctionTypes(self: *@This(), function: symbols.ResolvedFunction) void {
-        const function_return_type = self.resolveTypeReference(function.return_type_reference);
-        self.type_by_symbol_id.put(function.symbol_id, function_return_type) catch unreachable;
+        var parameter_types = std.ArrayList(typing.TypeId){};
         for (function.parameters) |parameter| {
-            const parameter_type = self.resolveTypeReference(parameter.type_reference);
+            parameter_types.append(self.allocator, self.resolveTypeReference(parameter.type_reference)) catch unreachable;
+        }
+
+        const owned_parameter_types = parameter_types.toOwnedSlice(self.allocator) catch unreachable;
+        const function_return_type = self.resolveTypeReference(function.return_type_reference);
+        const function_type_id = self.type_store.addFunctionType(.{
+            .parameter_types = owned_parameter_types,
+            .return_type = function_return_type,
+        });
+        self.type_by_symbol_id.put(function.symbol_id, function_type_id) catch unreachable;
+        for (function.parameters, owned_parameter_types) |parameter, parameter_type| {
             self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
         }
     }
@@ -416,14 +432,17 @@ pub const TypeChecker = struct {
                     .Expression,
                 );
                 const member_access = self.member_access_by_node_id.get(node.id) orelse unreachable;
-                switch (member_access) {
-                    .ArrayLength => {
+                return switch (member_access) {
+                    .StructureInstanceFieldAccess => .{ .type_id = type_id },
+                    .ArrayInstanceLengthAccess => {
                         std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
                         return TypeError.TypeMismatch;
                     },
-                    .StructureField => {},
-                }
-                return .{ .type_id = type_id };
+                    .StructureTypeFunctionAccess => {
+                        std.debug.print("Type Error: Cannot assign to structure function\n", .{});
+                        return TypeError.InvalidAssignmentTarget;
+                    },
+                };
             },
             .IndexAccess => {
                 const type_id = try self.checkNode(
@@ -517,42 +536,50 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
-        switch (call_expression.callee.kind) {
-            .Identifier => {
-                const callee_symbol_id = resolved_program.symbol_id_by_node_id.get(
-                    call_expression.callee.id,
-                ) orelse unreachable;
-                const resolved_function = self.getResolvedFunction(callee_symbol_id, resolved_program);
-                if (call_expression.arguments.len != resolved_function.parameters.len) {
-                    std.debug.print(
-                        "Type Error: Function expected {any} arguments, got {any}\n",
-                        .{ resolved_function.parameters.len, call_expression.arguments.len },
-                    );
-                    return TypeError.TypeMismatch;
-                }
+        const callee_type_id = try self.checkNode(
+            call_expression.callee,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+        );
 
-                for (call_expression.arguments, resolved_function.parameters) |*argument, parameter| {
-                    const argument_type = try self.checkNode(
-                        argument,
-                        resolved_program,
-                        exit_behavior_by_node_id,
-                        .Expression,
-                    );
-                    const parameter_type = self.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
-                    if (argument_type != parameter_type) {
-                        std.debug.print(
-                            "Type Error: Function parameter expected type {any}, got {any}\n",
-                            .{ self.getType(parameter_type), self.getType(argument_type) },
-                        );
-                        return TypeError.TypeMismatch;
-                    }
-                }
-
-                const function_return_type = self.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
-                return self.recordNodeType(node_id, function_return_type);
+        const function_type_id = switch (self.type_store.getType(callee_type_id)) {
+            .Function => |function_type_id| function_type_id,
+            else => {
+                std.debug.print(
+                    "Type Error: Cannot call non-function type {any}\n",
+                    .{self.getType(callee_type_id)},
+                );
+                return TypeError.TypeMismatch;
             },
-            else => return TypeError.TypeMismatch,
+        };
+        const function_type = self.type_store.function_types.items[function_type_id];
+
+        if (call_expression.arguments.len != function_type.parameter_types.len) {
+            std.debug.print(
+                "Type Error: Function expected {any} arguments, got {any}\n",
+                .{ function_type.parameter_types.len, call_expression.arguments.len },
+            );
+            return TypeError.TypeMismatch;
         }
+
+        for (call_expression.arguments, function_type.parameter_types) |*argument, parameter_type| {
+            const argument_type = try self.checkNode(
+                argument,
+                resolved_program,
+                exit_behavior_by_node_id,
+                .Expression,
+            );
+            if (argument_type != parameter_type) {
+                std.debug.print(
+                    "Type Error: Function parameter expected type {any}, got {any}\n",
+                    .{ self.getType(parameter_type), self.getType(argument_type) },
+                );
+                return TypeError.TypeMismatch;
+            }
+        }
+
+        return self.recordNodeType(node_id, function_type.return_type);
     }
 
     fn checkMemberAccessNode(
@@ -562,13 +589,64 @@ pub const TypeChecker = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
+        const member_name = member_access.member_name_token.kind.Identifier;
+        if (member_access.base.kind == .Identifier) {
+            const base_symbol_id = resolved_program.symbol_id_by_node_id.get(member_access.base.id) orelse unreachable;
+            const base_symbol = resolved_program.symbol_table.getSymbol(base_symbol_id);
+            switch (base_symbol.kind) {
+                .Structure => {
+                    const base_type_id = self.type_by_symbol_id.get(base_symbol_id) orelse unreachable;
+                    const structure_type_id = switch (self.type_store.getType(base_type_id)) {
+                        .Structure => |structure_type_id| structure_type_id,
+                        else => unreachable,
+                    };
+                    const structure_type = self.type_store.structure_types.items[structure_type_id];
+                    const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name) orelse {
+                        std.debug.print(
+                            "Type Error: No function named {s} exists on structure type {s}\n",
+                            .{ member_name, structure_type.name },
+                        );
+                        return TypeError.TypeMismatch;
+                    };
+
+                    self.recordMemberAccess(node_id, .{ .StructureTypeFunctionAccess = .{
+                        .structure_symbol_id = base_symbol_id,
+                        .function_symbol_id = function_symbol_id,
+                    } });
+                    const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+                    return self.recordNodeType(node_id, function_type_id);
+                },
+                .Binding, .Function => return self.checkInstanceMemberAccessNode(
+                    node_id,
+                    member_access,
+                    resolved_program,
+                    exit_behavior_by_node_id,
+                ),
+            }
+        }
+
+        return self.checkInstanceMemberAccessNode(
+            node_id,
+            member_access,
+            resolved_program,
+            exit_behavior_by_node_id,
+        );
+    }
+
+    fn checkInstanceMemberAccessNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        member_access: *const ast.MemberAccess,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const member_name = member_access.member_name_token.kind.Identifier;
         const base_type_id = try self.checkNode(
             member_access.base,
             resolved_program,
             exit_behavior_by_node_id,
             .Expression,
         );
-        const member_name = member_access.member_name_token.kind.Identifier;
         switch (self.type_store.getType(base_type_id)) {
             .Structure => |structure_type_id| {
                 const structure_type = self.type_store.structure_types.items[structure_type_id];
@@ -580,12 +658,12 @@ pub const TypeChecker = struct {
                     return TypeError.TypeMismatch;
                 };
 
-                self.recordMemberAccess(node_id, .{ .StructureField = .{ .field_index = field_index } });
+                self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = field_index } });
                 return self.recordNodeType(node_id, structure_type.fields[@intCast(field_index)].type_id);
             },
             .Array => {
                 if (std.mem.eql(u8, member_name, "length")) {
-                    self.recordMemberAccess(node_id, .ArrayLength);
+                    self.recordMemberAccess(node_id, .ArrayInstanceLengthAccess);
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
 
@@ -970,7 +1048,6 @@ pub const TypeChecker = struct {
             function_return_type,
             resolved_program,
         );
-        self.type_by_symbol_id.put(symbol_id, function_return_type) catch unreachable;
 
         const body_exit_behavior = exit_behavior_by_node_id.get(
             function_definition.body_expression.id,

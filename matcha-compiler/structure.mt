@@ -20,4 +20,11 @@ val point = Point {
     y = 1,
 };
 
+var other_point = Point {
+    x = 1,
+    y = 4,
+};
+
+val result_point = Point.movedBy(point, other_point);
+
 var x = 2;

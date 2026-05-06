@@ -231,11 +231,12 @@ test "semantic analysis resolves array types in function signatures" {
     const resolved_function = analyzed.typed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id).?;
     const expected_array_type = typing.Type{ .Array = analyzed.typed_program.type_store.integer_type_id };
 
-    try expectType(
-        expected_array_type,
-        &analyzed.typed_program,
-        analyzed.typed_program.type_by_symbol_id.get(function_symbol_id).?,
-    );
+    const function_type_id = analyzed.typed_program.type_by_symbol_id.get(function_symbol_id).?;
+    const function_type = switch (analyzed.typed_program.type_store.getType(function_type_id)) {
+        .Function => |id| analyzed.typed_program.type_store.function_types.items[id],
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectType(expected_array_type, &analyzed.typed_program, function_type.return_type);
     try expectType(
         expected_array_type,
         &analyzed.typed_program,
@@ -346,9 +347,70 @@ test "semantic analysis type-checks structure member access" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
     const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
     switch (member_access) {
-        .StructureField => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),
+        .StructureInstanceFieldAccess => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),
         else => return TestError.UnexpectedNodeKind,
     }
+}
+
+test "semantic analysis type-checks structure function calls" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure {
+        \\    x: int;
+        \\    y: int;
+        \\
+        \\    item movedBy(self: Point, other: Point): Point = Point {
+        \\        x = self.x + other.x,
+        \\        y = self.y + other.y,
+        \\    };
+        \\};
+        \\val point = Point { x = 1, y = 2 };
+        \\val other = Point { x = 3, y = 4 };
+        \\val moved = Point.movedBy(point, other);
+    );
+    defer analyzed.deinit();
+
+    const point_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
+        analyzed.parsed.program.statements[0].id,
+    ).?;
+    const point_type_id = analyzed.typed_program.type_by_symbol_id.get(point_symbol_id).?;
+    const moved_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
+        analyzed.parsed.program.statements[3].id,
+    ).?;
+    try std.testing.expectEqual(point_type_id, analyzed.typed_program.type_by_symbol_id.get(moved_symbol_id).?);
+
+    const moved_declaration = switch (analyzed.parsed.program.statements[3].kind) {
+        .Declaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const call_expression = switch (moved_declaration.value.kind) {
+        .CallExpression => |call_expression| call_expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const member_access = analyzed.typed_program.member_access_by_node_id.get(call_expression.callee.id).?;
+    switch (member_access) {
+        .StructureTypeFunctionAccess => |structure_function| {
+            try std.testing.expectEqual(point_symbol_id, structure_function.structure_symbol_id);
+        },
+        else => return TestError.UnexpectedNodeKind,
+    }
+}
+
+test "semantic analysis rejects instance method call syntax for now" {
+    try expectAnalyzeError(
+        error.TypeMismatch,
+        \\item Point = structure {
+        \\    x: int;
+        \\    y: int;
+        \\
+        \\    item movedBy(self: Point, other: Point): Point = Point {
+        \\        x = self.x + other.x,
+        \\        y = self.y + other.y,
+        \\    };
+        \\};
+        \\val point = Point { x = 1, y = 2 };
+        \\val other = Point { x = 3, y = 4 };
+        \\val moved = point.movedBy(other);
+    );
 }
 
 test "semantic analysis type-checks array length member access" {
@@ -367,7 +429,7 @@ test "semantic analysis type-checks array length member access" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
     const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
     switch (member_access) {
-        .ArrayLength => {},
+        .ArrayInstanceLengthAccess => {},
         else => return TestError.UnexpectedNodeKind,
     }
 }
