@@ -25,6 +25,8 @@ var other_point = Point {
     y = 4,
 };
 
-val result_point = Point.movedBy(point, other_point);
+val result_point = point.movedBy(other_point);
+printInt(result_point.x);
+printInt(result_point.y);
 
 var x = 2;
