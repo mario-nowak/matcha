@@ -4,6 +4,7 @@ const ast = @import("ast");
 
 pub const TypeId = u32;
 pub const StructureTypeId = u32;
+pub const FunctionTypeId = u32;
 pub const TaggedUnionTypeId = u32;
 
 pub const Type = union(enum) {
@@ -13,6 +14,7 @@ pub const Type = union(enum) {
     String,
 
     Structure: StructureTypeId,
+    Function: FunctionTypeId,
     Array: TypeId,
     TaggedUnion: TaggedUnionTypeId,
 };
@@ -21,6 +23,7 @@ pub const TypeStore = struct {
     allocator: std.mem.Allocator,
     types: std.ArrayList(Type),
     structure_types: std.ArrayList(StructureType),
+    function_types: std.ArrayList(FunctionType),
     array_type_id_by_element_type_id: std.AutoHashMap(TypeId, TypeId),
     unit_type_id: TypeId,
     boolean_type_id: TypeId,
@@ -37,6 +40,7 @@ pub const TypeStore = struct {
             .integer_type_id = undefined,
             .string_type_id = undefined,
             .structure_types = .{},
+            .function_types = .{},
         };
 
         store.unit_type_id = store.addType(.Unit);
@@ -53,10 +57,16 @@ pub const TypeStore = struct {
         return type_id;
     }
 
-    pub fn addStructureType(self: *@This(), structure_type: StructureType) StructureTypeId {
+    pub fn addStructureType(self: *@This(), structure_type: StructureType) TypeId {
         const structure_type_id: StructureTypeId = @intCast(self.structure_types.items.len);
         self.structure_types.append(self.allocator, structure_type) catch unreachable;
         return self.addType(.{ .Structure = structure_type_id });
+    }
+
+    pub fn addFunctionType(self: *@This(), function_type: FunctionType) TypeId {
+        const function_type_id: FunctionTypeId = @intCast(self.function_types.items.len);
+        self.function_types.append(self.allocator, function_type) catch unreachable;
+        return self.addType(.{ .Function = function_type_id });
     }
 
     pub fn getArrayType(self: *const @This(), element_type_id: TypeId) ?TypeId {
@@ -82,6 +92,7 @@ pub const StructureType = struct {
     name: []const u8,
     fields: []const Field,
     field_index_by_name: std.StringHashMap(u32),
+    function_symbol_id_by_name: std.StringHashMap(symbols.SymbolId),
 };
 
 pub const Field = struct {
@@ -89,15 +100,24 @@ pub const Field = struct {
     type_id: TypeId,
 };
 
+pub const FunctionType = struct {
+    parameter_types: []TypeId,
+    return_type: TypeId,
+};
+
 pub const StructureConstructionLayout = struct {
     field_indices: []const u32,
 };
 
 pub const MemberAccess = union(enum) {
-    StructureField: struct {
+    StructureInstanceFieldAccess: struct {
         field_index: u32,
     },
-    ArrayLength,
+    StructureTypeFunctionAccess: struct {
+        structure_symbol_id: symbols.SymbolId,
+        function_symbol_id: symbols.SymbolId,
+    },
+    ArrayInstanceLengthAccess,
 };
 
 pub const BinaryOperatorSignature = struct {
@@ -139,6 +159,7 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
         .Unit,
         .String,
         .Structure,
+        .Function,
         .Array,
         .TaggedUnion,
         => null,
@@ -163,6 +184,7 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
         .Unit,
         .String,
         .Structure,
+        .Function,
         .Array,
         .TaggedUnion,
         => null,

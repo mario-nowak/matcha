@@ -322,6 +322,10 @@ pub const LlvmIrEmitter = struct {
             .String => "%String",
             .Structure => "ptr",
             .Array => "%Array",
+            .Function => |unsupported_type| std.debug.panic(
+                "LLVM IR emitter does not support function values, got {any} (type id {d})",
+                .{ unsupported_type, type_id },
+            ),
             .TaggedUnion => |unsupported_type| std.debug.panic(
                 "LLVM IR emitter only supports builtin types for now, got {any} (type id {d})",
                 .{ unsupported_type, type_id },
@@ -593,7 +597,11 @@ pub const LlvmIrEmitter = struct {
 
         const function_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
         const function_symbol = typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
-        const function_return_type_id = typed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_type_id = typed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_return_type_id = switch (typed_program.type_store.getType(function_type_id)) {
+            .Function => |id| typed_program.type_store.function_types.items[id].return_type,
+            else => unreachable,
+        };
         const function_return_llvm_ir_type = llvmIrType(&typed_program.type_store, function_return_type_id);
 
         var parameter_list_buffer = std.ArrayList(u8){};
@@ -808,9 +816,22 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .CallExpression => |call_expression| {
-                const callee_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(
-                    call_expression.callee.id,
-                ) orelse unreachable;
+                const structure_function_access = switch (call_expression.callee.kind) {
+                    .MemberAccess => structure_function_access_from_member_access: {
+                        const member_access = typed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable;
+                        break :structure_function_access_from_member_access switch (member_access) {
+                            .StructureTypeFunctionAccess => |structure_function| structure_function,
+                            else => null,
+                        };
+                    },
+                    else => null,
+                };
+                const callee_symbol_id = if (structure_function_access) |structure_function|
+                    structure_function.function_symbol_id
+                else
+                    typed_program.resolved_program.symbol_id_by_node_id.get(
+                        call_expression.callee.id,
+                    ) orelse unreachable;
                 const callee_symbol = typed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
                 const function_info = switch (callee_symbol.kind) {
                     .Function => |function_info| function_info,
@@ -872,8 +893,18 @@ pub const LlvmIrEmitter = struct {
                     ) catch unreachable;
                 }
 
-                const function_name = self.symbol_generator.generateFunctionName(callee_symbol);
-                const function_return_type_id = typed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+                const function_name = if (structure_function_access) |structure_function|
+                    self.symbol_generator.generateStructureFunctionName(
+                        typed_program.resolved_program.symbol_table.getSymbol(structure_function.structure_symbol_id),
+                        callee_symbol,
+                    )
+                else
+                    self.symbol_generator.generateFunctionName(callee_symbol);
+                const function_type_id = typed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+                const function_return_type_id = switch (typed_program.type_store.getType(function_type_id)) {
+                    .Function => |id| typed_program.type_store.function_types.items[id].return_type,
+                    else => unreachable,
+                };
                 const function_return_llvm_ir_type = llvmIrType(&typed_program.type_store, function_return_type_id);
                 if (function_return_type_id == typed_program.type_store.unit_type_id) {
                     const call_instruction = std.fmt.allocPrint(
@@ -1171,7 +1202,7 @@ pub const LlvmIrEmitter = struct {
     ) EmissionResult {
         const resolved_member_access = typed_program.member_access_by_node_id.get(node.id) orelse unreachable;
         switch (resolved_member_access) {
-            .ArrayLength => {
+            .ArrayInstanceLengthAccess => {
                 const base_result = self.emitNode(
                     member_access.base,
                     entry_label,
@@ -1194,34 +1225,35 @@ pub const LlvmIrEmitter = struct {
                     .register = length_register,
                 };
             },
-            .StructureField => {},
+            .StructureInstanceFieldAccess => {
+                const member_pointer_result = self.emitMemberAccessPointer(
+                    node.id,
+                    member_access,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (member_pointer_result.exit_label == null) {
+                    return .{
+                        .exit_label = null,
+                        .register = null,
+                    };
+                }
+
+                const member_register = self.symbol_generator.generateRegister();
+                self.emitLoad(
+                    member_register,
+                    member_pointer_result.register.?,
+                    llvmIrType(&typed_program.type_store, typed_program.type_by_node_id.get(node.id).?),
+                );
+
+                return .{
+                    .exit_label = member_pointer_result.exit_label,
+                    .register = member_register,
+                };
+            },
+            .StructureTypeFunctionAccess => unreachable,
         }
-
-        const member_pointer_result = self.emitMemberAccessPointer(
-            node.id,
-            member_access,
-            entry_label,
-            typed_program,
-            environment,
-        );
-        if (member_pointer_result.exit_label == null) {
-            return .{
-                .exit_label = null,
-                .register = null,
-            };
-        }
-
-        const member_register = self.symbol_generator.generateRegister();
-        self.emitLoad(
-            member_register,
-            member_pointer_result.register.?,
-            llvmIrType(&typed_program.type_store, typed_program.type_by_node_id.get(node.id).?),
-        );
-
-        return .{
-            .exit_label = member_pointer_result.exit_label,
-            .register = member_register,
-        };
     }
 
     fn emitPlace(
@@ -1279,8 +1311,9 @@ pub const LlvmIrEmitter = struct {
 
         const resolved_member_access = typed_program.member_access_by_node_id.get(node_id) orelse unreachable;
         const field_index = switch (resolved_member_access) {
-            .StructureField => |structure_field| structure_field.field_index,
-            .ArrayLength => unreachable,
+            .StructureInstanceFieldAccess => |structure_field| structure_field.field_index,
+            .ArrayInstanceLengthAccess => unreachable,
+            .StructureTypeFunctionAccess => unreachable,
         };
 
         const base_type_id = typed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;

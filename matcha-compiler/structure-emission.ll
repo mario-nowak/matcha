@@ -47,7 +47,9 @@ entry:
 define i32 @main() {
 entry:
     %.s_0 = alloca ptr
-    %.s_1 = alloca i64
+    %.s_1 = alloca ptr
+    %.s_2 = alloca ptr
+    %.s_3 = alloca i64
 
     %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
     %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
@@ -55,7 +57,17 @@ entry:
     %.t_2 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1
     store i64 1, ptr %.t_2
     store ptr %.t_0, ptr %.s_0
-    store i64 2, ptr %.s_1
+    %.t_3 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
+    %.t_4 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 0
+    store i64 1, ptr %.t_4
+    %.t_5 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 1
+    store i64 4, ptr %.t_5
+    store ptr %.t_3, ptr %.s_1
+    %.t_6 = load ptr, ptr %.s_0
+    %.t_7 = load ptr, ptr %.s_1
+    %.t_8 = call ptr @matcha_structure_0_Point__function_7_movedBy(ptr %.t_6, ptr %.t_7)
+    store ptr %.t_8, ptr %.s_2
+    store i64 2, ptr %.s_3
     ret i32 0
 
 }
