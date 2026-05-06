@@ -27,7 +27,7 @@ pub const Lexer = struct {
     }
 
     pub fn next(self: *Lexer) Token {
-        self.skipWhitespace();
+        self.skipTrivia();
 
         if (self.done()) {
             return .{
@@ -283,5 +283,32 @@ pub const Lexer = struct {
                 break;
             }
         }
+    }
+
+    fn skipTrivia(self: *Lexer) void {
+        while (true) {
+            self.skipWhitespace();
+            if (!self.skipComment()) break;
+        }
+    }
+
+    fn skipComment(self: *Lexer) bool {
+        if (self.offsetInSource + 1 >= self.source.len) {
+            return false;
+        }
+
+        if (self.source[self.offsetInSource] != '/' or self.source[self.offsetInSource + 1] != '/') {
+            return false;
+        }
+
+        self.offsetInSource += 2;
+        self.column += 2;
+
+        while (!self.done() and self.source[self.offsetInSource] != '\n') {
+            self.offsetInSource += 1;
+            self.column += 1;
+        }
+
+        return true;
     }
 };

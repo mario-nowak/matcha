@@ -168,3 +168,62 @@ test "lexer tokenizes multiple strings in sequence" {
     try expectTokenTag(second, .StringLiteral);
     try std.testing.expectEqualStrings("second", second.kind.StringLiteral);
 }
+
+test "lexer skips line comments" {
+    var lexer = lexing.Lexer.init(
+        \\// comment before code
+        \\val answer = 42; // trailing comment
+        \\var next = answer;
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const expected_tags = [_]TokenTag{
+        .Val,
+        .Identifier,
+        .Assign,
+        .IntLiteral,
+        .Semicolon,
+        .Var,
+        .Identifier,
+        .Assign,
+        .Identifier,
+        .Semicolon,
+        .EndOfFile,
+    };
+
+    for (expected_tags) |expected_tag| {
+        try expectTokenTag(lexer.next(), expected_tag);
+    }
+}
+
+test "lexer skips consecutive line comments" {
+    var lexer = lexing.Lexer.init(
+        \\val first = 1;
+        \\// first comment
+        \\// second comment
+        \\val second = 2;
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const expected_tags = [_]TokenTag{
+        .Val,
+        .Identifier,
+        .Assign,
+        .IntLiteral,
+        .Semicolon,
+        .Val,
+        .Identifier,
+        .Assign,
+        .IntLiteral,
+        .Semicolon,
+        .EndOfFile,
+    };
+
+    for (expected_tags) |expected_tag| {
+        try expectTokenTag(lexer.next(), expected_tag);
+    }
+}
