@@ -90,6 +90,7 @@ pub const TypeChecker = struct {
         while (resolved_structures_iterator.next()) |structure| {
             const structure_type_id: typing.StructureTypeId = @intCast(self.type_store.structure_types.items.len);
             self.type_store.structure_types.append(self.allocator, .{
+                .symbol_id = structure.symbol_id,
                 .name = structure.name,
                 .fields = &.{},
                 .field_index_by_name = std.StringHashMap(u32).init(self.allocator),
@@ -128,6 +129,7 @@ pub const TypeChecker = struct {
             }
 
             self.type_store.structure_types.items[structure_type_id] = .{
+                .symbol_id = structure.symbol_id,
                 .name = structure.name,
                 .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
                 .field_index_by_name = field_index_by_name,
@@ -434,6 +436,10 @@ pub const TypeChecker = struct {
                 const member_access = self.member_access_by_node_id.get(node.id) orelse unreachable;
                 return switch (member_access) {
                     .StructureInstanceFieldAccess => .{ .type_id = type_id },
+                    .StructureInstanceMethodAccess => {
+                        std.debug.print("Type Error: Cannot assign to structure instance method\n", .{});
+                        return TypeError.InvalidAssignmentTarget;
+                    },
                     .ArrayInstanceLengthAccess => {
                         std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
                         return TypeError.TypeMismatch;
@@ -616,12 +622,13 @@ pub const TypeChecker = struct {
                     const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
                     return self.recordNodeType(node_id, function_type_id);
                 },
-                .Binding, .Function => return self.checkInstanceMemberAccessNode(
+                .Binding => return self.checkInstanceMemberAccessNode(
                     node_id,
                     member_access,
                     resolved_program,
                     exit_behavior_by_node_id,
                 ),
+                .Function => return TypeError.TypeMismatch,
             }
         }
 
@@ -650,16 +657,31 @@ pub const TypeChecker = struct {
         switch (self.type_store.getType(base_type_id)) {
             .Structure => |structure_type_id| {
                 const structure_type = self.type_store.structure_types.items[structure_type_id];
-                const field_index = structure_type.field_index_by_name.get(member_name) orelse {
-                    std.debug.print(
-                        "Type Error: No member named {s} exists on structure type {s}\n",
-                        .{ member_name, structure_type.name },
-                    );
-                    return TypeError.TypeMismatch;
-                };
+                const field_index = structure_type.field_index_by_name.get(member_name);
+                if (field_index) |structure_field_index| {
+                    self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = structure_field_index } });
+                    return self.recordNodeType(node_id, structure_type.fields[@intCast(structure_field_index)].type_id);
+                }
 
-                self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = field_index } });
-                return self.recordNodeType(node_id, structure_type.fields[@intCast(field_index)].type_id);
+                const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name);
+                if (function_symbol_id) |structure_function_symbol_id| {
+                    // Instance method access binds the receiver and drops the `self` parameter from the callable type.
+                    const bound_function_type_id = try self.bindInstanceMethodFunctionType(
+                        structure_function_symbol_id,
+                        base_type_id,
+                    );
+                    self.recordMemberAccess(node_id, .{ .StructureInstanceMethodAccess = .{
+                        .structure_symbol_id = structure_type.symbol_id,
+                        .function_symbol_id = structure_function_symbol_id,
+                    } });
+                    return self.recordNodeType(node_id, bound_function_type_id);
+                }
+
+                std.debug.print(
+                    "Type Error: No member named {s} exists on structure type {s}\n",
+                    .{ member_name, structure_type.name },
+                );
+                return TypeError.TypeMismatch;
             },
             .Array => {
                 if (std.mem.eql(u8, member_name, "length")) {
@@ -681,6 +703,42 @@ pub const TypeChecker = struct {
                 return TypeError.TypeMismatch;
             },
         }
+    }
+
+    fn bindInstanceMethodFunctionType(
+        self: *@This(),
+        function_symbol_id: symbols.SymbolId,
+        receiver_type_id: typing.TypeId,
+    ) TypeError!typing.TypeId {
+        const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_type = switch (self.type_store.getType(function_type_id)) {
+            .Function => |id| self.type_store.function_types.items[id],
+            else => unreachable,
+        };
+
+        if (function_type.parameter_types.len == 0) {
+            std.debug.print("Type Error: Structure instance method is missing a receiver parameter\n", .{});
+            return TypeError.TypeMismatch;
+        }
+
+        if (function_type.parameter_types[0] != receiver_type_id) {
+            std.debug.print(
+                "Type Error: Structure instance method receiver expected type {any}, got {any}\n",
+                .{ self.getType(function_type.parameter_types[0]), self.getType(receiver_type_id) },
+            );
+            return TypeError.TypeMismatch;
+        }
+
+        var remaining_parameter_types = std.ArrayList(typing.TypeId){};
+        defer remaining_parameter_types.deinit(self.allocator);
+        for (function_type.parameter_types[1..]) |parameter_type_id| {
+            remaining_parameter_types.append(self.allocator, parameter_type_id) catch unreachable;
+        }
+
+        return self.type_store.addFunctionType(.{
+            .parameter_types = remaining_parameter_types.toOwnedSlice(self.allocator) catch unreachable,
+            .return_type = function_type.return_type,
+        });
     }
 
     fn checkBinaryExpressionNode(

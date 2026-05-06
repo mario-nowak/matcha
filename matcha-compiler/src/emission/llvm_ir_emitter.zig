@@ -816,22 +816,28 @@ pub const LlvmIrEmitter = struct {
                 };
             },
             .CallExpression => |call_expression| {
-                const structure_function_access = switch (call_expression.callee.kind) {
-                    .MemberAccess => structure_function_access_from_member_access: {
+                var structure_symbol_id: ?symbols.SymbolId = null;
+                var instance_method_receiver: ?*const ast.Node = null;
+                const callee_symbol_id = switch (call_expression.callee.kind) {
+                    .MemberAccess => |callee_member_access| member_access_callee_symbol_id: {
                         const member_access = typed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable;
-                        break :structure_function_access_from_member_access switch (member_access) {
-                            .StructureTypeFunctionAccess => |structure_function| structure_function,
-                            else => null,
-                        };
+                        switch (member_access) {
+                            .StructureInstanceMethodAccess => |structure_method| {
+                                structure_symbol_id = structure_method.structure_symbol_id;
+                                instance_method_receiver = callee_member_access.base;
+                                break :member_access_callee_symbol_id structure_method.function_symbol_id;
+                            },
+                            .StructureTypeFunctionAccess => |structure_function| {
+                                structure_symbol_id = structure_function.structure_symbol_id;
+                                break :member_access_callee_symbol_id structure_function.function_symbol_id;
+                            },
+                            else => unreachable,
+                        }
                     },
-                    else => null,
-                };
-                const callee_symbol_id = if (structure_function_access) |structure_function|
-                    structure_function.function_symbol_id
-                else
-                    typed_program.resolved_program.symbol_id_by_node_id.get(
+                    else => typed_program.resolved_program.symbol_id_by_node_id.get(
                         call_expression.callee.id,
-                    ) orelse unreachable;
+                    ) orelse unreachable,
+                };
                 const callee_symbol = typed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
                 const function_info = switch (callee_symbol.kind) {
                     .Function => |function_info| function_info,
@@ -842,6 +848,28 @@ pub const LlvmIrEmitter = struct {
                 var current_label = entry_label;
                 var argument_registers = std.ArrayList(Register){};
                 defer argument_registers.deinit(self.allocator);
+
+                if (instance_method_receiver) |receiver| {
+                    const receiver_result = self.emitNode(
+                        receiver,
+                        current_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (receiver_result.exit_label) |exit_label| {
+                        current_label = exit_label;
+                    } else {
+                        return .{
+                            .exit_label = null,
+                            .register = null,
+                        };
+                    }
+                    argument_registers.append(
+                        self.allocator,
+                        receiver_result.register orelse unreachable,
+                    ) catch unreachable;
+                }
+
                 for (call_expression.arguments) |*argument| {
                     const argument_result = self.emitNode(
                         argument,
@@ -893,9 +921,9 @@ pub const LlvmIrEmitter = struct {
                     ) catch unreachable;
                 }
 
-                const function_name = if (structure_function_access) |structure_function|
+                const function_name = if (structure_symbol_id) |owning_structure_symbol_id|
                     self.symbol_generator.generateStructureFunctionName(
-                        typed_program.resolved_program.symbol_table.getSymbol(structure_function.structure_symbol_id),
+                        typed_program.resolved_program.symbol_table.getSymbol(owning_structure_symbol_id),
                         callee_symbol,
                     )
                 else
@@ -1252,6 +1280,7 @@ pub const LlvmIrEmitter = struct {
                     .register = member_register,
                 };
             },
+            .StructureInstanceMethodAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
         }
     }
@@ -1312,6 +1341,7 @@ pub const LlvmIrEmitter = struct {
         const resolved_member_access = typed_program.member_access_by_node_id.get(node_id) orelse unreachable;
         const field_index = switch (resolved_member_access) {
             .StructureInstanceFieldAccess => |structure_field| structure_field.field_index,
+            .StructureInstanceMethodAccess => unreachable,
             .ArrayInstanceLengthAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
         };

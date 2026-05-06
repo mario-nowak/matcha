@@ -395,9 +395,8 @@ test "semantic analysis type-checks structure function calls" {
     }
 }
 
-test "semantic analysis rejects instance method call syntax for now" {
-    try expectAnalyzeError(
-        error.TypeMismatch,
+test "semantic analysis type-checks structure instance method calls" {
+    var analyzed = try helpers.analyzeProgram(
         \\item Point = structure {
         \\    x: int;
         \\    y: int;
@@ -411,6 +410,40 @@ test "semantic analysis rejects instance method call syntax for now" {
         \\val other = Point { x = 3, y = 4 };
         \\val moved = point.movedBy(other);
     );
+    defer analyzed.deinit();
+
+    const moved_declaration = switch (analyzed.parsed.program.statements[3].kind) {
+        .Declaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const moved_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
+        analyzed.parsed.program.statements[3].id,
+    ).?;
+    const point_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(
+        analyzed.parsed.program.statements[0].id,
+    ).?;
+    try std.testing.expectEqual(
+        analyzed.typed_program.type_by_symbol_id.get(point_symbol_id).?,
+        analyzed.typed_program.type_by_symbol_id.get(moved_symbol_id).?,
+    );
+
+    const call_expression = switch (moved_declaration.value.kind) {
+        .CallExpression => |call_expression| call_expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const method_access = analyzed.typed_program.member_access_by_node_id.get(call_expression.callee.id).?;
+    switch (method_access) {
+        .StructureInstanceMethodAccess => |structure_method| {
+            const method_function_type_id = analyzed.typed_program.type_by_node_id.get(call_expression.callee.id).?;
+            const method_function_type = switch (analyzed.typed_program.type_store.getType(method_function_type_id)) {
+                .Function => |id| analyzed.typed_program.type_store.function_types.items[id],
+                else => return TestError.UnexpectedNodeKind,
+            };
+            try std.testing.expectEqual(@as(usize, 1), method_function_type.parameter_types.len);
+            try std.testing.expectEqualStrings("movedBy", analyzed.typed_program.resolved_program.symbol_table.getSymbol(structure_method.function_symbol_id).name);
+        },
+        else => return TestError.UnexpectedNodeKind,
+    }
 }
 
 test "semantic analysis type-checks array length member access" {

@@ -89,6 +89,7 @@ pub const TypeStore = struct {
 };
 
 pub const StructureType = struct {
+    symbol_id: symbols.SymbolId,
     name: []const u8,
     fields: []const Field,
     field_index_by_name: std.StringHashMap(u32),
@@ -112,6 +113,10 @@ pub const StructureConstructionLayout = struct {
 pub const MemberAccess = union(enum) {
     StructureInstanceFieldAccess: struct {
         field_index: u32,
+    },
+    StructureInstanceMethodAccess: struct {
+        structure_symbol_id: symbols.SymbolId,
+        function_symbol_id: symbols.SymbolId,
     },
     StructureTypeFunctionAccess: struct {
         structure_symbol_id: symbols.SymbolId,
