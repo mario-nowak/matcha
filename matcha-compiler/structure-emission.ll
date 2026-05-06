@@ -1,6 +1,7 @@
 declare void @matcha_initiate_garbage_collector()
 declare ptr @matcha_allocate(i64)
 declare ptr @matcha_allocate_atomic(i64)
+declare void @matcha_print_int(i64)
 
 %String = type { i8*, i64 }
 %Array = type { i64, ptr }
@@ -67,6 +68,14 @@ entry:
     %.t_7 = load ptr, ptr %.s_1
     %.t_8 = call ptr @matcha_structure_0_Point__function_7_movedBy(ptr %.t_6, ptr %.t_7)
     store ptr %.t_8, ptr %.s_2
+    %.t_9 = load ptr, ptr %.s_2
+    %.t_10 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_9, i32 0, i32 0
+    %.t_11 = load i64, ptr %.t_10
+    call void @matcha_print_int(i64 %.t_11)
+    %.t_12 = load ptr, ptr %.s_2
+    %.t_13 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_12, i32 0, i32 1
+    %.t_14 = load i64, ptr %.t_13
+    call void @matcha_print_int(i64 %.t_14)
     store i64 2, ptr %.s_3
     ret i32 0
 
