@@ -58,6 +58,26 @@ fn trimSlice(bytes: []const u8) []const u8 {
     return bytes[start..end];
 }
 
+fn delimiterMatches(bytes: []const u8, delimiter: []const u8, index: usize) bool {
+    return std.mem.eql(u8, bytes[index .. index + delimiter.len], delimiter);
+}
+
+fn countSplitParts(bytes: []const u8, delimiter: []const u8) usize {
+    var parts: usize = 1;
+    var index: usize = 0;
+
+    while (index + delimiter.len <= bytes.len) {
+        if (delimiterMatches(bytes, delimiter, index)) {
+            parts += 1;
+            index += delimiter.len;
+        } else {
+            index += 1;
+        }
+    }
+
+    return parts;
+}
+
 export fn matcha_initiate_garbage_collector() void {
     GC_init();
 }
@@ -139,17 +159,53 @@ export fn matcha_string_split(
     delimiter_ptr: [*]const u8,
     delimiter_len: usize,
 ) *ArrayHeader {
-    _ = ptr;
-    _ = len;
-    _ = delimiter_ptr;
-    _ = delimiter_len;
-    panic("panic: string.split is not implemented yet");
+    if (delimiter_len == 0) {
+        panic("panic: cannot split by empty string");
+    }
+
+    const bytes = ptr[0..len];
+    const delimiter = delimiter_ptr[0..delimiter_len];
+    const parts = countSplitParts(bytes, delimiter);
+
+    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const header: *ArrayHeader = @ptrCast(@alignCast(header_allocation));
+    const data_allocation = matcha_allocate(parts * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const data: [*]MatchaString = @ptrCast(@alignCast(data_allocation));
+
+    header.* = .{
+        .length = @intCast(parts),
+        .capacity = @intCast(parts),
+        .data = data_allocation,
+    };
+
+    var part_index: usize = 0;
+    var part_start: usize = 0;
+    var index: usize = 0;
+
+    while (index + delimiter.len <= bytes.len) {
+        if (delimiterMatches(bytes, delimiter, index)) {
+            data[part_index] = .{
+                .ptr = bytes.ptr + part_start,
+                .len = index - part_start,
+            };
+            part_index += 1;
+            index += delimiter.len;
+            part_start = index;
+        } else {
+            index += 1;
+        }
+    }
+
+    data[part_index] = .{
+        .ptr = bytes.ptr + part_start,
+        .len = bytes.len - part_start,
+    };
+
+    return header;
 }
 
 export fn matcha_string_to_int(ptr: [*]const u8, len: usize) i64 {
-    _ = ptr;
-    _ = len;
-    panic("panic: string.toInt is not implemented yet");
+    return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("panic: failed to parse int");
 }
 
 export fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i64, length: usize) noreturn {
