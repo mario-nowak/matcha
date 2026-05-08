@@ -448,6 +448,10 @@ pub const TypeChecker = struct {
                         std.debug.print("Type Error: Cannot assign to structure function\n", .{});
                         return TypeError.InvalidAssignmentTarget;
                     },
+                    .ArrayInstanceMethodAccess => {
+                        std.debug.print("Type Error: Cannot assign to array instance method\n", .{});
+                        return TypeError.InvalidAssignmentTarget;
+                    },
                 };
             },
             .IndexAccess => {
@@ -684,6 +688,12 @@ pub const TypeChecker = struct {
                 return TypeError.TypeMismatch;
             },
             .Array => {
+                if (std.mem.eql(u8, member_name, "append")) {
+                    // Array append mutates the shared array header and only needs the appended element explicitly.
+                    const append_function_type_id = try self.getArrayAppendFunctionTypeId(base_type_id);
+                    self.recordMemberAccess(node_id, .{ .ArrayInstanceMethodAccess = .Append });
+                    return self.recordNodeType(node_id, append_function_type_id);
+                }
                 if (std.mem.eql(u8, member_name, "length")) {
                     self.recordMemberAccess(node_id, .ArrayInstanceLengthAccess);
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
@@ -703,6 +713,23 @@ pub const TypeChecker = struct {
                 return TypeError.TypeMismatch;
             },
         }
+    }
+
+    fn getArrayAppendFunctionTypeId(
+        self: *@This(),
+        array_type_id: typing.TypeId,
+    ) TypeError!typing.TypeId {
+        const element_type_id = switch (self.type_store.getType(array_type_id)) {
+            .Array => |element_type_id| element_type_id,
+            else => unreachable,
+        };
+
+        const parameter_types = self.allocator.alloc(typing.TypeId, 1) catch unreachable;
+        parameter_types[0] = element_type_id;
+        return self.type_store.addFunctionType(.{
+            .parameter_types = parameter_types,
+            .return_type = self.type_store.unit_type_id,
+        });
     }
 
     fn bindInstanceMethodFunctionType(

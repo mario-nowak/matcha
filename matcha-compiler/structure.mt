@@ -23,22 +23,31 @@ item Point = structure {
     };
 };
 
-item PointHolder = structure {
-    point_1: Point;
-    point_2: Point;
+item PointCluster = structure {
+    points: Point[];
+
+    item sum(self: PointCluster): Point = {
+        var sum = Point.origin();
+        var point_index = 0;
+        while point_index < self.points.length : point_index = point_index + 1 {
+            sum = sum.movedBy(self.points[point_index]);
+        }
+
+        return sum;
+    };
 };
 
-val point = Point {
-    x = 3,
-    y = 1,
+val point_cluster = PointCluster {
+    points = [
+        Point { x =  3, y =  1, },
+        Point { x = -3, y = -4, },
+        Point { x = -8, y =  5, },
+        Point { x =  9, y =  2, },
+    ]
 };
 
-var other_point = Point {
-    x = 1,
-    y = 4,
-};
+point_cluster.points.append(Point { x = 6, y = 7, });
 
-val result_point = Point.origin().movedBy(other_point);
-result_point.print();
-result_point.invert();
-result_point.print();
+val sum_point = point_cluster.sum();
+sum_point.invert();
+sum_point.print();

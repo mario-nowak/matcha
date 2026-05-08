@@ -224,7 +224,7 @@ test "llvm emission lowers indexed assignment to bounds-checked store" {
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, ptr }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, i64, ptr }") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_panic_index_out_of_bounds") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp slt i64") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp sge i64") != null);
@@ -232,15 +232,28 @@ test "llvm emission lowers indexed assignment to bounds-checked store" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr") != null);
 }
 
-test "llvm emission lowers array length member access to extractvalue" {
+test "llvm emission lowers array length member access to header load" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
         \\val length = numbers.length;
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, ptr }") != null);
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, llvm_ir, "extractvalue %Array "));
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, i64, ptr }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %Array, ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, ptr") != null);
+}
+
+test "llvm emission lowers array append to runtime slot helper plus typed store" {
+    const llvm_ir = try emit(
+        \\val numbers = [1, 2, 3];
+        \\numbers.append(4);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_array_append_slot(ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_array_append_slot(ptr ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr ") != null);
 }
 
 test "llvm emission lowers match expressions to compare-and-branch chains" {
