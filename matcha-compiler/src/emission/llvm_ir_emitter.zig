@@ -9,11 +9,16 @@ const Label = []const u8;
 const Storage = []const u8;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 
+// A string is a header containing a pointer to the data and the length.
 const llvm_string_type_definition = "%String = type { i8*, i64 }";
 // An array is a header containing the length, capacity, and a pointer to the data.
 const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
 const runtime_print_int_function_name = "matcha_print_int";
 const runtime_print_string_function_name = "matcha_print_string";
+const runtime_read_file_function_name = "matcha_read_file";
+const runtime_string_trim_function_name = "matcha_string_trim";
+const runtime_string_split_function_name = "matcha_string_split";
+const runtime_string_to_int_function_name = "matcha_string_to_int";
 const runtime_panic_index_out_of_bounds_function_name = "matcha_panic_index_out_of_bounds";
 const runtime_array_append_slot_function_name = "matcha_array_append_slot";
 
@@ -21,6 +26,11 @@ const StringLiteralGlobal = struct {
     name: []const u8,
     content: []const u8,
     len: usize,
+};
+
+const StringParts = struct {
+    pointer_register: Register,
+    length_register: Register,
 };
 
 const LlvmTypeDefinition = struct {
@@ -195,6 +205,7 @@ pub const SymbolGenerator = struct {
             .Function => |function_info| switch (function_info.implementation) {
                 .BuiltinPrintInt => return runtime_print_int_function_name,
                 .BuiltinPrintString => return runtime_print_string_function_name,
+                .BuiltinReadFile => return runtime_read_file_function_name,
                 .UserDefined => {
                     return std.fmt.allocPrint(
                         self.allocator,
@@ -229,6 +240,10 @@ pub const LlvmIrEmitter = struct {
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
     needs_print_int: bool,
     needs_print_string: bool,
+    needs_read_file: bool,
+    needs_string_trim: bool,
+    needs_string_split: bool,
+    needs_string_to_int: bool,
     needs_panic_index_out_of_bounds: bool,
     needs_array_append_slot: bool,
 
@@ -243,6 +258,10 @@ pub const LlvmIrEmitter = struct {
             .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
             .needs_print_int = false,
             .needs_print_string = false,
+            .needs_read_file = false,
+            .needs_string_trim = false,
+            .needs_string_split = false,
+            .needs_string_to_int = false,
             .needs_panic_index_out_of_bounds = false,
             .needs_array_append_slot = false,
         };
@@ -259,6 +278,10 @@ pub const LlvmIrEmitter = struct {
     pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
         self.needs_print_int = false;
         self.needs_print_string = false;
+        self.needs_read_file = false;
+        self.needs_string_trim = false;
+        self.needs_string_split = false;
+        self.needs_string_to_int = false;
         self.needs_panic_index_out_of_bounds = false;
         self.needs_array_append_slot = false;
         self.symbol_generator.string_literal_counter = 0;
@@ -406,6 +429,30 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(ptr, i64)",
                 .{runtime_print_string_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_read_file) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(ptr, ptr, i64)",
+                .{runtime_read_file_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_string_trim) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(ptr, ptr, i64)",
+                .{runtime_string_trim_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_string_split) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare ptr @{s}(ptr, i64, ptr, i64)",
+                .{runtime_string_split_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_string_to_int) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare i64 @{s}(ptr, i64)",
+                .{runtime_string_to_int_function_name},
             ) catch unreachable;
         }
         if (self.needs_panic_index_out_of_bounds) {
@@ -676,7 +723,7 @@ pub const LlvmIrEmitter = struct {
         );
     }
 
-    fn emitRuntimePrintStringCall(self: *@This(), string_register: Register) void {
+    fn emitStringParts(self: *@This(), string_register: Register) StringParts {
         const pointer_register = self.symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
@@ -693,12 +740,36 @@ pub const LlvmIrEmitter = struct {
         ) catch unreachable;
         self.lines.append(self.allocator, .{ .instruction = length_instruction }) catch unreachable;
 
+        return .{
+            .pointer_register = pointer_register,
+            .length_register = length_register,
+        };
+    }
+
+    fn emitRuntimePrintStringCall(self: *@This(), string_register: Register) void {
+        const string_parts = self.emitStringParts(string_register);
+
         const print_instruction = std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
-            .{ runtime_print_string_function_name, pointer_register, length_register },
+            .{ runtime_print_string_function_name, string_parts.pointer_register, string_parts.length_register },
         ) catch unreachable;
         self.lines.append(self.allocator, .{ .instruction = print_instruction }) catch unreachable;
+    }
+
+    fn emitRuntimeStringOutputCall(self: *@This(), runtime_function_name: []const u8, string_register: Register) Register {
+        const string_parts = self.emitStringParts(string_register);
+        const result_storage = self.symbol_generator.generateStorage();
+        self.emitAlloca(result_storage, "%String");
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(ptr {s}, ptr {s}, i64 {s})",
+            .{ runtime_function_name, result_storage, string_parts.pointer_register, string_parts.length_register },
+        ) catch unreachable }) catch unreachable;
+
+        const result_register = self.symbol_generator.generateRegister();
+        self.emitLoad(result_register, result_storage, "%String");
+        return result_register;
     }
 
     fn emitNode(
@@ -842,16 +913,26 @@ pub const LlvmIrEmitter = struct {
                                 structure_symbol_id = structure_function.structure_symbol_id;
                                 break :member_access_callee_symbol_id structure_function.function_symbol_id;
                             },
-                        .ArrayInstanceMethodAccess => |array_method| {
-                            return switch (array_method) {
-                                .Append => self.emitArrayAppendCall(
+                            .ArrayInstanceMethodAccess => |array_method| {
+                                return switch (array_method) {
+                                    .Append => self.emitArrayAppendCall(
+                                        &callee_member_access,
+                                        &call_expression,
+                                        entry_label,
+                                        typed_program,
+                                        environment,
+                                    ),
+                                };
+                            },
+                            .StringInstanceMethodAccess => |string_method| {
+                                return self.emitStringMethodCall(
+                                    string_method,
                                     &callee_member_access,
                                     &call_expression,
                                     entry_label,
                                     typed_program,
                                     environment,
-                                    ),
-                                };
+                                );
                             },
                             else => unreachable,
                         }
@@ -922,6 +1003,18 @@ pub const LlvmIrEmitter = struct {
                         return .{
                             .exit_label = current_label,
                             .register = null,
+                        };
+                    },
+                    .BuiltinReadFile => {
+                        self.needs_read_file = true;
+                        const result_register = self.emitRuntimeStringOutputCall(
+                            runtime_read_file_function_name,
+                            argument_registers.items[0],
+                        );
+
+                        return .{
+                            .exit_label = current_label,
+                            .register = result_register,
                         };
                     },
                     .UserDefined => {},
@@ -1252,31 +1345,52 @@ pub const LlvmIrEmitter = struct {
     ) EmissionResult {
         const resolved_member_access = typed_program.member_access_by_node_id.get(node.id) orelse unreachable;
         switch (resolved_member_access) {
-            .ArrayInstanceLengthAccess => {
-                const base_result = self.emitNode(
-                    member_access.base,
-                    entry_label,
-                    typed_program,
-                    environment,
-                );
-                if (base_result.exit_label == null) {
-                    return .{ .exit_label = null, .register = null };
-                }
+            .ArrayInstanceFieldAccess => |array_field| switch (array_field) {
+                .Length => {
+                    const base_result = self.emitNode(
+                        member_access.base,
+                        entry_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (base_result.exit_label == null) {
+                        return .{ .exit_label = null, .register = null };
+                    }
 
-                const length_pointer_register = self.symbol_generator.generateRegister();
-                self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-                    .{ length_pointer_register, base_result.register orelse unreachable },
-                ) catch unreachable }) catch unreachable;
+                    const length_pointer_register = self.symbol_generator.generateRegister();
+                    self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+                        .{ length_pointer_register, base_result.register orelse unreachable },
+                    ) catch unreachable }) catch unreachable;
 
-                const length_register = self.symbol_generator.generateRegister();
-                self.emitLoad(length_register, length_pointer_register, "i64");
+                    const length_register = self.symbol_generator.generateRegister();
+                    self.emitLoad(length_register, length_pointer_register, "i64");
 
-                return .{
-                    .exit_label = base_result.exit_label,
-                    .register = length_register,
-                };
+                    return .{
+                        .exit_label = base_result.exit_label,
+                        .register = length_register,
+                    };
+                },
+            },
+            .StringInstanceFieldAccess => |string_field| switch (string_field) {
+                .Length => {
+                    const base_result = self.emitNode(
+                        member_access.base,
+                        entry_label,
+                        typed_program,
+                        environment,
+                    );
+                    if (base_result.exit_label == null) {
+                        return .{ .exit_label = null, .register = null };
+                    }
+
+                    const string_parts = self.emitStringParts(base_result.register orelse unreachable);
+                    return .{
+                        .exit_label = base_result.exit_label,
+                        .register = string_parts.length_register,
+                    };
+                },
             },
             .StructureInstanceFieldAccess => {
                 const member_pointer_result = self.emitMemberAccessPointer(
@@ -1308,6 +1422,7 @@ pub const LlvmIrEmitter = struct {
             .StructureInstanceMethodAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
             .ArrayInstanceMethodAccess => unreachable,
+            .StringInstanceMethodAccess => unreachable,
         }
     }
 
@@ -1368,9 +1483,11 @@ pub const LlvmIrEmitter = struct {
         const field_index = switch (resolved_member_access) {
             .StructureInstanceFieldAccess => |structure_field| structure_field.field_index,
             .StructureInstanceMethodAccess => unreachable,
-            .ArrayInstanceLengthAccess => unreachable,
+            .ArrayInstanceFieldAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
             .ArrayInstanceMethodAccess => unreachable,
+            .StringInstanceFieldAccess => unreachable,
+            .StringInstanceMethodAccess => unreachable,
         };
 
         const base_type_id = typed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
@@ -1742,6 +1859,93 @@ pub const LlvmIrEmitter = struct {
         return .{
             .exit_label = argument_result.exit_label,
             .register = null,
+        };
+    }
+
+    fn emitStringMethodCall(
+        self: *@This(),
+        string_method: typing.StringInstanceMethod,
+        callee_member_access: *const ast.MemberAccess,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        if (base_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        return switch (string_method) {
+            .Trim => {
+                if (call_expression.arguments.len != 0) unreachable;
+                self.needs_string_trim = true;
+                const result_register = self.emitRuntimeStringOutputCall(
+                    runtime_string_trim_function_name,
+                    base_result.register orelse unreachable,
+                );
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = result_register,
+                };
+            },
+            .Split => {
+                if (call_expression.arguments.len != 1) unreachable;
+                self.needs_string_split = true;
+
+                const delimiter_result = self.emitNode(
+                    &call_expression.arguments[0],
+                    base_result.exit_label.?,
+                    typed_program,
+                    environment,
+                );
+                if (delimiter_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
+
+                const base_parts = self.emitStringParts(base_result.register orelse unreachable);
+                const delimiter_parts = self.emitStringParts(delimiter_result.register orelse unreachable);
+                const result_register = self.symbol_generator.generateRegister();
+                self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = call ptr @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
+                    .{
+                        result_register,
+                        runtime_string_split_function_name,
+                        base_parts.pointer_register,
+                        base_parts.length_register,
+                        delimiter_parts.pointer_register,
+                        delimiter_parts.length_register,
+                    },
+                ) catch unreachable }) catch unreachable;
+
+                return .{
+                    .exit_label = delimiter_result.exit_label,
+                    .register = result_register,
+                };
+            },
+            .ToInt => {
+                if (call_expression.arguments.len != 0) unreachable;
+                self.needs_string_to_int = true;
+
+                const string_parts = self.emitStringParts(base_result.register orelse unreachable);
+                const result_register = self.symbol_generator.generateRegister();
+                self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = call i64 @{s}(ptr {s}, i64 {s})",
+                    .{
+                        result_register,
+                        runtime_string_to_int_function_name,
+                        string_parts.pointer_register,
+                        string_parts.length_register,
+                    },
+                ) catch unreachable }) catch unreachable;
+
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = result_register,
+                };
+            },
         };
     }
 

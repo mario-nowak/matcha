@@ -110,6 +110,24 @@ pub const StructureConstructionLayout = struct {
     field_indices: []const u32,
 };
 
+pub const ArrayInstanceMethod = enum {
+    Append,
+};
+
+pub const ArrayInstanceField = enum {
+    Length,
+};
+
+pub const StringInstanceMethod = enum {
+    Trim,
+    Split,
+    ToInt,
+};
+
+pub const StringInstanceField = enum {
+    Length,
+};
+
 pub const MemberAccess = union(enum) {
     StructureInstanceFieldAccess: struct {
         field_index: u32,
@@ -122,10 +140,10 @@ pub const MemberAccess = union(enum) {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
-    ArrayInstanceMethodAccess: enum {
-        Append,
-    },
-    ArrayInstanceLengthAccess,
+    ArrayInstanceMethodAccess: ArrayInstanceMethod,
+    ArrayInstanceFieldAccess: ArrayInstanceField,
+    StringInstanceMethodAccess: StringInstanceMethod,
+    StringInstanceFieldAccess: StringInstanceField,
 };
 
 pub const BinaryOperatorSignature = struct {
