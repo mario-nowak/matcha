@@ -440,9 +440,11 @@ pub const TypeChecker = struct {
                         std.debug.print("Type Error: Cannot assign to structure instance method\n", .{});
                         return TypeError.InvalidAssignmentTarget;
                     },
-                    .ArrayInstanceLengthAccess => {
-                        std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
-                        return TypeError.TypeMismatch;
+                    .ArrayInstanceFieldAccess => |array_field| switch (array_field) {
+                        .Length => {
+                            std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
+                            return TypeError.TypeMismatch;
+                        },
                     },
                     .StructureTypeFunctionAccess => {
                         std.debug.print("Type Error: Cannot assign to structure function\n", .{});
@@ -450,6 +452,16 @@ pub const TypeChecker = struct {
                     },
                     .ArrayInstanceMethodAccess => {
                         std.debug.print("Type Error: Cannot assign to array instance method\n", .{});
+                        return TypeError.InvalidAssignmentTarget;
+                    },
+                    .StringInstanceFieldAccess => |string_field| switch (string_field) {
+                        .Length => {
+                            std.debug.print("Type Error: Cannot assign to read-only string member length\n", .{});
+                            return TypeError.TypeMismatch;
+                        },
+                    },
+                    .StringInstanceMethodAccess => {
+                        std.debug.print("Type Error: Cannot assign to string instance method\n", .{});
                         return TypeError.InvalidAssignmentTarget;
                     },
                 };
@@ -695,12 +707,42 @@ pub const TypeChecker = struct {
                     return self.recordNodeType(node_id, append_function_type_id);
                 }
                 if (std.mem.eql(u8, member_name, "length")) {
-                    self.recordMemberAccess(node_id, .ArrayInstanceLengthAccess);
+                    self.recordMemberAccess(node_id, .{ .ArrayInstanceFieldAccess = .Length });
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
 
                 std.debug.print(
                     "Type Error: No member named {s} exists on array type\n",
+                    .{member_name},
+                );
+                return TypeError.TypeMismatch;
+            },
+            .String => {
+                if (std.mem.eql(u8, member_name, "length")) {
+                    self.recordMemberAccess(node_id, .{ .StringInstanceFieldAccess = .Length });
+                    return self.recordNodeType(node_id, self.type_store.integer_type_id);
+                }
+                if (std.mem.eql(u8, member_name, "trim")) {
+                    const trim_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
+                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Trim });
+                    return self.recordNodeType(node_id, trim_function_type_id);
+                }
+                if (std.mem.eql(u8, member_name, "split")) {
+                    const split_function_type_id = self.getStringMethodFunctionTypeId(
+                        &.{self.type_store.string_type_id},
+                        self.type_store.getOrCreateArrayType(self.type_store.string_type_id),
+                    );
+                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Split });
+                    return self.recordNodeType(node_id, split_function_type_id);
+                }
+                if (std.mem.eql(u8, member_name, "toInt")) {
+                    const to_int_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.integer_type_id);
+                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .ToInt });
+                    return self.recordNodeType(node_id, to_int_function_type_id);
+                }
+
+                std.debug.print(
+                    "Type Error: No member named {s} exists on string type\n",
                     .{member_name},
                 );
                 return TypeError.TypeMismatch;
@@ -729,6 +771,20 @@ pub const TypeChecker = struct {
         return self.type_store.addFunctionType(.{
             .parameter_types = parameter_types,
             .return_type = self.type_store.unit_type_id,
+        });
+    }
+
+    fn getStringMethodFunctionTypeId(
+        self: *@This(),
+        parameter_type_ids: []const typing.TypeId,
+        return_type_id: typing.TypeId,
+    ) typing.TypeId {
+        const parameter_types = self.allocator.alloc(typing.TypeId, parameter_type_ids.len) catch unreachable;
+        @memcpy(parameter_types, parameter_type_ids);
+
+        return self.type_store.addFunctionType(.{
+            .parameter_types = parameter_types,
+            .return_type = return_type_id,
         });
     }
 

@@ -63,6 +63,7 @@ pub const NameResolver = struct {
 
         self.addPrintIntBuiltinDebuggingFunction(&module_scope);
         self.addPrintStringBuiltinDebuggingFunction(&module_scope);
+        self.addReadFileBuiltinFunction(&module_scope);
 
         for (program.statements) |statement| {
             try self.resolveNode(&statement, &root_scope, &module_scope, .{
@@ -126,6 +127,31 @@ pub const NameResolver = struct {
                 .type_reference = .{ .Builtin = .String },
             }}) catch unreachable,
             .return_type_reference = .{ .Builtin = .Unit },
+            .implementation = .builtin,
+        });
+    }
+
+    fn addReadFileBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
+        const read_file_symbol = self.symbol_table.insertSymbol(.{
+            .name = "readFile",
+            .declared_at = null,
+            .kind = .{ .Function = .{ .implementation = .BuiltinReadFile } },
+        });
+        module_scope.insertSymbol(read_file_symbol.name, read_file_symbol.id);
+        const parameter_symbol = self.symbol_table.insertSymbol(.{
+            .name = "path",
+            .declared_at = null,
+            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+        });
+        self.appendResolvedFunction(.{
+            .symbol_id = read_file_symbol.id,
+            .name = read_file_symbol.name,
+            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
+                .symbol_id = parameter_symbol.id,
+                .name = parameter_symbol.name,
+                .type_reference = .{ .Builtin = .String },
+            }}) catch unreachable,
+            .return_type_reference = .{ .Builtin = .String },
             .implementation = .builtin,
         });
     }

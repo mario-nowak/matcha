@@ -219,6 +219,48 @@ test "semantic analysis resolves string type annotation" {
     try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
 }
 
+test "semantic analysis type-checks readFile builtin" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val input = readFile("input.txt");
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[0].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
+test "semantic analysis type-checks string length and parsing helpers" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val input = " 1,2 ";
+        \\val trimmed = input.trim();
+        \\val lines = trimmed.split(",");
+        \\val first = lines[0].toInt();
+        \\val length = trimmed.length;
+    );
+    defer analyzed.deinit();
+
+    const trimmed_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(trimmed_symbol_id).?);
+
+    const lines_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
+    try expectType(
+        .{ .Array = analyzed.typed_program.type_store.string_type_id },
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_symbol_id.get(lines_symbol_id).?,
+    );
+
+    const first_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[3].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(first_symbol_id).?);
+
+    const length_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[4].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(length_symbol_id).?);
+}
+
 test "semantic analysis resolves array types in function signatures" {
     var analyzed = try helpers.analyzeProgram(
         \\item identity(values: int[]): int[] = values;
@@ -462,7 +504,7 @@ test "semantic analysis type-checks array length member access" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
     const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
     switch (member_access) {
-        .ArrayInstanceLengthAccess => {},
+        .ArrayInstanceFieldAccess => |array_field| try std.testing.expectEqual(@as(typing.ArrayInstanceField, .Length), array_field),
         else => return TestError.UnexpectedNodeKind,
     }
 }

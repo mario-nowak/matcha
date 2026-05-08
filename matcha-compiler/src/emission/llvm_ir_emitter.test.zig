@@ -162,6 +162,27 @@ test "llvm emission lowers string literals to String globals and runtime printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
+test "llvm emission lowers file input and string helper methods to runtime calls" {
+    const llvm_ir = try emit(
+        \\val input = readFile("input.txt");
+        \\val trimmed = input.trim();
+        \\val lines = trimmed.split(",");
+        \\val first = lines[0].toInt();
+        \\printInt(first + trimmed.length);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_read_file(ptr, ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_string_trim(ptr, ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_string_split(ptr, i64, ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i64 @matcha_string_to_int(ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_read_file(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_string_trim(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_string_split(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_string_to_int(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String") != null);
+}
+
 test "llvm emission emits structure definitions as payload types" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
