@@ -467,6 +467,32 @@ test "semantic analysis type-checks array length member access" {
     }
 }
 
+test "semantic analysis type-checks array append instance method calls" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val numbers = [1, 2, 3];
+        \\numbers.append(4);
+        \\val length = numbers.length;
+    );
+    defer analyzed.deinit();
+
+    const append_expression_statement = switch (analyzed.parsed.program.statements[1].kind) {
+        .ExpressionStatement => |expression_statement| expression_statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const append_call = switch (append_expression_statement.expression.kind) {
+        .CallExpression => |call_expression| call_expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const member_access = analyzed.typed_program.member_access_by_node_id.get(append_call.callee.id).?;
+    switch (member_access) {
+        .ArrayInstanceMethodAccess => |array_method| try std.testing.expectEqual(@as(@TypeOf(array_method), .Append), array_method),
+        else => return TestError.UnexpectedNodeKind,
+    }
+
+    const length_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(length_symbol_id).?);
+}
+
 test "semantic analysis type-checks mutable structure field assignment" {
     var analyzed = try helpers.analyzeProgram(
         \\item Point = structure { x: int; y: int; };

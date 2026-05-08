@@ -122,6 +122,9 @@ pub const MemberAccess = union(enum) {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
+    ArrayInstanceMethodAccess: enum {
+        Append,
+    },
     ArrayInstanceLengthAccess,
 };
 

@@ -10,10 +10,12 @@ const Storage = []const u8;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 
 const llvm_string_type_definition = "%String = type { i8*, i64 }";
-const llvm_array_type_definition = "%Array = type { i64, ptr }";
+// An array is a header containing the length, capacity, and a pointer to the data.
+const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
 const runtime_print_int_function_name = "matcha_print_int";
 const runtime_print_string_function_name = "matcha_print_string";
 const runtime_panic_index_out_of_bounds_function_name = "matcha_panic_index_out_of_bounds";
+const runtime_array_append_slot_function_name = "matcha_array_append_slot";
 
 const StringLiteralGlobal = struct {
     name: []const u8,
@@ -228,6 +230,7 @@ pub const LlvmIrEmitter = struct {
     needs_print_int: bool,
     needs_print_string: bool,
     needs_panic_index_out_of_bounds: bool,
+    needs_array_append_slot: bool,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
@@ -241,6 +244,7 @@ pub const LlvmIrEmitter = struct {
             .needs_print_int = false,
             .needs_print_string = false,
             .needs_panic_index_out_of_bounds = false,
+            .needs_array_append_slot = false,
         };
     }
 
@@ -256,6 +260,7 @@ pub const LlvmIrEmitter = struct {
         self.needs_print_int = false;
         self.needs_print_string = false;
         self.needs_panic_index_out_of_bounds = false;
+        self.needs_array_append_slot = false;
         self.symbol_generator.string_literal_counter = 0;
         self.string_literal_globals.clearRetainingCapacity();
         self.string_literal_global_name_by_node_id.clearRetainingCapacity();
@@ -321,7 +326,7 @@ pub const LlvmIrEmitter = struct {
             .Integer => "i64",
             .String => "%String",
             .Structure => "ptr",
-            .Array => "%Array",
+            .Array => "ptr",
             .Function => |unsupported_type| std.debug.panic(
                 "LLVM IR emitter does not support function values, got {any} (type id {d})",
                 .{ unsupported_type, type_id },
@@ -407,6 +412,12 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(i64, i64, i64, i64) noreturn",
                 .{runtime_panic_index_out_of_bounds_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_array_append_slot) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare ptr @{s}(ptr, i64)",
+                .{runtime_array_append_slot_function_name},
             ) catch unreachable;
         }
 
@@ -831,6 +842,17 @@ pub const LlvmIrEmitter = struct {
                                 structure_symbol_id = structure_function.structure_symbol_id;
                                 break :member_access_callee_symbol_id structure_function.function_symbol_id;
                             },
+                        .ArrayInstanceMethodAccess => |array_method| {
+                            return switch (array_method) {
+                                .Append => self.emitArrayAppendCall(
+                                    &callee_member_access,
+                                    &call_expression,
+                                    entry_label,
+                                    typed_program,
+                                    environment,
+                                    ),
+                                };
+                            },
                             else => unreachable,
                         }
                     },
@@ -1241,12 +1263,15 @@ pub const LlvmIrEmitter = struct {
                     return .{ .exit_label = null, .register = null };
                 }
 
-                const length_register = self.symbol_generator.generateRegister();
+                const length_pointer_register = self.symbol_generator.generateRegister();
                 self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
                     self.allocator,
-                    "{s} = extractvalue %Array {s}, 0",
-                    .{ length_register, base_result.register orelse unreachable },
+                    "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+                    .{ length_pointer_register, base_result.register orelse unreachable },
                 ) catch unreachable }) catch unreachable;
+
+                const length_register = self.symbol_generator.generateRegister();
+                self.emitLoad(length_register, length_pointer_register, "i64");
 
                 return .{
                     .exit_label = base_result.exit_label,
@@ -1282,6 +1307,7 @@ pub const LlvmIrEmitter = struct {
             },
             .StructureInstanceMethodAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
+            .ArrayInstanceMethodAccess => unreachable,
         }
     }
 
@@ -1344,6 +1370,7 @@ pub const LlvmIrEmitter = struct {
             .StructureInstanceMethodAccess => unreachable,
             .ArrayInstanceLengthAccess => unreachable,
             .StructureTypeFunctionAccess => unreachable,
+            .ArrayInstanceMethodAccess => unreachable,
         };
 
         const base_type_id = typed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
@@ -1451,6 +1478,13 @@ pub const LlvmIrEmitter = struct {
         const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
         const length = array_literal.elements.len;
 
+        const header_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))",
+            .{header_register},
+        ) catch unreachable }) catch unreachable;
+
         const data_register = self.symbol_generator.generateRegister();
         self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
             self.allocator,
@@ -1480,23 +1514,45 @@ pub const LlvmIrEmitter = struct {
             ) catch unreachable }) catch unreachable;
         }
 
-        const partial_register = self.symbol_generator.generateRegister();
+        const length_pointer_register = self.symbol_generator.generateRegister();
         self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %Array undef, i64 {d}, 0",
-            .{ partial_register, length },
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+            .{ length_pointer_register, header_register },
+        ) catch unreachable }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "store i64 {d}, ptr {s}",
+            .{ length, length_pointer_register },
         ) catch unreachable }) catch unreachable;
 
-        const array_register = self.symbol_generator.generateRegister();
+        const capacity_pointer_register = self.symbol_generator.generateRegister();
         self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %Array {s}, ptr {s}, 1",
-            .{ array_register, partial_register, data_register },
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 1",
+            .{ capacity_pointer_register, header_register },
+        ) catch unreachable }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "store i64 {d}, ptr {s}",
+            .{ length, capacity_pointer_register },
+        ) catch unreachable }) catch unreachable;
+
+        const data_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
+            .{ data_pointer_register, header_register },
+        ) catch unreachable }) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "store ptr {s}, ptr {s}",
+            .{ data_register, data_pointer_register },
         ) catch unreachable }) catch unreachable;
 
         return .{
             .exit_label = current_label,
-            .register = array_register,
+            .register = header_register,
         };
     }
 
@@ -1559,19 +1615,25 @@ pub const LlvmIrEmitter = struct {
         };
         const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
 
-        const length_register = self.symbol_generator.generateRegister();
+        const length_pointer_register = self.symbol_generator.generateRegister();
         self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = extractvalue %Array {s}, 0",
-            .{ length_register, base_result.register orelse unreachable },
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+            .{ length_pointer_register, base_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const length_register = self.symbol_generator.generateRegister();
+        self.emitLoad(length_register, length_pointer_register, "i64");
+
+        const data_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
+            .{ data_pointer_register, base_result.register orelse unreachable },
         ) catch unreachable }) catch unreachable;
 
         const data_register = self.symbol_generator.generateRegister();
-        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
-            self.allocator,
-            "{s} = extractvalue %Array {s}, 1",
-            .{ data_register, base_result.register orelse unreachable },
-        ) catch unreachable }) catch unreachable;
+        self.emitLoad(data_register, data_pointer_register, "ptr");
 
         const negative_check_register = self.symbol_generator.generateRegister();
         self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
@@ -1626,6 +1688,60 @@ pub const LlvmIrEmitter = struct {
         return .{
             .exit_label = ok_label,
             .register = element_pointer_register,
+        };
+    }
+
+    fn emitArrayAppendCall(
+        self: *@This(),
+        callee_member_access: *const ast.MemberAccess,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        if (call_expression.arguments.len != 1) unreachable;
+
+        self.needs_array_append_slot = true;
+
+        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        if (base_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const argument_result = self.emitNode(&call_expression.arguments[0], base_result.exit_label.?, typed_program, environment);
+        if (argument_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const array_type_id = typed_program.type_by_node_id.get(callee_member_access.base.id) orelse unreachable;
+        const element_type_id = switch (typed_program.type_store.getType(array_type_id)) {
+            .Array => |element_type_id| element_type_id,
+            else => unreachable,
+        };
+        const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
+
+        // The runtime helper grows the backing storage if needed and returns the slot for the new element.
+        const slot_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @{s}(ptr {s}, i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 1) to i64))",
+            .{
+                slot_register,
+                runtime_array_append_slot_function_name,
+                base_result.register orelse unreachable,
+                element_llvm_type,
+            },
+        ) catch unreachable }) catch unreachable;
+
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "store {s} {s}, ptr {s}",
+            .{ element_llvm_type, argument_result.register orelse unreachable, slot_register },
+        ) catch unreachable }) catch unreachable;
+
+        return .{
+            .exit_label = argument_result.exit_label,
+            .register = null,
         };
     }
 
