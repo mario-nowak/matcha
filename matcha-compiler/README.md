@@ -28,4 +28,8 @@ Useful commands:
 mise tasks run build
 mise tasks run test
 mise tasks run jit -- path/to/file.mt
+mise tasks run build-compiler
+mise tasks run emit -- path/to/file.mt
+mise tasks run compile -- path/to/file.mt
+./path/to/file
 ```

@@ -144,6 +144,7 @@ pub const Lexer = struct {
         const start_line = self.line;
         const start_column = self.column;
         const start_offset = self.offsetInSource;
+        var content = std.ArrayList(u8){};
 
         // Skip the opening quote
         self.offsetInSource += 1;
@@ -152,22 +153,64 @@ pub const Lexer = struct {
         while (!self.done()) {
             const character = self.source[self.offsetInSource];
             if (character == '"') {
-                const content = self.source[start_offset + 1 .. self.offsetInSource];
-
                 // Skip the closing quote
                 self.offsetInSource += 1;
                 self.column += 1;
 
                 const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+                const decoded_content = content.toOwnedSlice(self.allocator) catch unreachable;
 
                 return Token{
                     .line = start_line,
                     .column = start_column,
                     .offsetInSource = start_offset,
                     .lenInSource = total_length,
-                    .kind = .{ .StringLiteral = content },
+                    .kind = .{ .StringLiteral = decoded_content },
                 };
             }
+
+            if (character == '\\') {
+                self.offsetInSource += 1;
+                self.column += 1;
+
+                if (self.done()) {
+                    const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+                    return Token{
+                        .line = start_line,
+                        .column = start_column,
+                        .offsetInSource = start_offset,
+                        .lenInSource = total_length,
+                        .kind = .{ .Error = .{ .message = "Unterminated string literal" } },
+                    };
+                }
+
+                const escaped_character = self.source[self.offsetInSource];
+                const decoded_character: u8 = switch (escaped_character) {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '"' => '"',
+                    '\\' => '\\',
+                    else => {
+                        self.offsetInSource += 1;
+                        self.column += 1;
+                        const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+                        return Token{
+                            .line = start_line,
+                            .column = start_column,
+                            .offsetInSource = start_offset,
+                            .lenInSource = total_length,
+                            .kind = .{ .Error = .{ .message = "Unknown string escape sequence" } },
+                        };
+                    },
+                };
+                content.append(self.allocator, decoded_character) catch unreachable;
+                self.offsetInSource += 1;
+                self.column += 1;
+                continue;
+            }
+
+            content.append(self.allocator, character) catch unreachable;
             self.offsetInSource += 1;
             self.column += 1;
         }
