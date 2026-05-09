@@ -9,7 +9,7 @@ declare ptr @matcha_array_append_slot(ptr, i64)
 %Array = type { i64, i64, ptr }
 
 %matcha_structure_0_Point = type { i64, i64 }
-define ptr @matcha_structure_0_Point__function_6_movedBy(ptr %arg_0_self, ptr %arg_1_other) {
+define ptr @matcha_structure_0_Point__function_8_movedBy(ptr %arg_0_self, ptr %arg_1_other) {
 entry:
     %.s_0 = alloca ptr
     %.s_1 = alloca ptr
@@ -38,7 +38,7 @@ entry:
     ret ptr %.t_0
 
 }
-define void @matcha_structure_0_Point__function_9_invert(ptr %arg_0_self) {
+define void @matcha_structure_0_Point__function_11_invert(ptr %arg_0_self) {
 entry:
     %.s_0 = alloca ptr
 
@@ -60,7 +60,7 @@ entry:
     ret void
 
 }
-define ptr @matcha_structure_0_Point__function_11_origin() {
+define ptr @matcha_structure_0_Point__function_13_origin() {
 entry:
 
     %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
@@ -71,7 +71,7 @@ entry:
     ret ptr %.t_0
 
 }
-define void @matcha_structure_0_Point__function_12_print(ptr %arg_0_self) {
+define void @matcha_structure_0_Point__function_14_print(ptr %arg_0_self) {
 entry:
     %.s_0 = alloca ptr
 
@@ -88,14 +88,14 @@ entry:
 
 }
 %matcha_structure_1_PointCluster = type { ptr }
-define ptr @matcha_structure_1_PointCluster__function_14_sum(ptr %arg_0_self) {
+define ptr @matcha_structure_1_PointCluster__function_16_sum(ptr %arg_0_self) {
 entry:
     %.s_0 = alloca ptr
     %.s_1 = alloca ptr
     %.s_2 = alloca i64
 
     store ptr %arg_0_self, ptr %.s_0
-    %.t_0 = call ptr @matcha_structure_0_Point__function_11_origin()
+    %.t_0 = call ptr @matcha_structure_0_Point__function_13_origin()
     store ptr %.t_0, ptr %.s_1
     store i64 0, ptr %.s_2
     br label %label_loop_header_0
@@ -128,7 +128,7 @@ label_index_panic_4:
 label_index_ok_5:
     %.t_20 = getelementptr inbounds ptr, ptr %.t_16, i64 %.t_12
     %.t_21 = load ptr, ptr %.t_20
-    %.t_22 = call ptr @matcha_structure_0_Point__function_6_movedBy(ptr %.t_8, ptr %.t_21)
+    %.t_22 = call ptr @matcha_structure_0_Point__function_8_movedBy(ptr %.t_8, ptr %.t_21)
     store ptr %.t_22, ptr %.s_1
     br label %label_loop_continue_2
 label_loop_continue_2:
@@ -201,12 +201,12 @@ entry:
     %.t_32 = call ptr @matcha_array_append_slot(ptr %.t_28, i64 ptrtoint (ptr getelementptr (ptr, ptr null, i64 1) to i64))
     store ptr %.t_29, ptr %.t_32
     %.t_33 = load ptr, ptr %.s_0
-    %.t_34 = call ptr @matcha_structure_1_PointCluster__function_14_sum(ptr %.t_33)
+    %.t_34 = call ptr @matcha_structure_1_PointCluster__function_16_sum(ptr %.t_33)
     store ptr %.t_34, ptr %.s_1
     %.t_35 = load ptr, ptr %.s_1
-    call void @matcha_structure_0_Point__function_9_invert(ptr %.t_35)
+    call void @matcha_structure_0_Point__function_11_invert(ptr %.t_35)
     %.t_36 = load ptr, ptr %.s_1
-    call void @matcha_structure_0_Point__function_12_print(ptr %.t_36)
+    call void @matcha_structure_0_Point__function_14_print(ptr %.t_36)
     ret i32 0
 
 }

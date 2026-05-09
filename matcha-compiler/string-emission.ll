@@ -1,28 +1,19 @@
+declare void @matcha_initiate_garbage_collector()
+declare ptr @matcha_allocate(i64)
+declare ptr @matcha_allocate_atomic(i64)
+declare void @matcha_print_string(ptr, i64)
+
 %String = type { i8*, i64 }
+%Array = type { i64, i64, ptr }
 
 @.string_literal_0 = private unnamed_addr constant [5 x i8] c"Hello"
-@.print_string_newline = private unnamed_addr constant [1 x i8] c"\0A"
 
-declare i64 @write(i32, i8*, i64)
-
-define void @builtin_printString(%String %arg_0_value) {
-entry:
-
-    %.t_0 = extractvalue %String %arg_0_value, 0
-    %.t_1 = extractvalue %String %arg_0_value, 1
-    call i64 @write(i32 1, i8* %.t_0, i64 %.t_1)
-    %.t_2 = getelementptr inbounds [1 x i8], [1 x i8]* @.print_string_newline, i64 0, i64 0
-    call i64 @write(i32 1, i8* %.t_2, i64 1)
-    ret void
-
-}
-
-define %String @matcha_0_identity(%String %arg_0_value) {
+define %String @matcha_function_0_identity(%String %arg_0_value) {
 entry:
     %.s_0 = alloca %String
 
-    store %String %arg_0_value, %String* %.s_0
-    %.t_0 = load %String, %String* %.s_0
+    store %String %arg_0_value, ptr %.s_0
+    %.t_0 = load %String, ptr %.s_0
     ret %String %.t_0
 
 }
@@ -34,19 +25,27 @@ entry:
     %.t_0 = getelementptr inbounds [5 x i8], [5 x i8]* @.string_literal_0, i64 0, i64 0
     %.t_1 = insertvalue %String undef, i8* %.t_0, 0
     %.t_2 = insertvalue %String %.t_1, i64 5, 1
-    store %String %.t_2, %String* %.s_0
-    %.t_3 = load %String, %String* %.s_0
-    %.t_4 = call %String @matcha_0_identity(%String %.t_3)
-    call void @builtin_printString(%String %.t_4)
-    %.t_5 = load %String, %String* %.s_0
-    %.t_6 = call %String @matcha_0_identity(%String %.t_5)
-    call void @builtin_printString(%String %.t_6)
-    %.t_7 = load %String, %String* %.s_0
-    %.t_8 = call %String @matcha_0_identity(%String %.t_7)
-    call void @builtin_printString(%String %.t_8)
-    %.t_9 = load %String, %String* %.s_0
-    %.t_10 = call %String @matcha_0_identity(%String %.t_9)
-    call void @builtin_printString(%String %.t_10)
+    store %String %.t_2, ptr %.s_0
+    %.t_3 = load %String, ptr %.s_0
+    %.t_4 = call %String @matcha_function_0_identity(%String %.t_3)
+    %.t_5 = extractvalue %String %.t_4, 0
+    %.t_6 = extractvalue %String %.t_4, 1
+    call void @matcha_print_string(ptr %.t_5, i64 %.t_6)
+    %.t_7 = load %String, ptr %.s_0
+    %.t_8 = call %String @matcha_function_0_identity(%String %.t_7)
+    %.t_9 = extractvalue %String %.t_8, 0
+    %.t_10 = extractvalue %String %.t_8, 1
+    call void @matcha_print_string(ptr %.t_9, i64 %.t_10)
+    %.t_11 = load %String, ptr %.s_0
+    %.t_12 = call %String @matcha_function_0_identity(%String %.t_11)
+    %.t_13 = extractvalue %String %.t_12, 0
+    %.t_14 = extractvalue %String %.t_12, 1
+    call void @matcha_print_string(ptr %.t_13, i64 %.t_14)
+    %.t_15 = load %String, ptr %.s_0
+    %.t_16 = call %String @matcha_function_0_identity(%String %.t_15)
+    %.t_17 = extractvalue %String %.t_16, 0
+    %.t_18 = extractvalue %String %.t_16, 1
+    call void @matcha_print_string(ptr %.t_17, i64 %.t_18)
     ret i32 0
 
 }

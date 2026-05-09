@@ -1089,12 +1089,11 @@ pub const Parser = struct {
             unreachable;
         }
 
-        if (self.lexer.peek().kind == .RightBracket) {
-            return ParserError.ArrayLiteralMustNotBeEmpty;
-        }
-
         var elements = std.ArrayList(ast.Node){};
         while (true) {
+            if (self.lexer.peek().kind == .RightBracket) {
+                break;
+            }
             const element = try self.parseExpression(.{ .current_binding_power = 0 });
             elements.append(self.allocator, element) catch unreachable;
 

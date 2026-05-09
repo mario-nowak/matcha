@@ -152,6 +152,18 @@ test "lexer captures string literal content" {
     try std.testing.expectEqualStrings("hello", token.kind.StringLiteral);
 }
 
+test "lexer decodes string literal escapes" {
+    var lexer = lexing.Lexer.init(
+        "\"line\\nquote: \\\" slash: \\\\ tab: \\t\"",
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const token = lexer.next();
+    try expectTokenTag(token, .StringLiteral);
+    try std.testing.expectEqualStrings("line\nquote: \" slash: \\ tab: \t", token.kind.StringLiteral);
+}
+
 test "lexer tokenizes multiple strings in sequence" {
     var lexer = lexing.Lexer.init(
         \\"first" "second"

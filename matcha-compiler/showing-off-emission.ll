@@ -1,41 +1,19 @@
 declare void @matcha_initiate_garbage_collector()
 declare ptr @matcha_allocate(i64)
 declare ptr @matcha_allocate_atomic(i64)
+declare void @matcha_print_int(i64)
+declare void @matcha_print_string(ptr, i64)
+
 %String = type { i8*, i64 }
+%Array = type { i64, i64, ptr }
 
 @.string_literal_0 = private unnamed_addr constant [7 x i8] c"Is zero"
 @.string_literal_1 = private unnamed_addr constant [11 x i8] c"Hello world"
 @.string_literal_2 = private unnamed_addr constant [15 x i8] c"Printing points"
 @.string_literal_3 = private unnamed_addr constant [27 x i8] c"Printing the while loop now"
-@.print_string_newline = private unnamed_addr constant [1 x i8] c"\0A"
-@.print_int_formatting_string = private unnamed_addr constant [4 x i8] c"%d\0A\00"
-
-declare i64 @write(i32, i8*, i64)
-declare i32 @printf(i8*, ...)
 
 %matcha_structure_2_Point = type { i64, i64 }
 %matcha_structure_3_NestedPoint = type { ptr, ptr }
-
-define void @builtin_printString(%String %arg_0_value) {
-entry:
-
-    %.t_0 = extractvalue %String %arg_0_value, 0
-    %.t_1 = extractvalue %String %arg_0_value, 1
-    call i64 @write(i32 1, i8* %.t_0, i64 %.t_1)
-    %.t_2 = getelementptr inbounds [1 x i8], [1 x i8]* @.print_string_newline, i64 0, i64 0
-    call i64 @write(i32 1, i8* %.t_2, i64 1)
-    ret void
-
-}
-
-define void @builtin_printInt(i64 %arg_0_value) {
-entry:
-
-    %.t_0 = getelementptr inbounds [4 x i8], [4 x i8]* @.print_int_formatting_string, i64 0, i64 0
-    call i32 (i8*, ...) @printf(i8* %.t_0, i64 %arg_0_value)
-    ret void
-
-}
 
 define i64 @matcha_function_0_addOne(i64 %arg_0_x) {
 entry:
@@ -60,13 +38,15 @@ label_then_1:
     %.t_2 = getelementptr inbounds [7 x i8], [7 x i8]* @.string_literal_0, i64 0, i64 0
     %.t_3 = insertvalue %String undef, i8* %.t_2, 0
     %.t_4 = insertvalue %String %.t_3, i64 7, 1
-    call void @builtin_printString(%String %.t_4)
-    %.t_5 = load i64, ptr %.s_0
-    ret i64 %.t_5
-label_continue_0:
-    %.t_6 = load i64, ptr %.s_0
-    %.t_7 = add i64 %.t_6, 1
+    %.t_5 = extractvalue %String %.t_4, 0
+    %.t_6 = extractvalue %String %.t_4, 1
+    call void @matcha_print_string(ptr %.t_5, i64 %.t_6)
+    %.t_7 = load i64, ptr %.s_0
     ret i64 %.t_7
+label_continue_0:
+    %.t_8 = load i64, ptr %.s_0
+    %.t_9 = add i64 %.t_8, 1
+    ret i64 %.t_9
 
 }
 
@@ -87,84 +67,90 @@ entry:
     %.t_1 = add i64 %.t_0, 1
     store i64 %.t_1, ptr %.s_1
     %.t_2 = load i64, ptr %.s_1
-    call void @builtin_printInt(i64 %.t_2)
+    call void @matcha_print_int(i64 %.t_2)
     %.t_3 = getelementptr inbounds [11 x i8], [11 x i8]* @.string_literal_1, i64 0, i64 0
     %.t_4 = insertvalue %String undef, i8* %.t_3, 0
     %.t_5 = insertvalue %String %.t_4, i64 11, 1
-    call void @builtin_printString(%String %.t_5)
-    %.t_6 = load i64, ptr %.s_1
-    %.t_7 = call i64 @matcha_function_0_addOne(i64 %.t_6)
-    call void @builtin_printInt(i64 %.t_7)
+    %.t_6 = extractvalue %String %.t_5, 0
+    %.t_7 = extractvalue %String %.t_5, 1
+    call void @matcha_print_string(ptr %.t_6, i64 %.t_7)
+    %.t_8 = load i64, ptr %.s_1
+    %.t_9 = call i64 @matcha_function_0_addOne(i64 %.t_8)
+    call void @matcha_print_int(i64 %.t_9)
     store i64 4, ptr %.s_2
-    %.t_8 = load i64, ptr %.s_2
-    store i64 %.t_8, ptr %.s_3
-    %.t_9 = load i64, ptr %.s_3
-    call void @builtin_printInt(i64 %.t_9)
-    %.t_10 = call i64 @matcha_function_1_complexFunction(i64 1)
-    store i64 %.t_10, ptr %.s_4
-    %.t_11 = load i64, ptr %.s_4
-    call void @builtin_printInt(i64 %.t_11)
+    %.t_10 = load i64, ptr %.s_2
+    store i64 %.t_10, ptr %.s_3
+    %.t_11 = load i64, ptr %.s_3
+    call void @matcha_print_int(i64 %.t_11)
+    %.t_12 = call i64 @matcha_function_1_complexFunction(i64 1)
+    store i64 %.t_12, ptr %.s_4
+    %.t_13 = load i64, ptr %.s_4
+    call void @matcha_print_int(i64 %.t_13)
     store i1 1, ptr %.s_5
-    %.t_12 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_2_Point, ptr null, i32 1) to i64))
-    %.t_13 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_12, i32 0, i32 0
-    store i64 4, ptr %.t_13
-    %.t_14 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_12, i32 0, i32 1
-    store i64 5, ptr %.t_14
-    store ptr %.t_12, ptr %.s_6
-    %.t_15 = load ptr, ptr %.s_6
-    %.t_16 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_15, i32 0, i32 1
-    store i64 2, ptr %.t_16
-    %.t_17 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_3_NestedPoint, ptr null, i32 1) to i64))
-    %.t_18 = load ptr, ptr %.s_6
-    %.t_19 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_17, i32 0, i32 0
-    store ptr %.t_18, ptr %.t_19
-    %.t_20 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_2_Point, ptr null, i32 1) to i64))
-    %.t_21 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_20, i32 0, i32 0
-    store i64 3, ptr %.t_21
-    %.t_22 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_20, i32 0, i32 1
-    store i64 6, ptr %.t_22
-    %.t_23 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_17, i32 0, i32 1
-    store ptr %.t_20, ptr %.t_23
-    store ptr %.t_17, ptr %.s_7
-    %.t_24 = getelementptr inbounds [15 x i8], [15 x i8]* @.string_literal_2, i64 0, i64 0
-    %.t_25 = insertvalue %String undef, i8* %.t_24, 0
-    %.t_26 = insertvalue %String %.t_25, i64 15, 1
-    call void @builtin_printString(%String %.t_26)
-    %.t_27 = load ptr, ptr %.s_6
-    %.t_28 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_27, i32 0, i32 0
-    store i64 110, ptr %.t_28
-    %.t_29 = load ptr, ptr %.s_7
-    %.t_30 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_29, i32 0, i32 0
-    %.t_31 = load ptr, ptr %.t_30
+    %.t_14 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_2_Point, ptr null, i32 1) to i64))
+    %.t_15 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_14, i32 0, i32 0
+    store i64 4, ptr %.t_15
+    %.t_16 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_14, i32 0, i32 1
+    store i64 5, ptr %.t_16
+    store ptr %.t_14, ptr %.s_6
+    %.t_17 = load ptr, ptr %.s_6
+    %.t_18 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_17, i32 0, i32 1
+    store i64 2, ptr %.t_18
+    %.t_19 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_3_NestedPoint, ptr null, i32 1) to i64))
+    %.t_20 = load ptr, ptr %.s_6
+    %.t_21 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_19, i32 0, i32 0
+    store ptr %.t_20, ptr %.t_21
+    %.t_22 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_2_Point, ptr null, i32 1) to i64))
+    %.t_23 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_22, i32 0, i32 0
+    store i64 3, ptr %.t_23
+    %.t_24 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_22, i32 0, i32 1
+    store i64 6, ptr %.t_24
+    %.t_25 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_19, i32 0, i32 1
+    store ptr %.t_22, ptr %.t_25
+    store ptr %.t_19, ptr %.s_7
+    %.t_26 = getelementptr inbounds [15 x i8], [15 x i8]* @.string_literal_2, i64 0, i64 0
+    %.t_27 = insertvalue %String undef, i8* %.t_26, 0
+    %.t_28 = insertvalue %String %.t_27, i64 15, 1
+    %.t_29 = extractvalue %String %.t_28, 0
+    %.t_30 = extractvalue %String %.t_28, 1
+    call void @matcha_print_string(ptr %.t_29, i64 %.t_30)
+    %.t_31 = load ptr, ptr %.s_6
     %.t_32 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_31, i32 0, i32 0
-    store i64 330, ptr %.t_32
+    store i64 110, ptr %.t_32
     %.t_33 = load ptr, ptr %.s_7
     %.t_34 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_33, i32 0, i32 0
     %.t_35 = load ptr, ptr %.t_34
     %.t_36 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_35, i32 0, i32 0
-    %.t_37 = load i64, ptr %.t_36
-    call void @builtin_printInt(i64 %.t_37)
-    %.t_38 = load ptr, ptr %.s_7
-    %.t_39 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_38, i32 0, i32 1
-    %.t_40 = load ptr, ptr %.t_39
-    %.t_41 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_40, i32 0, i32 1
-    %.t_42 = load i64, ptr %.t_41
-    call void @builtin_printInt(i64 %.t_42)
-    %.t_43 = getelementptr inbounds [27 x i8], [27 x i8]* @.string_literal_3, i64 0, i64 0
-    %.t_44 = insertvalue %String undef, i8* %.t_43, 0
-    %.t_45 = insertvalue %String %.t_44, i64 27, 1
-    call void @builtin_printString(%String %.t_45)
+    store i64 330, ptr %.t_36
+    %.t_37 = load ptr, ptr %.s_7
+    %.t_38 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_37, i32 0, i32 0
+    %.t_39 = load ptr, ptr %.t_38
+    %.t_40 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_39, i32 0, i32 0
+    %.t_41 = load i64, ptr %.t_40
+    call void @matcha_print_int(i64 %.t_41)
+    %.t_42 = load ptr, ptr %.s_7
+    %.t_43 = getelementptr inbounds %matcha_structure_3_NestedPoint, ptr %.t_42, i32 0, i32 1
+    %.t_44 = load ptr, ptr %.t_43
+    %.t_45 = getelementptr inbounds %matcha_structure_2_Point, ptr %.t_44, i32 0, i32 1
+    %.t_46 = load i64, ptr %.t_45
+    call void @matcha_print_int(i64 %.t_46)
+    %.t_47 = getelementptr inbounds [27 x i8], [27 x i8]* @.string_literal_3, i64 0, i64 0
+    %.t_48 = insertvalue %String undef, i8* %.t_47, 0
+    %.t_49 = insertvalue %String %.t_48, i64 27, 1
+    %.t_50 = extractvalue %String %.t_49, 0
+    %.t_51 = extractvalue %String %.t_49, 1
+    call void @matcha_print_string(ptr %.t_50, i64 %.t_51)
     br label %label_loop_header_0
 label_loop_header_0:
-    %.t_46 = load i64, ptr %.s_3
-    %.t_47 = icmp slt i64 %.t_46, 10
-    br i1 %.t_47, label %label_loop_body_1, label %label_loop_exit_3
+    %.t_52 = load i64, ptr %.s_3
+    %.t_53 = icmp slt i64 %.t_52, 10
+    br i1 %.t_53, label %label_loop_body_1, label %label_loop_exit_3
 label_loop_body_1:
-    %.t_48 = load i64, ptr %.s_3
-    %.t_49 = add i64 %.t_48, 1
-    store i64 %.t_49, ptr %.s_3
-    %.t_50 = load i64, ptr %.s_3
-    call void @builtin_printInt(i64 %.t_50)
+    %.t_54 = load i64, ptr %.s_3
+    %.t_55 = add i64 %.t_54, 1
+    store i64 %.t_55, ptr %.s_3
+    %.t_56 = load i64, ptr %.s_3
+    call void @matcha_print_int(i64 %.t_56)
     br label %label_loop_continue_2
 label_loop_continue_2:
     br label %label_loop_header_0
