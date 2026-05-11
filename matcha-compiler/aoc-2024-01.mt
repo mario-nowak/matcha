@@ -29,7 +29,7 @@ item countSort(array: int[]): int[] = {
         count_array[index] = count_array[index] + 1;
     }
 
-    // compute prefic sum
+    // compute prefix sum
     i = 1;
     while i <= maximum_element : i = i+1 {
         count_array[i] = count_array[i] + count_array[i - 1];
