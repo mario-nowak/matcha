@@ -105,6 +105,11 @@ pub const ControlFlowValidator = struct {
                     try self.validateNode(field.value, context);
                 }
             },
+            .AnonymousStructureLiteral => |anonymous_structure_literal| {
+                for (anonymous_structure_literal.fields) |field| {
+                    try self.validateNode(field.value, context);
+                }
+            },
             .While => |while_statement| {
                 try self.validateNode(while_statement.condition, context);
                 if (while_statement.update) |update| {
@@ -250,6 +255,17 @@ pub const ControlFlowValidator = struct {
             },
             .StructureConstruction => |structure_construction| {
                 for (structure_construction.fields) |field| {
+                    const result = try self.validateTerminatesWithValue(field.value);
+                    if (result == .Terminates) {
+                        self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                        return .Terminates;
+                    }
+                }
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithValue) catch unreachable;
+                return .FallsThroughWithValue;
+            },
+            .AnonymousStructureLiteral => |anonymous_structure_literal| {
+                for (anonymous_structure_literal.fields) |field| {
                     const result = try self.validateTerminatesWithValue(field.value);
                     if (result == .Terminates) {
                         self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;

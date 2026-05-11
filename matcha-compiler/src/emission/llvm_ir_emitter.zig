@@ -1313,7 +1313,14 @@ pub const LlvmIrEmitter = struct {
             },
             .StructureConstruction => |structure_construction| return self.emitStructureConstruction(
                 node,
-                &structure_construction,
+                structure_construction.fields,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            .AnonymousStructureLiteral => |anonymous_structure_literal| return self.emitStructureConstruction(
+                node,
+                anonymous_structure_literal.fields,
                 entry_label,
                 typed_program,
                 environment,
@@ -1514,15 +1521,15 @@ pub const LlvmIrEmitter = struct {
     fn emitStructureConstruction(
         self: *@This(),
         node: *const ast.Node,
-        structure_construction: *const ast.StructureConstruction,
+        fields: []const ast.StructureConstructionField,
         entry_label: Label,
         typed_program: *const typing.TypedProgram,
         environment: *Environment,
     ) EmissionResult {
-        const structure_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
-        const structure_symbol = typed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
+        const node_type_id = typed_program.type_by_node_id.get(node.id) orelse unreachable;
+        const structure_symbol = self.getStructureSymbolForTypeId(typed_program, node_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
-        const structure_type_id = switch (typed_program.type_store.getType(typed_program.type_by_symbol_id.get(structure_symbol_id) orelse unreachable)) {
+        const structure_type_id = switch (typed_program.type_store.getType(node_type_id)) {
             .Structure => |id| id,
             else => unreachable,
         };
@@ -1542,7 +1549,7 @@ pub const LlvmIrEmitter = struct {
         ) catch unreachable;
 
         var current_label: Label = entry_label;
-        for (structure_construction.fields, structure_construction_layout.field_indices) |field, field_index| {
+        for (fields, structure_construction_layout.field_indices) |field, field_index| {
             const structure_field = structure_type.fields[@intCast(field_index)];
             const field_value_result = self.emitNode(
                 field.value,

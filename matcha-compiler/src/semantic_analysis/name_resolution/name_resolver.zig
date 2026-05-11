@@ -360,6 +360,11 @@ pub const NameResolver = struct {
             .StructureConstruction => |*structure_construction| {
                 try self.resolveStructureConstruction(node.id, structure_construction, node_scope, module_scope, context);
             },
+            .AnonymousStructureLiteral => |anonymous_structure_literal| {
+                for (anonymous_structure_literal.fields) |field| {
+                    try self.resolveNode(field.value, node_scope, module_scope, context);
+                }
+            },
             .ArrayLiteral => |array_literal| {
                 for (array_literal.elements) |*element| {
                     try self.resolveNode(element, node_scope, module_scope, context);

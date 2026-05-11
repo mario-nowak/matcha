@@ -321,6 +321,25 @@ test "parser parses structure member access expressions" {
     try expectNodeTag(constructed_point_x.base, .StructureConstruction);
 }
 
+test "parser parses anonymous structure literal expressions" {
+    const source =
+        \\val point = .{ x = 1, y = 2 };
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const anonymous_literal = switch (declaration.value.kind) {
+        .AnonymousStructureLiteral => |literal| literal,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(@as(usize, 2), anonymous_literal.fields.len);
+}
+
 test "parser parses structure member assignment statements" {
     const source =
         \\point.x = 3;

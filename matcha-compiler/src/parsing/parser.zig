@@ -840,6 +840,15 @@ pub const Parser = struct {
                     break :block self.createNode(.{ .Identifier = token });
                 }
             },
+            .Dot => block: {
+                const post_dot_token = self.lexer.peek();
+                if (state.allow_structure_construction and post_dot_token.kind == .LeftBrace) {
+                    break :block try self.parseAnonymousStructureLiteral(token);
+                }
+
+                std.debug.print("Expected expression starter, got: {any}\n", .{token});
+                return ParserError.ExpectedIdentifier;
+            },
             .If => if_block: {
                 const if_form = try self.parseIfForm(token);
                 break :if_block switch (if_form) {
@@ -1000,6 +1009,32 @@ pub const Parser = struct {
     }
 
     fn parseStructureConstruction(self: *@This(), structure_name: lexing.Token) ParserError!ast.Node {
+        const parsed_fields = try self.parseStructureConstructionFields();
+
+        return self.createNode(.{
+            .StructureConstruction = .{
+                .structure_name = structure_name,
+                .fields = parsed_fields.fields,
+            },
+        });
+    }
+
+    fn parseAnonymousStructureLiteral(self: *@This(), dot_token: lexing.Token) ParserError!ast.Node {
+        const parsed_fields = try self.parseStructureConstructionFields();
+
+        return self.createNode(.{
+            .AnonymousStructureLiteral = .{
+                .dot_token = dot_token,
+                .left_brace = parsed_fields.left_brace_token,
+                .fields = parsed_fields.fields,
+            },
+        });
+    }
+
+    fn parseStructureConstructionFields(self: *@This()) ParserError!struct {
+        left_brace_token: lexing.Token,
+        fields: []ast.StructureConstructionField,
+    } {
         const left_brace_token = self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
             return ParserError.ExpectedLeftBrace;
@@ -1040,12 +1075,10 @@ pub const Parser = struct {
             }
         }
 
-        return self.createNode(.{
-            .StructureConstruction = .{
-                .structure_name = structure_name,
-                .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
-            },
-        });
+        return .{
+            .left_brace_token = left_brace_token,
+            .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
+        };
     }
 
     pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) ParserError!ast.Node {

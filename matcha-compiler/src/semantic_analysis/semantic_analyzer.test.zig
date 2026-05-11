@@ -372,6 +372,66 @@ test "semantic analysis records structure construction layout in source order" {
     try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
 }
 
+test "semantic analysis type-checks anonymous structure literals from contextual type" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure { x: int; y: int; };
+        \\val point: Point = .{ y = 2, x = 1 };
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[1].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const anonymous_structure_literal = switch (declaration.value.kind) {
+        .AnonymousStructureLiteral => |literal| literal,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    _ = anonymous_structure_literal;
+
+    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(declaration.value.id).?;
+    try std.testing.expectEqual(@as(usize, 2), construction_layout.field_indices.len);
+    try std.testing.expectEqual(@as(u32, 1), construction_layout.field_indices[0]);
+    try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
+}
+
+test "semantic analysis rejects anonymous structure literals without contextual type" {
+    try expectAnalyzeError(
+        error.CannotInferType,
+        \\item Point = structure { x: int; y: int; };
+        \\val point = .{ x = 1, y = 2 };
+    );
+}
+
+test "semantic analysis threads contextual type through function body and branch expressions" {
+    var analyzed = try helpers.analyzeProgram(
+        \\item Point = structure { x: int; y: int; };
+        \\
+        \\item viaBlockResult(): Point = {
+        \\    .{ x = 1, y = 2 }
+        \\};
+        \\
+        \\item viaIfExpression(flag: boolean): Point = if flag {
+        \\    .{ x = 3, y = 4 }
+        \\} else {
+        \\    .{ x = 5, y = 6 }
+        \\};
+        \\
+        \\item viaMatchExpression(code: int): Point = match code {
+        \\    0 => .{ x = 7, y = 8 },
+        \\    else => .{ x = 9, y = 10 },
+        \\};
+        \\
+        \\item viaReturn(flag: boolean): Point = {
+        \\    if flag {
+        \\        return .{ x = 11, y = 12 };
+        \\    }
+        \\    return .{ x = 13, y = 14 };
+        \\};
+    );
+    defer analyzed.deinit();
+}
+
 test "semantic analysis type-checks structure member access" {
     var analyzed = try helpers.analyzeProgram(
         \\item Point = structure { x: int; y: int; };
