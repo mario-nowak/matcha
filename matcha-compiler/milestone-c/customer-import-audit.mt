@@ -2,17 +2,17 @@ item AuditDecision = structure {
     statusCode: int; // 0 valid, 1 invalid, 2 suspicious
     reason: string;
 
-    item valid(): AuditDecision = AuditDecision {
+    item valid(): AuditDecision = .{
         statusCode = 0,
         reason = "ok",
     };
 
-    item invalid(reason: string): AuditDecision = AuditDecision {
+    item invalid(reason: string): AuditDecision = .{
         statusCode = 1,
         reason = reason,
     };
 
-    item suspicious(reason: string): AuditDecision = AuditDecision {
+    item suspicious(reason: string): AuditDecision = .{
         statusCode = 2,
         reason = reason,
     };
@@ -27,7 +27,7 @@ item CustomerSubscription = structure {
     item fromRow(row: string): CustomerSubscription = {
         val fields = row.split("|");
 
-        return CustomerSubscription {
+        return .{
             customerId = fields[0].trim(),
             planCode = fields[1].trim().toInt(),
             seats = fields[2].trim().toInt(),
@@ -52,27 +52,32 @@ item AuditSummary = structure {
     invalid: int;
     suspicious: int;
 
-    item empty(): AuditSummary = AuditSummary {
+    item empty(): AuditSummary = .{
         total = 0,
         valid = 0,
         invalid = 0,
         suspicious = 0,
     };
 
-    item apply(self: AuditSummary, decision: AuditDecision): unit = {
-        self.total = self.total + 1;
-
-        match decision.statusCode {
-            0 => {
-                self.valid = self.valid + 1;
-            },
-            1 => {
-                self.invalid = self.invalid + 1;
-            },
-            else => {
-                self.suspicious = self.suspicious + 1;
-            },
-        };
+    item applied(self: AuditSummary, decision: AuditDecision): AuditSummary = match decision.statusCode {
+        0 => .{
+            total = self.total + 1,
+            valid = self.valid + 1,
+            invalid = self.invalid,
+            suspicious = self.suspicious,
+        },
+        1 => .{
+            total = self.total + 1,
+            valid = self.valid,
+            invalid = self.invalid + 1,
+            suspicious = self.suspicious,
+        },
+        else => .{
+            total = self.total + 1,
+            valid = self.valid,
+            invalid = self.invalid,
+            suspicious = self.suspicious + 1,
+        },
     };
 
     item print(self: AuditSummary): unit = {
@@ -88,7 +93,7 @@ item AuditSummary = structure {
 };
 
 val rows = readFile("customer-import-audit-input.txt").trim().split("\n");
-val summary = AuditSummary.empty();
+var summary = AuditSummary.empty();
 
 var i = 0;
 while i < rows.length : i = i + 1 {
@@ -96,7 +101,7 @@ while i < rows.length : i = i + 1 {
     val subscription = CustomerSubscription.fromRow(row);
     val decision = subscription.classify();
 
-    summary.apply(decision);
+    summary = summary.applied(decision);
 
     if decision.statusCode != 0 {
         printString(subscription.customerId);

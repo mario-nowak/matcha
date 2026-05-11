@@ -210,6 +210,22 @@ test "llvm emission lowers structure construction" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
 }
 
+test "llvm emission lowers anonymous structure literals with contextual type" {
+    const llvm_ir = try emit(
+        \\item Point = structure { x: int; y: int; };
+        \\val point: Point = .{ y = 2, x = 1 };
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_allocate(i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_0_Point = type { i64, i64 }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 2, ptr %.t_1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
+}
+
 test "llvm emission lowers structure member access to gep plus load" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };

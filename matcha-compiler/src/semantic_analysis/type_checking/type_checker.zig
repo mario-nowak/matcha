@@ -169,10 +169,10 @@ pub const TypeChecker = struct {
         switch (node.kind) {
             .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, resolved_program, exit_behavior_by_node_id),
             .ItemDefinition => |item_definition| return self.checkItemDefinitionNode(node.id, &item_definition, resolved_program, exit_behavior_by_node_id),
-            .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, resolved_program, exit_behavior_by_node_id),
+            .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, contextual_type_id, resolved_program, exit_behavior_by_node_id),
             .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, resolved_program, exit_behavior_by_node_id),
-            .Loop => |loop| return self.checkLoopNode(node.id, &loop, resolved_program, exit_behavior_by_node_id),
-            .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, resolved_program, exit_behavior_by_node_id),
+            .Loop => |loop| return self.checkLoopNode(node.id, &loop, contextual_type_id, resolved_program, exit_behavior_by_node_id),
+            .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, contextual_type_id, resolved_program, exit_behavior_by_node_id),
             .Leave => return self.checkLeaveNode(node.id),
             .Continue => return self.checkContinueNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
@@ -180,14 +180,15 @@ pub const TypeChecker = struct {
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, resolved_program, exit_behavior_by_node_id),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, resolved_program, exit_behavior_by_node_id),
             .StructureConstruction => |structure_construction| return self.checkStructureConstructionNode(node.id, &structure_construction, resolved_program, exit_behavior_by_node_id),
-            .Block => |block| return self.checkBlockNode(node.id, &block, resolved_program, exit_behavior_by_node_id, context),
+            .AnonymousStructureLiteral => |anonymous_structure_literal| return self.checkAnonymousStructureLiteralNode(node.id, &anonymous_structure_literal, contextual_type_id, resolved_program, exit_behavior_by_node_id),
+            .Block => |block| return self.checkBlockNode(node.id, &block, contextual_type_id, resolved_program, exit_behavior_by_node_id, context),
             .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
             .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
             .StringLiteral => return self.checkStringLiteralNode(node.id),
             .Identifier => return self.checkIdentifierNode(node.id, resolved_program),
-            .IfStatement => |if_statement| return self.checkIfStatementNode(node.id, &if_statement, resolved_program, exit_behavior_by_node_id),
-            .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, resolved_program, exit_behavior_by_node_id, context),
-            .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, resolved_program, exit_behavior_by_node_id, context),
+            .IfStatement => |if_statement| return self.checkIfStatementNode(node.id, &if_statement, contextual_type_id, resolved_program, exit_behavior_by_node_id),
+            .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, contextual_type_id, resolved_program, exit_behavior_by_node_id, context),
+            .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, contextual_type_id, resolved_program, exit_behavior_by_node_id, context),
             .ExpressionStatement => |expression_statement| return self.checkExpressionStatementNode(node.id, &expression_statement, resolved_program, exit_behavior_by_node_id),
             .ArrayLiteral => |array_literal| return self.checkArrayLiteralNode(node.id, &array_literal, contextual_type_id, resolved_program, exit_behavior_by_node_id),
             .IndexAccess => |index_access| return self.checkIndexAccessNode(node.id, &index_access, resolved_program, exit_behavior_by_node_id),
@@ -238,12 +239,53 @@ pub const TypeChecker = struct {
     ) TypeError!typing.TypeId {
         const structure_symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
         const type_id = self.type_by_symbol_id.get(structure_symbol_id).?;
-        const structure_construction_type = self.type_store.getType(type_id);
-        const structure_type_id = switch (structure_construction_type) {
-            .Structure => |structure_type_id| structure_type_id,
+        return self.checkStructureLiteralFieldsAgainstType(
+            node_id,
+            structure_construction.fields,
+            type_id,
+            resolved_program,
+            exit_behavior_by_node_id,
+        );
+    }
+
+    fn checkAnonymousStructureLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        anonymous_structure_literal: *const ast.AnonymousStructureLiteral,
+        contextual_type_id: ?typing.TypeId,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const type_id = contextual_type_id orelse {
+            std.debug.print(
+                "Type Error: Cannot infer type of anonymous structure literal without contextual type\n",
+                .{},
+            );
+            return TypeError.CannotInferType;
+        };
+        return self.checkStructureLiteralFieldsAgainstType(
+            node_id,
+            anonymous_structure_literal.fields,
+            type_id,
+            resolved_program,
+            exit_behavior_by_node_id,
+        );
+    }
+
+    fn checkStructureLiteralFieldsAgainstType(
+        self: *@This(),
+        node_id: ast.NodeId,
+        fields: []const ast.StructureConstructionField,
+        type_id: typing.TypeId,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const structure_literal_type = self.type_store.getType(type_id);
+        const structure_type_id = switch (structure_literal_type) {
+            .Structure => |id| id,
             else => {
                 std.debug.print(
-                    "Type Error: Expected structure type for structure construction, got {any}\n",
+                    "Type Error: Expected structure type for structure literal, got {any}\n",
                     .{self.getType(type_id)},
                 );
                 return TypeError.TypeMismatch;
@@ -256,7 +298,7 @@ pub const TypeChecker = struct {
         var field_indices = std.ArrayList(u32){};
         defer field_indices.deinit(self.allocator);
 
-        for (structure_construction.fields) |field| {
+        for (fields) |field| {
             const field_name = field.name.kind.Identifier;
             const existing_field_name = unique_field_names.get(field_name);
             if (existing_field_name) |_| {
@@ -281,7 +323,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Expression,
-                null,
+                structure_type_field.type_id,
             );
 
             if (structure_type_field.type_id != field_value_type_id) {
@@ -350,6 +392,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         return_statement: *const ast.Return,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
@@ -359,7 +402,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Expression,
-                null,
+                contextual_type_id,
             );
         }
 
@@ -496,6 +539,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         loop: *const ast.Loop,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
@@ -504,7 +548,7 @@ pub const TypeChecker = struct {
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
-            null,
+            contextual_type_id,
         );
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -513,6 +557,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         while_statement: *const ast.While,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
@@ -537,7 +582,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Statement,
-                null,
+                contextual_type_id,
             );
         }
 
@@ -546,7 +591,7 @@ pub const TypeChecker = struct {
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
-            null,
+            contextual_type_id,
         );
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -929,6 +974,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         block: *const ast.Block,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
@@ -948,7 +994,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Statement,
-                null,
+                contextual_type_id,
             );
         }
         if (block.result) |result_node| {
@@ -957,7 +1003,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 .Expression,
-                null,
+                contextual_type_id,
             );
             return self.recordNodeType(node_id, result_type);
         }
@@ -1000,6 +1046,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         if_statement: *const ast.IfStatement,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!typing.TypeId {
@@ -1023,7 +1070,7 @@ pub const TypeChecker = struct {
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
-            null,
+            contextual_type_id,
         );
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -1032,6 +1079,7 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         if_expression: *const ast.IfExpression,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
@@ -1056,14 +1104,14 @@ pub const TypeChecker = struct {
             resolved_program,
             exit_behavior_by_node_id,
             context,
-            null,
+            contextual_type_id,
         );
         const else_block_type = try self.checkNode(
             if_expression.else_block,
             resolved_program,
             exit_behavior_by_node_id,
             context,
-            null,
+            contextual_type_id,
         );
         if (then_block_type != else_block_type) {
             std.debug.print(
@@ -1080,12 +1128,14 @@ pub const TypeChecker = struct {
         self: *@This(),
         node_id: ast.NodeId,
         match_expression: *const ast.MatchExpression,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
     ) TypeError!typing.TypeId {
         const match_type = try self.checkMatchExpression(
             match_expression,
+            contextual_type_id,
             resolved_program,
             exit_behavior_by_node_id,
             context,
@@ -1223,7 +1273,7 @@ pub const TypeChecker = struct {
             resolved_program,
             exit_behavior_by_node_id,
             .FunctionBody,
-            null,
+            function_return_type,
         );
         try self.checkReturnStatementsMatchType(
             function_definition.body_expression,
@@ -1371,6 +1421,11 @@ pub const TypeChecker = struct {
                     try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
                 }
             },
+            .AnonymousStructureLiteral => |anonymous_structure_literal| {
+                for (anonymous_structure_literal.fields) |field| {
+                    try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
+                }
+            },
             .ArrayLiteral => |array_literal| {
                 for (array_literal.elements) |*element| {
                     try self.checkReturnStatementsMatchType(element, function_return_type, resolved_program);
@@ -1421,6 +1476,7 @@ pub const TypeChecker = struct {
     fn checkMatchExpression(
         self: *@This(),
         match_expression: *const ast.MatchExpression,
+        contextual_type_id: ?typing.TypeId,
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
         context: ValidationContext,
@@ -1516,7 +1572,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 context,
-                null,
+                contextual_type_id,
             );
             if (arm_result_type) |expected_type| {
                 if (expected_type != body_type) {
@@ -1537,7 +1593,7 @@ pub const TypeChecker = struct {
                 resolved_program,
                 exit_behavior_by_node_id,
                 context,
-                null,
+                contextual_type_id,
             );
             if (arm_result_type) |expected_type| {
                 if (expected_type != else_type) {
