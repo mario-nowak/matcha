@@ -16,6 +16,7 @@ pub const NodeKind = union(enum) {
     Leave: Leave,
     Continue: Continue,
     While: While,
+    ForIn: ForIn,
     // Expressions-ish nodes
     IfExpression: IfExpression,
     MatchExpression: MatchExpression,
@@ -119,6 +120,14 @@ pub const While = struct {
     while_token: lexing.Token,
     condition: *Node,
     update: ?*Node,
+    body_block: *Node,
+};
+
+pub const ForIn = struct {
+    for_token: lexing.Token,
+    item_name: lexing.Token,
+    in_token: lexing.Token,
+    iterable: *Node,
     body_block: *Node,
 };
 

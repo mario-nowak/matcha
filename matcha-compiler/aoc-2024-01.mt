@@ -8,16 +8,15 @@ item countSort(array: int[]): int[] = {
 
     // find the maximum element
     var maximum_element = array[0];
-    var i = 0;
-    while i < n : i += 1 {
-        if array[i] > maximum_element {
-            maximum_element = array[i];
+    for element in array {
+        if element > maximum_element {
+            maximum_element = element;
         }
     }
 
     // create and initialize count array
     val count_array: int[] = [];
-    i = 0;
+    var i = 0;
     while i <= maximum_element : i += 1 {
         count_array.append(0);
     }

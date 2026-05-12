@@ -203,6 +203,32 @@ test "parser treats bare identifier while conditions as conditions, not structur
     try expectNodeTag(while_statement.condition, .Identifier);
 }
 
+test "parser parses for-in loops with block bodies" {
+    const source =
+        \\for value in items {
+        \\    continue;
+        \\}
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const for_in = switch (parsed.program.statements[0].kind) {
+        .ForIn => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+
+    try std.testing.expectEqualStrings("value", for_in.item_name.kind.Identifier);
+    try expectNodeTag(for_in.iterable, .Identifier);
+
+    const body_block = switch (for_in.body_block.kind) {
+        .Block => |block| block,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqual(@as(usize, 1), body_block.statements.len);
+    try expectNodeTag(&body_block.statements[0], .Continue);
+}
+
 test "parser parses string literal declarations" {
     const source =
         \\val greeting = "hello world";

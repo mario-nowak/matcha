@@ -115,6 +115,7 @@ pub const Parser = struct {
                 });
             },
             .While => try self.parseWhileStatement(),
+            .For => try self.parseForStatement(),
             .LeftBrace => {
                 const leftBrace = self.lexer.next();
                 return try self.parseBlock(leftBrace);
@@ -135,6 +136,7 @@ pub const Parser = struct {
             .Leave,
             .Continue,
             .While,
+            .For,
             .Item,
             .Return,
             => true,
@@ -489,6 +491,48 @@ pub const Parser = struct {
                 .while_token = while_token,
                 .condition = condition,
                 .update = update,
+                .body_block = body,
+            },
+        });
+    }
+
+    fn parseForStatement(self: *@This()) ParserError!ast.Node {
+        const for_token = self.lexer.next();
+        if (for_token.kind != .For) {
+            unreachable;
+        }
+
+        const item_name = self.lexer.next();
+        if (item_name.kind != .Identifier) {
+            return ParserError.ExpectedIdentifier;
+        }
+
+        const in_token = self.lexer.next();
+        if (in_token.kind != .In) {
+            return ParserError.ExpectedIn;
+        }
+
+        const iterable = self.allocator.create(ast.Node) catch unreachable;
+        iterable.* = try self.parseExpression(.{
+            .current_binding_power = 0.0,
+            .allow_structure_construction = false,
+        });
+
+        const left_brace_token = self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            std.debug.print("Expected left brace after for iterable, got: {any}\n", .{left_brace_token});
+            return ParserError.ExpectedLeftBrace;
+        }
+
+        const body = self.allocator.create(ast.Node) catch unreachable;
+        body.* = try self.parseBlock(left_brace_token);
+
+        return self.createNode(.{
+            .ForIn = .{
+                .for_token = for_token,
+                .item_name = item_name,
+                .in_token = in_token,
+                .iterable = iterable,
                 .body_block = body,
             },
         });

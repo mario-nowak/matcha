@@ -116,6 +116,23 @@ test "llvm emission routes while continue through the update clause" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_continue_2:\n    %.t_2 = load i64, ptr %.s_0\n    %.t_3 = add i64 %.t_2, 1\n    store i64 %.t_3, ptr %.s_0\n    br label %label_loop_header_0") != null);
 }
 
+test "llvm emission lowers for-in loops over arrays" {
+    const llvm_ir = try emit(
+        \\val numbers = [1, 2, 3];
+        \\for value in numbers {
+        \\    printInt(value);
+        \\}
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%Array = type { i64, i64, ptr }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds %Array, ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp slt i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "getelementptr inbounds i64, ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_print_int(i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_panic_index_out_of_bounds") == null);
+}
+
 test "llvm emission returns from main without implicit printing" {
     const llvm_ir = try emit(
         \\val answer = 41 + 1;

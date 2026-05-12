@@ -1009,6 +1009,13 @@ pub const LlvmIrEmitter = struct {
                     environment,
                 );
             },
+            .ForIn => |for_in| return self.emitForInArrayLoop(
+                node,
+                &for_in,
+                entry_label,
+                typed_program,
+                environment,
+            ),
             .Leave => {
                 self.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
 
@@ -1816,6 +1823,129 @@ pub const LlvmIrEmitter = struct {
         return .{
             .exit_label = current_label,
             .register = memory_register,
+        };
+    }
+
+    fn emitForInArrayLoop(
+        self: *@This(),
+        node: *const ast.Node,
+        for_in: *const ast.ForIn,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const iterable_result = self.emitNode(
+            for_in.iterable,
+            entry_label,
+            typed_program,
+            environment,
+        );
+        if (iterable_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        const iterable_type_id = typed_program.type_by_node_id.get(for_in.iterable.id) orelse unreachable;
+        const element_type_id = switch (typed_program.type_store.getType(iterable_type_id)) {
+            .Array => |id| id,
+            else => unreachable,
+        };
+        const element_llvm_type = llvmIrType(&typed_program.type_store, element_type_id);
+
+        const item_symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+        const item_storage = self.symbol_generator.generateStorage();
+        self.emitAlloca(item_storage, element_llvm_type);
+        environment.storage_by_symbol_id.put(item_symbol_id, item_storage) catch unreachable;
+
+        const index_storage = self.symbol_generator.generateStorage();
+        self.emitAlloca(index_storage, "i64");
+        self.emitStore("0", index_storage, "i64");
+
+        const length_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+            .{ length_pointer_register, iterable_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const length_register = self.symbol_generator.generateRegister();
+        self.emitLoad(length_register, length_pointer_register, "i64");
+
+        const data_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
+            .{ data_pointer_register, iterable_result.register orelse unreachable },
+        ) catch unreachable }) catch unreachable;
+
+        const data_register = self.symbol_generator.generateRegister();
+        self.emitLoad(data_register, data_pointer_register, "ptr");
+
+        const loop_header_label = self.symbol_generator.generateLabel("loop_header");
+        const loop_body_label = self.symbol_generator.generateLabel("loop_body");
+        const loop_continue_label = self.symbol_generator.generateLabel("loop_continue");
+        const loop_exit_label = self.symbol_generator.generateLabel("loop_exit");
+        const previous_loop_context = environment.loop_context;
+        const loop_context = LoopContext{
+            .continue_label = loop_continue_label,
+            .leave_label = loop_exit_label,
+        };
+        environment.loop_context = loop_context;
+
+        self.emitBranchInstruction(null, &.{loop_header_label});
+        self.emitLabel(loop_header_label);
+
+        const current_index_register = self.symbol_generator.generateRegister();
+        self.emitLoad(current_index_register, index_storage, "i64");
+
+        const within_bounds_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = icmp slt i64 {s}, {s}",
+            .{ within_bounds_register, current_index_register, length_register },
+        ) catch unreachable }) catch unreachable;
+        self.emitBranchInstruction(within_bounds_register, &.{ loop_body_label, loop_exit_label });
+
+        self.emitLabel(loop_body_label);
+
+        const element_pointer_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
+            .{ element_pointer_register, element_llvm_type, data_register, current_index_register },
+        ) catch unreachable }) catch unreachable;
+
+        const element_register = self.symbol_generator.generateRegister();
+        self.emitLoad(element_register, element_pointer_register, element_llvm_type);
+        self.emitStore(element_register, item_storage, element_llvm_type);
+
+        const body_block = switch (for_in.body_block.kind) {
+            .Block => |block| block,
+            else => unreachable,
+        };
+        const body_result = self.emitBlock(body_block, loop_body_label, typed_program, environment);
+
+        if (body_result.exit_label != null) {
+            self.emitBranchInstruction(null, &.{loop_continue_label});
+        }
+        self.emitLabel(loop_continue_label);
+
+        const loop_index_register = self.symbol_generator.generateRegister();
+        self.emitLoad(loop_index_register, index_storage, "i64");
+        const next_index_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = add i64 {s}, 1",
+            .{ next_index_register, loop_index_register },
+        ) catch unreachable }) catch unreachable;
+        self.emitStore(next_index_register, index_storage, "i64");
+        self.emitBranchInstruction(null, &.{loop_header_label});
+
+        self.emitLabel(loop_exit_label);
+        environment.loop_context = previous_loop_context;
+
+        return .{
+            .exit_label = loop_exit_label,
+            .register = null,
         };
     }
 

@@ -92,9 +92,7 @@ val arguments = getArguments();
 val rows = readFile(arguments[0]).trim().split("\n");
 var summary = AuditSummary.empty();
 
-var i = 0;
-while i < rows.length : i += 1 {
-    val row = rows[i];
+for row in rows {
     val subscription = CustomerSubscription.fromRow(row);
     val decision = subscription.classify();
 

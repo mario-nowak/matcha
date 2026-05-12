@@ -121,6 +121,31 @@ test "lexer tokenizes match keyword and arrows" {
     }
 }
 
+test "lexer tokenizes for-in keywords" {
+    var lexer = lexing.Lexer.init(
+        \\for value in items { continue; }
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    const expected_tags = [_]TokenTag{
+        .For,
+        .Identifier,
+        .In,
+        .Identifier,
+        .LeftBrace,
+        .Continue,
+        .Semicolon,
+        .RightBrace,
+        .EndOfFile,
+    };
+
+    for (expected_tags) |expected_tag| {
+        try expectTokenTag(lexer.next(), expected_tag);
+    }
+}
+
 test "lexer tokenizes plain string literals" {
     var lexer = lexing.Lexer.init(
         \\val greeting = "hello world";

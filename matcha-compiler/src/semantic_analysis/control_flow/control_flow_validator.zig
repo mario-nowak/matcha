@@ -122,6 +122,15 @@ pub const ControlFlowValidator = struct {
                 };
                 try self.validateNode(while_statement.body_block, &loop_context);
             },
+            .ForIn => |for_in| {
+                try self.validateNode(for_in.iterable, context);
+                const loop_context = ControlFlowValidationContext{
+                    .loop_depth = context.loop_depth + 1,
+                    .scope_depth = context.scope_depth,
+                    .in_function = context.in_function,
+                };
+                try self.validateNode(for_in.body_block, &loop_context);
+            },
             .Continue => {
                 if (context.loop_depth == 0) {
                     return ControlFlowValidationError.ContinueUsedOutsideOfLoop;
@@ -317,6 +326,18 @@ pub const ControlFlowValidator = struct {
                 }
 
                 _ = try self.validateTerminatesWithValue(while_statement.body_block);
+                self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
+
+                return .FallsThroughWithoutValue;
+            },
+            .ForIn => |for_in| {
+                const iterable_result = try self.validateTerminatesWithValue(for_in.iterable);
+                if (iterable_result == .Terminates) {
+                    self.exit_behavior_by_node_id.put(node.id, .Terminates) catch unreachable;
+                    return .Terminates;
+                }
+
+                _ = try self.validateTerminatesWithValue(for_in.body_block);
                 self.exit_behavior_by_node_id.put(node.id, .FallsThroughWithoutValue) catch unreachable;
 
                 return .FallsThroughWithoutValue;

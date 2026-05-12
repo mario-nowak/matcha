@@ -668,6 +668,55 @@ test "semantic analysis type-checks array append instance method calls" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(length_symbol_id).?);
 }
 
+test "semantic analysis type-checks for-in loops over arrays" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val numbers = [1, 2, 3];
+        \\for number in numbers {
+        \\    printInt(number);
+        \\}
+    );
+    defer analyzed.deinit();
+
+    const for_item_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(for_item_symbol_id).?);
+    try expectType(.Unit, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(analyzed.parsed.program.statements[1].id).?);
+
+    const for_in = switch (analyzed.parsed.program.statements[1].kind) {
+        .ForIn => |for_in| for_in,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const body_block = switch (for_in.body_block.kind) {
+        .Block => |block| block,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const print_statement = switch (body_block.statements[0].kind) {
+        .ExpressionStatement => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const print_call = switch (print_statement.expression.kind) {
+        .CallExpression => |call| call,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(print_call.arguments[0].id).?);
+}
+
+test "semantic analysis rejects non-array for-in iterables" {
+    try expectAnalyzeError(error.TypeMismatch,
+        \\for value in 1 {
+        \\    printInt(value);
+        \\}
+    );
+}
+
+test "semantic analysis rejects assignment to immutable for-in items" {
+    try expectAnalyzeError(error.CannotAssignToImmutable,
+        \\val numbers = [1, 2, 3];
+        \\for number in numbers {
+        \\    number = 4;
+        \\}
+    );
+}
+
 test "semantic analysis type-checks mutable structure field assignment" {
     var analyzed = try helpers.analyzeProgram(
         \\item Point = structure { x: int; y: int; };
