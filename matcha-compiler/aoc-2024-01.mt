@@ -51,7 +51,8 @@ item countSort(array: int[]): int[] = {
     return output_array;
 };
 
-val file_content = readFile("aoc-2024-01-input.txt");
+val arguments = getArguments();
+val file_content = readFile(arguments[0]);
 val rows = file_content.split("\n");
 
 val first_list: int[] = [];

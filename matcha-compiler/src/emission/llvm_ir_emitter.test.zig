@@ -183,6 +183,22 @@ test "llvm emission lowers file input and string helper methods to runtime calls
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String") != null);
 }
 
+test "llvm emission lowers getArguments to runtime-backed cloned array access" {
+    const llvm_ir = try emit(
+        \\val args = getArguments();
+        \\val count = args.length;
+        \\if count > 0 { printString(args[0]); }
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define i32 @main(i32 %argc, ptr %argv)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_init_arguments(i32, ptr)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_get_arguments()") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@matcha_arguments_cache = internal global ptr null") == null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_init_arguments(i32 %argc, ptr %argv)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_get_arguments()") != null);
+}
+
 test "llvm emission emits structure definitions as payload types" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };

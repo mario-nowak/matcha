@@ -234,6 +234,28 @@ test "semantic analysis type-checks readFile builtin" {
     try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
 }
 
+test "semantic analysis type-checks getArguments builtin" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val args = getArguments();
+        \\val count = args.length;
+        \\val first = args[0];
+    );
+    defer analyzed.deinit();
+
+    const args_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try expectType(
+        .{ .Array = analyzed.typed_program.type_store.string_type_id },
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_symbol_id.get(args_symbol_id).?,
+    );
+
+    const count_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(count_symbol_id).?);
+
+    const first_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(first_symbol_id).?);
+}
+
 test "semantic analysis type-checks string length and parsing helpers" {
     var analyzed = try helpers.analyzeProgram(
         \\val input = " 1,2 ";

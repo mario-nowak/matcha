@@ -16,6 +16,8 @@ const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
 const runtime_print_int_function_name = "matcha_print_int";
 const runtime_print_string_function_name = "matcha_print_string";
 const runtime_read_file_function_name = "matcha_read_file";
+const runtime_init_arguments_function_name = "matcha_init_arguments";
+const runtime_get_arguments_function_name = "matcha_get_arguments";
 const runtime_string_trim_function_name = "matcha_string_trim";
 const runtime_string_split_function_name = "matcha_string_split";
 const runtime_string_to_int_function_name = "matcha_string_to_int";
@@ -206,6 +208,7 @@ pub const SymbolGenerator = struct {
                 .BuiltinPrintInt => return runtime_print_int_function_name,
                 .BuiltinPrintString => return runtime_print_string_function_name,
                 .BuiltinReadFile => return runtime_read_file_function_name,
+                .BuiltinGetArguments => return runtime_get_arguments_function_name,
                 .UserDefined => {
                     return std.fmt.allocPrint(
                         self.allocator,
@@ -241,6 +244,7 @@ pub const LlvmIrEmitter = struct {
     needs_print_int: bool,
     needs_print_string: bool,
     needs_read_file: bool,
+    needs_get_arguments: bool,
     needs_string_trim: bool,
     needs_string_split: bool,
     needs_string_to_int: bool,
@@ -259,6 +263,7 @@ pub const LlvmIrEmitter = struct {
             .needs_print_int = false,
             .needs_print_string = false,
             .needs_read_file = false,
+            .needs_get_arguments = false,
             .needs_string_trim = false,
             .needs_string_split = false,
             .needs_string_to_int = false,
@@ -279,6 +284,7 @@ pub const LlvmIrEmitter = struct {
         self.needs_print_int = false;
         self.needs_print_string = false;
         self.needs_read_file = false;
+        self.needs_get_arguments = false;
         self.needs_string_trim = false;
         self.needs_string_split = false;
         self.needs_string_to_int = false;
@@ -403,7 +409,6 @@ pub const LlvmIrEmitter = struct {
         if (string_literal_globals_ir.len > 0) {
             module_preamble_buffer.writer(self.allocator).print("\n\n{s}", .{string_literal_globals_ir}) catch unreachable;
         }
-
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
     }
 
@@ -415,6 +420,7 @@ pub const LlvmIrEmitter = struct {
             \\declare void @matcha_initiate_garbage_collector()
             \\declare ptr @matcha_allocate(i64)
             \\declare ptr @matcha_allocate_atomic(i64)
+            \\declare void @matcha_init_arguments(i32, ptr)
         ,
             .{},
         ) catch unreachable;
@@ -435,6 +441,12 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(ptr, ptr, i64)",
                 .{runtime_read_file_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_get_arguments) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare ptr @{s}()",
+                .{runtime_get_arguments_function_name},
             ) catch unreachable;
         }
         if (self.needs_string_trim) {
@@ -624,6 +636,8 @@ pub const LlvmIrEmitter = struct {
         defer environment.deinit();
         var current_label: Label = "entry";
 
+        self.emitInitializeArgumentsFromMainParameters();
+
         for (typed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
                 .ItemDefinition => continue,
@@ -640,7 +654,7 @@ pub const LlvmIrEmitter = struct {
 
         self.lines.append(self.allocator, .{ .instruction = "ret i32 0" }) catch unreachable;
 
-        return self.renderCurrentFunction("main", "i32", "");
+        return self.renderCurrentFunction("main", "i32", "i32 %argc, ptr %argv");
     }
 
     fn emitFunctionDefinition(
@@ -770,6 +784,15 @@ pub const LlvmIrEmitter = struct {
         const result_register = self.symbol_generator.generateRegister();
         self.emitLoad(result_register, result_storage, "%String");
         return result_register;
+    }
+
+    fn emitInitializeArgumentsFromMainParameters(self: *@This()) void {
+        const init_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i32 %argc, ptr %argv)",
+            .{runtime_init_arguments_function_name},
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = init_instruction }) catch unreachable;
     }
 
     fn emitNode(
@@ -1016,6 +1039,9 @@ pub const LlvmIrEmitter = struct {
                             .exit_label = current_label,
                             .register = result_register,
                         };
+                    },
+                    .BuiltinGetArguments => {
+                        self.needs_get_arguments = true;
                     },
                     .UserDefined => {},
                 }
