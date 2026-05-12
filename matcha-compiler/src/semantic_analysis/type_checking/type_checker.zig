@@ -13,6 +13,7 @@ const ValidationContext = enum {
 const ExhaustivenessClass = enum {
     Boolean,
     IntegerOpen,
+    StringOpen,
     Subjectless,
 };
 
@@ -535,6 +536,10 @@ pub const TypeChecker = struct {
                         std.debug.print("Type Error: Cannot assign to string instance method\n", .{});
                         return TypeError.InvalidAssignmentTarget;
                     },
+                    .IntegerInstanceMethodAccess => {
+                        std.debug.print("Type Error: Cannot assign to integer instance method\n", .{});
+                        return TypeError.InvalidAssignmentTarget;
+                    },
                 };
             },
             .IndexAccess => {
@@ -824,6 +829,19 @@ pub const TypeChecker = struct {
 
                 std.debug.print(
                     "Type Error: No member named {s} exists on string type\n",
+                    .{member_name},
+                );
+                return TypeError.TypeMismatch;
+            },
+            .Integer => {
+                if (std.mem.eql(u8, member_name, "toString")) {
+                    const to_string_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
+                    self.recordMemberAccess(node_id, .{ .IntegerInstanceMethodAccess = .ToString });
+                    return self.recordNodeType(node_id, to_string_function_type_id);
+                }
+
+                std.debug.print(
+                    "Type Error: No member named {s} exists on integer type\n",
                     .{member_name},
                 );
                 return TypeError.TypeMismatch;
@@ -1525,8 +1543,9 @@ pub const TypeChecker = struct {
             break :class switch (self.getType(subject_type)) {
                 .Boolean => .Boolean,
                 .Integer => .IntegerOpen,
+                .String => .StringOpen,
                 else => {
-                    std.debug.print("Type Error: Match subject must be boolean or integer in v1, got {any}\n", .{self.getType(subject_type)});
+                    std.debug.print("Type Error: Match subject must be boolean, integer, or string in v1, got {any}\n", .{self.getType(subject_type)});
                     return TypeError.TypeMismatch;
                 },
             };
@@ -1598,6 +1617,19 @@ pub const TypeChecker = struct {
                         }
                     },
                 },
+                .StringOpen => {
+                    const pattern_type = try self.checkNode(
+                        arm.pattern_or_condition,
+                        resolved_program,
+                        exit_behavior_by_node_id,
+                        .Expression,
+                        null,
+                    );
+                    if (pattern_type != self.type_store.string_type_id) {
+                        std.debug.print("Type Error: String match arms must be string expressions in v1\n", .{});
+                        return TypeError.TypeMismatch;
+                    }
+                },
             }
 
             const body_type = try self.checkNode(
@@ -1645,6 +1677,7 @@ pub const TypeChecker = struct {
             .Subjectless => match_expression.else_arm != null,
             .Boolean => (saw_true and saw_false) or match_expression.else_arm != null,
             .IntegerOpen => match_expression.else_arm != null,
+            .StringOpen => match_expression.else_arm != null,
         };
         if (!is_exhaustive) {
             std.debug.print("Type Error: Match expression is not exhaustive in v1\n", .{});

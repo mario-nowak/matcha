@@ -277,6 +277,7 @@ test "semantic analysis type-checks string length and parsing helpers" {
         \\val trimmed = input.trim();
         \\val lines = trimmed.split(",");
         \\val first = lines[0].toInt();
+        \\val as_text = first.toString();
         \\val length = trimmed.length;
     );
     defer analyzed.deinit();
@@ -294,8 +295,29 @@ test "semantic analysis type-checks string length and parsing helpers" {
     const first_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[3].id).?;
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(first_symbol_id).?);
 
-    const length_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[4].id).?;
+    const as_text_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[4].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(as_text_symbol_id).?);
+
+    const length_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[5].id).?;
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(length_symbol_id).?);
+}
+
+test "semantic analysis type-checks string concatenation and comparison operators" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val greeting = "hello" + " world";
+        \\val is_same = greeting == "hello world";
+        \\val is_different = greeting != "other";
+    );
+    defer analyzed.deinit();
+
+    const greeting_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(greeting_symbol_id).?);
+
+    const is_same_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Boolean, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(is_same_symbol_id).?);
+
+    const is_different_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[2].id).?;
+    try expectType(.Boolean, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(is_different_symbol_id).?);
 }
 
 test "semantic analysis resolves array types in function signatures" {
@@ -384,6 +406,21 @@ test "semantic analysis type-checks subjectless and integer matches with else" {
         \\};
     );
     defer analyzed.deinit();
+}
+
+test "semantic analysis type-checks string matches with else" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val plan = "enterprise";
+        \\val score = match plan {
+        \\    "basic" => 1,
+        \\    "pro" => 2,
+        \\    else => 3,
+        \\};
+    );
+    defer analyzed.deinit();
+
+    const score_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(score_symbol_id).?);
 }
 
 test "semantic analysis records structure construction layout in source order" {
@@ -652,6 +689,8 @@ test "semantic analysis type-checks compound assignments" {
         \\var counter = 1;
         \\counter += 2;
         \\counter -= 1;
+        \\var label = "base";
+        \\label += "-suffix";
         \\var numbers = [1, 2, 3];
         \\numbers[0] *= 4;
     );
@@ -718,6 +757,12 @@ test "semantic analysis rejects non-exhaustive boolean and integer matches witho
         \\    1 => "one",
         \\};
     );
+
+    try expectAnalyzeError(error.NonExhaustiveMatch,
+        \\val label = match "x" {
+        \\    "x" => "yes",
+        \\};
+    );
 }
 
 test "semantic analysis rejects duplicate and invalid v1 match arms" {
@@ -732,6 +777,13 @@ test "semantic analysis rejects duplicate and invalid v1 match arms" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val label = match 1 {
         \\    "two" => "two",
+        \\    else => "other",
+        \\};
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\val label = match "two" {
+        \\    2 => "two",
         \\    else => "other",
         \\};
     );

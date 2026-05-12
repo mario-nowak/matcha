@@ -19,9 +19,12 @@ const runtime_read_file_function_name = "matcha_read_file";
 const runtime_read_line_function_name = "matcha_read_line";
 const runtime_init_arguments_function_name = "matcha_init_arguments";
 const runtime_get_arguments_function_name = "matcha_get_arguments";
+const runtime_string_concatenate_function_name = "matcha_string_concatenate";
+const runtime_string_compare_function_name = "matcha_string_compare";
 const runtime_string_trim_function_name = "matcha_string_trim";
 const runtime_string_split_function_name = "matcha_string_split";
 const runtime_string_to_int_function_name = "matcha_string_to_int";
+const runtime_int_to_string_function_name = "matcha_int_to_string";
 const runtime_panic_index_out_of_bounds_function_name = "matcha_panic_index_out_of_bounds";
 const runtime_array_append_slot_function_name = "matcha_array_append_slot";
 
@@ -248,9 +251,12 @@ pub const LlvmIrEmitter = struct {
     needs_read_file: bool,
     needs_read_line: bool,
     needs_get_arguments: bool,
+    needs_string_concatenate: bool,
+    needs_string_compare: bool,
     needs_string_trim: bool,
     needs_string_split: bool,
     needs_string_to_int: bool,
+    needs_int_to_string: bool,
     needs_panic_index_out_of_bounds: bool,
     needs_array_append_slot: bool,
 
@@ -268,9 +274,12 @@ pub const LlvmIrEmitter = struct {
             .needs_read_file = false,
             .needs_read_line = false,
             .needs_get_arguments = false,
+            .needs_string_concatenate = false,
+            .needs_string_compare = false,
             .needs_string_trim = false,
             .needs_string_split = false,
             .needs_string_to_int = false,
+            .needs_int_to_string = false,
             .needs_panic_index_out_of_bounds = false,
             .needs_array_append_slot = false,
         };
@@ -290,9 +299,12 @@ pub const LlvmIrEmitter = struct {
         self.needs_read_file = false;
         self.needs_read_line = false;
         self.needs_get_arguments = false;
+        self.needs_string_concatenate = false;
+        self.needs_string_compare = false;
         self.needs_string_trim = false;
         self.needs_string_split = false;
         self.needs_string_to_int = false;
+        self.needs_int_to_string = false;
         self.needs_panic_index_out_of_bounds = false;
         self.needs_array_append_slot = false;
         self.symbol_generator.string_literal_counter = 0;
@@ -460,6 +472,18 @@ pub const LlvmIrEmitter = struct {
                 .{runtime_get_arguments_function_name},
             ) catch unreachable;
         }
+        if (self.needs_string_concatenate) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(ptr, ptr, i64, ptr, i64)",
+                .{runtime_string_concatenate_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_string_compare) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare i1 @{s}(ptr, i64, ptr, i64)",
+                .{runtime_string_compare_function_name},
+            ) catch unreachable;
+        }
         if (self.needs_string_trim) {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(ptr, ptr, i64)",
@@ -476,6 +500,12 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare i64 @{s}(ptr, i64)",
                 .{runtime_string_to_int_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_int_to_string) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(ptr, i64)",
+                .{runtime_int_to_string_function_name},
             ) catch unreachable;
         }
         if (self.needs_panic_index_out_of_bounds) {
@@ -811,6 +841,56 @@ pub const LlvmIrEmitter = struct {
         return result_register;
     }
 
+    fn emitRuntimeStringConcatenateCall(
+        self: *@This(),
+        left_string_register: Register,
+        right_string_register: Register,
+    ) Register {
+        const left_parts = self.emitStringParts(left_string_register);
+        const right_parts = self.emitStringParts(right_string_register);
+        const result_storage = self.symbol_generator.generateStorage();
+        self.emitAlloca(result_storage, "%String");
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s}, i64 {s})",
+            .{
+                runtime_string_concatenate_function_name,
+                result_storage,
+                left_parts.pointer_register,
+                left_parts.length_register,
+                right_parts.pointer_register,
+                right_parts.length_register,
+            },
+        ) catch unreachable }) catch unreachable;
+
+        const result_register = self.symbol_generator.generateRegister();
+        self.emitLoad(result_register, result_storage, "%String");
+        return result_register;
+    }
+
+    fn emitRuntimeStringCompareCall(
+        self: *@This(),
+        left_string_register: Register,
+        right_string_register: Register,
+    ) Register {
+        const left_parts = self.emitStringParts(left_string_register);
+        const right_parts = self.emitStringParts(right_string_register);
+        const result_register = self.symbol_generator.generateRegister();
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call i1 @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
+            .{
+                result_register,
+                runtime_string_compare_function_name,
+                left_parts.pointer_register,
+                left_parts.length_register,
+                right_parts.pointer_register,
+                right_parts.length_register,
+            },
+        ) catch unreachable }) catch unreachable;
+        return result_register;
+    }
+
     fn emitInitializeArgumentsFromMainParameters(self: *@This()) void {
         const init_instruction = std.fmt.allocPrint(
             self.allocator,
@@ -975,6 +1055,16 @@ pub const LlvmIrEmitter = struct {
                             .StringInstanceMethodAccess => |string_method| {
                                 return self.emitStringMethodCall(
                                     string_method,
+                                    &callee_member_access,
+                                    &call_expression,
+                                    entry_label,
+                                    typed_program,
+                                    environment,
+                                );
+                            },
+                            .IntegerInstanceMethodAccess => |integer_method| {
+                                return self.emitIntegerMethodCall(
+                                    integer_method,
                                     &callee_member_access,
                                     &call_expression,
                                     entry_label,
@@ -1158,12 +1248,12 @@ pub const LlvmIrEmitter = struct {
                     environment,
                 );
                 const left_operand_type = typed_program.type_by_node_id.get(binary_expression.left.id).?;
-                const instruction_type = llvmIrType(&typed_program.type_store, left_operand_type);
-                const result_register = self.emitBinaryInstruction(
+                const result_register = self.emitBinaryOperation(
                     binary_expression.operator,
-                    instruction_type,
+                    left_operand_type,
                     left_result.register.?,
                     right_result.register.?,
+                    typed_program,
                 );
 
                 return .{
@@ -1270,11 +1360,12 @@ pub const LlvmIrEmitter = struct {
                             };
                         }
 
-                        const result_register = self.emitBinaryInstruction(
+                        const result_register = self.emitBinaryOperation(
                             binary_operator,
-                            llvm_ir_type,
+                            value_type_id,
                             current_value_register,
                             value_result.register.?,
+                            typed_program,
                         );
 
                         self.emitStore(result_register, place_result.register.?, llvm_ir_type);
@@ -1422,13 +1513,40 @@ pub const LlvmIrEmitter = struct {
         }
     }
 
-    fn emitBinaryInstruction(
+    fn emitBinaryOperation(
         self: *@This(),
         binary_operator: ast.BinaryOperator,
-        llvm_ir_type: []const u8,
+        operand_type_id: typing.TypeId,
         left_register: Register,
         right_register: Register,
+        typed_program: *const typing.TypedProgram,
     ) Register {
+        if (operand_type_id == typed_program.type_store.string_type_id) {
+            return switch (binary_operator) {
+                .Add => concatenate: {
+                    self.needs_string_concatenate = true;
+                    break :concatenate self.emitRuntimeStringConcatenateCall(left_register, right_register);
+                },
+                .Equal => compare_equal: {
+                    self.needs_string_compare = true;
+                    break :compare_equal self.emitRuntimeStringCompareCall(left_register, right_register);
+                },
+                .NotEqual => compare_not_equal: {
+                    self.needs_string_compare = true;
+                    const equal_register = self.emitRuntimeStringCompareCall(left_register, right_register);
+                    const result_register = self.symbol_generator.generateRegister();
+                    self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                        self.allocator,
+                        "{s} = xor i1 {s}, 1",
+                        .{ result_register, equal_register },
+                    ) catch unreachable }) catch unreachable;
+                    break :compare_not_equal result_register;
+                },
+                else => unreachable,
+            };
+        }
+
+        const llvm_ir_type = llvmIrType(&typed_program.type_store, operand_type_id);
         const operator_instruction = switch (binary_operator) {
             .Add => "add",
             .Subtract => "sub",
@@ -1543,6 +1661,7 @@ pub const LlvmIrEmitter = struct {
             .StructureTypeFunctionAccess => unreachable,
             .ArrayInstanceMethodAccess => unreachable,
             .StringInstanceMethodAccess => unreachable,
+            .IntegerInstanceMethodAccess => unreachable,
         }
     }
 
@@ -1608,6 +1727,7 @@ pub const LlvmIrEmitter = struct {
             .ArrayInstanceMethodAccess => unreachable,
             .StringInstanceFieldAccess => unreachable,
             .StringInstanceMethodAccess => unreachable,
+            .IntegerInstanceMethodAccess => unreachable,
         };
 
         const base_type_id = typed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
@@ -2069,6 +2189,47 @@ pub const LlvmIrEmitter = struct {
         };
     }
 
+    fn emitIntegerMethodCall(
+        self: *@This(),
+        integer_method: typing.IntegerInstanceMethod,
+        callee_member_access: *const ast.MemberAccess,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const typing.TypedProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        if (base_result.exit_label == null) {
+            return .{ .exit_label = null, .register = null };
+        }
+
+        return switch (integer_method) {
+            .ToString => {
+                if (call_expression.arguments.len != 0) unreachable;
+                self.needs_int_to_string = true;
+
+                const result_storage = self.symbol_generator.generateStorage();
+                self.emitAlloca(result_storage, "%String");
+                self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "call void @{s}(ptr {s}, i64 {s})",
+                    .{
+                        runtime_int_to_string_function_name,
+                        result_storage,
+                        base_result.register orelse unreachable,
+                    },
+                ) catch unreachable }) catch unreachable;
+
+                const result_register = self.symbol_generator.generateRegister();
+                self.emitLoad(result_register, result_storage, "%String");
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = result_register,
+                };
+            },
+        };
+    }
+
     fn getStructureSymbolForTypeId(
         self: *@This(),
         typed_program: *const typing.TypedProgram,
@@ -2262,18 +2423,13 @@ pub const LlvmIrEmitter = struct {
                     }
                     current_label = pattern_result.exit_label.?;
 
-                    const comparison_register = self.symbol_generator.generateRegister();
-                    const comparison_instruction = std.fmt.allocPrint(
-                        self.allocator,
-                        "{s} = icmp eq {s} {s}, {s}",
-                        .{
-                            comparison_register,
-                            llvmIrType(&typed_program.type_store, subject_type_id.?),
-                            subject_register.?,
-                            pattern_result.register.?,
-                        },
-                    ) catch unreachable;
-                    self.lines.append(self.allocator, .{ .instruction = comparison_instruction }) catch unreachable;
+                    const comparison_register = self.emitBinaryOperation(
+                        .Equal,
+                        subject_type_id.?,
+                        subject_register.?,
+                        pattern_result.register.?,
+                        typed_program,
+                    );
 
                     self.emitBranchInstruction(comparison_register, &.{ arm_label, false_label.? });
                 } else {

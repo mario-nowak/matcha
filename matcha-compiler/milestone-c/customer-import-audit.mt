@@ -81,14 +81,10 @@ item AuditSummary = structure {
     };
 
     item print(self: AuditSummary): unit = {
-        printString("Total");
-        printInt(self.total);
-        printString("Valid");
-        printInt(self.valid);
-        printString("Invalid");
-        printInt(self.invalid);
-        printString("Suspicious");
-        printInt(self.suspicious);
+        printString("Total: " + self.total.toString());
+        printString("Valid: " + self.valid.toString());
+        printString("Invalid: " + self.invalid.toString());
+        printString("Suspicious: " + self.suspicious.toString());
     };
 };
 
@@ -104,9 +100,14 @@ while i < rows.length : i += 1 {
 
     summary = summary.applied(decision);
 
-    if decision.statusCode != 0 {
-        printString(subscription.customerId);
-        printString(decision.reason);
+    if decision.reason != "ok" {
+        val recommendation = match decision.reason {
+            "unknown plan code" => "check plan mapping in source data",
+            "non-positive seat count" => "verify seat count in billing system",
+            "enterprise account with very low seats" => "confirm enterprise plan assignment",
+            else => "review account for unusual seat distribution",
+        };
+        printString(subscription.customerId + ": " + decision.reason + " (" + recommendation + ")");
     }
 }
 
