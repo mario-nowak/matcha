@@ -241,6 +241,39 @@ export fn matcha_get_arguments() *ArrayHeader {
     return cloneArguments(arguments_header);
 }
 
+export fn matcha_string_concatenate(
+    out: *MatchaString,
+    left_ptr: [*]const u8,
+    left_len: usize,
+    right_ptr: [*]const u8,
+    right_len: usize,
+) void {
+    const result_len = left_len + right_len;
+    const allocation = matcha_allocate_atomic(@max(result_len, 1)) orelse panic("panic: out of memory");
+    const result_ptr: [*]u8 = @ptrCast(allocation);
+
+    if (left_len > 0) {
+        @memcpy(result_ptr[0..left_len], left_ptr[0..left_len]);
+    }
+    if (right_len > 0) {
+        @memcpy(result_ptr[left_len .. left_len + right_len], right_ptr[0..right_len]);
+    }
+
+    out.* = .{
+        .ptr = result_ptr,
+        .len = result_len,
+    };
+}
+
+export fn matcha_string_compare(
+    left_ptr: [*]const u8,
+    left_len: usize,
+    right_ptr: [*]const u8,
+    right_len: usize,
+) bool {
+    return std.mem.eql(u8, left_ptr[0..left_len], right_ptr[0..right_len]);
+}
+
 export fn matcha_string_trim(out: *MatchaString, ptr: [*]const u8, len: usize) void {
     const trimmed = trimSlice(ptr[0..len]);
     out.* = .{
@@ -302,6 +335,12 @@ export fn matcha_string_split(
 
 export fn matcha_string_to_int(ptr: [*]const u8, len: usize) i64 {
     return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("panic: failed to parse int");
+}
+
+export fn matcha_int_to_string(out: *MatchaString, value: i64) void {
+    var buffer: [32]u8 = undefined;
+    const rendered = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch panic("panic: failed to render int");
+    out.* = copyBytesToAtomic(rendered);
 }
 
 export fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i64, length: usize) noreturn {

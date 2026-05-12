@@ -73,6 +73,21 @@ test "llvm emission compares booleans with icmp eq i1" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i1") != null);
 }
 
+test "llvm emission lowers string-subject match comparisons to runtime string compare" {
+    const llvm_ir = try emit(
+        \\val tier = "pro";
+        \\val score = match tier {
+        \\    "basic" => 1,
+        \\    "pro" => 2,
+        \\    else => 3,
+        \\};
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i1 @matcha_string_compare(ptr, i64, ptr, i64)") != null);
+    try std.testing.expect(std.mem.count(u8, llvm_ir, "call i1 @matcha_string_compare(") >= 2);
+}
+
 test "llvm emission stores and loads mutable variables" {
     const llvm_ir = try emit(
         \\var counter = 1;
@@ -168,7 +183,8 @@ test "llvm emission lowers file input and string helper methods to runtime calls
         \\val trimmed = input.trim();
         \\val lines = trimmed.split(",");
         \\val first = lines[0].toInt();
-        \\printInt(first + trimmed.length);
+        \\val first_text = first.toString();
+        \\printInt(first_text.length + trimmed.length);
     );
     defer std.testing.allocator.free(llvm_ir);
 
@@ -176,10 +192,12 @@ test "llvm emission lowers file input and string helper methods to runtime calls
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_string_trim(ptr, ptr, i64)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare ptr @matcha_string_split(ptr, i64, ptr, i64)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i64 @matcha_string_to_int(ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_int_to_string(ptr, i64)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_read_file(ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_string_trim(ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_string_split(ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_string_to_int(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_int_to_string(ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String") != null);
 }
 
@@ -194,6 +212,24 @@ test "llvm emission lowers readLine to a runtime call" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_read_line(ptr") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr") != null);
+}
+
+test "llvm emission lowers string binary operators to runtime helpers" {
+    const llvm_ir = try emit(
+        \\var left = "left";
+        \\left += "-tail";
+        \\val combined = left + "-more";
+        \\val is_equal = combined == "left-tail-more";
+        \\val is_not_equal = combined != "other";
+        \\if is_equal and is_not_equal { printInt(1); } else { printInt(0); };
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_string_concatenate(ptr, ptr, i64, ptr, i64)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i1 @matcha_string_compare(ptr, i64, ptr, i64)") != null);
+    try std.testing.expect(std.mem.count(u8, llvm_ir, "call void @matcha_string_concatenate(") >= 2);
+    try std.testing.expect(std.mem.count(u8, llvm_ir, "call i1 @matcha_string_compare(") >= 2);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "xor i1") != null);
 }
 
 test "llvm emission lowers getArguments to runtime-backed cloned array access" {

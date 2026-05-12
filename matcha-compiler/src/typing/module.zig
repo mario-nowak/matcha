@@ -124,6 +124,10 @@ pub const StringInstanceMethod = enum {
     ToInt,
 };
 
+pub const IntegerInstanceMethod = enum {
+    ToString,
+};
+
 pub const StringInstanceField = enum {
     Length,
 };
@@ -142,6 +146,7 @@ pub const MemberAccess = union(enum) {
     },
     ArrayInstanceMethodAccess: ArrayInstanceMethod,
     ArrayInstanceFieldAccess: ArrayInstanceField,
+    IntegerInstanceMethodAccess: IntegerInstanceMethod,
     StringInstanceMethodAccess: StringInstanceMethod,
     StringInstanceFieldAccess: StringInstanceField,
 };
@@ -182,8 +187,21 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
             .And = null,
             .Or = null,
         }),
+        .String => BinaryOperatorRules.init(.{
+            .Add = .{ .argument_type_id = type_store.string_type_id, .return_type_id = type_store.string_type_id },
+            .Equal = .{ .argument_type_id = type_store.string_type_id, .return_type_id = type_store.boolean_type_id },
+            .NotEqual = .{ .argument_type_id = type_store.string_type_id, .return_type_id = type_store.boolean_type_id },
+            .LessThan = null,
+            .LessThanOrEqual = null,
+            .GreaterThan = null,
+            .GreaterThanOrEqual = null,
+            .Subtract = null,
+            .Multiply = null,
+            .Divide = null,
+            .And = null,
+            .Or = null,
+        }),
         .Unit,
-        .String,
         .Structure,
         .Function,
         .Array,
