@@ -342,6 +342,21 @@ pub const NameResolver = struct {
                 var loop_scope = scope.Scope.init(self.allocator, node_scope);
                 try self.resolveNode(while_statement.body_block, &loop_scope, module_scope, context);
             },
+            .ForIn => |for_in| {
+                try self.resolveNode(for_in.iterable, node_scope, module_scope, context);
+
+                var loop_scope = scope.Scope.init(self.allocator, node_scope);
+                const item_name = for_in.item_name.kind.Identifier;
+                const item_symbol = self.symbol_table.insertSymbol(.{
+                    .name = item_name,
+                    .declared_at = for_in.item_name,
+                    .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+                });
+                self.symbol_id_by_node_id.put(node.id, item_symbol.id) catch unreachable;
+                loop_scope.insertSymbol(item_name, item_symbol.id);
+
+                try self.resolveNode(for_in.body_block, &loop_scope, module_scope, context);
+            },
             .CallExpression => |call_expression| {
                 try self.resolveNode(call_expression.callee, node_scope, module_scope, context);
 

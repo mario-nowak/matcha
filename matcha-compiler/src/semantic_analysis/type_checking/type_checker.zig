@@ -174,6 +174,7 @@ pub const TypeChecker = struct {
             .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, resolved_program, exit_behavior_by_node_id),
             .Loop => |loop| return self.checkLoopNode(node.id, &loop, contextual_type_id, resolved_program, exit_behavior_by_node_id),
             .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, contextual_type_id, resolved_program, exit_behavior_by_node_id),
+            .ForIn => |for_in| return self.checkForInNode(node.id, &for_in, contextual_type_id, resolved_program, exit_behavior_by_node_id),
             .Leave => return self.checkLeaveNode(node.id),
             .Continue => return self.checkContinueNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, resolved_program, exit_behavior_by_node_id),
@@ -612,6 +613,45 @@ pub const TypeChecker = struct {
 
         _ = try self.checkNode(
             while_statement.body_block,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Statement,
+            contextual_type_id,
+        );
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
+    }
+
+    fn checkForInNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        for_in: *const ast.ForIn,
+        contextual_type_id: ?typing.TypeId,
+        resolved_program: *const symbols.ResolvedProgram,
+        exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
+    ) TypeError!typing.TypeId {
+        const iterable_type_id = try self.checkNode(
+            for_in.iterable,
+            resolved_program,
+            exit_behavior_by_node_id,
+            .Expression,
+            null,
+        );
+        const item_type_id = switch (self.type_store.getType(iterable_type_id)) {
+            .Array => |element_type_id| element_type_id,
+            else => {
+                std.debug.print(
+                    "Type Error: For-in iterable must be an array, got {any}\n",
+                    .{self.getType(iterable_type_id)},
+                );
+                return TypeError.TypeMismatch;
+            },
+        };
+
+        const item_symbol_id = resolved_program.symbol_id_by_node_id.get(node_id).?;
+        self.type_by_symbol_id.put(item_symbol_id, item_type_id) catch unreachable;
+
+        _ = try self.checkNode(
+            for_in.body_block,
             resolved_program,
             exit_behavior_by_node_id,
             .Statement,
@@ -1440,6 +1480,10 @@ pub const TypeChecker = struct {
             },
             .While => |while_statement| {
                 try self.checkReturnStatementsMatchType(while_statement.body_block, function_return_type, resolved_program);
+            },
+            .ForIn => |for_in| {
+                try self.checkReturnStatementsMatchType(for_in.iterable, function_return_type, resolved_program);
+                try self.checkReturnStatementsMatchType(for_in.body_block, function_return_type, resolved_program);
             },
             .CallExpression => |call_expression| {
                 try self.checkReturnStatementsMatchType(call_expression.callee, function_return_type, resolved_program);

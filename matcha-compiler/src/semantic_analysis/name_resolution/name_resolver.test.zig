@@ -186,6 +186,40 @@ test "name resolution resolves forward structure references in field type annota
     }
 }
 
+test "name resolution resolves for-in item bindings inside loop bodies" {
+    var parsed = try parseProgram(
+        \\val numbers = [1, 2, 3];
+        \\for number in numbers {
+        \\    printInt(number);
+        \\}
+    );
+    defer parsed.deinit();
+
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+
+    const for_in = switch (parsed.program.statements[1].kind) {
+        .ForIn => |for_in| for_in,
+        else => return error.UnexpectedNodeKind,
+    };
+    const body_block = switch (for_in.body_block.kind) {
+        .Block => |block| block,
+        else => return error.UnexpectedNodeKind,
+    };
+    const print_statement = switch (body_block.statements[0].kind) {
+        .ExpressionStatement => |statement| statement,
+        else => return error.UnexpectedNodeKind,
+    };
+    const print_call = switch (print_statement.expression.kind) {
+        .CallExpression => |call| call,
+        else => return error.UnexpectedNodeKind,
+    };
+
+    const for_item_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
+    const body_identifier_symbol_id = resolved_program.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
+    try std.testing.expectEqual(for_item_symbol_id, body_identifier_symbol_id);
+}
+
 test "name resolution rejects function symbols in type annotations" {
     var parsed = try parseProgram(
         \\item helper(): int = 1;

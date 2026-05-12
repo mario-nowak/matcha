@@ -9,6 +9,7 @@ pub const ParseError = error{
     ExpectedLeftBrace,
     ExpectedIf,
     ExpectedMatch,
+    ExpectedIn,
     UnexpectedElse,
     ExpectedCommaOrClosingParenthesis,
     ExpectedColon,
