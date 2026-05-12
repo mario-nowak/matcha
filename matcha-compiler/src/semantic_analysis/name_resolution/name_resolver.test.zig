@@ -196,3 +196,30 @@ test "name resolution rejects function symbols in type annotations" {
     var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
     try std.testing.expectError(error.InvalidTypeAnnotation, name_resolver.resolveProgram(&parsed.program));
 }
+
+test "name resolution rejects structure field and type function name collisions" {
+    var parsed = try parseProgram(
+        \\item User = structure {
+        \\    name: string;
+        \\    item name(): string = "duplicate";
+        \\};
+    );
+    defer parsed.deinit();
+
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    try std.testing.expectError(error.StructureMemberNameCollision, name_resolver.resolveProgram(&parsed.program));
+}
+
+test "name resolution rejects duplicate structure type function names" {
+    var parsed = try parseProgram(
+        \\item User = structure {
+        \\    id: int;
+        \\    item format(): string = "a";
+        \\    item format(): string = "b";
+        \\};
+    );
+    defer parsed.deinit();
+
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    try std.testing.expectError(error.StructureMemberNameCollision, name_resolver.resolveProgram(&parsed.program));
+}

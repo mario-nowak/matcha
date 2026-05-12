@@ -10,6 +10,7 @@ pub const NameResolutionError = error{
     ValueAlreadyDeclared,
     FunctionAlreadyDefined,
     StructureAlreadyDefined,
+    StructureMemberNameCollision,
 };
 
 const ModuleShadowing = enum {
@@ -516,12 +517,28 @@ pub const NameResolver = struct {
         structure_definition: *const ast.Structure,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
+        const StructureMemberKind = enum {
+            Field,
+            Function,
+        };
+
         const structure_symbol_id = module_scope.lookupSymbol(structure_name) orelse unreachable;
 
         var resolved_fields = std.ArrayList(symbols.ResolvedStructureField){};
+        var member_kind_by_name = std.StringHashMap(StructureMemberKind).init(self.allocator);
         for (structure_definition.fields) |field| {
+            const field_name = field.name.kind.Identifier;
+            if (member_kind_by_name.get(field_name)) |_| {
+                std.debug.print(
+                    "Semantic Error: Structure member name already declared in {s}: {s}\n",
+                    .{ structure_name, field_name },
+                );
+                return NameResolutionError.StructureMemberNameCollision;
+            }
+            member_kind_by_name.put(field_name, .Field) catch unreachable;
+
             resolved_fields.append(self.allocator, .{
-                .name = field.name.kind.Identifier,
+                .name = field_name,
                 .type_reference = try self.resolveTypeExpression(field.type_annotation, module_scope),
             }) catch unreachable;
         }
@@ -531,8 +548,18 @@ pub const NameResolver = struct {
             switch (node.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
                     .Function => |function_definition| {
+                        const function_name = item_definition.identifier_token.kind.Identifier;
+                        if (member_kind_by_name.get(function_name)) |_| {
+                            std.debug.print(
+                                "Semantic Error: Structure member name already declared in {s}: {s}\n",
+                                .{ structure_name, function_name },
+                            );
+                            return NameResolutionError.StructureMemberNameCollision;
+                        }
+                        member_kind_by_name.put(function_name, .Function) catch unreachable;
+
                         const method_symbol = self.symbol_table.insertSymbol(.{
-                            .name = item_definition.identifier_token.kind.Identifier,
+                            .name = function_name,
                             .declared_at = item_definition.item_token,
                             .kind = .{ .Function = .{ .implementation = .UserDefined } },
                         });
