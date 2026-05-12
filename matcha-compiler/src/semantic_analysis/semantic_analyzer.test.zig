@@ -700,6 +700,25 @@ test "semantic analysis type-checks for-in loops over arrays" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(print_call.arguments[0].id).?);
 }
 
+test "semantic analysis allows item as an ordinary identifier" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val item = 1;
+        \\for item in [item] {
+        \\    printInt(item);
+        \\}
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+
+    const for_item_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(for_item_symbol_id).?);
+}
+
 test "semantic analysis rejects non-array for-in iterables" {
     try expectAnalyzeError(error.TypeMismatch,
         \\for value in 1 {

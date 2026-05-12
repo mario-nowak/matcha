@@ -64,10 +64,13 @@ pub const Parser = struct {
     }
 
     fn parseStatement(self: *Parser) ParserError!ast.Node {
+        if (self.startsItemDefinition()) {
+            return try self.parseItem();
+        }
+
         const token = self.lexer.peek();
         return switch (token.kind) {
             .Val, .Var => try self.parseDeclaration(),
-            .Item => try self.parseItem(),
             .Return => try self.parseReturnStatement(),
             .If => block: {
                 const if_token = self.lexer.next();
@@ -137,9 +140,47 @@ pub const Parser = struct {
             .Continue,
             .While,
             .For,
-            .Item,
             .Return,
             => true,
+            else => false,
+        };
+    }
+
+    fn isIdentifierNamed(token: lexing.Token, expected_name: []const u8) bool {
+        return switch (token.kind) {
+            .Identifier => |name| std.mem.eql(u8, name, expected_name),
+            else => false,
+        };
+    }
+
+    fn contextualItemToken(token: lexing.Token) ?lexing.Token {
+        if (!isIdentifierNamed(token, "item")) {
+            return null;
+        }
+
+        return .{
+            .line = token.line,
+            .column = token.column,
+            .offsetInSource = token.offsetInSource,
+            .lenInSource = token.lenInSource,
+            .kind = .Item,
+        };
+    }
+
+    fn startsItemDefinition(self: *@This()) bool {
+        var lookahead = self.lexer;
+        const item_token = lookahead.next();
+        if (!isIdentifierNamed(item_token, "item")) {
+            return false;
+        }
+
+        if (lookahead.peek().kind != .Identifier) {
+            return false;
+        }
+        _ = lookahead.next();
+
+        return switch (lookahead.peek().kind) {
+            .LeftParenthesis, .Assign => true,
             else => false,
         };
     }
@@ -192,10 +233,7 @@ pub const Parser = struct {
     }
 
     fn parseItem(self: *@This()) ParserError!ast.Node {
-        const item_token = self.lexer.next();
-        if (item_token.kind != .Item) {
-            unreachable;
-        }
+        const item_token = contextualItemToken(self.lexer.next()) orelse unreachable;
 
         const identifier_token = self.lexer.next();
         if (identifier_token.kind != .Identifier) {
@@ -262,46 +300,42 @@ pub const Parser = struct {
                 break;
             }
 
-            const field_name_or_item_token = self.lexer.peek();
-            switch (field_name_or_item_token.kind) {
-                .Identifier => {
-                    const field_name_token = self.lexer.next();
-                    if (field_name_token.kind != .Identifier) {
-                        return ParserError.ExpectedIdentifier;
-                    }
+            if (self.startsItemDefinition()) {
+                const item = try self.parseItem();
+                switch (item.kind) {
+                    .ItemDefinition => |item_definition| {
+                        switch (item_definition.item) {
+                            .Function => function_definitions.append(self.allocator, item) catch unreachable,
+                            else => return ParserError.ExpectedFunctionDefinitionInStructure,
+                        }
+                    },
+                    else => unreachable,
+                }
+                continue;
+            }
 
-                    const colon_token = self.lexer.next();
-                    if (colon_token.kind != .Colon) {
-                        return ParserError.ExpectedColon;
-                    }
+            const field_name_token = self.lexer.next();
+            if (field_name_token.kind != .Identifier) {
+                return ParserError.ExpectedIdentifierOrItem;
+            }
 
-                    const type_annotation = try self.parseTypeAnnotation();
+            const colon_token = self.lexer.next();
+            if (colon_token.kind != .Colon) {
+                return ParserError.ExpectedColon;
+            }
 
-                    fields.append(self.allocator, .{
-                        .name = field_name_token,
-                        .type_annotation = type_annotation,
-                    }) catch unreachable;
+            const type_annotation = try self.parseTypeAnnotation();
 
-                    const post_field_token = self.lexer.peek();
-                    if (post_field_token.kind == .Semicolon) {
-                        _ = self.lexer.next(); // consume semicolon and continue to next field
-                    } else if (post_field_token.kind != .RightBrace) {
-                        return ParserError.ExpectedSemicolon;
-                    }
-                },
-                .Item => {
-                    const item = try self.parseItem();
-                    switch (item.kind) {
-                        .ItemDefinition => |item_definition| {
-                            switch (item_definition.item) {
-                                .Function => function_definitions.append(self.allocator, item) catch unreachable,
-                                else => return ParserError.ExpectedFunctionDefinitionInStructure,
-                            }
-                        },
-                        else => unreachable,
-                    }
-                },
-                else => return ParserError.ExpectedIdentifierOrItem,
+            fields.append(self.allocator, .{
+                .name = field_name_token,
+                .type_annotation = type_annotation,
+            }) catch unreachable;
+
+            const post_field_token = self.lexer.peek();
+            if (post_field_token.kind == .Semicolon) {
+                _ = self.lexer.next(); // consume semicolon and continue to next field
+            } else if (post_field_token.kind != .RightBrace) {
+                return ParserError.ExpectedSemicolon;
             }
         }
 
