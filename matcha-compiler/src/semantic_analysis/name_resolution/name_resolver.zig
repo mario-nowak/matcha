@@ -64,6 +64,7 @@ pub const NameResolver = struct {
         self.addPrintIntBuiltinDebuggingFunction(&module_scope);
         self.addPrintStringBuiltinDebuggingFunction(&module_scope);
         self.addReadFileBuiltinFunction(&module_scope);
+        self.addReadLineBuiltinFunction(&module_scope);
         self.addGetArgumentsBuiltinFunction(&module_scope);
 
         for (program.statements) |statement| {
@@ -152,6 +153,23 @@ pub const NameResolver = struct {
                 .name = parameter_symbol.name,
                 .type_reference = .{ .Builtin = .String },
             }}) catch unreachable,
+            .return_type_reference = .{ .Builtin = .String },
+            .implementation = .builtin,
+        });
+    }
+
+    fn addReadLineBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
+        const read_line_symbol = self.symbol_table.insertSymbol(.{
+            .name = "readLine",
+            .declared_at = null,
+            .kind = .{ .Function = .{ .implementation = .BuiltinReadLine } },
+        });
+        module_scope.insertSymbol(read_line_symbol.name, read_line_symbol.id);
+
+        self.appendResolvedFunction(.{
+            .symbol_id = read_line_symbol.id,
+            .name = read_line_symbol.name,
+            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{}) catch unreachable,
             .return_type_reference = .{ .Builtin = .String },
             .implementation = .builtin,
         });

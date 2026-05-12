@@ -16,6 +16,7 @@ const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
 const runtime_print_int_function_name = "matcha_print_int";
 const runtime_print_string_function_name = "matcha_print_string";
 const runtime_read_file_function_name = "matcha_read_file";
+const runtime_read_line_function_name = "matcha_read_line";
 const runtime_init_arguments_function_name = "matcha_init_arguments";
 const runtime_get_arguments_function_name = "matcha_get_arguments";
 const runtime_string_trim_function_name = "matcha_string_trim";
@@ -208,6 +209,7 @@ pub const SymbolGenerator = struct {
                 .BuiltinPrintInt => return runtime_print_int_function_name,
                 .BuiltinPrintString => return runtime_print_string_function_name,
                 .BuiltinReadFile => return runtime_read_file_function_name,
+                .BuiltinReadLine => return runtime_read_line_function_name,
                 .BuiltinGetArguments => return runtime_get_arguments_function_name,
                 .UserDefined => {
                     return std.fmt.allocPrint(
@@ -244,6 +246,7 @@ pub const LlvmIrEmitter = struct {
     needs_print_int: bool,
     needs_print_string: bool,
     needs_read_file: bool,
+    needs_read_line: bool,
     needs_get_arguments: bool,
     needs_string_trim: bool,
     needs_string_split: bool,
@@ -263,6 +266,7 @@ pub const LlvmIrEmitter = struct {
             .needs_print_int = false,
             .needs_print_string = false,
             .needs_read_file = false,
+            .needs_read_line = false,
             .needs_get_arguments = false,
             .needs_string_trim = false,
             .needs_string_split = false,
@@ -284,6 +288,7 @@ pub const LlvmIrEmitter = struct {
         self.needs_print_int = false;
         self.needs_print_string = false;
         self.needs_read_file = false;
+        self.needs_read_line = false;
         self.needs_get_arguments = false;
         self.needs_string_trim = false;
         self.needs_string_split = false;
@@ -441,6 +446,12 @@ pub const LlvmIrEmitter = struct {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare void @{s}(ptr, ptr, i64)",
                 .{runtime_read_file_function_name},
+            ) catch unreachable;
+        }
+        if (self.needs_read_line) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(ptr)",
+                .{runtime_read_line_function_name},
             ) catch unreachable;
         }
         if (self.needs_get_arguments) {
@@ -786,6 +797,20 @@ pub const LlvmIrEmitter = struct {
         return result_register;
     }
 
+    fn emitRuntimeZeroInputStringOutputCall(self: *@This(), runtime_function_name: []const u8) Register {
+        const result_storage = self.symbol_generator.generateStorage();
+        self.emitAlloca(result_storage, "%String");
+        self.lines.append(self.allocator, .{ .instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(ptr {s})",
+            .{ runtime_function_name, result_storage },
+        ) catch unreachable }) catch unreachable;
+
+        const result_register = self.symbol_generator.generateRegister();
+        self.emitLoad(result_register, result_storage, "%String");
+        return result_register;
+    }
+
     fn emitInitializeArgumentsFromMainParameters(self: *@This()) void {
         const init_instruction = std.fmt.allocPrint(
             self.allocator,
@@ -1035,6 +1060,16 @@ pub const LlvmIrEmitter = struct {
                             argument_registers.items[0],
                         );
 
+                        return .{
+                            .exit_label = current_label,
+                            .register = result_register,
+                        };
+                    },
+                    .BuiltinReadLine => {
+                        self.needs_read_line = true;
+                        const result_register = self.emitRuntimeZeroInputStringOutputCall(
+                            runtime_read_line_function_name,
+                        );
                         return .{
                             .exit_label = current_label,
                             .register = result_register,

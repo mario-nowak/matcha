@@ -28,6 +28,7 @@ pub const Implementation = union(enum) {
     BuiltinPrintInt,
     BuiltinPrintString,
     BuiltinReadFile,
+    BuiltinReadLine,
     BuiltinGetArguments,
 };
 
