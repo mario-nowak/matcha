@@ -229,6 +229,45 @@ test "parser parses for-in loops with block bodies" {
     try expectNodeTag(&body_block.statements[0], .Continue);
 }
 
+test "parser treats item as a contextual definition keyword" {
+    const source =
+        \\val item = 1;
+        \\for item in items {
+        \\    printInt(item);
+        \\}
+        \\item Point = structure {
+        \\    item: int;
+        \\    item get(self: Point): int = self.item;
+        \\};
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const declaration = switch (parsed.program.statements[0].kind) {
+        .Declaration => |value_declaration| value_declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqualStrings("item", declaration.name.kind.Identifier);
+
+    const for_in = switch (parsed.program.statements[1].kind) {
+        .ForIn => |statement| statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqualStrings("item", for_in.item_name.kind.Identifier);
+
+    const structure_item_definition = switch (parsed.program.statements[2].kind) {
+        .ItemDefinition => |item_definition| item_definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const structure_definition = switch (structure_item_definition.item) {
+        .Structure => |structure| structure,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try std.testing.expectEqualStrings("item", structure_definition.fields[0].name.kind.Identifier);
+    try std.testing.expectEqual(@as(usize, 1), structure_definition.function_definitions.len);
+}
+
 test "parser parses string literal declarations" {
     const source =
         \\val greeting = "hello world";

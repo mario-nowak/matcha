@@ -146,6 +146,19 @@ test "lexer tokenizes for-in keywords" {
     }
 }
 
+test "lexer keeps item as an identifier" {
+    var lexer = lexing.Lexer.init(
+        \\item structure
+    ,
+        std.heap.page_allocator,
+    );
+    defer lexer.deinit();
+
+    try expectTokenTag(lexer.next(), .Identifier);
+    try expectTokenTag(lexer.next(), .Structure);
+    try expectTokenTag(lexer.next(), .EndOfFile);
+}
+
 test "lexer tokenizes plain string literals" {
     var lexer = lexing.Lexer.init(
         \\val greeting = "hello world";
