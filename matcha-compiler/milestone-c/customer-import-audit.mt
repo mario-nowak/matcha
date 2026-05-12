@@ -92,7 +92,8 @@ item AuditSummary = structure {
     };
 };
 
-val rows = readFile("customer-import-audit-input.txt").trim().split("\n");
+val arguments = getArguments();
+val rows = readFile(arguments[0]).trim().split("\n");
 var summary = AuditSummary.empty();
 
 var i = 0;

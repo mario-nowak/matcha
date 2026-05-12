@@ -145,6 +145,83 @@ export fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: 
     };
 }
 
+fn copyBytesToAtomic(bytes: []const u8) MatchaString {
+    const allocation = matcha_allocate_atomic(@max(bytes.len, 1)) orelse panic("panic: out of memory");
+    const copied_ptr: [*]u8 = @ptrCast(allocation);
+    if (bytes.len > 0) {
+        @memcpy(copied_ptr[0..bytes.len], bytes);
+    }
+
+    return .{
+        .ptr = copied_ptr,
+        .len = bytes.len,
+    };
+}
+
+var cached_program_arguments: ?*ArrayHeader = null;
+
+fn buildArguments(argument_count_from_main: i32, argument_values_raw: *anyopaque) *ArrayHeader {
+    const argument_values: [*]const [*:0]const u8 = @ptrCast(@alignCast(argument_values_raw));
+    const argument_count: usize = if (argument_count_from_main <= 1) 0 else @intCast(argument_count_from_main - 1);
+
+    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const header: *ArrayHeader = @ptrCast(@alignCast(header_allocation));
+
+    const data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const data: [*]MatchaString = @ptrCast(@alignCast(data_allocation));
+
+    var index: usize = 0;
+    while (index < argument_count) : (index += 1) {
+        const argument_c_string = argument_values[index + 1];
+        const argument_slice = std.mem.span(argument_c_string);
+        data[index] = copyBytesToAtomic(argument_slice);
+    }
+
+    header.* = .{
+        .length = @intCast(argument_count),
+        .capacity = @intCast(argument_count),
+        .data = data_allocation,
+    };
+
+    return header;
+}
+
+fn cloneArguments(arguments_header: *ArrayHeader) *ArrayHeader {
+    if (arguments_header.length < 0) {
+        panic("panic: invalid arguments array length");
+    }
+
+    const argument_count: usize = @intCast(arguments_header.length);
+    const cloned_header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const cloned_header: *ArrayHeader = @ptrCast(@alignCast(cloned_header_allocation));
+
+    const cloned_data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const cloned_data: [*]MatchaString = @ptrCast(@alignCast(cloned_data_allocation));
+
+    if (argument_count > 0) {
+        const source_data_allocation = arguments_header.data orelse panic("panic: missing arguments data");
+        const source_data: [*]const MatchaString = @ptrCast(@alignCast(source_data_allocation));
+        @memcpy(cloned_data[0..argument_count], source_data[0..argument_count]);
+    }
+
+    cloned_header.* = .{
+        .length = @intCast(argument_count),
+        .capacity = @intCast(argument_count),
+        .data = cloned_data_allocation,
+    };
+
+    return cloned_header;
+}
+
+export fn matcha_init_arguments(argument_count_from_main: i32, argument_values_raw: *anyopaque) void {
+    cached_program_arguments = buildArguments(argument_count_from_main, argument_values_raw);
+}
+
+export fn matcha_get_arguments() *ArrayHeader {
+    const arguments_header = cached_program_arguments orelse panic("panic: program arguments were not initialized");
+    return cloneArguments(arguments_header);
+}
+
 export fn matcha_string_trim(out: *MatchaString, ptr: [*]const u8, len: usize) void {
     const trimmed = trimSlice(ptr[0..len]);
     out.* = .{

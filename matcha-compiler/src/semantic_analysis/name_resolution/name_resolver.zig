@@ -64,6 +64,7 @@ pub const NameResolver = struct {
         self.addPrintIntBuiltinDebuggingFunction(&module_scope);
         self.addPrintStringBuiltinDebuggingFunction(&module_scope);
         self.addReadFileBuiltinFunction(&module_scope);
+        self.addGetArgumentsBuiltinFunction(&module_scope);
 
         for (program.statements) |statement| {
             try self.resolveNode(&statement, &root_scope, &module_scope, .{
@@ -152,6 +153,26 @@ pub const NameResolver = struct {
                 .type_reference = .{ .Builtin = .String },
             }}) catch unreachable,
             .return_type_reference = .{ .Builtin = .String },
+            .implementation = .builtin,
+        });
+    }
+
+    fn addGetArgumentsBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
+        const get_arguments_symbol = self.symbol_table.insertSymbol(.{
+            .name = "getArguments",
+            .declared_at = null,
+            .kind = .{ .Function = .{ .implementation = .BuiltinGetArguments } },
+        });
+        module_scope.insertSymbol(get_arguments_symbol.name, get_arguments_symbol.id);
+
+        const string_type_reference = self.allocator.create(symbols.ResolvedTypeReference) catch unreachable;
+        string_type_reference.* = .{ .Builtin = .String };
+
+        self.appendResolvedFunction(.{
+            .symbol_id = get_arguments_symbol.id,
+            .name = get_arguments_symbol.name,
+            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{}) catch unreachable,
+            .return_type_reference = .{ .Array = string_type_reference },
             .implementation = .builtin,
         });
     }

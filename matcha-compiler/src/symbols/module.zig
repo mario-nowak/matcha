@@ -28,6 +28,7 @@ pub const Implementation = union(enum) {
     BuiltinPrintInt,
     BuiltinPrintString,
     BuiltinReadFile,
+    BuiltinGetArguments,
 };
 
 pub const BindingMutability = enum {
