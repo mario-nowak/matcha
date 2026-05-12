@@ -499,7 +499,14 @@ pub const Parser = struct {
         target.* = try self.parsePlaceExpression();
 
         const assignment_token = self.lexer.next();
-        if (assignment_token.kind != .Assign) {
+        const assignment_operator = switch (assignment_token.kind) {
+            .Assign => ast.AssignmentOperator.Assign,
+            .PlusAssign => ast.AssignmentOperator{ .Compound = .Add },
+            .MinusAssign => ast.AssignmentOperator{ .Compound = .Subtract },
+            .AsteriskAssign => ast.AssignmentOperator{ .Compound = .Multiply },
+            else => null,
+        };
+        if (assignment_operator == null) {
             return ParserError.ExpectedEqualSign;
         }
 
@@ -516,6 +523,7 @@ pub const Parser = struct {
         return self.createNode(.{
             .Assignment = .{
                 .target = target,
+                .operator = assignment_operator.?,
                 .assignment_token = assignment_token,
                 .value = value,
             },
@@ -553,7 +561,10 @@ pub const Parser = struct {
             }
         }
 
-        return lookahead.peek().kind == .Assign;
+        return switch (lookahead.peek().kind) {
+            .Assign, .PlusAssign, .MinusAssign, .AsteriskAssign => true,
+            else => false,
+        };
     }
 
     fn parsePlaceExpression(self: *@This()) ParserError!ast.Node {

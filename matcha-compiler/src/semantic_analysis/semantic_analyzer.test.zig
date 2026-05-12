@@ -396,8 +396,7 @@ test "semantic analysis type-checks anonymous structure literals from contextual
 }
 
 test "semantic analysis rejects anonymous structure literals without contextual type" {
-    try expectAnalyzeError(
-        error.CannotInferType,
+    try expectAnalyzeError(error.CannotInferType,
         \\item Point = structure { x: int; y: int; };
         \\val point = .{ x = 1, y = 2 };
     );
@@ -611,6 +610,17 @@ test "semantic analysis type-checks mutable structure field assignment" {
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
 }
 
+test "semantic analysis type-checks compound assignments" {
+    var analyzed = try helpers.analyzeProgram(
+        \\var counter = 1;
+        \\counter += 2;
+        \\counter -= 1;
+        \\var numbers = [1, 2, 3];
+        \\numbers[0] *= 4;
+    );
+    defer analyzed.deinit();
+}
+
 test "semantic analysis rejects invalid structure member access" {
     try expectAnalyzeError(error.TypeMismatch,
         \\val x = 1.x;
@@ -651,6 +661,11 @@ test "semantic analysis rejects mismatched and read-only place assignment" {
     try expectAnalyzeError(error.TypeMismatch,
         \\var numbers = [1, 2, 3];
         \\numbers.length = 4;
+    );
+
+    try expectAnalyzeError(error.TypeMismatch,
+        \\var flag = true;
+        \\flag += 1;
     );
 }
 

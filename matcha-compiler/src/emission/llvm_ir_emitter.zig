@@ -1096,29 +1096,14 @@ pub const LlvmIrEmitter = struct {
                     typed_program,
                     environment,
                 );
-                const result_register = self.symbol_generator.generateRegister();
-                const operator = switch (binary_expression.operator) {
-                    .Add => "add",
-                    .Subtract => "sub",
-                    .Multiply => "mul",
-                    .Divide => "sdiv",
-                    .Equal => "icmp eq",
-                    .NotEqual => "icmp ne",
-                    .LessThan => "icmp slt",
-                    .LessThanOrEqual => "icmp sle",
-                    .GreaterThan => "icmp sgt",
-                    .GreaterThanOrEqual => "icmp sge",
-                    .And => "and",
-                    .Or => "or",
-                };
                 const left_operand_type = typed_program.type_by_node_id.get(binary_expression.left.id).?;
                 const instruction_type = llvmIrType(&typed_program.type_store, left_operand_type);
-                const instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "{s} = {s} {s} {s}, {s}",
-                    .{ result_register, operator, instruction_type, left_result.register.?, right_result.register.? },
-                ) catch unreachable;
-                self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
+                const result_register = self.emitBinaryInstruction(
+                    binary_expression.operator,
+                    instruction_type,
+                    left_result.register.?,
+                    right_result.register.?,
+                );
 
                 return .{
                     .exit_label = right_result.exit_label,
@@ -1190,20 +1175,54 @@ pub const LlvmIrEmitter = struct {
                     };
                 }
 
-                const value_result = self.emitNode(
-                    assignment.value,
-                    place_result.exit_label.?,
-                    typed_program,
-                    environment,
-                );
                 const value_type_id = typed_program.type_by_node_id.get(assignment.target.id).?;
                 const llvm_ir_type = llvmIrType(&typed_program.type_store, value_type_id);
-                self.emitStore(value_result.register.?, place_result.register.?, llvm_ir_type);
+                switch (assignment.operator) {
+                    .Assign => {
+                        const value_result = self.emitNode(
+                            assignment.value,
+                            place_result.exit_label.?,
+                            typed_program,
+                            environment,
+                        );
+                        self.emitStore(value_result.register.?, place_result.register.?, llvm_ir_type);
 
-                return .{
-                    .exit_label = value_result.exit_label,
-                    .register = null,
-                };
+                        return .{
+                            .exit_label = value_result.exit_label,
+                            .register = null,
+                        };
+                    },
+                    .Compound => |binary_operator| {
+                        const current_value_register = self.symbol_generator.generateRegister();
+                        self.emitLoad(current_value_register, place_result.register.?, llvm_ir_type);
+
+                        const value_result = self.emitNode(
+                            assignment.value,
+                            place_result.exit_label.?,
+                            typed_program,
+                            environment,
+                        );
+                        if (value_result.exit_label == null) {
+                            return .{
+                                .exit_label = null,
+                                .register = null,
+                            };
+                        }
+
+                        const result_register = self.emitBinaryInstruction(
+                            binary_operator,
+                            llvm_ir_type,
+                            current_value_register,
+                            value_result.register.?,
+                        );
+
+                        self.emitStore(result_register, place_result.register.?, llvm_ir_type);
+                        return .{
+                            .exit_label = value_result.exit_label,
+                            .register = null,
+                        };
+                    },
+                }
             },
             .Block => |block| return self.emitBlock(
                 block,
@@ -1340,6 +1359,39 @@ pub const LlvmIrEmitter = struct {
                 environment,
             ),
         }
+    }
+
+    fn emitBinaryInstruction(
+        self: *@This(),
+        binary_operator: ast.BinaryOperator,
+        llvm_ir_type: []const u8,
+        left_register: Register,
+        right_register: Register,
+    ) Register {
+        const operator_instruction = switch (binary_operator) {
+            .Add => "add",
+            .Subtract => "sub",
+            .Multiply => "mul",
+            .Divide => "sdiv",
+            .Equal => "icmp eq",
+            .NotEqual => "icmp ne",
+            .LessThan => "icmp slt",
+            .LessThanOrEqual => "icmp sle",
+            .GreaterThan => "icmp sgt",
+            .GreaterThanOrEqual => "icmp sge",
+            .And => "and",
+            .Or => "or",
+        };
+
+        const result_register = self.symbol_generator.generateRegister();
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = {s} {s} {s}, {s}",
+            .{ result_register, operator_instruction, llvm_ir_type, left_register, right_register },
+        ) catch unreachable;
+        self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
+
+        return result_register;
     }
 
     fn emitMemberAccess(

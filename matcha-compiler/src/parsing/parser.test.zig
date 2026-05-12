@@ -391,6 +391,46 @@ test "parser parses indexed and mixed place assignment statements" {
     try expectNodeTag(mixed_assignment.value, .IntegerLiteral);
 }
 
+test "parser parses compound assignment statements as assignment nodes with compound operators" {
+    const source =
+        \\counter += 1;
+        \\balance -= 3;
+        \\numbers[i] *= 2;
+    ;
+
+    var parsed = try helpers.parseProgram(source);
+    defer parsed.deinit();
+
+    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
+    switch (first_assignment.operator) {
+        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Add, binary_operator),
+        else => return TestError.UnexpectedNodeKind,
+    }
+    try expectNodeTag(first_assignment.target, .Identifier);
+    try expectNodeTag(first_assignment.value, .IntegerLiteral);
+
+    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
+    switch (second_assignment.operator) {
+        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Subtract, binary_operator),
+        else => return TestError.UnexpectedNodeKind,
+    }
+    try expectNodeTag(second_assignment.target, .Identifier);
+    try expectNodeTag(second_assignment.value, .IntegerLiteral);
+
+    const third_assignment = try expectAssignment(&parsed.program.statements[2]);
+    switch (third_assignment.operator) {
+        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Multiply, binary_operator),
+        else => return TestError.UnexpectedNodeKind,
+    }
+    const indexed_target = switch (third_assignment.target.kind) {
+        .IndexAccess => |index_access| index_access,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    try expectNodeTag(indexed_target.base, .Identifier);
+    try expectNodeTag(indexed_target.index, .Identifier);
+    try expectNodeTag(third_assignment.value, .IntegerLiteral);
+}
+
 test "parser parses subjectful match expressions" {
     const source =
         \\val message = match true {

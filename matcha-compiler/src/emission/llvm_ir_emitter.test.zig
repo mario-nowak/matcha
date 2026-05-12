@@ -269,6 +269,21 @@ test "llvm emission lowers indexed assignment to bounds-checked store" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr") != null);
 }
 
+test "llvm emission lowers compound assignments to load-op-store sequences" {
+    const llvm_ir = try emit(
+        \\var value = 5;
+        \\value += 2;
+        \\value -= 1;
+        \\value *= 3;
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, ptr %.s_0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "add i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "sub i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "mul i64") != null);
+}
+
 test "llvm emission lowers array length member access to header load" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];

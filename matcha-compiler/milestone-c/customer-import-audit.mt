@@ -96,7 +96,7 @@ val rows = readFile("customer-import-audit-input.txt").trim().split("\n");
 var summary = AuditSummary.empty();
 
 var i = 0;
-while i < rows.length : i = i + 1 {
+while i < rows.length : i += 1 {
     val row = rows[i];
     val subscription = CustomerSubscription.fromRow(row);
     val decision = subscription.classify();
