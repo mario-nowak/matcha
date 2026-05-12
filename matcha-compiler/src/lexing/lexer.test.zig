@@ -66,13 +66,16 @@ test "lexer keeps keyword prefixes inside identifiers" {
 
 test "lexer distinguishes assign from equality operators" {
     var lexer = lexing.Lexer.init(
-        "= => == != < <= > >= [ ]",
+        "= += -= *= => == != < <= > >= [ ]",
         std.heap.page_allocator,
     );
     defer lexer.deinit();
 
     const expected_tags = [_]TokenTag{
         .Assign,
+        .PlusAssign,
+        .MinusAssign,
+        .AsteriskAssign,
         .FatArrow,
         .EqualEqual,
         .NotEqual,

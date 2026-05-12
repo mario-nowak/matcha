@@ -428,12 +428,31 @@ pub const TypeChecker = struct {
             .Expression,
             place.type_id,
         );
-        if (place.type_id != value_type) {
-            std.debug.print(
-                "Type Error: Cannot assign value of type {any} to target of type {any}\n",
-                .{ self.getType(value_type), self.getType(place.type_id) },
-            );
-            return TypeError.TypeMismatch;
+
+        switch (assignment.operator) {
+            .Assign => {
+                if (place.type_id != value_type) {
+                    std.debug.print(
+                        "Type Error: Cannot assign value of type {any} to target of type {any}\n",
+                        .{ self.getType(value_type), self.getType(place.type_id) },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+            },
+            .Compound => |binary_operator| {
+                const compound_result_type = try self.checkBinaryOperatorApplication(
+                    binary_operator,
+                    place.type_id,
+                    value_type,
+                );
+                if (compound_result_type != place.type_id) {
+                    std.debug.print(
+                        "Type Error: Compound assignment result type {any} cannot be assigned to target of type {any}\n",
+                        .{ self.getType(compound_result_type), self.getType(place.type_id) },
+                    );
+                    return TypeError.TypeMismatch;
+                }
+            },
         }
 
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
@@ -907,31 +926,45 @@ pub const TypeChecker = struct {
             .Expression,
             null,
         );
-        if (typing.getBinaryOperatorRules(&self.type_store, left_expression_type)) |rules_for_left_type| {
-            if (rules_for_left_type.get(binary_expression.operator)) |operator_rule| {
-                if (operator_rule.argument_type_id != right_expression_type) {
+        const result_type = try self.checkBinaryOperatorApplication(
+            binary_expression.operator,
+            left_expression_type,
+            right_expression_type,
+        );
+        return self.recordNodeType(node_id, result_type);
+    }
+
+    fn checkBinaryOperatorApplication(
+        self: *@This(),
+        binary_operator: ast.BinaryOperator,
+        left_operand_type: typing.TypeId,
+        right_operand_type: typing.TypeId,
+    ) TypeError!typing.TypeId {
+        if (typing.getBinaryOperatorRules(&self.type_store, left_operand_type)) |rules_for_left_type| {
+            if (rules_for_left_type.get(binary_operator)) |operator_rule| {
+                if (operator_rule.argument_type_id != right_operand_type) {
                     std.debug.print(
                         "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
                         .{
-                            binary_expression.operator,
+                            binary_operator,
                             self.getType(operator_rule.argument_type_id),
-                            self.getType(right_expression_type),
+                            self.getType(right_operand_type),
                         },
                     );
                     return TypeError.TypeMismatch;
                 }
-                return self.recordNodeType(node_id, operator_rule.return_type_id);
+                return operator_rule.return_type_id;
             } else {
                 std.debug.print(
                     "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
-                    .{ binary_expression.operator, self.getType(left_expression_type) },
+                    .{ binary_operator, self.getType(left_operand_type) },
                 );
                 return TypeError.TypeMismatch;
             }
         } else {
             std.debug.print(
                 "Type Error: No binary operator rules exist for left operand type {any}\n",
-                .{self.getType(left_expression_type)},
+                .{self.getType(left_operand_type)},
             );
             return TypeError.TypeMismatch;
         }

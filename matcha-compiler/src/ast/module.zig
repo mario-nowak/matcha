@@ -87,8 +87,14 @@ pub const Return = struct {
 
 pub const Assignment = struct {
     target: *Node,
+    operator: AssignmentOperator,
     assignment_token: lexing.Token,
     value: *Node,
+};
+
+pub const AssignmentOperator = union(enum) {
+    Assign,
+    Compound: BinaryOperator,
 };
 
 pub const BindingMutability = enum {

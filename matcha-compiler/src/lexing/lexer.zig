@@ -232,6 +232,9 @@ pub const Lexer = struct {
             const nextCharacter = self.source[self.offsetInSource + 1];
             const multiCharacterKind: ?TokenKind = switch (character) {
                 '=' => if (nextCharacter == '=') .EqualEqual else if (nextCharacter == '>') .FatArrow else null,
+                '+' => if (nextCharacter == '=') .PlusAssign else null,
+                '-' => if (nextCharacter == '=') .MinusAssign else null,
+                '*' => if (nextCharacter == '=') .AsteriskAssign else null,
                 '!' => if (nextCharacter == '=') .NotEqual else null,
                 '<' => if (nextCharacter == '=') .LessThanOrEqual else null,
                 '>' => if (nextCharacter == '=') .GreaterThanOrEqual else null,
