@@ -145,6 +145,25 @@ export fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: 
     };
 }
 
+export fn matcha_read_line(out: *MatchaString) void {
+    const maybe_line = std.fs.File.stdin().deprecatedReader().readUntilDelimiterOrEofAlloc(
+        std.heap.page_allocator,
+        '\n',
+        std.math.maxInt(usize),
+    ) catch panic("panic: failed to read stdin");
+    defer if (maybe_line) |line| std.heap.page_allocator.free(line);
+
+    if (maybe_line) |line| {
+        const trimmed_line = if (line.len > 0 and line[line.len - 1] == '\r')
+            line[0 .. line.len - 1]
+        else
+            line;
+        out.* = copyBytesToAtomic(trimmed_line);
+    } else {
+        out.* = copyBytesToAtomic("");
+    }
+}
+
 fn copyBytesToAtomic(bytes: []const u8) MatchaString {
     const allocation = matcha_allocate_atomic(@max(bytes.len, 1)) orelse panic("panic: out of memory");
     const copied_ptr: [*]u8 = @ptrCast(allocation);

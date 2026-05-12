@@ -234,6 +234,21 @@ test "semantic analysis type-checks readFile builtin" {
     try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
 }
 
+test "semantic analysis type-checks readLine builtin" {
+    var analyzed = try helpers.analyzeProgram(
+        \\val line = readLine();
+    );
+    defer analyzed.deinit();
+
+    const declaration = switch (analyzed.parsed.program.statements[0].kind) {
+        .Declaration => |d| d,
+        else => return TestError.UnexpectedNodeKind,
+    };
+    const symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
+    try expectType(.String, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
+}
+
 test "semantic analysis type-checks getArguments builtin" {
     var analyzed = try helpers.analyzeProgram(
         \\val args = getArguments();

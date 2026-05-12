@@ -183,6 +183,19 @@ test "llvm emission lowers file input and string helper methods to runtime calls
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String") != null);
 }
 
+test "llvm emission lowers readLine to a runtime call" {
+    const llvm_ir = try emit(
+        \\val line = readLine();
+        \\printInt(line.length);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_read_line(ptr)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_read_line(ptr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr") != null);
+}
+
 test "llvm emission lowers getArguments to runtime-backed cloned array access" {
     const llvm_ir = try emit(
         \\val args = getArguments();
