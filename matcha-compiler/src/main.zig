@@ -12,7 +12,7 @@ pub fn main() !void {
     const fileName = command_line_arguments[1];
 
     const cwd = std.fs.cwd();
-    const file_contents = try cwd.readFileAlloc(allocator, fileName, 4096);
+    const file_contents = try cwd.readFileAlloc(allocator, fileName, 1024 * 1024);
     defer allocator.free(file_contents);
 
     var lexer = matcha.lexing.Lexer.init(file_contents, allocator);
