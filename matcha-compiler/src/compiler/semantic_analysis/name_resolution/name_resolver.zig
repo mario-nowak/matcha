@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const lexing = @import("lexing");
 const symbols = @import("symbols");
 const type_expressions = @import("type_expressions");
 const scope = @import("scope.zig");
@@ -18,8 +19,14 @@ const ModuleShadowing = enum {
     Allowed,
 };
 
-const ResolutionContext = struct {
+const ResolutionOptions = struct {
     module_shadowing: ModuleShadowing,
+};
+
+const ResolutionEnvironment = struct {
+    node_scope: *scope.Scope,
+    module_scope: *scope.ModuleScope,
+    options: ResolutionOptions,
 };
 
 const FunctionResolutionTarget = struct {
@@ -47,9 +54,7 @@ pub const NameResolver = struct {
     }
 
     pub fn resolveProgram(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
-        const resolved_program = try self.resolveModule(program);
-
-        return resolved_program;
+        return try self.resolveModule(program);
     }
 
     fn resolveModule(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
@@ -62,16 +67,17 @@ pub const NameResolver = struct {
 
         var module_scope = try self.buildModuleScope(program);
 
-        self.addPrintIntBuiltinDebuggingFunction(&module_scope);
-        self.addPrintStringBuiltinDebuggingFunction(&module_scope);
-        self.addReadFileBuiltinFunction(&module_scope);
-        self.addReadLineBuiltinFunction(&module_scope);
-        self.addGetArgumentsBuiltinFunction(&module_scope);
+        self.addBuiltinFunctions(&module_scope);
 
-        for (program.statements) |statement| {
-            try self.resolveNode(&statement, &root_scope, &module_scope, .{
+        const root_environment = ResolutionEnvironment{
+            .node_scope = &root_scope,
+            .module_scope = &module_scope,
+            .options = .{
                 .module_shadowing = .Forbidden,
-            });
+            },
+        };
+        for (program.statements) |*statement| {
+            try self.resolveNode(statement, root_environment);
         }
 
         return .{
@@ -82,6 +88,14 @@ pub const NameResolver = struct {
             .resolved_structure_by_symbol_id = self.resolved_structure_by_symbol_id,
             .annotated_type_reference_by_symbol_id = self.annotated_type_reference_by_symbol_id,
         };
+    }
+
+    fn addBuiltinFunctions(self: *@This(), module_scope: *scope.ModuleScope) void {
+        self.addPrintIntBuiltinDebuggingFunction(module_scope);
+        self.addPrintStringBuiltinDebuggingFunction(module_scope);
+        self.addReadFileBuiltinFunction(module_scope);
+        self.addReadLineBuiltinFunction(module_scope);
+        self.addGetArgumentsBuiltinFunction(module_scope);
     }
 
     fn addPrintIntBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
@@ -201,43 +215,8 @@ pub const NameResolver = struct {
 
         for (program.statements) |*statement| {
             switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
-                    .Function => |_| {
-                        const function_name = item_definition.identifier_token.kind.Identifier;
-                        module_scope.validateNotInScope(function_name) catch {
-                            std.debug.print("Semantic Error: Function already defined in module scope: {s}\n", .{function_name});
-                            return NameResolutionError.FunctionAlreadyDefined;
-                        };
-
-                        const function_symbol = self.symbol_table.insertSymbol(.{
-                            .name = function_name,
-                            .declared_at = item_definition.item_token,
-                            .kind = .{ .Function = .{ .implementation = .UserDefined } },
-                        });
-                        self.symbol_id_by_node_id.put(statement.id, function_symbol.id) catch unreachable;
-                        module_scope.insertSymbol(
-                            function_name,
-                            function_symbol.id,
-                        );
-                    },
-                    .Structure => |_| {
-                        const structure_name = item_definition.identifier_token.kind.Identifier;
-                        module_scope.validateNotInScope(structure_name) catch {
-                            std.debug.print("Semantic Error: Structure already defined in module scope: {s}\n", .{structure_name});
-                            return NameResolutionError.StructureAlreadyDefined;
-                        };
-
-                        const structure_symbol = self.symbol_table.insertSymbol(.{
-                            .name = structure_name,
-                            .declared_at = item_definition.item_token,
-                            .kind = .{ .Structure = {} },
-                        });
-                        self.symbol_id_by_node_id.put(statement.id, structure_symbol.id) catch unreachable;
-                        module_scope.insertSymbol(
-                            structure_name,
-                            structure_symbol.id,
-                        );
-                    },
+                .ItemDefinition => |item_definition| {
+                    try self.registerModuleItemDefinition(statement.id, item_definition, &module_scope);
                 },
                 else => {},
             }
@@ -246,189 +225,91 @@ pub const NameResolver = struct {
         return module_scope;
     }
 
+    fn registerModuleItemDefinition(
+        self: *@This(),
+        node_id: ast.NodeId,
+        item_definition: ast.ItemDefinition,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!void {
+        switch (item_definition.item) {
+            .Function => |_| {
+                try self.registerModuleFunctionSymbol(node_id, item_definition, module_scope);
+            },
+            .Structure => |_| {
+                try self.registerModuleStructureSymbol(node_id, item_definition, module_scope);
+            },
+        }
+    }
+
+    fn registerModuleFunctionSymbol(
+        self: *@This(),
+        node_id: ast.NodeId,
+        item_definition: ast.ItemDefinition,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!void {
+        const function_name = item_definition.identifier_token.kind.Identifier;
+        module_scope.validateNotInScope(function_name) catch {
+            std.debug.print("Semantic Error: Function already defined in module scope: {s}\n", .{function_name});
+            return NameResolutionError.FunctionAlreadyDefined;
+        };
+
+        const function_symbol = self.symbol_table.insertSymbol(.{
+            .name = function_name,
+            .declared_at = item_definition.item_token,
+            .kind = .{ .Function = .{ .implementation = .UserDefined } },
+        });
+        self.symbol_id_by_node_id.put(node_id, function_symbol.id) catch unreachable;
+        module_scope.insertSymbol(function_name, function_symbol.id);
+    }
+
+    fn registerModuleStructureSymbol(
+        self: *@This(),
+        node_id: ast.NodeId,
+        item_definition: ast.ItemDefinition,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!void {
+        const structure_name = item_definition.identifier_token.kind.Identifier;
+        module_scope.validateNotInScope(structure_name) catch {
+            std.debug.print("Semantic Error: Structure already defined in module scope: {s}\n", .{structure_name});
+            return NameResolutionError.StructureAlreadyDefined;
+        };
+
+        const structure_symbol = self.symbol_table.insertSymbol(.{
+            .name = structure_name,
+            .declared_at = item_definition.item_token,
+            .kind = .{ .Structure = {} },
+        });
+        self.symbol_id_by_node_id.put(node_id, structure_symbol.id) catch unreachable;
+        module_scope.insertSymbol(structure_name, structure_symbol.id);
+    }
+
     fn resolveNode(
         self: *@This(),
         node: *const ast.Node,
-        node_scope: *scope.Scope,
-        module_scope: *scope.ModuleScope,
-        context: ResolutionContext,
+        environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         switch (node.kind) {
-            .Declaration => |declaration| {
-                const declaration_name = declaration.name.kind.Identifier;
-
-                if (context.module_shadowing == .Forbidden) {
-                    if (module_scope.lookupSymbol(declaration_name)) |_| {
-                        std.debug.print(
-                            "Semantic Error: Value already declared in module scope: {s}\n",
-                            .{declaration_name},
-                        );
-                        return NameResolutionError.ValueAlreadyDeclared;
-                    }
-                }
-                if (node_scope.lookupSymbol(declaration_name)) |_| {
-                    std.debug.print(
-                        "Semantic Error: Value already declared: {s}\n",
-                        .{declaration_name},
-                    );
-                    return NameResolutionError.ValueAlreadyDeclared;
-                }
-
-                try self.resolveNode(declaration.value, node_scope, module_scope, context);
-                const annotated_type_reference = if (declaration.type_annotation) |type_annotation|
-                    try self.resolveTypeExpression(type_annotation, module_scope)
-                else
-                    null;
-
-                const declaration_symbol = self.symbol_table.insertSymbol(.{
-                    .name = declaration_name,
-                    .declared_at = declaration.val_token,
-                    .kind = .{
-                        .Binding = .{
-                            .binding_mutability = switch (declaration.binding_mutability) {
-                                .Mutable => symbols.BindingMutability.Mutable,
-                                .Immutable => symbols.BindingMutability.Immutable,
-                            },
-                        },
-                    },
-                });
-                self.symbol_id_by_node_id.put(node.id, declaration_symbol.id) catch unreachable;
-                node_scope.insertSymbol(declaration_name, declaration_symbol.id);
-                if (annotated_type_reference) |type_reference| {
-                    self.annotated_type_reference_by_symbol_id.put(
-                        declaration_symbol.id,
-                        type_reference,
-                    ) catch unreachable;
-                }
-            },
-            .ItemDefinition => |item_definition| switch (item_definition.item) {
-                .Function => |function_definition| {
-                    const function_symbol_id = module_scope.lookupSymbol(
-                        item_definition.identifier_token.kind.Identifier,
-                    ) orelse unreachable;
-                    const function_symbol = self.symbol_table.getSymbol(function_symbol_id);
-                    const resolved_function = try self.resolveFunction(
-                        .{
-                            .node_id = node.id,
-                            .symbol = function_symbol,
-                        },
-                        &function_definition,
-                        module_scope,
-                    );
-                    self.appendResolvedFunction(resolved_function);
-                },
-                .Structure => |structure_definition| {
-                    try self.resolveStructureDefinition(node.id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
-                },
-            },
-            .Return => |return_statement| {
-                if (return_statement.value) |value| {
-                    try self.resolveNode(value, node_scope, module_scope, context);
-                }
-            },
-            .Assignment => |assignment| {
-                try self.resolveNode(assignment.target, node_scope, module_scope, context);
-                try self.resolveNode(assignment.value, node_scope, module_scope, context);
-            },
-            .Loop => |loop| {
-                var loop_scope = scope.Scope.init(self.allocator, node_scope);
-                try self.resolveNode(loop.body_block, &loop_scope, module_scope, context);
-            },
-            .While => |while_statement| {
-                try self.resolveNode(while_statement.condition, node_scope, module_scope, context);
-                if (while_statement.update) |update| {
-                    try self.resolveNode(update, node_scope, module_scope, context);
-                }
-                var loop_scope = scope.Scope.init(self.allocator, node_scope);
-                try self.resolveNode(while_statement.body_block, &loop_scope, module_scope, context);
-            },
-            .ForIn => |for_in| {
-                try self.resolveNode(for_in.iterable, node_scope, module_scope, context);
-
-                var loop_scope = scope.Scope.init(self.allocator, node_scope);
-                const item_name = for_in.item_name.kind.Identifier;
-                const item_symbol = self.symbol_table.insertSymbol(.{
-                    .name = item_name,
-                    .declared_at = for_in.item_name,
-                    .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
-                });
-                self.symbol_id_by_node_id.put(node.id, item_symbol.id) catch unreachable;
-                loop_scope.insertSymbol(item_name, item_symbol.id);
-
-                try self.resolveNode(for_in.body_block, &loop_scope, module_scope, context);
-            },
-            .CallExpression => |call_expression| {
-                try self.resolveNode(call_expression.callee, node_scope, module_scope, context);
-
-                for (call_expression.arguments) |*argument| {
-                    try self.resolveNode(argument, node_scope, module_scope, context);
-                }
-            },
-            .BinaryExpression => |binaryExpression| {
-                try self.resolveNode(binaryExpression.left, node_scope, module_scope, context);
-                try self.resolveNode(binaryExpression.right, node_scope, module_scope, context);
-            },
-            .UnaryExpression => |unaryExpression| {
-                try self.resolveNode(unaryExpression.operand, node_scope, module_scope, context);
-            },
-            .MemberAccess => |member_access| {
-                try self.resolveNode(member_access.base, node_scope, module_scope, context);
-            },
-            .Identifier => |identifier| {
-                const identifier_name = identifier.kind.Identifier;
-                const symbol_id = try NameResolver.getSymbolIdForName(identifier_name, node_scope, module_scope);
-                self.symbol_id_by_node_id.put(node.id, symbol_id) catch unreachable;
-            },
-            .Block => |block| {
-                var block_scope = scope.Scope.init(self.allocator, node_scope);
-                for (block.statements) |statement| {
-                    try self.resolveNode(&statement, &block_scope, module_scope, context);
-                }
-                if (block.result) |result_node| {
-                    try self.resolveNode(result_node, &block_scope, module_scope, context);
-                }
-            },
-            .IfStatement => |if_statement| {
-                try self.resolveNode(if_statement.condition, node_scope, module_scope, context);
-                try self.resolveNode(if_statement.then_branch, node_scope, module_scope, context);
-            },
-            .IfExpression => |if_expression| {
-                try self.resolveNode(if_expression.condition, node_scope, module_scope, context);
-                try self.resolveNode(if_expression.then_block, node_scope, module_scope, context);
-                try self.resolveNode(if_expression.else_block, node_scope, module_scope, context);
-            },
-            .MatchExpression => |match_expression| {
-                if (match_expression.subject) |subject| {
-                    try self.resolveNode(subject, node_scope, module_scope, context);
-                }
-                for (match_expression.arms) |arm| {
-                    try self.resolveNode(arm.pattern_or_condition, node_scope, module_scope, context);
-                    try self.resolveNode(arm.body, node_scope, module_scope, context);
-                }
-                if (match_expression.else_arm) |else_arm| {
-                    try self.resolveNode(else_arm, node_scope, module_scope, context);
-                }
-            },
-            .ExpressionStatement => |expression_statement| {
-                try self.resolveNode(expression_statement.expression, node_scope, module_scope, context);
-            },
-            .StructureConstruction => |*structure_construction| {
-                try self.resolveStructureConstruction(node.id, structure_construction, node_scope, module_scope, context);
-            },
-            .AnonymousStructureLiteral => |anonymous_structure_literal| {
-                for (anonymous_structure_literal.fields) |field| {
-                    try self.resolveNode(field.value, node_scope, module_scope, context);
-                }
-            },
-            .ArrayLiteral => |array_literal| {
-                for (array_literal.elements) |*element| {
-                    try self.resolveNode(element, node_scope, module_scope, context);
-                }
-            },
-            .IndexAccess => |index_access| {
-                try self.resolveNode(index_access.base, node_scope, module_scope, context);
-                try self.resolveNode(index_access.index, node_scope, module_scope, context);
-            },
+            .Declaration => |declaration| try self.resolveDeclarationNode(node.id, declaration, environment),
+            .ItemDefinition => |item_definition| try self.resolveItemDefinitionNode(node.id, item_definition, environment.module_scope),
+            .Return => |return_statement| try self.resolveReturnNode(return_statement, environment),
+            .Assignment => |assignment| try self.resolveAssignmentNode(assignment, environment),
+            .Loop => |loop| try self.resolveLoopNode(loop, environment),
+            .While => |while_statement| try self.resolveWhileNode(while_statement, environment),
+            .ForIn => |for_in| try self.resolveForInNode(node.id, for_in, environment),
+            .CallExpression => |call_expression| try self.resolveCallExpressionNode(call_expression, environment),
+            .BinaryExpression => |binary_expression| try self.resolveBinaryExpressionNode(binary_expression, environment),
+            .UnaryExpression => |unary_expression| try self.resolveUnaryExpressionNode(unary_expression, environment),
+            .MemberAccess => |member_access| try self.resolveMemberAccessNode(member_access, environment),
+            .Identifier => |identifier| try self.resolveIdentifierNode(node.id, identifier, environment),
+            .Block => |block| try self.resolveBlockNode(block, environment),
+            .IfStatement => |if_statement| try self.resolveIfStatementNode(if_statement, environment),
+            .IfExpression => |if_expression| try self.resolveIfExpressionNode(if_expression, environment),
+            .MatchExpression => |match_expression| try self.resolveMatchExpressionNode(match_expression, environment),
+            .ExpressionStatement => |expression_statement| try self.resolveExpressionStatementNode(expression_statement, environment),
+            .StructureConstruction => |*structure_construction| try self.resolveStructureConstruction(node.id, structure_construction, environment),
+            .AnonymousStructureLiteral => |anonymous_structure_literal| try self.resolveAnonymousStructureLiteralNode(anonymous_structure_literal, environment),
+            .ArrayLiteral => |array_literal| try self.resolveArrayLiteralNode(array_literal, environment),
+            .IndexAccess => |index_access| try self.resolveIndexAccessNode(index_access, environment),
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
@@ -438,12 +319,302 @@ pub const NameResolver = struct {
         }
     }
 
+    fn resolveDeclarationNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        declaration: ast.Declaration,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        const declaration_name = declaration.name.kind.Identifier;
+        try validateDeclarationName(declaration_name, environment);
+
+        try self.resolveNode(declaration.value, environment);
+        const annotated_type_reference = if (declaration.type_annotation) |type_annotation|
+            try self.resolveTypeExpression(type_annotation, environment.module_scope)
+        else
+            null;
+
+        const declaration_symbol = self.symbol_table.insertSymbol(.{
+            .name = declaration_name,
+            .declared_at = declaration.val_token,
+            .kind = .{
+                .Binding = .{
+                    .binding_mutability = switch (declaration.binding_mutability) {
+                        .Mutable => symbols.BindingMutability.Mutable,
+                        .Immutable => symbols.BindingMutability.Immutable,
+                    },
+                },
+            },
+        });
+        self.symbol_id_by_node_id.put(node_id, declaration_symbol.id) catch unreachable;
+        environment.node_scope.insertSymbol(declaration_name, declaration_symbol.id);
+        if (annotated_type_reference) |type_reference| {
+            self.annotated_type_reference_by_symbol_id.put(
+                declaration_symbol.id,
+                type_reference,
+            ) catch unreachable;
+        }
+    }
+
+    fn validateDeclarationName(
+        declaration_name: []const u8,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        if (environment.options.module_shadowing == .Forbidden) {
+            if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
+                std.debug.print(
+                    "Semantic Error: Value already declared in module scope: {s}\n",
+                    .{declaration_name},
+                );
+                return NameResolutionError.ValueAlreadyDeclared;
+            }
+        }
+        if (environment.node_scope.lookupSymbol(declaration_name)) |_| {
+            std.debug.print(
+                "Semantic Error: Value already declared: {s}\n",
+                .{declaration_name},
+            );
+            return NameResolutionError.ValueAlreadyDeclared;
+        }
+    }
+
+    fn resolveItemDefinitionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        item_definition: ast.ItemDefinition,
+        module_scope: *scope.ModuleScope,
+    ) NameResolutionError!void {
+        switch (item_definition.item) {
+            .Function => |function_definition| {
+                const function_symbol_id = module_scope.lookupSymbol(item_definition.identifier_token.kind.Identifier) orelse unreachable;
+                const function_symbol = self.symbol_table.getSymbol(function_symbol_id);
+                const resolved_function = try self.resolveFunction(
+                    .{
+                        .node_id = node_id,
+                        .symbol = function_symbol,
+                    },
+                    &function_definition,
+                    module_scope,
+                );
+                self.appendResolvedFunction(resolved_function);
+            },
+            .Structure => |structure_definition| {
+                try self.resolveStructureDefinition(node_id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
+            },
+        }
+    }
+
+    fn resolveReturnNode(
+        self: *@This(),
+        return_statement: ast.Return,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        if (return_statement.value) |value| {
+            try self.resolveNode(value, environment);
+        }
+    }
+
+    fn resolveAssignmentNode(
+        self: *@This(),
+        assignment: ast.Assignment,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(assignment.target, environment);
+        try self.resolveNode(assignment.value, environment);
+    }
+
+    fn resolveLoopNode(
+        self: *@This(),
+        loop_statement: ast.Loop,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var loop_environment = environment;
+        loop_environment.node_scope = &loop_scope;
+        try self.resolveNode(loop_statement.body_block, loop_environment);
+    }
+
+    fn resolveWhileNode(
+        self: *@This(),
+        while_statement: ast.While,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(while_statement.condition, environment);
+        if (while_statement.update) |update| {
+            try self.resolveNode(update, environment);
+        }
+
+        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var loop_environment = environment;
+        loop_environment.node_scope = &loop_scope;
+        try self.resolveNode(while_statement.body_block, loop_environment);
+    }
+
+    fn resolveForInNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        for_in: ast.ForIn,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(for_in.iterable, environment);
+
+        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        const item_name = for_in.item_name.kind.Identifier;
+        const item_symbol = self.symbol_table.insertSymbol(.{
+            .name = item_name,
+            .declared_at = for_in.item_name,
+            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+        });
+        self.symbol_id_by_node_id.put(node_id, item_symbol.id) catch unreachable;
+        loop_scope.insertSymbol(item_name, item_symbol.id);
+
+        var loop_environment = environment;
+        loop_environment.node_scope = &loop_scope;
+        try self.resolveNode(for_in.body_block, loop_environment);
+    }
+
+    fn resolveCallExpressionNode(
+        self: *@This(),
+        call_expression: ast.CallExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(call_expression.callee, environment);
+
+        for (call_expression.arguments) |*argument| {
+            try self.resolveNode(argument, environment);
+        }
+    }
+
+    fn resolveBinaryExpressionNode(
+        self: *@This(),
+        binary_expression: ast.BinaryExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(binary_expression.left, environment);
+        try self.resolveNode(binary_expression.right, environment);
+    }
+
+    fn resolveUnaryExpressionNode(
+        self: *@This(),
+        unary_expression: ast.UnaryExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(unary_expression.operand, environment);
+    }
+
+    fn resolveMemberAccessNode(
+        self: *@This(),
+        member_access: ast.MemberAccess,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(member_access.base, environment);
+    }
+
+    fn resolveIdentifierNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        identifier: lexing.Token,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        const identifier_name = identifier.kind.Identifier;
+        const symbol_id = try NameResolver.getSymbolIdForName(identifier_name, environment);
+        self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
+    }
+
+    fn resolveBlockNode(
+        self: *@This(),
+        block: ast.Block,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        var block_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var block_environment = environment;
+        block_environment.node_scope = &block_scope;
+        for (block.statements) |*statement| {
+            try self.resolveNode(statement, block_environment);
+        }
+        if (block.result) |result_node| {
+            try self.resolveNode(result_node, block_environment);
+        }
+    }
+
+    fn resolveIfStatementNode(
+        self: *@This(),
+        if_statement: ast.IfStatement,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(if_statement.condition, environment);
+        try self.resolveNode(if_statement.then_branch, environment);
+    }
+
+    fn resolveIfExpressionNode(
+        self: *@This(),
+        if_expression: ast.IfExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(if_expression.condition, environment);
+        try self.resolveNode(if_expression.then_block, environment);
+        try self.resolveNode(if_expression.else_block, environment);
+    }
+
+    fn resolveMatchExpressionNode(
+        self: *@This(),
+        match_expression: ast.MatchExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        if (match_expression.subject) |subject| {
+            try self.resolveNode(subject, environment);
+        }
+        for (match_expression.arms) |arm| {
+            try self.resolveNode(arm.pattern_or_condition, environment);
+            try self.resolveNode(arm.body, environment);
+        }
+        if (match_expression.else_arm) |else_arm| {
+            try self.resolveNode(else_arm, environment);
+        }
+    }
+
+    fn resolveExpressionStatementNode(
+        self: *@This(),
+        expression_statement: ast.ExpressionStatement,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(expression_statement.expression, environment);
+    }
+
+    fn resolveAnonymousStructureLiteralNode(
+        self: *@This(),
+        anonymous_structure_literal: ast.AnonymousStructureLiteral,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        for (anonymous_structure_literal.fields) |field| {
+            try self.resolveNode(field.value, environment);
+        }
+    }
+
+    fn resolveArrayLiteralNode(
+        self: *@This(),
+        array_literal: ast.ArrayLiteral,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        for (array_literal.elements) |*element| {
+            try self.resolveNode(element, environment);
+        }
+    }
+
+    fn resolveIndexAccessNode(
+        self: *@This(),
+        index_access: ast.IndexAccess,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        try self.resolveNode(index_access.base, environment);
+        try self.resolveNode(index_access.index, environment);
+    }
+
     fn getSymbolIdForName(
         name: []const u8,
-        node_scope: *scope.Scope,
-        module_scope: *scope.ModuleScope,
+        environment: ResolutionEnvironment,
     ) NameResolutionError!symbols.SymbolId {
-        const symbol_id = node_scope.lookupSymbol(name) orelse module_scope.lookupSymbol(name) orelse {
+        const symbol_id = environment.node_scope.lookupSymbol(name) orelse environment.module_scope.lookupSymbol(name) orelse {
             std.debug.print(
                 "Semantic Error: Undefined identifier: {s}\n",
                 .{name},
@@ -458,12 +629,10 @@ pub const NameResolver = struct {
         self: *@This(),
         node_id: ast.NodeId,
         structure_construction: *const ast.StructureConstruction,
-        node_scope: *scope.Scope,
-        module_scope: *scope.ModuleScope,
-        context: ResolutionContext,
+        environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         const structure_name = structure_construction.structure_name.kind.Identifier;
-        const symbol_id = module_scope.lookupSymbol(structure_name) orelse {
+        const symbol_id = environment.module_scope.lookupSymbol(structure_name) orelse {
             std.debug.print(
                 "Semantic Error: Undefined structure in structure construction: {s}\n",
                 .{structure_name},
@@ -472,7 +641,7 @@ pub const NameResolver = struct {
         };
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
         for (structure_construction.fields) |field| {
-            try self.resolveNode(field.value, node_scope, module_scope, context);
+            try self.resolveNode(field.value, environment);
         }
     }
 
@@ -518,8 +687,12 @@ pub const NameResolver = struct {
             },
         };
 
-        try self.resolveNode(function_definition.body_expression, &function_scope, module_scope, .{
-            .module_shadowing = .Allowed,
+        try self.resolveNode(function_definition.body_expression, .{
+            .node_scope = &function_scope,
+            .module_scope = module_scope,
+            .options = .{
+                .module_shadowing = .Allowed,
+            },
         });
 
         return resolved_function;

@@ -15,8 +15,18 @@ fn expectAnalyzeError(expected: anyerror, source: []const u8) !void {
 
     const allocator = parsed.allocator();
     const name_resolver = @import("semantic_analysis").name_resolution.NameResolver.init(allocator);
-    const type_checker = @import("semantic_analysis").type_checking.TypeChecker.init(allocator);
-    const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator.init(allocator);
+    const type_seeder = @import("semantic_analysis").type_checking.TypeSeeder.init();
+    const node_type_analyzer = @import("semantic_analysis").type_checking.NodeTypeAnalyzer.init(allocator);
+    const type_checker = @import("semantic_analysis").type_checking.TypeChecker.init(
+        type_seeder,
+        node_type_analyzer,
+    );
+    const structural_validator = @import("semantic_analysis").control_flow_validation.StructuralValidator.init();
+    const exit_behavior_analyzer = @import("semantic_analysis").control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator.init(
+        structural_validator,
+        exit_behavior_analyzer,
+    );
     var analyzer = @import("semantic_analysis").SemanticAnalyzer.init(
         name_resolver,
         type_checker,

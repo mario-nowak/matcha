@@ -1,1 +1,12 @@
 pub const LlvmIrEmitter = @import("llvm_ir_emitter.zig").LlvmIrEmitter;
+pub const function_emission = @import("function_emission");
+pub const FunctionIrBuilder = function_emission.FunctionIrBuilder;
+pub const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
+pub const runtime_emission = @import("runtime_emission");
+pub const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
+pub const RuntimeSymbolEmitter = runtime_emission.RuntimeSymbolEmitter;
+pub const RuntimeRequirements = runtime_emission.RuntimeRequirements;
+pub const StringLiteralEmitter = @import("string_literal_emitter.zig").StringLiteralEmitter;
+pub const SymbolGenerator = @import("symbol_generator.zig").SymbolGenerator;
+pub const StructureTypeDefinitionEmitter = @import("structure_type_definition_emitter.zig").StructureTypeDefinitionEmitter;
+pub const llvm_type_lowering = @import("llvm_type_lowering.zig");
