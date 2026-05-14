@@ -21,41 +21,6 @@ run = "zig build"
 description = "Run Matcha compiler tests"
 run = "zig build test"
 
-[tasks.jit]
-description = "Compile a .mt file and execute the emitted LLVM IR"
-usage = 'arg "<file>" help="Path to the .mt source file"'
-run = '''
-zig build run -- "$usage_file"
-gc_prefix=$(brew --prefix bdw-gc)
-lli \
-  --extra-archive=zig-out/lib/libmatcha_runtime.a \
-  --dlopen="$gc_prefix/lib/libgc.dylib" \
-  "${usage_file%.mt}-emission.ll"
-'''
-
 [tasks.build-compiler]
 description = "Build an optimized matcha compiler binary"
 run = "zig build -Doptimize=ReleaseFast"
-
-[tasks.emit]
-description = "Use the built compiler binary to emit LLVM IR from a .mt file"
-usage = 'arg "<file>" help="Path to the .mt source file"'
-run = '''
-zig build -Doptimize=ReleaseFast
-zig-out/bin/matcha "$usage_file"
-'''
-
-[tasks.compile]
-description = "Compile a .mt file into a native executable"
-usage = 'arg "<file>" help="Path to the .mt source file"'
-run = '''
-zig build -Doptimize=ReleaseFast
-zig-out/bin/matcha "$usage_file"
-gc_prefix=$(brew --prefix bdw-gc)
-clang \
-  "${usage_file%.mt}-emission.ll" \
-  zig-out/lib/libmatcha_runtime.a \
-  -L"$gc_prefix/lib" \
-  -lgc \
-  -o "${usage_file%.mt}"
-'''

@@ -16,18 +16,21 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const clap = b.dependency("clap", .{});
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "version", "0.1.0");
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
     const lexing_module = b.addModule("lexing", .{
-        .root_source_file = b.path("src/lexing/module.zig"),
+        .root_source_file = b.path("src/compiler/lexing/module.zig"),
         .target = target,
     });
 
     const type_expressions_module = b.addModule("type_expressions", .{
-        .root_source_file = b.path("src/type_expressions/module.zig"),
+        .root_source_file = b.path("src/compiler/type_expressions/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -35,7 +38,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const ast_module = b.addModule("ast", .{
-        .root_source_file = b.path("src/ast/module.zig"),
+        .root_source_file = b.path("src/compiler/ast/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -44,7 +47,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const parsing_module = b.addModule("parsing", .{
-        .root_source_file = b.path("src/parsing/module.zig"),
+        .root_source_file = b.path("src/compiler/parsing/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -54,7 +57,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const symbols_module = b.addModule("symbols", .{
-        .root_source_file = b.path("src/symbols/module.zig"),
+        .root_source_file = b.path("src/compiler/symbols/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -63,7 +66,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const typing_module = b.addModule("typing", .{
-        .root_source_file = b.path("src/typing/module.zig"),
+        .root_source_file = b.path("src/compiler/typing/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "symbols", .module = symbols_module },
@@ -72,7 +75,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const semantic_analysis_module = b.addModule("semantic_analysis", .{
-        .root_source_file = b.path("src/semantic_analysis/module.zig"),
+        .root_source_file = b.path("src/compiler/semantic_analysis/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
@@ -83,12 +86,49 @@ pub fn build(b: *std.Build) void {
     });
 
     const emission_module = b.addModule("emission", .{
-        .root_source_file = b.path("src/emission/module.zig"),
+        .root_source_file = b.path("src/compiler/emission/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+        },
+    });
+
+    const compiler_module = b.addModule("compiler", .{
+        .root_source_file = b.path("src/compiler/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
+            .{ .name = "emission", .module = emission_module },
+        },
+    });
+
+    const toolchain_module = b.addModule("toolchain", .{
+        .root_source_file = b.path("src/toolchain/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "compiler", .module = compiler_module },
+        },
+    });
+
+    const matcha_tests_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/tests.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
+            .{ .name = "emission", .module = emission_module },
         },
     });
 
@@ -111,13 +151,29 @@ pub fn build(b: *std.Build) void {
         // which requires us to specify a target.
         .target = target,
         .imports = &.{
-            .{ .name = "lexing", .module = lexing_module },
-            .{ .name = "ast", .module = ast_module },
-            .{ .name = "type_expressions", .module = type_expressions_module },
-            .{ .name = "parsing", .module = parsing_module },
-            .{ .name = "typing", .module = typing_module },
-            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
-            .{ .name = "emission", .module = emission_module },
+            .{ .name = "compiler", .module = compiler_module },
+            .{ .name = "toolchain", .module = toolchain_module },
+        },
+    });
+
+    const cli_module = b.createModule(.{
+        .root_source_file = b.path("src/cli/module.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "matcha", .module = matcha_module },
+            .{ .name = "clap", .module = clap.module("clap") },
+        },
+    });
+    cli_module.addOptions("build_options", build_options);
+
+    const matcha_test_root_module = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "compiler", .module = compiler_module },
+            .{ .name = "toolchain", .module = toolchain_module },
+            .{ .name = "matcha_tests", .module = matcha_tests_module },
         },
     });
 
@@ -157,8 +213,11 @@ pub fn build(b: *std.Build) void {
             // can be extremely useful in case of collisions (which can happen
             // importing modules from different packages).
             .{ .name = "matcha", .module = matcha_module },
+            .{ .name = "cli", .module = cli_module },
+            .{ .name = "clap", .module = clap.module("clap") },
         },
     });
+    exe_root_module.addOptions("build_options", build_options);
 
     const exe = b.addExecutable(.{
         .name = "matcha",
@@ -223,7 +282,7 @@ pub fn build(b: *std.Build) void {
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
     const mod_tests = b.addTest(.{
-        .root_module = matcha_module,
+        .root_module = matcha_test_root_module,
     });
 
     // A run step that will run the test executable.
