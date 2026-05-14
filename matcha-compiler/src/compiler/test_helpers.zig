@@ -56,8 +56,18 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
 
     const allocator = parsed.allocator();
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator);
-    const type_checker = semantic_analysis.type_checking.TypeChecker.init(allocator);
-    const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(allocator);
+    const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
+    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator);
+    const type_checker = semantic_analysis.type_checking.TypeChecker.init(
+        type_seeder,
+        node_type_analyzer,
+    );
+    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init();
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
+        structural_validator,
+        exit_behavior_analyzer,
+    );
     var analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,

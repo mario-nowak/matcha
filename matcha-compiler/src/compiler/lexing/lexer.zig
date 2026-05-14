@@ -145,6 +145,7 @@ pub const Lexer = struct {
         const start_column = self.column;
         const start_offset = self.offsetInSource;
         var content = std.ArrayList(u8){};
+        defer content.deinit(self.allocator);
 
         // Skip the opening quote
         self.offsetInSource += 1;

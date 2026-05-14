@@ -19,8 +19,18 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8) 
     const program = try parser.parse();
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator);
-    const type_checker = semantic_analysis.type_checking.TypeChecker.init(allocator);
-    const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(allocator);
+    const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
+    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator);
+    const type_checker = semantic_analysis.type_checking.TypeChecker.init(
+        type_seeder,
+        node_type_analyzer,
+    );
+    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init();
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
+        structural_validator,
+        exit_behavior_analyzer,
+    );
     var semantic_analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
@@ -28,7 +38,23 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8) 
     );
     const typed_program = try semantic_analyzer.validateProgram(&program);
 
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(allocator);
+    const function_symbol_generator = emission.FunctionSymbolGenerator.init(allocator);
+    const function_ir_builder = emission.FunctionIrBuilder.init(allocator);
+    const symbol_generator = emission.SymbolGenerator.init(allocator);
+    const runtime_call_emitter = emission.RuntimeCallEmitter.init(allocator);
+    const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(allocator);
+    const string_literal_emitter = emission.StringLiteralEmitter.init(allocator);
+    const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(allocator);
+    var llvm_ir_emitter = emission.LlvmIrEmitter.init(
+        allocator,
+        function_symbol_generator,
+        function_ir_builder,
+        symbol_generator,
+        runtime_call_emitter,
+        runtime_symbol_emitter,
+        string_literal_emitter,
+        structure_type_definition_emitter,
+    );
     return llvm_ir_emitter.emitLlvmIr(&typed_program);
 }
 

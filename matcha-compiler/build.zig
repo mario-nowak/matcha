@@ -78,10 +78,24 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/semantic_analysis/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
+        },
+    });
+
+    const function_emission_module = b.addModule("function_emission", .{
+        .root_source_file = b.path("src/compiler/emission/function_emission/module.zig"),
+        .target = target,
+    });
+
+    const runtime_emission_module = b.addModule("runtime_emission", .{
+        .root_source_file = b.path("src/compiler/emission/runtime/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "function_emission", .module = function_emission_module },
         },
     });
 
@@ -90,11 +104,12 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
+            .{ .name = "function_emission", .module = function_emission_module },
+            .{ .name = "runtime_emission", .module = runtime_emission_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
         },
     });
-
     const compiler_module = b.addModule("compiler", .{
         .root_source_file = b.path("src/compiler/module.zig"),
         .target = target,

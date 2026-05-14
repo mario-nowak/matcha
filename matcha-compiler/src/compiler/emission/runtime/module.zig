@@ -1,0 +1,20 @@
+const runtime_symbols = @import("runtime_symbols.zig");
+
+pub const RuntimeCallEmitter = @import("runtime_call_emitter.zig").RuntimeCallEmitter;
+pub const RuntimeSymbolEmitter = @import("runtime_symbol_emitter.zig").RuntimeSymbolEmitter;
+pub const RuntimeStringParts = @import("runtime_call_emitter.zig").RuntimeStringParts;
+pub const RuntimeRequirements = runtime_symbols.RuntimeRequirements;
+pub const runtime_print_int_function_name = runtime_symbols.runtime_print_int_function_name;
+pub const runtime_print_string_function_name = runtime_symbols.runtime_print_string_function_name;
+pub const runtime_read_file_function_name = runtime_symbols.runtime_read_file_function_name;
+pub const runtime_read_line_function_name = runtime_symbols.runtime_read_line_function_name;
+pub const runtime_init_arguments_function_name = runtime_symbols.runtime_init_arguments_function_name;
+pub const runtime_get_arguments_function_name = runtime_symbols.runtime_get_arguments_function_name;
+pub const runtime_string_concatenate_function_name = runtime_symbols.runtime_string_concatenate_function_name;
+pub const runtime_string_compare_function_name = runtime_symbols.runtime_string_compare_function_name;
+pub const runtime_string_trim_function_name = runtime_symbols.runtime_string_trim_function_name;
+pub const runtime_string_split_function_name = runtime_symbols.runtime_string_split_function_name;
+pub const runtime_string_to_int_function_name = runtime_symbols.runtime_string_to_int_function_name;
+pub const runtime_int_to_string_function_name = runtime_symbols.runtime_int_to_string_function_name;
+pub const runtime_panic_index_out_of_bounds_function_name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name;
+pub const runtime_array_append_slot_function_name = runtime_symbols.runtime_array_append_slot_function_name;

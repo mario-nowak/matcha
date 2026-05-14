@@ -6,7 +6,23 @@ fn emit(source: []const u8) ![]const u8 {
     var analyzed = try helpers.analyzeProgram(source);
     defer analyzed.deinit();
 
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(analyzed.allocator());
+    const function_symbol_generator = emission.FunctionSymbolGenerator.init(analyzed.allocator());
+    const function_ir_builder = emission.FunctionIrBuilder.init(analyzed.allocator());
+    const symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
+    const runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
+    const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
+    const string_literal_emitter = emission.StringLiteralEmitter.init(analyzed.allocator());
+    const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(analyzed.allocator());
+    var llvm_ir_emitter = emission.LlvmIrEmitter.init(
+        analyzed.allocator(),
+        function_symbol_generator,
+        function_ir_builder,
+        symbol_generator,
+        runtime_call_emitter,
+        runtime_symbol_emitter,
+        string_literal_emitter,
+        structure_type_definition_emitter,
+    );
     const llvm_ir = llvm_ir_emitter.emitLlvmIr(&analyzed.typed_program);
     return try std.testing.allocator.dupe(u8, llvm_ir);
 }
