@@ -131,6 +131,7 @@ val status = match {
     happy_people_counter == 0 and not_happy_people_counter == 0 => "No people there",
     happy_people_counter > 0 and not_happy_people_counter == 0 => "Only happy people",
     happy_people_counter == 0 and not_happy_people_counter > 0 => "Only non-happy people",
+    happy_people_counter > 0 and not_happy_people_counter > 0 => "Mixed happiness",
     else => "Unknown status",
 };
 
@@ -190,15 +191,9 @@ loop {
             printString("Well done!");
             leave;
         },
-        "Hi!" => {
-            printString("Try a bit less enthusiastic...");
-        },
-        "hello" => {
-            printString("Almost! But not quite...");
-        },
-        else => {
-            printString("Wrong answer! Try again!");
-        },
+        "Hi!" => printString("Try a bit less enthusiastic..."),
+        "hello" => printString("Almost! But not quite..."),
+        else => printString("Wrong answer! Try again!"),
     };
 }
 
@@ -233,12 +228,8 @@ item absolute(number: int): int = match {
 };
 
 item printStatus(code: int): unit = match code {
-    0 => {
-        printString("No errors");
-    },
-    else => {
-        printString("Encountered error code: " + code.toString());
-    },
+    0 => printString("No errors"),
+    else => printString("Encountered error code: " + code.toString()),
 };
 
 

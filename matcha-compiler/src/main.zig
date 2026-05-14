@@ -1,46 +1,18 @@
 const std = @import("std");
 
-const matcha = @import("matcha");
+const cli = @import("cli");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const command_line_arguments = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, command_line_arguments);
-    const fileName = command_line_arguments[1];
+    var command_line_arguments = try std.process.ArgIterator.initWithAllocator(allocator);
+    defer command_line_arguments.deinit();
+    _ = command_line_arguments.skip();
 
-    const cwd = std.fs.cwd();
-    const file_contents = try cwd.readFileAlloc(allocator, fileName, 1024 * 1024);
-    defer allocator.free(file_contents);
-
-    var lexer = matcha.lexing.Lexer.init(file_contents, allocator);
-    defer lexer.deinit();
-
-    var parser = matcha.parsing.Parser.init(lexer, allocator);
-    const program = try parser.parse();
-
-    const name_resolver = matcha.semantic_analysis.name_resolution.NameResolver.init(allocator);
-    const type_checker = matcha.semantic_analysis.type_checking.TypeChecker.init(allocator);
-    const control_flow_validator = matcha.semantic_analysis.control_flow_validation.ControlFlowValidator.init(allocator);
-    var semantic_analyzer = matcha.semantic_analysis.SemanticAnalyzer.init(
-        name_resolver,
-        type_checker,
-        control_flow_validator,
-    );
-    const typed_program = try semantic_analyzer.validateProgram(&program);
-
-    var llvm_ir_emitter = matcha.emission.LlvmIrEmitter.init(allocator);
-    const emitted = llvm_ir_emitter.emitLlvmIr(&typed_program);
-
-    const file_name_without_extension = fileName[0 .. std.mem.indexOf(u8, fileName, ".") orelse fileName.len];
-    const output_file_name = std.fmt.allocPrint(
-        allocator,
-        "{s}-emission.ll",
-        .{file_name_without_extension},
-    ) catch unreachable;
-    var file = try std.fs.cwd().createFile(output_file_name, .{});
-    defer file.close();
-    _ = try file.write(emitted);
+    const exit_code = cli.run(allocator, &command_line_arguments) catch {
+        std.process.exit(1);
+    };
+    std.process.exit(exit_code);
 }
