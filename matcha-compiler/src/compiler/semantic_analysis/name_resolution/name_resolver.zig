@@ -1,17 +1,14 @@
 const std = @import("std");
 const ast = @import("ast");
 const lexing = @import("lexing");
+const diagnostics = @import("diagnostics");
 const symbols = @import("symbols");
 const type_expressions = @import("type_expressions");
 const scope = @import("scope.zig");
 
 pub const NameResolutionError = error{
-    UndefinedIdentifier,
-    InvalidTypeAnnotation,
-    ValueAlreadyDeclared,
-    FunctionAlreadyDefined,
-    StructureAlreadyDefined,
-    StructureMemberNameCollision,
+    OutOfMemory,
+    DiagnosticsEmitted,
 };
 
 const ModuleShadowing = enum {
@@ -36,15 +33,17 @@ const FunctionResolutionTarget = struct {
 
 pub const NameResolver = struct {
     allocator: std.mem.Allocator,
+    diagnostic_store: *diagnostics.DiagnosticStore,
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
     resolved_function_by_symbol_id: symbols.ResolvedFunctionBySymbolId,
     resolved_structure_by_symbol_id: symbols.ResolvedStructureBySymbolId,
     annotated_type_reference_by_symbol_id: symbols.AnnotatedTypeReferenceBySymbolId,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
             .allocator = allocator,
+            .diagnostic_store = diagnostic_store,
             .symbol_table = symbols.SymbolTable.init(allocator),
             .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
             .resolved_function_by_symbol_id = symbols.ResolvedFunctionBySymbolId.init(allocator),
@@ -249,8 +248,8 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         const function_name = item_definition.identifier_token.kind.Identifier;
         module_scope.validateNotInScope(function_name) catch {
-            std.debug.print("Semantic Error: Function already defined in module scope: {s}\n", .{function_name});
-            return NameResolutionError.FunctionAlreadyDefined;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "function '{s}' is already defined", .{function_name});
+            return error.DiagnosticsEmitted;
         };
 
         const function_symbol = self.symbol_table.insertSymbol(.{
@@ -270,8 +269,8 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         const structure_name = item_definition.identifier_token.kind.Identifier;
         module_scope.validateNotInScope(structure_name) catch {
-            std.debug.print("Semantic Error: Structure already defined in module scope: {s}\n", .{structure_name});
-            return NameResolutionError.StructureAlreadyDefined;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure '{s}' is already defined", .{structure_name});
+            return error.DiagnosticsEmitted;
         };
 
         const structure_symbol = self.symbol_table.insertSymbol(.{
@@ -326,7 +325,7 @@ pub const NameResolver = struct {
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         const declaration_name = declaration.name.kind.Identifier;
-        try validateDeclarationName(declaration_name, environment);
+        try self.validateDeclarationName(declaration.name, declaration_name, environment);
 
         try self.resolveNode(declaration.value, environment);
         const annotated_type_reference = if (declaration.type_annotation) |type_annotation|
@@ -357,24 +356,20 @@ pub const NameResolver = struct {
     }
 
     fn validateDeclarationName(
+        self: *@This(),
+        declaration_token: lexing.Token,
         declaration_name: []const u8,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         if (environment.options.module_shadowing == .Forbidden) {
             if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
-                std.debug.print(
-                    "Semantic Error: Value already declared in module scope: {s}\n",
-                    .{declaration_name},
-                );
-                return NameResolutionError.ValueAlreadyDeclared;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "value '{s}' is already declared in module scope", .{declaration_name});
+                return error.DiagnosticsEmitted;
             }
         }
         if (environment.node_scope.lookupSymbol(declaration_name)) |_| {
-            std.debug.print(
-                "Semantic Error: Value already declared: {s}\n",
-                .{declaration_name},
-            );
-            return NameResolutionError.ValueAlreadyDeclared;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "value '{s}' is already declared in this scope", .{declaration_name});
+            return error.DiagnosticsEmitted;
         }
     }
 
@@ -517,7 +512,7 @@ pub const NameResolver = struct {
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         const identifier_name = identifier.kind.Identifier;
-        const symbol_id = try NameResolver.getSymbolIdForName(identifier_name, environment);
+        const symbol_id = try self.getSymbolIdForName(identifier, identifier_name, environment);
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
     }
 
@@ -611,15 +606,14 @@ pub const NameResolver = struct {
     }
 
     fn getSymbolIdForName(
+        self: *@This(),
+        identifier_token: lexing.Token,
         name: []const u8,
         environment: ResolutionEnvironment,
     ) NameResolutionError!symbols.SymbolId {
         const symbol_id = environment.node_scope.lookupSymbol(name) orelse environment.module_scope.lookupSymbol(name) orelse {
-            std.debug.print(
-                "Semantic Error: Undefined identifier: {s}\n",
-                .{name},
-            );
-            return NameResolutionError.UndefinedIdentifier;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "undefined identifier '{s}'", .{name});
+            return error.DiagnosticsEmitted;
         };
 
         return symbol_id;
@@ -633,11 +627,8 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         const structure_name = structure_construction.structure_name.kind.Identifier;
         const symbol_id = environment.module_scope.lookupSymbol(structure_name) orelse {
-            std.debug.print(
-                "Semantic Error: Undefined structure in structure construction: {s}\n",
-                .{structure_name},
-            );
-            return NameResolutionError.UndefinedIdentifier;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, structure_construction.structure_name, "undefined structure '{s}'", .{structure_name});
+            return error.DiagnosticsEmitted;
         };
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
         for (structure_construction.fields) |field| {
@@ -657,8 +648,8 @@ pub const NameResolver = struct {
         for (function_definition.parameters) |*parameter| {
             const parameter_name = parameter.name.kind.Identifier;
             function_scope.validateNotInScope(parameter_name) catch {
-                std.debug.print("Semantic Error: Value already declared in function scope: {s}\n", .{parameter_name});
-                return NameResolutionError.ValueAlreadyDeclared;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, parameter.name, "parameter '{s}' is already declared in this function", .{parameter_name});
+                return error.DiagnosticsEmitted;
             };
 
             const parameter_symbol = self.symbol_table.insertSymbol(.{
@@ -717,11 +708,8 @@ pub const NameResolver = struct {
         for (structure_definition.fields) |field| {
             const field_name = field.name.kind.Identifier;
             if (member_kind_by_name.get(field_name)) |_| {
-                std.debug.print(
-                    "Semantic Error: Structure member name already declared in {s}: {s}\n",
-                    .{ structure_name, field_name },
-                );
-                return NameResolutionError.StructureMemberNameCollision;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "structure member '{s}' is already declared in '{s}'", .{ field_name, structure_name });
+                return error.DiagnosticsEmitted;
             }
             member_kind_by_name.put(field_name, .Field) catch unreachable;
 
@@ -738,11 +726,8 @@ pub const NameResolver = struct {
                     .Function => |function_definition| {
                         const function_name = item_definition.identifier_token.kind.Identifier;
                         if (member_kind_by_name.get(function_name)) |_| {
-                            std.debug.print(
-                                "Semantic Error: Structure member name already declared in {s}: {s}\n",
-                                .{ structure_name, function_name },
-                            );
-                            return NameResolutionError.StructureMemberNameCollision;
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
+                            return error.DiagnosticsEmitted;
                         }
                         member_kind_by_name.put(function_name, .Function) catch unreachable;
 
@@ -790,15 +775,15 @@ pub const NameResolver = struct {
                     .{ .Builtin = builtin_type }
                 else named_type_reference: {
                     const symbol_id = module_scope.lookupSymbol(type_name) orelse {
-                        std.debug.print("Semantic Error: Unknown type annotation: {s}\n", .{type_name});
-                        return NameResolutionError.UndefinedIdentifier;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "unknown type annotation '{s}'", .{type_name});
+                        return error.DiagnosticsEmitted;
                     };
                     const symbol = self.symbol_table.getSymbol(symbol_id);
                     switch (symbol.kind) {
                         .Structure => break :named_type_reference symbols.ResolvedTypeReference{ .Symbol = symbol_id },
                         else => {
-                            std.debug.print("Semantic Error: Type annotation must reference a structure, got: {s}\n", .{type_name});
-                            return NameResolutionError.InvalidTypeAnnotation;
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "type annotation '{s}' must refer to a structure", .{type_name});
+                            return error.DiagnosticsEmitted;
                         },
                     }
                 };

@@ -24,9 +24,17 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
+    const diagnostics_module = b.addModule("diagnostics", .{
+        .root_source_file = b.path("src/compiler/diagnostics/module.zig"),
+        .target = target,
+    });
+
     const lexing_module = b.addModule("lexing", .{
         .root_source_file = b.path("src/compiler/lexing/module.zig"),
         .target = target,
+        .imports = &.{
+            .{ .name = "diagnostics", .module = diagnostics_module },
+        },
     });
 
     const type_expressions_module = b.addModule("type_expressions", .{
@@ -53,6 +61,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
         },
     });
 
@@ -83,6 +92,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
         },
     });
 
@@ -118,6 +128,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "emission", .module = emission_module },
@@ -140,6 +151,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },

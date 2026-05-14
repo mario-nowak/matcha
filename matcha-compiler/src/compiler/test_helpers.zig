@@ -2,6 +2,7 @@ const std = @import("std");
 const ast = @import("ast");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
+const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 
@@ -38,10 +39,13 @@ pub fn parseProgram(source: []const u8) !ParsedProgram {
     const allocator = arena.allocator();
     const owned_source = try allocator.dupe(u8, source);
 
-    var lexer = lexing.Lexer.init(owned_source, allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.Parser.init(lexer, allocator);
+    var parser = parsing.Parser.init(lexer, allocator, &diagnostic_store);
     const program = try parser.parse();
 
     return .{
@@ -55,15 +59,18 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
     errdefer parsed.deinit();
 
     const allocator = parsed.allocator();
-    const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator, &diagnostic_store);
     const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
-    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator);
+    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator, &diagnostic_store);
     const type_checker = semantic_analysis.type_checking.TypeChecker.init(
         type_seeder,
         node_type_analyzer,
     );
-    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init();
-    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(&diagnostic_store);
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator, &diagnostic_store);
     const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
         structural_validator,
         exit_behavior_analyzer,

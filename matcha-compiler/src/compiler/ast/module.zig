@@ -38,6 +38,37 @@ pub const NodeKind = union(enum) {
 pub const Node = struct {
     id: NodeId,
     kind: NodeKind,
+
+    pub fn primaryToken(self: *const @This()) lexing.Token {
+        return switch (self.kind) {
+            .Declaration => |declaration| declaration.name,
+            .ItemDefinition => |item_definition| item_definition.identifier_token,
+            .Return => |return_statement| return_statement.return_token,
+            .IfStatement => |if_statement| if_statement.if_token,
+            .ExpressionStatement => |expression_statement| expression_statement.expression.primaryToken(),
+            .Assignment => |assignment| assignment.assignment_token,
+            .Loop => |loop| loop.loop_token,
+            .Leave => |leave_statement| leave_statement.leave_token,
+            .Continue => |continue_statement| continue_statement.continue_token,
+            .While => |while_statement| while_statement.while_token,
+            .ForIn => |for_in| for_in.for_token,
+            .IfExpression => |if_expression| if_expression.if_token,
+            .MatchExpression => |match_expression| match_expression.match_token,
+            .CallExpression => |call_expression| call_expression.left_parenthesis,
+            .MemberAccess => |member_access| member_access.member_name_token,
+            .BinaryExpression => |binary_expression| binary_expression.operator_token,
+            .UnaryExpression => |unary_expression| unary_expression.operator_token,
+            .Identifier => |token| token,
+            .IntegerLiteral => |token| token,
+            .BooleanLiteral => |token| token,
+            .StringLiteral => |token| token,
+            .Block => |block| block.left_brace,
+            .StructureConstruction => |structure_construction| structure_construction.structure_name,
+            .AnonymousStructureLiteral => |anonymous_structure_literal| anonymous_structure_literal.dot_token,
+            .ArrayLiteral => |array_literal| array_literal.left_bracket,
+            .IndexAccess => |index_access| index_access.left_bracket,
+        };
+    }
 };
 
 pub const ItemDefinition = struct {
@@ -189,6 +220,23 @@ pub const BinaryOperator = enum {
     GreaterThanOrEqual,
     And,
     Or,
+
+    pub fn name(self: @This()) []const u8 {
+        return switch (self) {
+            .Add => "+",
+            .Subtract => "-",
+            .Multiply => "*",
+            .Divide => "/",
+            .Equal => "==",
+            .NotEqual => "!=",
+            .LessThan => "<",
+            .LessThanOrEqual => "<=",
+            .GreaterThan => ">",
+            .GreaterThanOrEqual => ">=",
+            .And => "and",
+            .Or => "or",
+        };
+    }
 };
 
 pub const BinaryExpression = struct {
@@ -201,6 +249,13 @@ pub const BinaryExpression = struct {
 pub const UnaryOperator = enum {
     Negate,
     Not,
+
+    pub fn name(self: @This()) []const u8 {
+        return switch (self) {
+            .Negate => "-",
+            .Not => "not",
+        };
+    }
 };
 
 pub const UnaryExpression = struct {

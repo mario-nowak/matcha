@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexing = @import("lexing");
+const diagnostics = @import("diagnostics");
 const type_expressions = @import("type_expressions");
 
 const ParseError = @import("parse_error.zig").ParseError;
@@ -7,14 +8,17 @@ const ParseError = @import("parse_error.zig").ParseError;
 pub const TypeExpressionParser = struct {
     lexer: *lexing.Lexer,
     allocator: std.mem.Allocator,
+    diagnostic_store: *diagnostics.DiagnosticStore,
 
     pub fn init(
         lexer: *lexing.Lexer,
         allocator: std.mem.Allocator,
+        diagnostic_store: *diagnostics.DiagnosticStore,
     ) @This() {
         return .{
             .lexer = lexer,
             .allocator = allocator,
+            .diagnostic_store = diagnostic_store,
         };
     }
 
@@ -24,10 +28,13 @@ pub const TypeExpressionParser = struct {
     }
 
     fn parsePrimary(self: *@This()) ParseError!*type_expressions.TypeExpression {
-        const token = self.lexer.next();
+        const token = try self.lexer.next();
         switch (token.kind) {
             .Identifier => return self.allocateTypeExpression(.{ .Named = .{ .name_token = token } }),
-            else => return ParseError.ExpectedTypeAnnotation,
+            else => {
+                try self.diagnostic_store.emitErrorFromToken(token, "expected type annotation");
+                return error.DiagnosticsEmitted;
+            },
         }
     }
 
@@ -37,11 +44,12 @@ pub const TypeExpressionParser = struct {
     ) ParseError!*type_expressions.TypeExpression {
         var type_expression = base_type_expression;
 
-        while (self.lexer.peek().kind == .LeftBracket) {
-            const left_bracket_token = self.lexer.next();
-            const right_bracket_token = self.lexer.next();
+        while ((try self.lexer.peek()).kind == .LeftBracket) {
+            const left_bracket_token = try self.lexer.next();
+            const right_bracket_token = try self.lexer.next();
             if (right_bracket_token.kind != .RightBracket) {
-                return ParseError.ExpectedRightBracket;
+                try self.diagnostic_store.emitErrorFromToken(right_bracket_token, "expected ']' after array type suffix");
+                return error.DiagnosticsEmitted;
             }
 
             type_expression = self.allocateTypeExpression(.{

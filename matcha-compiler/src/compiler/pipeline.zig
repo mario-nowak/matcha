@@ -1,10 +1,11 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
+const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const emission = @import("emission");
 
-pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile(input_path, .{});
     defer file.close();
@@ -12,21 +13,21 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8) 
     const file_contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(file_contents);
 
-    var lexer = lexing.Lexer.init(file_contents, allocator);
+    var lexer = lexing.Lexer.init(file_contents, allocator, diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.Parser.init(lexer, allocator);
+    var parser = parsing.Parser.init(lexer, allocator, diagnostic_store);
     const program = try parser.parse();
 
-    const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator);
+    const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator, diagnostic_store);
     const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
-    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator);
+    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator, diagnostic_store);
     const type_checker = semantic_analysis.type_checking.TypeChecker.init(
         type_seeder,
         node_type_analyzer,
     );
-    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init();
-    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(diagnostic_store);
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator, diagnostic_store);
     const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
         structural_validator,
         exit_behavior_analyzer,
@@ -58,8 +59,8 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8) 
     return llvm_ir_emitter.emitLlvmIr(&typed_program);
 }
 
-pub fn emitFile(allocator: std.mem.Allocator, input_path: []const u8, output_path: ?[]const u8) ![]const u8 {
-    const llvm_ir = try emitLlvmIrFromFile(allocator, input_path);
+pub fn emitFile(allocator: std.mem.Allocator, input_path: []const u8, output_path: ?[]const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
+    const llvm_ir = try emitLlvmIrFromFile(allocator, input_path, diagnostic_store);
     const resolved_output_path = output_path orelse try defaultLlvmOutputPath(allocator, input_path);
     try writeFile(resolved_output_path, llvm_ir);
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});

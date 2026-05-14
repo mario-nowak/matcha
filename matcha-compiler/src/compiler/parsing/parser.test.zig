@@ -1,5 +1,8 @@
 const std = @import("std");
 const ast = @import("ast");
+const lexing = @import("lexing");
+const parsing = @import("parsing");
+const diagnostics = @import("diagnostics");
 const helpers = @import("../test_helpers.zig");
 
 const NodeTag = std.meta.Tag(ast.NodeKind);
@@ -54,6 +57,28 @@ fn expectAssignment(node: *const ast.Node) !ast.Assignment {
     };
 }
 
+test "parser emits a diagnostic for a missing declaration semicolon" {
+    const source =
+        \\val x = 1
+        \\val y = 2;
+    ;
+
+    var diagnostic_store = diagnostics.DiagnosticStore.init(std.testing.allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(source, std.testing.allocator, &diagnostic_store);
+    defer lexer.deinit();
+
+    var parser = parsing.Parser.init(lexer, std.testing.allocator, &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, parser.parse());
+
+    const diagnostic_items = diagnostic_store.items();
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_items.len);
+    try std.testing.expectEqualStrings("expected ';'", diagnostic_items[0].message);
+    try std.testing.expectEqual(@as(usize, 2), diagnostic_items[0].span.line);
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_items[0].span.column);
+}
+
 test "parser distinguishes statement ifs from expression ifs" {
     const source =
         \\if true { val scoped = 1; }
@@ -92,7 +117,7 @@ test "parser requires braces for one-branch if bodies" {
         \\if true printInt(1);
     ;
 
-    try std.testing.expectError(error.ExpectedLeftBrace, helpers.parseProgram(source));
+    try std.testing.expectError(error.DiagnosticsEmitted, helpers.parseProgram(source));
 }
 
 test "parser respects boolean and comparison precedence" {

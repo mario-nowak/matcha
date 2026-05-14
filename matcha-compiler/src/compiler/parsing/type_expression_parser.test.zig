@@ -1,6 +1,7 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
+const diagnostics = @import("diagnostics");
 const type_expressions = @import("type_expressions");
 
 const ParsedTypeExpression = struct {
@@ -19,10 +20,13 @@ fn parseTypeExpression(source: []const u8) !ParsedTypeExpression {
     const allocator = arena.allocator();
     const owned_source = try allocator.dupe(u8, source);
 
-    var lexer = lexing.Lexer.init(owned_source, allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.TypeExpressionParser.init(&lexer, allocator);
+    var parser = parsing.TypeExpressionParser.init(&lexer, allocator, &diagnostic_store);
     const type_expression = try parser.parse();
     return .{
         .arena = arena,
@@ -66,11 +70,14 @@ test "type expression parser rejects missing right bracket" {
 
     const allocator = arena.allocator();
     const owned_source = try allocator.dupe(u8, "int[");
-    var lexer = lexing.Lexer.init(owned_source, allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.TypeExpressionParser.init(&lexer, allocator);
-    try std.testing.expectError(error.ExpectedRightBracket, parser.parse());
+    var parser = parsing.TypeExpressionParser.init(&lexer, allocator, &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, parser.parse());
 }
 
 test "type expression parser rejects missing base type" {
@@ -79,9 +86,12 @@ test "type expression parser rejects missing base type" {
 
     const allocator = arena.allocator();
     const owned_source = try allocator.dupe(u8, "[]");
-    var lexer = lexing.Lexer.init(owned_source, allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.TypeExpressionParser.init(&lexer, allocator);
-    try std.testing.expectError(error.ExpectedTypeAnnotation, parser.parse());
+    var parser = parsing.TypeExpressionParser.init(&lexer, allocator, &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, parser.parse());
 }

@@ -282,8 +282,10 @@ item Point = structure {
         y = self.y + other.y,
     };
 
+    item length(self: Point): int = self.x * self.x + self.y * self.y;
+
     item print(self: Point): unit = printString(
-        "Point { x = " + self.x.toString() + ", y = " + self.y.toString() + " }"
+        "Point { x = " + self.x.toString() + ", y = " + self.y.toString() + " } (length: " + self.length().toString() + ")"
     );
 };
 

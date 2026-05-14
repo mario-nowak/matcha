@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const diagnostics = @import("diagnostics");
 const type_expressions = @import("type_expressions");
 const control_flow_types = @import("control_flow_types.zig");
 
@@ -8,10 +9,14 @@ pub const ExitBehavior = control_flow_types.ExitBehavior;
 pub const ExitBehaviorByNodeId = control_flow_types.ExitBehaviorByNodeId;
 
 pub const ExitBehaviorAnalyzer = struct {
+    diagnostic_store: *diagnostics.DiagnosticStore,
+    allocator: std.mem.Allocator,
     exit_behavior_by_node_id: ExitBehaviorByNodeId,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
+            .diagnostic_store = diagnostic_store,
+            .allocator = allocator,
             .exit_behavior_by_node_id = ExitBehaviorByNodeId.init(allocator),
         };
     }
@@ -36,7 +41,7 @@ pub const ExitBehaviorAnalyzer = struct {
         switch (node.kind) {
             .ItemDefinition => |item_definition| switch (item_definition.item) {
                 .Function => |function_definition| {
-                    try self.validateFunctionReturnsValue(&function_definition);
+                    try self.validateFunctionReturnsValue(item_definition.identifier_token, &function_definition);
                 },
                 .Structure => |structure| {
                     for (structure.function_definitions) |*function_definition_node| {
@@ -48,12 +53,12 @@ pub const ExitBehaviorAnalyzer = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_definition: *const ast.Function) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: anytype, function_definition: *const ast.Function) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {
-            std.debug.print("Semantic Error: Not all paths in the function return a value\n", .{});
-            return ControlFlowValidationError.NotAllPathsReturnValue;
+            try self.diagnostic_store.emitErrorFromToken(function_name_token, "not all control-flow paths in this function return a value");
+            return error.DiagnosticsEmitted;
         }
     }
 
@@ -65,7 +70,10 @@ pub const ExitBehaviorAnalyzer = struct {
             .Return => try self.validateReturnNode(node),
             .Block => |block| try self.validateBlockNode(node, block),
             .Declaration => |declaration| try self.validateDeclarationNode(declaration),
-            .ItemDefinition => ControlFlowValidationError.ItemDefinitionInNonTopLevel,
+            .ItemDefinition => {
+                try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "item definitions are only allowed at the top level");
+                return error.DiagnosticsEmitted;
+            },
             .IfStatement => |if_statement| try self.validateIfStatementNode(node, if_statement),
             .StructureConstruction => |structure_construction| try self.validateStructureConstructionNode(node, structure_construction),
             .AnonymousStructureLiteral => |anonymous_structure_literal| try self.validateAnonymousStructureLiteralNode(node, anonymous_structure_literal),

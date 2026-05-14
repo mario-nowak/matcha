@@ -1,6 +1,7 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
+const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 
 const ParsedProgram = struct {
@@ -23,10 +24,13 @@ fn parseProgram(source: []const u8) !ParsedProgram {
     const allocator = arena.allocator();
     const owned_source = try allocator.dupe(u8, source);
 
-    var lexer = lexing.Lexer.init(owned_source, allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
     defer lexer.deinit();
 
-    var parser = parsing.Parser.init(lexer, allocator);
+    var parser = parsing.Parser.init(lexer, allocator, &diagnostic_store);
     const program = try parser.parse();
 
     return .{
@@ -42,7 +46,9 @@ test "name resolution emits resolved structures and functions" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
     const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
@@ -86,7 +92,9 @@ test "name resolution resolves declaration type annotations into side table" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
     const declaration = switch (parsed.program.statements[1].kind) {
@@ -114,7 +122,9 @@ test "name resolution resolves array type expressions recursively" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
     const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
@@ -163,7 +173,9 @@ test "name resolution resolves forward structure references in field type annota
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
     const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
@@ -195,7 +207,9 @@ test "name resolution resolves for-in item bindings inside loop bodies" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
     const for_in = switch (parsed.program.statements[1].kind) {
@@ -227,8 +241,10 @@ test "name resolution rejects function symbols in type annotations" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
-    try std.testing.expectError(error.InvalidTypeAnnotation, name_resolver.resolveProgram(&parsed.program));
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
 }
 
 test "name resolution rejects structure field and type function name collisions" {
@@ -240,8 +256,10 @@ test "name resolution rejects structure field and type function name collisions"
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
-    try std.testing.expectError(error.StructureMemberNameCollision, name_resolver.resolveProgram(&parsed.program));
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
 }
 
 test "name resolution rejects duplicate structure type function names" {
@@ -254,6 +272,8 @@ test "name resolution rejects duplicate structure type function names" {
     );
     defer parsed.deinit();
 
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator());
-    try std.testing.expectError(error.StructureMemberNameCollision, name_resolver.resolveProgram(&parsed.program));
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
 }
