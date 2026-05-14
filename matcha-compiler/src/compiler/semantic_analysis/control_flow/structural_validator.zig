@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const diagnostics = @import("diagnostics");
 const control_flow_types = @import("control_flow_types.zig");
 
 const ControlFlowValidationError = control_flow_types.ControlFlowValidationError;
@@ -11,8 +12,10 @@ const ControlFlowValidationContext = struct {
 };
 
 pub const StructuralValidator = struct {
-    pub fn init() @This() {
-        return .{};
+    diagnostic_store: *diagnostics.DiagnosticStore,
+
+    pub fn init(diagnostic_store: *diagnostics.DiagnosticStore) @This() {
+        return .{ .diagnostic_store = diagnostic_store };
     }
 
     pub fn validateProgram(
@@ -40,8 +43,8 @@ pub const StructuralValidator = struct {
             .AnonymousStructureLiteral => |anonymous_structure_literal| try self.validateAnonymousStructureLiteral(anonymous_structure_literal, context),
             .While => |while_statement| try self.validateWhile(while_statement, context),
             .ForIn => |for_in| try self.validateForIn(for_in, context),
-            .Continue => try validateContinue(context),
-            .Leave => try validateLeave(context),
+            .Continue => |continue_statement| try self.validateContinue(continue_statement, context),
+            .Leave => |leave_statement| try self.validateLeave(leave_statement, context),
             .IfStatement => |if_statement| try self.validateIfStatement(if_statement, context),
             .IfExpression => |if_expression| try self.validateIfExpression(if_expression, context),
             .MatchExpression => |match_expression| try self.validateMatchExpression(match_expression, context),
@@ -75,8 +78,8 @@ pub const StructuralValidator = struct {
         context: *const ControlFlowValidationContext,
     ) ControlFlowValidationError!void {
         if (context.scope_depth > 0) {
-            std.debug.print("Semantic Error: Item definitions are only allowed at the top level\n", .{});
-            return ControlFlowValidationError.ItemDefinitionInNonTopLevel;
+            try self.diagnostic_store.emitErrorFromToken(item_definition.item_token, "item definitions are only allowed at the top level");
+            return error.DiagnosticsEmitted;
         }
 
         switch (item_definition.item) {
@@ -102,8 +105,8 @@ pub const StructuralValidator = struct {
         context: *const ControlFlowValidationContext,
     ) ControlFlowValidationError!void {
         if (!context.in_function) {
-            std.debug.print("Semantic Error: Return statements are only allowed inside functions\n", .{});
-            return ControlFlowValidationError.ReturnUsedOutsideOfFunction;
+            try self.diagnostic_store.emitErrorFromToken(return_statement.return_token, "return statements are only allowed inside functions");
+            return error.DiagnosticsEmitted;
         }
         if (return_statement.value) |expression| {
             try self.validateNode(expression, context);
@@ -185,15 +188,17 @@ pub const StructuralValidator = struct {
         try self.validateNode(for_in.body_block, &loop_context);
     }
 
-    fn validateContinue(context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
+    fn validateContinue(self: *@This(), continue_statement: ast.Continue, context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
         if (context.loop_depth == 0) {
-            return ControlFlowValidationError.ContinueUsedOutsideOfLoop;
+            try self.diagnostic_store.emitErrorFromToken(continue_statement.continue_token, "continue is only allowed inside loops");
+            return error.DiagnosticsEmitted;
         }
     }
 
-    fn validateLeave(context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
+    fn validateLeave(self: *@This(), leave_statement: ast.Leave, context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
         if (context.loop_depth == 0) {
-            return ControlFlowValidationError.LeaveUsedOutsideOfLoop;
+            try self.diagnostic_store.emitErrorFromToken(leave_statement.leave_token, "leave is only allowed inside loops");
+            return error.DiagnosticsEmitted;
         }
     }
 

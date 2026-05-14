@@ -51,9 +51,6 @@ pub const TokenKind = union(enum) {
     StringLiteral: []const u8,
     //
     EndOfFile,
-    Error: struct {
-        message: []const u8,
-    },
 };
 
 pub const Token = struct {

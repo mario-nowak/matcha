@@ -130,14 +130,14 @@ export fn matcha_print_string(ptr: [*]const u8, len: usize) void {
 
 export fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: usize) void {
     const path = path_ptr[0..path_len];
-    var file = std.fs.cwd().openFile(path, .{}) catch panic("panic: failed to open file");
+    var file = std.fs.cwd().openFile(path, .{}) catch panic("runtime error: failed to open file");
     defer file.close();
 
-    const file_size = file.getEndPos() catch panic("panic: failed to read file size");
-    const allocation = matcha_allocate_atomic(@max(file_size, 1)) orelse panic("panic: out of memory");
+    const file_size = file.getEndPos() catch panic("runtime error: failed to read file size");
+    const allocation = matcha_allocate_atomic(@max(file_size, 1)) orelse panic("runtime error: out of memory");
     const bytes: [*]u8 = @ptrCast(allocation);
     const buffer = bytes[0..file_size];
-    const bytes_read = file.readAll(buffer) catch panic("panic: failed to read file");
+    const bytes_read = file.readAll(buffer) catch panic("runtime error: failed to read file");
 
     out.* = .{
         .ptr = bytes,
@@ -150,7 +150,7 @@ export fn matcha_read_line(out: *MatchaString) void {
         std.heap.page_allocator,
         '\n',
         std.math.maxInt(usize),
-    ) catch panic("panic: failed to read stdin");
+    ) catch panic("runtime error: failed to read stdin");
     defer if (maybe_line) |line| std.heap.page_allocator.free(line);
 
     if (maybe_line) |line| {
@@ -165,7 +165,7 @@ export fn matcha_read_line(out: *MatchaString) void {
 }
 
 fn copyBytesToAtomic(bytes: []const u8) MatchaString {
-    const allocation = matcha_allocate_atomic(@max(bytes.len, 1)) orelse panic("panic: out of memory");
+    const allocation = matcha_allocate_atomic(@max(bytes.len, 1)) orelse panic("runtime error: out of memory");
     const copied_ptr: [*]u8 = @ptrCast(allocation);
     if (bytes.len > 0) {
         @memcpy(copied_ptr[0..bytes.len], bytes);
@@ -183,10 +183,10 @@ fn buildArguments(argument_count_from_main: i32, argument_values_raw: *anyopaque
     const argument_values: [*]const [*:0]const u8 = @ptrCast(@alignCast(argument_values_raw));
     const argument_count: usize = if (argument_count_from_main <= 1) 0 else @intCast(argument_count_from_main - 1);
 
-    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("runtime error: out of memory");
     const header: *ArrayHeader = @ptrCast(@alignCast(header_allocation));
 
-    const data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("runtime error: out of memory");
     const data: [*]MatchaString = @ptrCast(@alignCast(data_allocation));
 
     var index: usize = 0;
@@ -207,18 +207,18 @@ fn buildArguments(argument_count_from_main: i32, argument_values_raw: *anyopaque
 
 fn cloneArguments(arguments_header: *ArrayHeader) *ArrayHeader {
     if (arguments_header.length < 0) {
-        panic("panic: invalid arguments array length");
+        panic("runtime error: invalid arguments array length");
     }
 
     const argument_count: usize = @intCast(arguments_header.length);
-    const cloned_header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const cloned_header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("runtime error: out of memory");
     const cloned_header: *ArrayHeader = @ptrCast(@alignCast(cloned_header_allocation));
 
-    const cloned_data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const cloned_data_allocation = matcha_allocate(@max(argument_count, 1) * @sizeOf(MatchaString)) orelse panic("runtime error: out of memory");
     const cloned_data: [*]MatchaString = @ptrCast(@alignCast(cloned_data_allocation));
 
     if (argument_count > 0) {
-        const source_data_allocation = arguments_header.data orelse panic("panic: missing arguments data");
+        const source_data_allocation = arguments_header.data orelse panic("runtime error: missing arguments data");
         const source_data: [*]const MatchaString = @ptrCast(@alignCast(source_data_allocation));
         @memcpy(cloned_data[0..argument_count], source_data[0..argument_count]);
     }
@@ -237,7 +237,7 @@ export fn matcha_init_arguments(argument_count_from_main: i32, argument_values_r
 }
 
 export fn matcha_get_arguments() *ArrayHeader {
-    const arguments_header = cached_program_arguments orelse panic("panic: program arguments were not initialized");
+    const arguments_header = cached_program_arguments orelse panic("runtime error: program arguments were not initialized");
     return cloneArguments(arguments_header);
 }
 
@@ -249,7 +249,7 @@ export fn matcha_string_concatenate(
     right_len: usize,
 ) void {
     const result_len = left_len + right_len;
-    const allocation = matcha_allocate_atomic(@max(result_len, 1)) orelse panic("panic: out of memory");
+    const allocation = matcha_allocate_atomic(@max(result_len, 1)) orelse panic("runtime error: out of memory");
     const result_ptr: [*]u8 = @ptrCast(allocation);
 
     if (left_len > 0) {
@@ -289,16 +289,16 @@ export fn matcha_string_split(
     delimiter_len: usize,
 ) *ArrayHeader {
     if (delimiter_len == 0) {
-        panic("panic: cannot split by empty string");
+        panic("runtime error: cannot split by empty string");
     }
 
     const bytes = ptr[0..len];
     const delimiter = delimiter_ptr[0..delimiter_len];
     const parts = countSplitParts(bytes, delimiter);
 
-    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("panic: out of memory");
+    const header_allocation = matcha_allocate(@sizeOf(ArrayHeader)) orelse panic("runtime error: out of memory");
     const header: *ArrayHeader = @ptrCast(@alignCast(header_allocation));
-    const data_allocation = matcha_allocate(parts * @sizeOf(MatchaString)) orelse panic("panic: out of memory");
+    const data_allocation = matcha_allocate(parts * @sizeOf(MatchaString)) orelse panic("runtime error: out of memory");
     const data: [*]MatchaString = @ptrCast(@alignCast(data_allocation));
 
     header.* = .{
@@ -334,12 +334,12 @@ export fn matcha_string_split(
 }
 
 export fn matcha_string_to_int(ptr: [*]const u8, len: usize) i64 {
-    return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("panic: failed to parse int");
+    return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("runtime error: failed to parse int");
 }
 
 export fn matcha_int_to_string(out: *MatchaString, value: i64) void {
     var buffer: [32]u8 = undefined;
-    const rendered = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch panic("panic: failed to render int");
+    const rendered = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch panic("runtime error: failed to render int");
     out.* = copyBytesToAtomic(rendered);
 }
 
@@ -347,7 +347,7 @@ export fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i6
     var buffer: [256]u8 = undefined;
     const formatted = std.fmt.bufPrint(
         &buffer,
-        "panic: array index out of bounds at line {d}, column {d}: index {d}, length {d}",
+        "runtime error: array index out of bounds\n  at line {d}, column {d}\n  index {d} is out of bounds for length {d}",
         .{ line, column, index, length },
     ) catch unreachable;
     panic(formatted);

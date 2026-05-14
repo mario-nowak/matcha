@@ -17,6 +17,34 @@ pub const Type = union(enum) {
     Function: FunctionTypeId,
     Array: TypeId,
     TaggedUnion: TaggedUnionTypeId,
+
+    pub fn name(self: @This(), store: *const TypeStore, allocator: std.mem.Allocator) ![]const u8 {
+        return switch (self) {
+            .Unit => allocator.dupe(u8, "unit"),
+            .Boolean => allocator.dupe(u8, "boolean"),
+            .Integer => allocator.dupe(u8, "int"),
+            .String => allocator.dupe(u8, "string"),
+            .Structure => |structure_type_id| allocator.dupe(u8, store.structure_types.items[structure_type_id].name),
+            .Array => |element_type_id| std.fmt.allocPrint(allocator, "{s}[]", .{try store.getType(element_type_id).name(store, allocator)}),
+            .Function => |function_type_id| {
+                const function_type = store.function_types.items[function_type_id];
+                var parameter_text = std.ArrayList(u8){};
+                defer parameter_text.deinit(allocator);
+                for (function_type.parameter_types, 0..) |parameter_type_id, index| {
+                    if (index > 0) {
+                        try parameter_text.appendSlice(allocator, ", ");
+                    }
+                    try parameter_text.appendSlice(allocator, try store.getType(parameter_type_id).name(store, allocator));
+                }
+                return std.fmt.allocPrint(
+                    allocator,
+                    "function taking ({s}) and returning {s}",
+                    .{ parameter_text.items, try store.getType(function_type.return_type).name(store, allocator) },
+                );
+            },
+            .TaggedUnion => allocator.dupe(u8, "tagged union"),
+        };
+    }
 };
 
 pub const TypeStore = struct {

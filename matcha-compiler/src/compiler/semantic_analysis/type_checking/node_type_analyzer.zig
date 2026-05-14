@@ -1,5 +1,7 @@
 const std = @import("std");
 const ast = @import("ast");
+const lexing = @import("lexing");
+const diagnostics = @import("diagnostics");
 const symbols = @import("symbols");
 const typing = @import("typing");
 const control_flow_validation = @import("../control_flow/module.zig");
@@ -13,15 +15,17 @@ const PlaceInfo = type_checking_types.PlaceInfo;
 
 pub const NodeTypeAnalyzer = struct {
     allocator: std.mem.Allocator,
+    diagnostic_store: *diagnostics.DiagnosticStore,
     type_store: typing.TypeStore,
     type_by_symbol_id: typing.TypeBySymbolId,
     type_by_node_id: typing.TypeByNodeId,
     structure_construction_layout_by_node_id: typing.StructureConstructionLayoutByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
             .allocator = allocator,
+            .diagnostic_store = diagnostic_store,
             .type_store = typing.TypeStore.init(allocator),
             .type_by_symbol_id = typing.TypeBySymbolId.init(allocator),
             .type_by_node_id = typing.TypeByNodeId.init(allocator),
@@ -64,6 +68,10 @@ pub const NodeTypeAnalyzer = struct {
             .structure_construction_layout_by_node_id = self.structure_construction_layout_by_node_id,
             .member_access_by_node_id = self.member_access_by_node_id,
         };
+    }
+
+    fn typeName(self: *@This(), type_id: typing.TypeId) ![]const u8 {
+        return self.type_store.getType(type_id).name(&self.type_store, self.allocator);
     }
 
     fn checkNode(
@@ -181,11 +189,11 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const type_id = environment.contextual_type_id orelse {
-            std.debug.print(
-                "Type Error: Cannot infer type of anonymous structure literal without contextual type\n",
-                .{},
+            try self.diagnostic_store.emitErrorFromToken(
+                anonymous_structure_literal.dot_token,
+                "cannot infer the type of an anonymous structure literal without a contextual type",
             );
-            return TypeError.CannotInferType;
+            return error.DiagnosticsEmitted;
         };
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
@@ -206,11 +214,8 @@ pub const NodeTypeAnalyzer = struct {
         const structure_type_id = switch (structure_literal_type) {
             .Structure => |id| id,
             else => {
-                std.debug.print(
-                    "Type Error: Expected structure type for structure literal, got {any}\n",
-                    .{self.getType(type_id)},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, fields[0].name, "expected a structure type for this literal, found {s}", .{try self.typeName(type_id)});
+                return error.DiagnosticsEmitted;
             },
         };
         const structure_type = self.type_store.structure_types.items[structure_type_id];
@@ -224,31 +229,27 @@ pub const NodeTypeAnalyzer = struct {
             const field_name = field.name.kind.Identifier;
             const existing_field_name = unique_field_names.get(field_name);
             if (existing_field_name) |_| {
-                std.debug.print(
-                    "Type Error: Duplicate field name in structure construction: {s}\n",
-                    .{field_name},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "duplicate field '{s}' in structure construction", .{field_name});
+                return error.DiagnosticsEmitted;
             }
             unique_field_names.put(field_name, true) catch unreachable;
 
             const field_index = structure_type.field_index_by_name.get(field_name) orelse {
-                std.debug.print(
-                    "Type Error: No field named {s} exists on structure type {s}\n",
-                    .{ field_name, structure_type.name },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "field '{s}' does not exist on structure '{s}'", .{ field_name, structure_type.name });
+                return error.DiagnosticsEmitted;
             };
             const structure_type_field = structure_type.fields[@intCast(field_index)];
             const field_environment = environment.withContextAndType(.Expression, structure_type_field.type_id);
             const field_value_type_id = try self.checkNode(field.value, field_environment);
 
             if (structure_type_field.type_id != field_value_type_id) {
-                std.debug.print(
-                    "Type Error: Field {s} of structure type {s} expected type {any}, got {any}\n",
-                    .{ field_name, structure_type.name, self.getType(structure_type_field.type_id), self.getType(field_value_type_id) },
+                try self.diagnostic_store.emitFormattedErrorFromToken(
+                    self.allocator,
+                    field.name,
+                    "field '{s}' on structure '{s}' expects {s}, found {s}",
+                    .{ field_name, structure_type.name, try self.typeName(structure_type_field.type_id), try self.typeName(field_value_type_id) },
                 );
-                return TypeError.TypeMismatch;
+                return error.DiagnosticsEmitted;
             }
 
             field_indices.append(self.allocator, field_index) catch unreachable;
@@ -257,11 +258,8 @@ pub const NodeTypeAnalyzer = struct {
         for (structure_type.fields) |field| {
             const field_exists_in_construction = unique_field_names.get(field.name);
             if (field_exists_in_construction == null) {
-                std.debug.print(
-                    "Type Error: Field {s} of structure type {s} is missing in structure construction\n",
-                    .{ field.name, structure_type.name },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, fields[0].name, "missing field '{s}' in construction of '{s}'", .{ field.name, structure_type.name });
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -287,11 +285,8 @@ pub const NodeTypeAnalyzer = struct {
         const value_type = try self.checkNode(declaration.value, value_environment);
         if (annotated_type) |annotated| {
             if (annotated != value_type) {
-                std.debug.print(
-                    "Type Error: Value declaration annotation does not match initializer type, expected {any}, got {any}\n",
-                    .{ self.getType(annotated), self.getType(value_type) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration.name, "declaration '{s}' expects {s}, found {s}", .{ declaration.name.kind.Identifier, try self.typeName(annotated), try self.typeName(value_type) });
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -326,25 +321,20 @@ pub const NodeTypeAnalyzer = struct {
         switch (assignment.operator) {
             .Assign => {
                 if (place.type_id != value_type) {
-                    std.debug.print(
-                        "Type Error: Cannot assign value of type {any} to target of type {any}\n",
-                        .{ self.getType(value_type), self.getType(place.type_id) },
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment.assignment_token, "cannot assign value of type {s} to target of type {s}", .{ try self.typeName(value_type), try self.typeName(place.type_id) });
+                    return error.DiagnosticsEmitted;
                 }
             },
             .Compound => |binary_operator| {
                 const compound_result_type = try self.checkBinaryOperatorApplication(
+                    assignment.assignment_token,
                     binary_operator,
                     place.type_id,
                     value_type,
                 );
                 if (compound_result_type != place.type_id) {
-                    std.debug.print(
-                        "Type Error: Compound assignment result type {any} cannot be assigned to target of type {any}\n",
-                        .{ self.getType(compound_result_type), self.getType(place.type_id) },
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment.assignment_token, "compound assignment produces {s}, which cannot be assigned to target of type {s}", .{ try self.typeName(compound_result_type), try self.typeName(place.type_id) });
+                    return error.DiagnosticsEmitted;
                 }
             },
         }
@@ -364,19 +354,13 @@ pub const NodeTypeAnalyzer = struct {
                 switch (symbol.kind) {
                     .Binding => |binding| {
                         if (binding.binding_mutability == symbols.BindingMutability.Immutable) {
-                            std.debug.print(
-                                "Semantic Error: Cannot assign to immutable variable: {s}\n",
-                                .{identifier.kind.Identifier},
-                            );
-                            return TypeError.CannotAssignToImmutable;
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier, "cannot assign to immutable binding '{s}'", .{identifier.kind.Identifier});
+                            return error.DiagnosticsEmitted;
                         }
                     },
                     else => {
-                        std.debug.print(
-                            "Semantic Error: Cannot assign to non-binding symbol: {s}\n",
-                            .{identifier.kind.Identifier},
-                        );
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier, "cannot assign to non-binding symbol '{s}'", .{identifier.kind.Identifier});
+                        return error.DiagnosticsEmitted;
                     },
                 }
 
@@ -389,36 +373,36 @@ pub const NodeTypeAnalyzer = struct {
                 return switch (member_access) {
                     .StructureInstanceFieldAccess => .{ .type_id = type_id },
                     .StructureInstanceMethodAccess => {
-                        std.debug.print("Type Error: Cannot assign to structure instance method\n", .{});
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure instance method");
+                        return error.DiagnosticsEmitted;
                     },
                     .ArrayInstanceFieldAccess => |array_field| switch (array_field) {
                         .Length => {
-                            std.debug.print("Type Error: Cannot assign to read-only array member length\n", .{});
-                            return TypeError.TypeMismatch;
+                            try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to read-only array member 'length'");
+                            return error.DiagnosticsEmitted;
                         },
                     },
                     .StructureTypeFunctionAccess => {
-                        std.debug.print("Type Error: Cannot assign to structure function\n", .{});
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure function");
+                        return error.DiagnosticsEmitted;
                     },
                     .ArrayInstanceMethodAccess => {
-                        std.debug.print("Type Error: Cannot assign to array instance method\n", .{});
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to an array instance method");
+                        return error.DiagnosticsEmitted;
                     },
                     .StringInstanceFieldAccess => |string_field| switch (string_field) {
                         .Length => {
-                            std.debug.print("Type Error: Cannot assign to read-only string member length\n", .{});
-                            return TypeError.TypeMismatch;
+                            try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to read-only string member 'length'");
+                            return error.DiagnosticsEmitted;
                         },
                     },
                     .StringInstanceMethodAccess => {
-                        std.debug.print("Type Error: Cannot assign to string instance method\n", .{});
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a string instance method");
+                        return error.DiagnosticsEmitted;
                     },
                     .IntegerInstanceMethodAccess => {
-                        std.debug.print("Type Error: Cannot assign to integer instance method\n", .{});
-                        return TypeError.InvalidAssignmentTarget;
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to an integer instance method");
+                        return error.DiagnosticsEmitted;
                     },
                 };
             },
@@ -427,8 +411,8 @@ pub const NodeTypeAnalyzer = struct {
                 return .{ .type_id = type_id };
             },
             else => {
-                std.debug.print("Semantic Error: Invalid assignment target\n", .{});
-                return TypeError.InvalidAssignmentTarget;
+                try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "invalid assignment target");
+                return error.DiagnosticsEmitted;
             },
         }
     }
@@ -452,11 +436,8 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const while_condition_type = try self.checkExpression(while_statement.condition, environment);
         if (while_condition_type != self.type_store.boolean_type_id) {
-            std.debug.print(
-                "Type Error: While condition must be of type boolean, got {any}\n",
-                .{self.getType(while_condition_type)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, while_statement.while_token, "while condition must be boolean, found {s}", .{try self.typeName(while_condition_type)});
+            return error.DiagnosticsEmitted;
         }
 
         if (while_statement.update) |update| {
@@ -477,11 +458,8 @@ pub const NodeTypeAnalyzer = struct {
         const item_type_id = switch (self.type_store.getType(iterable_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
-                std.debug.print(
-                    "Type Error: For-in iterable must be an array, got {any}\n",
-                    .{self.getType(iterable_type_id)},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, for_in.in_token, "for-in iterable must be an array, found {s}", .{try self.typeName(iterable_type_id)});
+                return error.DiagnosticsEmitted;
             },
         };
 
@@ -517,31 +495,22 @@ pub const NodeTypeAnalyzer = struct {
         const function_type_id = switch (self.type_store.getType(callee_type_id)) {
             .Function => |function_type_id| function_type_id,
             else => {
-                std.debug.print(
-                    "Type Error: Cannot call non-function type {any}\n",
-                    .{self.getType(callee_type_id)},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, call_expression.left_parenthesis, "cannot call value of non-function type {s}", .{try self.typeName(callee_type_id)});
+                return error.DiagnosticsEmitted;
             },
         };
         const function_type = self.type_store.function_types.items[function_type_id];
 
         if (call_expression.arguments.len != function_type.parameter_types.len) {
-            std.debug.print(
-                "Type Error: Function expected {any} arguments, got {any}\n",
-                .{ function_type.parameter_types.len, call_expression.arguments.len },
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, call_expression.left_parenthesis, "function expects {d} arguments, found {d}", .{ function_type.parameter_types.len, call_expression.arguments.len });
+            return error.DiagnosticsEmitted;
         }
 
         for (call_expression.arguments, function_type.parameter_types) |*argument, parameter_type| {
             const argument_type = try self.checkWithExpectedType(argument, parameter_type, environment);
             if (argument_type != parameter_type) {
-                std.debug.print(
-                    "Type Error: Function parameter expected type {any}, got {any}\n",
-                    .{ self.getType(parameter_type), self.getType(argument_type) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, argument.primaryToken(), "function argument expects {s}, found {s}", .{ try self.typeName(parameter_type), try self.typeName(argument_type) });
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -567,11 +536,8 @@ pub const NodeTypeAnalyzer = struct {
                     };
                     const structure_type = self.type_store.structure_types.items[structure_type_id];
                     const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name) orelse {
-                        std.debug.print(
-                            "Type Error: No function named {s} exists on structure type {s}\n",
-                            .{ member_name, structure_type.name },
-                        );
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, structure_type.name });
+                        return error.DiagnosticsEmitted;
                     };
 
                     self.recordMemberAccess(node_id, .{ .StructureTypeFunctionAccess = .{
@@ -586,7 +552,10 @@ pub const NodeTypeAnalyzer = struct {
                     member_access,
                     environment,
                 ),
-                .Function => return TypeError.TypeMismatch,
+                .Function => {
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "cannot access member '{s}' on a function", .{member_name});
+                    return error.DiagnosticsEmitted;
+                },
             }
         }
 
@@ -621,6 +590,7 @@ pub const NodeTypeAnalyzer = struct {
                 if (function_symbol_id) |structure_function_symbol_id| {
                     // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                     const bound_function_type_id = try self.bindInstanceMethodFunctionType(
+                        member_access.member_name_token,
                         structure_function_symbol_id,
                         base_type_id,
                     );
@@ -631,11 +601,8 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, bound_function_type_id);
                 }
 
-                std.debug.print(
-                    "Type Error: No member named {s} exists on structure type {s}\n",
-                    .{ member_name, structure_type.name },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "type '{s}' has no member named '{s}'", .{ structure_type.name, member_name });
+                return error.DiagnosticsEmitted;
             },
             .Array => {
                 if (std.mem.eql(u8, member_name, "append")) {
@@ -649,11 +616,8 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
 
-                std.debug.print(
-                    "Type Error: No member named {s} exists on array type\n",
-                    .{member_name},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "array has no member named '{s}'", .{member_name});
+                return error.DiagnosticsEmitted;
             },
             .String => {
                 if (std.mem.eql(u8, member_name, "length")) {
@@ -679,11 +643,8 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, to_int_function_type_id);
                 }
 
-                std.debug.print(
-                    "Type Error: No member named {s} exists on string type\n",
-                    .{member_name},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "string has no member named '{s}'", .{member_name});
+                return error.DiagnosticsEmitted;
             },
             .Integer => {
                 if (std.mem.eql(u8, member_name, "toString")) {
@@ -692,18 +653,12 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, to_string_function_type_id);
                 }
 
-                std.debug.print(
-                    "Type Error: No member named {s} exists on integer type\n",
-                    .{member_name},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "int has no member named '{s}'", .{member_name});
+                return error.DiagnosticsEmitted;
             },
             else => {
-                std.debug.print(
-                    "Type Error: Cannot access member {s} on type {any}\n",
-                    .{ member_name, self.getType(base_type_id) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "cannot access member '{s}' on type {s}", .{ member_name, try self.typeName(base_type_id) });
+                return error.DiagnosticsEmitted;
             },
         }
     }
@@ -741,6 +696,7 @@ pub const NodeTypeAnalyzer = struct {
 
     fn bindInstanceMethodFunctionType(
         self: *@This(),
+        member_name_token: lexing.Token,
         function_symbol_id: symbols.SymbolId,
         receiver_type_id: typing.TypeId,
     ) TypeError!typing.TypeId {
@@ -751,16 +707,13 @@ pub const NodeTypeAnalyzer = struct {
         };
 
         if (function_type.parameter_types.len == 0) {
-            std.debug.print("Type Error: Structure instance method is missing a receiver parameter\n", .{});
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitErrorFromToken(member_name_token, "structure instance method is missing a receiver parameter");
+            return error.DiagnosticsEmitted;
         }
 
         if (function_type.parameter_types[0] != receiver_type_id) {
-            std.debug.print(
-                "Type Error: Structure instance method receiver expected type {any}, got {any}\n",
-                .{ self.getType(function_type.parameter_types[0]), self.getType(receiver_type_id) },
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_name_token, "structure instance method receiver expects {s}, found {s}", .{ try self.typeName(function_type.parameter_types[0]), try self.typeName(receiver_type_id) });
+            return error.DiagnosticsEmitted;
         }
 
         var remaining_parameter_types = std.ArrayList(typing.TypeId){};
@@ -790,6 +743,7 @@ pub const NodeTypeAnalyzer = struct {
             environment.withContextAndType(.Expression, null),
         );
         const result_type = try self.checkBinaryOperatorApplication(
+            binary_expression.operator_token,
             binary_expression.operator,
             left_expression_type,
             right_expression_type,
@@ -799,6 +753,7 @@ pub const NodeTypeAnalyzer = struct {
 
     fn checkBinaryOperatorApplication(
         self: *@This(),
+        operator_token: lexing.Token,
         binary_operator: ast.BinaryOperator,
         left_operand_type: typing.TypeId,
         right_operand_type: typing.TypeId,
@@ -806,30 +761,22 @@ pub const NodeTypeAnalyzer = struct {
         if (typing.getBinaryOperatorRules(&self.type_store, left_operand_type)) |rules_for_left_type| {
             if (rules_for_left_type.get(binary_operator)) |operator_rule| {
                 if (operator_rule.argument_type_id != right_operand_type) {
-                    std.debug.print(
-                        "Type Error: Binary operator {any} expected right operand of type {any}, got {any}\n",
-                        .{
-                            binary_operator,
-                            self.getType(operator_rule.argument_type_id),
-                            self.getType(right_operand_type),
-                        },
+                    try self.diagnostic_store.emitFormattedErrorFromToken(
+                        self.allocator,
+                        operator_token,
+                        "binary operator '{s}' expects right operand of type {s}, found {s}",
+                        .{ binary_operator.name(), try self.typeName(operator_rule.argument_type_id), try self.typeName(right_operand_type) },
                     );
-                    return TypeError.TypeMismatch;
+                    return error.DiagnosticsEmitted;
                 }
                 return operator_rule.return_type_id;
             } else {
-                std.debug.print(
-                    "Type Error: Binary operator {any} is not supported for left operand type {any}\n",
-                    .{ binary_operator, self.getType(left_operand_type) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, operator_token, "binary operator '{s}' is not supported for left operand type {s}", .{ binary_operator.name(), try self.typeName(left_operand_type) });
+                return error.DiagnosticsEmitted;
             }
         } else {
-            std.debug.print(
-                "Type Error: No binary operator rules exist for left operand type {any}\n",
-                .{self.getType(left_operand_type)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, operator_token, "no binary operator rules exist for left operand type {s}", .{try self.typeName(left_operand_type)});
+            return error.DiagnosticsEmitted;
         }
     }
 
@@ -847,18 +794,12 @@ pub const NodeTypeAnalyzer = struct {
             if (rules_for_operand_type.get(unary_expression.operator)) |operator_rule| {
                 return self.recordNodeType(node_id, operator_rule.return_type_id);
             } else {
-                std.debug.print(
-                    "Type Error: Unary operator {any} is not supported for operand type {any}\n",
-                    .{ unary_expression.operator, self.getType(operand_type) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, unary_expression.operator_token, "unary operator '{s}' is not supported for operand type {s}", .{ unary_expression.operator.name(), try self.typeName(operand_type) });
+                return error.DiagnosticsEmitted;
             }
         } else {
-            std.debug.print(
-                "Type Error: No unary operator rules exist for operand type {any}\n",
-                .{self.getType(operand_type)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, unary_expression.operator_token, "no unary operator rules exist for operand type {s}", .{try self.typeName(operand_type)});
+            return error.DiagnosticsEmitted;
         }
     }
 
@@ -871,12 +812,12 @@ pub const NodeTypeAnalyzer = struct {
         const context = environment.context;
         const contextual_type_id = environment.contextual_type_id;
         if (context == .Expression and block.result == null) {
-            std.debug.print("Type Error: Block must produce a value in this context\n", .{});
-            return TypeError.BlockMustProduceValue;
+            try self.diagnostic_store.emitErrorFromToken(block.left_brace, "block must produce a value in this context");
+            return error.DiagnosticsEmitted;
         }
         if (context == .Statement and block.result != null) {
-            std.debug.print("Type Error: Block cannot have a trailing expression in statement context\n", .{});
-            return TypeError.BlockCannotProduceValue;
+            try self.diagnostic_store.emitErrorFromToken(block.left_brace, "block cannot have a trailing expression in statement context");
+            return error.DiagnosticsEmitted;
         }
 
         for (block.statements) |*statement| {
@@ -932,11 +873,8 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const if_condition_type = try self.checkExpression(if_statement.condition, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
-            std.debug.print(
-                "Type Error: If condition must be of type boolean, got {any}\n",
-                .{self.getType(if_condition_type)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_statement.if_token, "if condition must be boolean, found {s}", .{try self.typeName(if_condition_type)});
+            return error.DiagnosticsEmitted;
         }
 
         _ = try self.checkStatement(if_statement.then_branch, environment);
@@ -951,21 +889,15 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const if_condition_type = try self.checkExpression(if_expression.condition, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
-            std.debug.print(
-                "Type Error: If condition must be of type boolean, got {any}\n",
-                .{self.getType(if_condition_type)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_expression.if_token, "if condition must be boolean, found {s}", .{try self.typeName(if_condition_type)});
+            return error.DiagnosticsEmitted;
         }
 
         const then_block_type = try self.checkNode(if_expression.then_block, environment);
         const else_block_type = try self.checkNode(if_expression.else_block, environment);
         if (then_block_type != else_block_type) {
-            std.debug.print(
-                "Type Error: Then and else blocks of an if expression must have the same type, got then: {any}, else: {any}\n",
-                .{ self.getType(then_block_type), self.getType(else_block_type) },
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_expression.else_token, "if-expression branches must have the same type, found then: {s}, else: {s}", .{ try self.typeName(then_block_type), try self.typeName(else_block_type) });
+            return error.DiagnosticsEmitted;
         }
 
         return self.recordNodeType(node_id, then_block_type);
@@ -992,11 +924,8 @@ pub const NodeTypeAnalyzer = struct {
                 return self.recordNodeType(node_id, type_id);
             }
 
-            std.debug.print(
-                "Type Error: Cannot infer type of empty array literal without contextual type\n",
-                .{},
-            );
-            return TypeError.CannotInferType;
+            try self.diagnostic_store.emitErrorFromToken(array_literal.left_bracket, "cannot infer the type of an empty array literal without a contextual type");
+            return error.DiagnosticsEmitted;
         }
 
         const first_element_type = try self.checkExpression(&array_literal.elements[0], environment);
@@ -1004,11 +933,8 @@ pub const NodeTypeAnalyzer = struct {
         for (array_literal.elements[1..]) |*element| {
             const element_type = try self.checkExpression(element, environment);
             if (element_type != first_element_type) {
-                std.debug.print(
-                    "Type Error: Array literal elements must all have the same type, expected {any}, got {any}\n",
-                    .{ self.getType(first_element_type), self.getType(element_type) },
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, element.primaryToken(), "array literal elements must all have the same type, expected {s}, found {s}", .{ try self.typeName(first_element_type), try self.typeName(element_type) });
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -1026,21 +952,15 @@ pub const NodeTypeAnalyzer = struct {
         const element_type_id = switch (self.type_store.getType(base_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
-                std.debug.print(
-                    "Type Error: Cannot index into non-array type {any}\n",
-                    .{self.getType(base_type_id)},
-                );
-                return TypeError.TypeMismatch;
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_access.left_bracket, "cannot index into non-array type {s}", .{try self.typeName(base_type_id)});
+                return error.DiagnosticsEmitted;
             },
         };
 
         const index_type_id = try self.checkExpression(index_access.index, environment);
         if (index_type_id != self.type_store.integer_type_id) {
-            std.debug.print(
-                "Type Error: Array index must be of type int, got {any}\n",
-                .{self.getType(index_type_id)},
-            );
-            return TypeError.TypeMismatch;
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_access.index.primaryToken(), "array index must be int, found {s}", .{try self.typeName(index_type_id)});
+            return error.DiagnosticsEmitted;
         }
 
         return self.recordNodeType(node_id, element_type_id);
@@ -1057,8 +977,8 @@ pub const NodeTypeAnalyzer = struct {
             environment.withContextAndType(.Statement, null),
         );
         if (expression_type != self.type_store.unit_type_id) {
-            std.debug.print("Type Error: Expression statement must evaluate to unit\n", .{});
-            return TypeError.BlockCannotProduceValue;
+            try self.diagnostic_store.emitErrorFromToken(expression_statement.expression.primaryToken(), "expression statement must evaluate to unit");
+            return error.DiagnosticsEmitted;
         }
 
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
@@ -1112,20 +1032,14 @@ pub const NodeTypeAnalyzer = struct {
             .Terminates => {},
             .FallsThroughWithoutValue => {
                 if (function_return_type != self.type_store.unit_type_id) {
-                    std.debug.print(
-                        "Type Error: Function with non-unit return type {any} has control flow path that falls through without returning a value\n",
-                        .{self.getType(function_return_type)},
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, function_definition.body_expression.primaryToken(), "function declared to return {s} has a path that falls through without returning a value", .{try self.typeName(function_return_type)});
+                    return error.DiagnosticsEmitted;
                 }
             },
             .FallsThroughWithValue => {
                 if (function_return_type != body_expression_type) {
-                    std.debug.print(
-                        "Type Error: Function with return type {any} has control flow path that falls through with value of type {any}\n",
-                        .{ self.getType(function_return_type), self.getType(body_expression_type) },
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, function_definition.body_expression.primaryToken(), "function declared to return {s} cannot fall through with a value of type {s}", .{ try self.typeName(function_return_type), try self.typeName(body_expression_type) });
+                    return error.DiagnosticsEmitted;
                 }
             },
         }
@@ -1142,19 +1056,13 @@ pub const NodeTypeAnalyzer = struct {
                 if (return_statement.value) |return_value| {
                     const return_value_type = self.type_by_node_id.get(return_value.id).?;
                     if (return_value_type != function_return_type) {
-                        std.debug.print(
-                            "Type Error: Return statement in function with return type {any} has return value of type {any}\n",
-                            .{ self.getType(function_return_type), self.getType(return_value_type) },
-                        );
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, return_statement.return_token, "return statement expects value of type {s}, found {s}", .{ try self.typeName(function_return_type), try self.typeName(return_value_type) });
+                        return error.DiagnosticsEmitted;
                     }
                 } else {
                     if (function_return_type != self.type_store.unit_type_id) {
-                        std.debug.print(
-                            "Type Error: Return statement with no value in function with non-unit return type {any}\n",
-                            .{self.getType(function_return_type)},
-                        );
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, return_statement.return_token, "return statement is missing a value for function return type {s}", .{try self.typeName(function_return_type)});
+                        return error.DiagnosticsEmitted;
                     }
                 }
             },
@@ -1294,8 +1202,8 @@ pub const NodeTypeAnalyzer = struct {
                 .Integer => .IntegerOpen,
                 .String => .StringOpen,
                 else => {
-                    std.debug.print("Type Error: Match subject must be boolean, integer, or string in v1, got {any}\n", .{self.getType(subject_type)});
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, match_expression.match_token, "match subject must be boolean, integer, or string, found {s}", .{try self.typeName(subject_type)});
+                    return error.DiagnosticsEmitted;
                 },
             };
         } else .Subjectless;
@@ -1314,24 +1222,30 @@ pub const NodeTypeAnalyzer = struct {
                         environment.withContextAndType(.Expression, null),
                     );
                     if (condition_type != self.type_store.boolean_type_id) {
-                        std.debug.print("Type Error: Subjectless match arm condition must be boolean, got {any}\n", .{self.getType(condition_type)});
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.pattern_or_condition.primaryToken(), "subjectless match arm condition must be boolean, found {s}", .{try self.typeName(condition_type)});
+                        return error.DiagnosticsEmitted;
                     }
                 },
                 .Boolean => switch (arm.pattern_or_condition.kind) {
                     .BooleanLiteral => |token| {
                         if (token.kind.BooleanLiteral) {
-                            if (saw_true) return TypeError.DuplicateMatchArm;
+                            if (saw_true) {
+                                try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'true' match arm");
+                                return error.DiagnosticsEmitted;
+                            }
                             saw_true = true;
                         } else {
-                            if (saw_false) return TypeError.DuplicateMatchArm;
+                            if (saw_false) {
+                                try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'false' match arm");
+                                return error.DiagnosticsEmitted;
+                            }
                             saw_false = true;
                         }
                         self.type_by_node_id.put(arm.pattern_or_condition.id, self.type_store.boolean_type_id) catch unreachable;
                     },
                     else => {
-                        std.debug.print("Type Error: Boolean match arms must use boolean literals in v1\n", .{});
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "boolean match arms must use boolean literals");
+                        return error.DiagnosticsEmitted;
                     },
                 },
                 .IntegerOpen => switch (arm.pattern_or_condition.kind) {
@@ -1342,7 +1256,8 @@ pub const NodeTypeAnalyzer = struct {
                         );
                         const value = token.kind.IntLiteral;
                         if (integer_patterns.contains(value)) {
-                            return TypeError.DuplicateMatchArm;
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, token, "duplicate integer match arm for value {d}", .{value});
+                            return error.DiagnosticsEmitted;
                         }
                         integer_patterns.put(value, {}) catch unreachable;
                     },
@@ -1352,8 +1267,8 @@ pub const NodeTypeAnalyzer = struct {
                             environment.withContextAndType(.Expression, null),
                         );
                         if (pattern_type != self.type_store.integer_type_id) {
-                            std.debug.print("Type Error: Integer match arms must be integer expressions in v1\n", .{});
-                            return TypeError.TypeMismatch;
+                            try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "integer match arms must be integer expressions");
+                            return error.DiagnosticsEmitted;
                         }
                     },
                 },
@@ -1363,8 +1278,8 @@ pub const NodeTypeAnalyzer = struct {
                         environment.withContextAndType(.Expression, null),
                     );
                     if (pattern_type != self.type_store.string_type_id) {
-                        std.debug.print("Type Error: String match arms must be string expressions in v1\n", .{});
-                        return TypeError.TypeMismatch;
+                        try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "string match arms must be string expressions");
+                        return error.DiagnosticsEmitted;
                     }
                 },
             }
@@ -1375,11 +1290,8 @@ pub const NodeTypeAnalyzer = struct {
             );
             if (arm_result_type) |expected_type| {
                 if (expected_type != body_type) {
-                    std.debug.print(
-                        "Type Error: Match arms must all produce the same type, expected {any}, got {any}\n",
-                        .{ self.getType(expected_type), self.getType(body_type) },
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.body.primaryToken(), "match arms must all produce the same type, expected {s}, found {s}", .{ try self.typeName(expected_type), try self.typeName(body_type) });
+                    return error.DiagnosticsEmitted;
                 }
             } else {
                 arm_result_type = body_type;
@@ -1393,11 +1305,8 @@ pub const NodeTypeAnalyzer = struct {
             );
             if (arm_result_type) |expected_type| {
                 if (expected_type != else_type) {
-                    std.debug.print(
-                        "Type Error: Match else arm must produce the same type as other arms, expected {any}, got {any}\n",
-                        .{ self.getType(expected_type), self.getType(else_type) },
-                    );
-                    return TypeError.TypeMismatch;
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, else_arm.primaryToken(), "match else arm must produce the same type as other arms, expected {s}, found {s}", .{ try self.typeName(expected_type), try self.typeName(else_type) });
+                    return error.DiagnosticsEmitted;
                 }
             } else {
                 arm_result_type = else_type;
@@ -1411,14 +1320,14 @@ pub const NodeTypeAnalyzer = struct {
             .StringOpen => match_expression.else_arm != null,
         };
         if (!is_exhaustive) {
-            std.debug.print("Type Error: Match expression is not exhaustive in v1\n", .{});
-            return TypeError.NonExhaustiveMatch;
+            try self.diagnostic_store.emitErrorFromToken(match_expression.match_token, "match expression is not exhaustive");
+            return error.DiagnosticsEmitted;
         }
 
         const result_type = arm_result_type orelse self.type_store.unit_type_id;
         if (context == .Statement and result_type != self.type_store.unit_type_id) {
-            std.debug.print("Type Error: Match expression used as statement must evaluate to unit\n", .{});
-            return TypeError.BlockCannotProduceValue;
+            try self.diagnostic_store.emitErrorFromToken(match_expression.match_token, "match expression used as a statement must evaluate to unit");
+            return error.DiagnosticsEmitted;
         }
 
         return result_type;

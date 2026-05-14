@@ -16,14 +16,8 @@ pub const ExhaustivenessClass = enum {
 };
 
 pub const TypeError = error{
-    BlockMustProduceValue,
-    BlockCannotProduceValue,
-    TypeMismatch,
-    NonExhaustiveMatch,
-    DuplicateMatchArm,
-    CannotInferType,
-    CannotAssignToImmutable,
-    InvalidAssignmentTarget,
+    OutOfMemory,
+    DiagnosticsEmitted,
 };
 
 pub const TypeCheckEnvironment = struct {

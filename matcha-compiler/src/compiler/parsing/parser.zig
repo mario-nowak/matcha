@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexing = @import("lexing");
+const diagnostics = @import("diagnostics");
 const ast = @import("ast");
 const type_expressions = @import("type_expressions");
 
@@ -18,6 +19,7 @@ pub const BlockItem = union(enum) {
 pub const Parser = struct {
     lexer: lexing.Lexer,
     allocator: std.mem.Allocator,
+    diagnostic_store: *diagnostics.DiagnosticStore,
     next_node_id: ast.NodeId = 0,
 
     pub const ParserError = @import("parse_error.zig").ParseError;
@@ -32,10 +34,11 @@ pub const Parser = struct {
         right_binding_power: f64,
     };
 
-    pub fn init(lexer: lexing.Lexer, allocator: std.mem.Allocator) Parser {
+    pub fn init(lexer: lexing.Lexer, allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Parser {
         return .{
             .lexer = lexer,
             .allocator = allocator,
+            .diagnostic_store = diagnostic_store,
         };
     }
 
@@ -49,7 +52,7 @@ pub const Parser = struct {
         var statements = std.ArrayList(ast.Node){};
 
         while (true) {
-            const token = self.lexer.peek();
+            const token = try self.lexer.peek();
             if (token.kind == .EndOfFile) {
                 break;
             }
@@ -68,7 +71,7 @@ pub const Parser = struct {
             return try self.parseItem();
         }
 
-        const token = self.lexer.peek();
+        const token = try self.lexer.peek();
         return switch (token.kind) {
             .Val, .Var => try self.parseDeclaration(),
             .Return => try self.parseReturnStatement(),
@@ -98,14 +101,15 @@ pub const Parser = struct {
     }
 
     fn parseIfStatement(self: *Parser) ParserError!ast.Node {
-        const if_token = self.lexer.next();
+        const if_token = try self.lexer.next();
         const if_form = try self.parseIfForm(if_token);
         return switch (if_form) {
             .statement => |if_statement| if_statement,
             .expression => |if_expression| {
-                const semicolon = self.lexer.next();
+                const semicolon = try self.lexer.next();
                 if (semicolon.kind != .Semicolon) {
-                    return ParserError.ExpectedSemicolon;
+                    try self.diagnostic_store.emitErrorFromToken(semicolon, "expected ';' after if expression");
+                    return error.DiagnosticsEmitted;
                 }
                 return self.wrapExpressionStatement(if_expression);
             },
@@ -113,10 +117,11 @@ pub const Parser = struct {
     }
 
     fn parseLeaveStatement(self: *Parser) ParserError!ast.Node {
-        const leave_token = self.lexer.next();
-        const semicolon = self.lexer.next();
+        const leave_token = try self.lexer.next();
+        const semicolon = try self.lexer.next();
         if (semicolon.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon, "expected ';' after leave");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -127,10 +132,11 @@ pub const Parser = struct {
     }
 
     fn parseContinueStatement(self: *Parser) ParserError!ast.Node {
-        const continue_token = self.lexer.next();
-        const semicolon = self.lexer.next();
+        const continue_token = try self.lexer.next();
+        const semicolon = try self.lexer.next();
         if (semicolon.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon, "expected ';' after continue");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -141,7 +147,7 @@ pub const Parser = struct {
     }
 
     fn parseBlockStatement(self: *Parser) ParserError!ast.Node {
-        const left_brace = self.lexer.next();
+        const left_brace = try self.lexer.next();
         return self.parseBlock(left_brace);
     }
 
@@ -183,52 +189,58 @@ pub const Parser = struct {
 
     fn startsItemDefinition(self: *@This()) bool {
         var lookahead = self.lexer;
-        const item_token = lookahead.next();
+        const item_token = lookahead.next() catch return false;
         if (!isIdentifierNamed(item_token, "item")) {
             return false;
         }
 
-        if (lookahead.peek().kind != .Identifier) {
+        if ((lookahead.peek() catch return false).kind != .Identifier) {
             return false;
         }
-        _ = lookahead.next();
+        _ = lookahead.next() catch return false;
 
-        return switch (lookahead.peek().kind) {
+        return switch ((lookahead.peek() catch return false).kind) {
             .LeftParenthesis, .Assign => true,
             else => false,
         };
     }
 
     fn parseDeclaration(self: *Parser) ParserError!ast.Node {
-        const val_or_var_token = self.lexer.next(); // consume token
+        const val_or_var_token = try self.lexer.next(); // consume token
 
-        const identifierToken = self.lexer.next();
+        const identifierToken = try self.lexer.next();
         if (identifierToken.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(identifierToken, "expected identifier after 'val' or 'var'");
+            return error.DiagnosticsEmitted;
         }
 
-        const colon_or_equal_token = self.lexer.next();
+        const colon_or_equal_token = try self.lexer.next();
         const type_annotation: ?*type_expressions.TypeExpression = switch (colon_or_equal_token.kind) {
             .Colon => block: {
                 const parsed_type_annotation = try self.parseTypeAnnotation();
 
-                const equalToken = self.lexer.next();
+                const equalToken = try self.lexer.next();
                 if (equalToken.kind != .Assign) {
-                    return ParserError.ExpectedEqualSign;
+                    try self.diagnostic_store.emitErrorFromToken(equalToken, "expected '=' after type annotation in declaration");
+                    return error.DiagnosticsEmitted;
                 }
 
                 break :block parsed_type_annotation;
             },
             .Assign => null,
-            else => return ParserError.ExpectedColonOrEqualSign,
+            else => {
+                try self.diagnostic_store.emitErrorFromToken(colon_or_equal_token, "expected ':' or '=' after declaration name");
+                return error.DiagnosticsEmitted;
+            },
         };
 
         const value = self.allocator.create(ast.Node) catch unreachable;
         value.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolon_token = self.lexer.next();
+        const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after declaration");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -247,27 +259,28 @@ pub const Parser = struct {
     }
 
     fn parseItem(self: *@This()) ParserError!ast.Node {
-        const item_token = contextualItemToken(self.lexer.next()) orelse unreachable;
+        const item_token = contextualItemToken(try self.lexer.next()) orelse unreachable;
 
-        const identifier_token = self.lexer.next();
+        const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(identifier_token, "expected identifier after 'item'");
+            return error.DiagnosticsEmitted;
         }
 
-        const post_identifier_token = self.lexer.peek();
+        const post_identifier_token = try self.lexer.peek();
         if (post_identifier_token.kind == .LeftParenthesis) {
             return try self.parseFunctionDefinition(item_token, identifier_token);
         }
         if (post_identifier_token.kind != .Assign) {
-            std.debug.print("Expected left parenthesis or equal sign after item name, got: {any}\n", .{post_identifier_token});
-            return ParserError.ExpectedEqualSign;
+            try self.diagnostic_store.emitErrorFromToken(post_identifier_token, "expected '(' or '=' after item name");
+            return error.DiagnosticsEmitted;
         }
-        _ = self.lexer.next(); // consume equal sign
+        _ = try self.lexer.next(); // consume equal sign
 
-        const post_assign_token = self.lexer.peek();
+        const post_assign_token = try self.lexer.peek();
         if (post_assign_token.kind != .Structure) {
-            std.debug.print("Expected 'structure' keyword after item name and equal sign, got: {any}\n", .{post_assign_token});
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(post_assign_token, "expected 'structure' after '=' in item definition");
+            return error.DiagnosticsEmitted;
         }
 
         return self.parseStructureDefinition(item_token, identifier_token);
@@ -279,9 +292,10 @@ pub const Parser = struct {
         identifier_token: lexing.Token,
     ) ParserError!ast.Node {
         const structure = try self.parseStructure();
-        const semicolon_token = self.lexer.next();
+        const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after structure definition");
+            return error.DiagnosticsEmitted;
         }
         return self.createNode(.{
             .ItemDefinition = .{
@@ -295,22 +309,23 @@ pub const Parser = struct {
     fn parseStructure(
         self: *@This(),
     ) ParserError!ast.Structure {
-        const structure_token = self.lexer.next();
+        const structure_token = try self.lexer.next();
         if (structure_token.kind != .Structure) {
             unreachable;
         }
 
-        const left_brace_token = self.lexer.next();
+        const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' after 'structure'");
+            return error.DiagnosticsEmitted;
         }
 
         var function_definitions = std.ArrayList(ast.Node){};
         var fields = std.ArrayList(ast.Field){};
         while (true) {
-            const next_token = self.lexer.peek();
+            const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
-                _ = self.lexer.next();
+                _ = try self.lexer.next();
                 break;
             }
 
@@ -320,7 +335,10 @@ pub const Parser = struct {
                     .ItemDefinition => |item_definition| {
                         switch (item_definition.item) {
                             .Function => function_definitions.append(self.allocator, item) catch unreachable,
-                            else => return ParserError.ExpectedFunctionDefinitionInStructure,
+                            else => {
+                                try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside structure body");
+                                return error.DiagnosticsEmitted;
+                            },
                         }
                     },
                     else => unreachable,
@@ -328,14 +346,16 @@ pub const Parser = struct {
                 continue;
             }
 
-            const field_name_token = self.lexer.next();
+            const field_name_token = try self.lexer.next();
             if (field_name_token.kind != .Identifier) {
-                return ParserError.ExpectedIdentifierOrItem;
+                try self.diagnostic_store.emitErrorFromToken(field_name_token, "expected field name or item definition in structure body");
+                return error.DiagnosticsEmitted;
             }
 
-            const colon_token = self.lexer.next();
+            const colon_token = try self.lexer.next();
             if (colon_token.kind != .Colon) {
-                return ParserError.ExpectedColon;
+                try self.diagnostic_store.emitErrorFromToken(colon_token, "expected ':' after structure field name");
+                return error.DiagnosticsEmitted;
             }
 
             const type_annotation = try self.parseTypeAnnotation();
@@ -345,17 +365,18 @@ pub const Parser = struct {
                 .type_annotation = type_annotation,
             }) catch unreachable;
 
-            const post_field_token = self.lexer.peek();
+            const post_field_token = try self.lexer.peek();
             if (post_field_token.kind == .Semicolon) {
-                _ = self.lexer.next(); // consume semicolon and continue to next field
+                _ = try self.lexer.next(); // consume semicolon and continue to next field
             } else if (post_field_token.kind != .RightBrace) {
-                return ParserError.ExpectedSemicolon;
+                try self.diagnostic_store.emitErrorFromToken(post_field_token, "expected ';' or '}' after structure field");
+                return error.DiagnosticsEmitted;
             }
         }
 
         if (fields.items.len == 0) {
-            std.debug.print("Structures must have at least one field\n", .{});
-            return ParserError.StructureWithoutFields;
+            try self.diagnostic_store.emitErrorFromToken(structure_token, "structure must declare at least one field");
+            return error.DiagnosticsEmitted;
         }
 
         return .{
@@ -370,23 +391,25 @@ pub const Parser = struct {
         item_token: lexing.Token,
         identifier_token: lexing.Token,
     ) ParserError!ast.Node {
-        const left_parenthesis_token = self.lexer.next();
+        const left_parenthesis_token = try self.lexer.next();
         if (left_parenthesis_token.kind != .LeftParenthesis) {
-            std.debug.print("Expected left parenthesis after function name, got: {any}\n", .{left_parenthesis_token});
-            return ParserError.ExpectedOpeningParenthesis;
+            try self.diagnostic_store.emitErrorFromToken(left_parenthesis_token, "expected '(' after function name");
+            return error.DiagnosticsEmitted;
         }
 
         var parameters = std.ArrayList(ast.Parameter){};
-        var next_token = self.lexer.next();
-        while (next_token.kind != .RightParenthesis) : (next_token = self.lexer.next()) {
+        var next_token = try self.lexer.next();
+        while (next_token.kind != .RightParenthesis) : (next_token = try self.lexer.next()) {
             if (next_token.kind != .Identifier) {
-                return ParserError.ExpectedIdentifier;
+                try self.diagnostic_store.emitErrorFromToken(next_token, "expected parameter name");
+                return error.DiagnosticsEmitted;
             }
             const parameter_name_token = next_token;
 
-            const colon_token = self.lexer.next();
+            const colon_token = try self.lexer.next();
             if (colon_token.kind != .Colon) {
-                return ParserError.ExpectedColonOrEqualSign;
+                try self.diagnostic_store.emitErrorFromToken(colon_token, "expected ':' after parameter name");
+                return error.DiagnosticsEmitted;
             }
 
             const type_annotation = try self.parseTypeAnnotation();
@@ -396,36 +419,41 @@ pub const Parser = struct {
                 .type_annotation = type_annotation,
             }) catch unreachable;
 
-            const post_parameter_token = self.lexer.peek();
+            const post_parameter_token = try self.lexer.peek();
             if (post_parameter_token.kind == .Comma) {
-                _ = self.lexer.next(); // consume comma and continue to next parameter
+                _ = try self.lexer.next(); // consume comma and continue to next parameter
             } else if (post_parameter_token.kind != .RightParenthesis) {
-                return ParserError.ExpectedCommaOrClosingParenthesis;
+                try self.diagnostic_store.emitErrorFromToken(post_parameter_token, "expected ',' or ')' after parameter");
+                return error.DiagnosticsEmitted;
             }
         }
 
         if (next_token.kind != .RightParenthesis) {
-            return ParserError.MissingClosingParenthesis;
+            try self.diagnostic_store.emitErrorFromToken(next_token, "expected ')' after parameter list");
+            return error.DiagnosticsEmitted;
         }
 
-        const colon_token = self.lexer.next();
+        const colon_token = try self.lexer.next();
         if (colon_token.kind != .Colon) {
-            return ParserError.ExpectedColon;
+            try self.diagnostic_store.emitErrorFromToken(colon_token, "expected ':' before function return type");
+            return error.DiagnosticsEmitted;
         }
 
         const return_type_annotation = try self.parseTypeAnnotation();
 
-        const assign_token = self.lexer.next();
+        const assign_token = try self.lexer.next();
         if (assign_token.kind != .Assign) {
-            return ParserError.ExpectedEqualSign;
+            try self.diagnostic_store.emitErrorFromToken(assign_token, "expected '=' before function body");
+            return error.DiagnosticsEmitted;
         }
 
         const body_expression = self.allocator.create(ast.Node) catch unreachable;
         body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolon_token = self.lexer.next();
+        const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after function definition");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -444,19 +472,19 @@ pub const Parser = struct {
     }
 
     fn parseTypeAnnotation(self: *@This()) ParserError!*type_expressions.TypeExpression {
-        var type_expression_parser = TypeExpressionParser.init(&self.lexer, self.allocator);
+        var type_expression_parser = TypeExpressionParser.init(&self.lexer, self.allocator, self.diagnostic_store);
         return type_expression_parser.parse();
     }
 
     fn parseReturnStatement(self: *@This()) ParserError!ast.Node {
-        const return_token = self.lexer.next();
+        const return_token = try self.lexer.next();
         if (return_token.kind != .Return) {
             unreachable;
         }
 
-        const post_return_token = self.lexer.peek();
+        const post_return_token = try self.lexer.peek();
         if (post_return_token.kind == .Semicolon) {
-            _ = self.lexer.next(); // consume semicolon
+            _ = try self.lexer.next(); // consume semicolon
             return self.createNode(.{
                 .Return = .{
                     .return_token = return_token,
@@ -468,9 +496,10 @@ pub const Parser = struct {
         const expression = self.allocator.create(ast.Node) catch unreachable;
         expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolon_token = self.lexer.next();
+        const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after return value");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -482,14 +511,15 @@ pub const Parser = struct {
     }
 
     fn parseLoopStatement(self: *@This()) ParserError!ast.Node {
-        const loop_token = self.lexer.next();
+        const loop_token = try self.lexer.next();
         if (loop_token.kind != .Loop) {
             unreachable;
         }
 
-        const left_brace = self.lexer.next();
+        const left_brace = try self.lexer.next();
         if (left_brace.kind != .LeftBrace) {
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(left_brace, "expected '{' after 'loop'");
+            return error.DiagnosticsEmitted;
         }
 
         const body_block = self.allocator.create(ast.Node) catch unreachable;
@@ -504,7 +534,7 @@ pub const Parser = struct {
     }
 
     fn parseWhileStatement(self: *@This()) ParserError!ast.Node {
-        const while_token = self.lexer.next();
+        const while_token = try self.lexer.next();
         if (while_token.kind != .While) {
             unreachable;
         }
@@ -516,20 +546,20 @@ pub const Parser = struct {
         });
 
         var update: ?*ast.Node = null;
-        var post_condition_token = self.lexer.peek();
+        var post_condition_token = try self.lexer.peek();
         if (post_condition_token.kind == .Colon) {
-            _ = self.lexer.next();
+            _ = try self.lexer.next();
             const assignment_statement = self.allocator.create(ast.Node) catch unreachable;
             assignment_statement.* = try self.parseAssignmentStatement(.{ .require_semicolon = false });
             update = assignment_statement;
-            post_condition_token = self.lexer.peek();
+            post_condition_token = try self.lexer.peek();
         }
 
         if (post_condition_token.kind != .LeftBrace) {
-            std.debug.print("Expected left brace after while condition (and optional update), got: {any}\n", .{post_condition_token});
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(post_condition_token, "expected '{' after while condition");
+            return error.DiagnosticsEmitted;
         }
-        const left_brace_token = self.lexer.next();
+        const left_brace_token = try self.lexer.next();
 
         const body = self.allocator.create(ast.Node) catch unreachable;
         body.* = try self.parseBlock(left_brace_token);
@@ -545,19 +575,21 @@ pub const Parser = struct {
     }
 
     fn parseForStatement(self: *@This()) ParserError!ast.Node {
-        const for_token = self.lexer.next();
+        const for_token = try self.lexer.next();
         if (for_token.kind != .For) {
             unreachable;
         }
 
-        const item_name = self.lexer.next();
+        const item_name = try self.lexer.next();
         if (item_name.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(item_name, "expected loop variable name after 'for'");
+            return error.DiagnosticsEmitted;
         }
 
-        const in_token = self.lexer.next();
+        const in_token = try self.lexer.next();
         if (in_token.kind != .In) {
-            return ParserError.ExpectedIn;
+            try self.diagnostic_store.emitErrorFromToken(in_token, "expected 'in' after loop variable");
+            return error.DiagnosticsEmitted;
         }
 
         const iterable = self.allocator.create(ast.Node) catch unreachable;
@@ -566,10 +598,10 @@ pub const Parser = struct {
             .allow_structure_construction = false,
         });
 
-        const left_brace_token = self.lexer.next();
+        const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
-            std.debug.print("Expected left brace after for iterable, got: {any}\n", .{left_brace_token});
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' after for iterable");
+            return error.DiagnosticsEmitted;
         }
 
         const body = self.allocator.create(ast.Node) catch unreachable;
@@ -590,7 +622,7 @@ pub const Parser = struct {
         const target = self.allocator.create(ast.Node) catch unreachable;
         target.* = try self.parsePlaceExpression();
 
-        const assignment_token = self.lexer.next();
+        const assignment_token = try self.lexer.next();
         const assignment_operator = switch (assignment_token.kind) {
             .Assign => ast.AssignmentOperator.Assign,
             .PlusAssign => ast.AssignmentOperator{ .Compound = .Add },
@@ -599,16 +631,18 @@ pub const Parser = struct {
             else => null,
         };
         if (assignment_operator == null) {
-            return ParserError.ExpectedEqualSign;
+            try self.diagnostic_store.emitErrorFromToken(assignment_token, "expected assignment operator");
+            return error.DiagnosticsEmitted;
         }
 
         const value = self.allocator.create(ast.Node) catch unreachable;
         value.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         if (options.require_semicolon) {
-            const semicolon_token = self.lexer.next();
+            const semicolon_token = try self.lexer.next();
             if (semicolon_token.kind != .Semicolon) {
-                return ParserError.ExpectedSemicolon;
+                try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after assignment");
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -624,23 +658,23 @@ pub const Parser = struct {
 
     fn startsAssignmentStatement(self: *@This()) bool {
         var lookahead = self.lexer;
-        if (lookahead.peek().kind != .Identifier) return false;
+        if ((lookahead.peek() catch return false).kind != .Identifier) return false;
 
-        _ = lookahead.next();
+        _ = lookahead.next() catch return false;
         while (true) {
-            switch (lookahead.peek().kind) {
+            switch ((lookahead.peek() catch return false).kind) {
                 .Dot => {
-                    _ = lookahead.next();
-                    if (lookahead.peek().kind != .Identifier) {
+                    _ = lookahead.next() catch return false;
+                    if ((lookahead.peek() catch return false).kind != .Identifier) {
                         return false;
                     }
-                    _ = lookahead.next();
+                    _ = lookahead.next() catch return false;
                 },
                 .LeftBracket => {
-                    _ = lookahead.next();
+                    _ = lookahead.next() catch return false;
                     var bracket_depth: usize = 1;
                     while (bracket_depth > 0) {
-                        const next_token = lookahead.next();
+                        const next_token = lookahead.next() catch return false;
                         switch (next_token.kind) {
                             .LeftBracket => bracket_depth += 1,
                             .RightBracket => bracket_depth -= 1,
@@ -653,21 +687,22 @@ pub const Parser = struct {
             }
         }
 
-        return switch (lookahead.peek().kind) {
+        return switch ((lookahead.peek() catch return false).kind) {
             .Assign, .PlusAssign, .MinusAssign, .AsteriskAssign => true,
             else => false,
         };
     }
 
     fn parsePlaceExpression(self: *@This()) ParserError!ast.Node {
-        const identifier_token = self.lexer.next();
+        const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(identifier_token, "expected identifier");
+            return error.DiagnosticsEmitted;
         }
 
         var target = self.createNode(.{ .Identifier = identifier_token });
         while (true) {
-            switch (self.lexer.peek().kind) {
+            switch ((try self.lexer.peek()).kind) {
                 .Dot => target = try self.parseMemberAccessExpression(target),
                 .LeftBracket => target = try self.parseIndexAccessExpression(target),
                 else => break,
@@ -679,7 +714,8 @@ pub const Parser = struct {
 
     fn parseIfForm(self: *Parser, if_token: lexing.Token) ParserError!ParsedIf {
         if (if_token.kind != .If) {
-            return ParserError.ExpectedIf;
+            try self.diagnostic_store.emitErrorFromToken(if_token, "expected 'if'");
+            return error.DiagnosticsEmitted;
         }
 
         const condition = self.allocator.create(ast.Node) catch unreachable;
@@ -688,22 +724,24 @@ pub const Parser = struct {
             .allow_structure_construction = false,
         });
 
-        const then_branch_left_brace_token = self.lexer.next();
+        const then_branch_left_brace_token = try self.lexer.next();
         if (then_branch_left_brace_token.kind != .LeftBrace) {
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(then_branch_left_brace_token, "expected '{' after if condition");
+            return error.DiagnosticsEmitted;
         }
 
         const then_branch = self.allocator.create(ast.Node) catch unreachable;
 
         then_branch.* = try self.parseBlock(then_branch_left_brace_token);
 
-        const post_then_branch_token = self.lexer.peek();
+        const post_then_branch_token = try self.lexer.peek();
         if (post_then_branch_token.kind == .Else) {
-            const else_token = self.lexer.next();
+            const else_token = try self.lexer.next();
 
-            const else_branch_left_brace_token = self.lexer.next();
+            const else_branch_left_brace_token = try self.lexer.next();
             if (else_branch_left_brace_token.kind != .LeftBrace) {
-                return ParserError.ExpectedLeftBrace;
+                try self.diagnostic_store.emitErrorFromToken(else_branch_left_brace_token, "expected '{' after 'else'");
+                return error.DiagnosticsEmitted;
             }
             const else_block = self.allocator.create(ast.Node) catch unreachable;
             else_block.* = try self.parseBlock(else_branch_left_brace_token);
@@ -734,11 +772,12 @@ pub const Parser = struct {
 
     fn parseMatchExpression(self: *Parser, match_token: lexing.Token) ParserError!ast.Node {
         if (match_token.kind != .Match) {
-            return ParserError.ExpectedMatch;
+            try self.diagnostic_store.emitErrorFromToken(match_token, "expected 'match'");
+            return error.DiagnosticsEmitted;
         }
 
         var subject: ?*ast.Node = null;
-        const post_match_token = self.lexer.peek();
+        const post_match_token = try self.lexer.peek();
         if (post_match_token.kind != .LeftBrace) {
             const subject_node = self.allocator.create(ast.Node) catch unreachable;
             subject_node.* = try self.parseExpression(.{
@@ -748,9 +787,10 @@ pub const Parser = struct {
             subject = subject_node;
         }
 
-        const left_brace_token = self.lexer.next();
+        const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start match body");
+            return error.DiagnosticsEmitted;
         }
 
         var arms = std.ArrayList(ast.MatchArm){};
@@ -758,17 +798,18 @@ pub const Parser = struct {
         var else_arm: ?*ast.Node = null;
 
         while (true) {
-            const next_token = self.lexer.peek();
+            const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
-                _ = self.lexer.next();
+                _ = try self.lexer.next();
                 break;
             }
 
             if (next_token.kind == .Else) {
-                else_token = self.lexer.next();
-                const arrow_token = self.lexer.next();
+                else_token = try self.lexer.next();
+                const arrow_token = try self.lexer.next();
                 if (arrow_token.kind != .FatArrow) {
-                    return ParserError.ExpectedFatArrow;
+                    try self.diagnostic_store.emitErrorFromToken(arrow_token, "expected '=>' after 'else' in match expression");
+                    return error.DiagnosticsEmitted;
                 }
 
                 const body = self.allocator.create(ast.Node) catch unreachable;
@@ -778,9 +819,10 @@ pub const Parser = struct {
                 const pattern_or_condition = self.allocator.create(ast.Node) catch unreachable;
                 pattern_or_condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-                const arrow_token = self.lexer.next();
+                const arrow_token = try self.lexer.next();
                 if (arrow_token.kind != .FatArrow) {
-                    return ParserError.ExpectedFatArrow;
+                    try self.diagnostic_store.emitErrorFromToken(arrow_token, "expected '=>' in match arm");
+                    return error.DiagnosticsEmitted;
                 }
 
                 const body = self.allocator.create(ast.Node) catch unreachable;
@@ -793,13 +835,16 @@ pub const Parser = struct {
                 }) catch unreachable;
             }
 
-            const separator_or_end = self.lexer.peek();
+            const separator_or_end = try self.lexer.peek();
             switch (separator_or_end.kind) {
                 .Comma => {
-                    _ = self.lexer.next();
+                    _ = try self.lexer.next();
                 },
                 .RightBrace => {},
-                else => return ParserError.ExpectedSemicolon,
+                else => {
+                    try self.diagnostic_store.emitErrorFromToken(separator_or_end, "expected ',' or '}' after match arm");
+                    return error.DiagnosticsEmitted;
+                },
             }
         }
 
@@ -823,7 +868,7 @@ pub const Parser = struct {
             switch (block_item) {
                 .statement => |statement| {
                     statements.append(self.allocator, statement) catch unreachable;
-                    const post_statement_token = self.lexer.peek();
+                    const post_statement_token = try self.lexer.peek();
                     if (post_statement_token.kind == .RightBrace) {
                         // Done parsing the block. It finished with a statement, so there is no result expression.
                         break;
@@ -839,7 +884,7 @@ pub const Parser = struct {
             }
         }
 
-        const right_brace_token = self.lexer.next();
+        const right_brace_token = try self.lexer.next();
 
         return self.createNode(.{
             .Block = .{
@@ -852,7 +897,7 @@ pub const Parser = struct {
     }
 
     fn parseBlockItem(self: *Parser) ParserError!BlockItem {
-        const token = self.lexer.peek();
+        const token = try self.lexer.peek();
         if (Parser.startsStatementOnlyConstruct(token)) {
             const statement = try self.parseStatement();
             return .{ .statement = statement };
@@ -870,36 +915,39 @@ pub const Parser = struct {
         }
 
         const expression = try self.parseExpression(.{ .current_binding_power = 0 });
-        const post_expression_token = self.lexer.peek();
+        const post_expression_token = try self.lexer.peek();
         switch (post_expression_token.kind) {
             .Semicolon => {
-                _ = self.lexer.next(); // consume semicolon
+                _ = try self.lexer.next(); // consume semicolon
                 return .{ .statement = self.wrapExpressionStatement(expression) };
             },
             .RightBrace => return .{
                 .expression = expression,
             },
             else => {
-                std.debug.print("Expected semicolon, got: {any}", .{post_expression_token.kind});
-                return ParserError.ExpectedSemicolon;
+                try self.diagnostic_store.emitErrorFromToken(post_expression_token, "expected ';' after expression");
+                return error.DiagnosticsEmitted;
             },
         }
     }
 
     fn parseIfBlockItem(self: *Parser) ParserError!BlockItem {
-        const if_token = self.lexer.next();
+        const if_token = try self.lexer.next();
         const if_form = try self.parseIfForm(if_token);
         return switch (if_form) {
             .statement => |if_statement| .{ .statement = if_statement },
             .expression => |if_expression| {
-                const post_if_expression_token = self.lexer.peek();
+                const post_if_expression_token = try self.lexer.peek();
                 switch (post_if_expression_token.kind) {
                     .Semicolon => {
-                        _ = self.lexer.next();
+                        _ = try self.lexer.next();
                         return .{ .statement = self.wrapExpressionStatement(if_expression) };
                     },
                     .RightBrace => return .{ .expression = if_expression },
-                    else => return ParserError.ExpectedSemicolon,
+                    else => {
+                        try self.diagnostic_store.emitErrorFromToken(post_if_expression_token, "expected ';' after if expression");
+                        return error.DiagnosticsEmitted;
+                    },
                 }
             },
         };
@@ -908,29 +956,31 @@ pub const Parser = struct {
     fn parseExpressionStatement(self: *Parser) ParserError!ast.Node {
         const expression = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolonToken = self.lexer.next();
+        const semicolonToken = try self.lexer.next();
         if (semicolonToken.kind != .Semicolon) {
-            return ParserError.ExpectedSemicolon;
+            try self.diagnostic_store.emitErrorFromToken(semicolonToken, "expected ';' after expression");
+            return error.DiagnosticsEmitted;
         }
 
         return self.wrapExpressionStatement(expression);
     }
 
     pub fn parseExpression(self: *Parser, state: ParseState) ParserError!ast.Node {
-        const token = self.lexer.next();
+        const token = try self.lexer.next();
         var left_hand_side = try self.parsePrefixExpression(token, state);
 
         if (token.kind == .LeftParenthesis) {
-            const next_token = self.lexer.peek();
+            const next_token = try self.lexer.peek();
             if (next_token.kind != .RightParenthesis) {
-                return ParserError.MissingClosingParenthesis;
+                try self.diagnostic_store.emitErrorFromToken(next_token, "expected ')' to close grouped expression");
+                return error.DiagnosticsEmitted;
             }
-            _ = self.lexer.next();
+            _ = try self.lexer.next();
         }
 
         while (true) {
             // Find the next operator without consuming it
-            const next_token = self.lexer.peek();
+            const next_token = try self.lexer.peek();
 
             if (next_token.kind == .LeftParenthesis) {
                 left_hand_side = try self.parseCalleeExpression(left_hand_side);
@@ -958,7 +1008,7 @@ pub const Parser = struct {
                 // first before we can incorporate it into the current expression.
                 // Therefore, we consume the currently peeked operator and parse whatever is to the right hand side of
                 // our current operator.
-                _ = self.lexer.next();
+                _ = try self.lexer.next();
                 const right_hand_side = self.allocator.create(ast.Node) catch unreachable;
                 right_hand_side.* = try self.parseExpression(.{
                     .current_binding_power = operator.right_binding_power,
@@ -1047,17 +1097,21 @@ pub const Parser = struct {
             .LeftBracket => try self.parseArrayLiteral(token),
             .LeftParenthesis => try self.parseExpression(.{ .current_binding_power = 0 }),
             .LeftBrace => try self.parseBlock(token),
+            .Else => {
+                try self.diagnostic_store.emitErrorFromToken(token, "unexpected 'else'");
+                return error.DiagnosticsEmitted;
+            },
             .Minus => try self.parseUnaryExpression(token, .Negate, state),
             .Not => try self.parseUnaryExpression(token, .Not, state),
             else => {
-                std.debug.print("Expected expression starter, got: {any}\n", .{token});
-                return ParserError.ExpectedIdentifier;
+                try self.diagnostic_store.emitErrorFromToken(token, "expected expression");
+                return error.DiagnosticsEmitted;
             },
         };
     }
 
     fn parseIdentifierExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
-        const post_identifier_token = self.lexer.peek();
+        const post_identifier_token = try self.lexer.peek();
         if (state.allow_structure_construction and post_identifier_token.kind == .LeftBrace) {
             return self.parseStructureConstruction(token);
         }
@@ -1065,19 +1119,23 @@ pub const Parser = struct {
     }
 
     fn parseDotExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
-        const post_dot_token = self.lexer.peek();
+        const post_dot_token = try self.lexer.peek();
         if (state.allow_structure_construction and post_dot_token.kind == .LeftBrace) {
             return self.parseAnonymousStructureLiteral(token);
         }
 
-        std.debug.print("Expected expression starter, got: {any}\n", .{token});
-        return ParserError.ExpectedIdentifier;
+        try self.diagnostic_store.emitErrorFromToken(token, "expected '{' after '.' in anonymous structure literal");
+
+        return error.DiagnosticsEmitted;
     }
 
     fn parseIfExpression(self: *Parser, token: lexing.Token) ParserError!ast.Node {
         const if_form = try self.parseIfForm(token);
         return switch (if_form) {
-            .statement => |_| ParserError.ExpectedIdentifier, // TODO: dedicated if-expression parse error
+            .statement => |_| {
+                try self.diagnostic_store.emitErrorFromToken(token, "expected 'else' branch in if expression");
+                return error.DiagnosticsEmitted;
+            },
             .expression => |if_expression| if_expression,
         };
     }
@@ -1132,27 +1190,30 @@ pub const Parser = struct {
         left_brace_token: lexing.Token,
         fields: []ast.StructureConstructionField,
     } {
-        const left_brace_token = self.lexer.next();
+        const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
-            return ParserError.ExpectedLeftBrace;
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start structure construction");
+            return error.DiagnosticsEmitted;
         }
 
         var fields = std.ArrayList(ast.StructureConstructionField){};
         while (true) {
-            const next_token = self.lexer.peek();
+            const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
-                _ = self.lexer.next();
+                _ = try self.lexer.next();
                 break;
             }
 
-            const field_name_token = self.lexer.next();
+            const field_name_token = try self.lexer.next();
             if (field_name_token.kind != .Identifier) {
-                return ParserError.ExpectedIdentifier;
+                try self.diagnostic_store.emitErrorFromToken(field_name_token, "expected field name in structure construction");
+                return error.DiagnosticsEmitted;
             }
 
-            const assign_token = self.lexer.next();
+            const assign_token = try self.lexer.next();
             if (assign_token.kind != .Assign) {
-                return ParserError.ExpectedAssign;
+                try self.diagnostic_store.emitErrorFromToken(assign_token, "expected '=' after field name in structure construction");
+                return error.DiagnosticsEmitted;
             }
 
             const value_expression = self.allocator.create(ast.Node) catch unreachable;
@@ -1164,11 +1225,12 @@ pub const Parser = struct {
                 .value = value_expression,
             }) catch unreachable;
 
-            const post_field_token = self.lexer.peek();
+            const post_field_token = try self.lexer.peek();
             if (post_field_token.kind == .Comma) {
-                _ = self.lexer.next(); // consume comma and continue to next field
+                _ = try self.lexer.next(); // consume comma and continue to next field
             } else if (post_field_token.kind != .RightBrace) {
-                return ParserError.ExpectedCommaOrRightBrace;
+                try self.diagnostic_store.emitErrorFromToken(post_field_token, "expected ',' or '}' after structure field");
+                return error.DiagnosticsEmitted;
             }
         }
 
@@ -1179,17 +1241,18 @@ pub const Parser = struct {
     }
 
     pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) ParserError!ast.Node {
-        const left_parenthesis = self.lexer.next();
+        const left_parenthesis = try self.lexer.next();
         if (left_parenthesis.kind != .LeftParenthesis) {
-            return ParserError.ExpectedOpeningParenthesis;
+            try self.diagnostic_store.emitErrorFromToken(left_parenthesis, "expected '(' to start argument list");
+            return error.DiagnosticsEmitted;
         }
 
-        var next_token = self.lexer.peek();
+        var next_token = try self.lexer.peek();
         var arguments = std.ArrayList(ast.Node){};
 
-        while (true) : (next_token = self.lexer.peek()) {
+        while (true) : (next_token = try self.lexer.peek()) {
             if (next_token.kind == .RightParenthesis) {
-                const right_parenthesis = self.lexer.next();
+                const right_parenthesis = try self.lexer.next();
 
                 const callee = self.allocator.create(ast.Node) catch unreachable;
                 callee.* = left_hand_size;
@@ -1205,7 +1268,7 @@ pub const Parser = struct {
             }
 
             if (next_token.kind == .Comma) {
-                _ = self.lexer.next(); // consume comma
+                _ = try self.lexer.next(); // consume comma
                 continue;
             }
 
@@ -1221,16 +1284,16 @@ pub const Parser = struct {
 
         var elements = std.ArrayList(ast.Node){};
         while (true) {
-            if (self.lexer.peek().kind == .RightBracket) {
+            if ((try self.lexer.peek()).kind == .RightBracket) {
                 break;
             }
             const element = try self.parseExpression(.{ .current_binding_power = 0 });
             elements.append(self.allocator, element) catch unreachable;
 
-            const post_element_token = self.lexer.peek();
+            const post_element_token = try self.lexer.peek();
             if (post_element_token.kind == .Comma) {
-                _ = self.lexer.next();
-                if (self.lexer.peek().kind == .RightBracket) {
+                _ = try self.lexer.next();
+                if ((try self.lexer.peek()).kind == .RightBracket) {
                     break;
                 }
                 continue;
@@ -1238,12 +1301,14 @@ pub const Parser = struct {
             if (post_element_token.kind == .RightBracket) {
                 break;
             }
-            return ParserError.ExpectedCommaOrRightBracket;
+            try self.diagnostic_store.emitErrorFromToken(post_element_token, "expected ',' or ']' after array element");
+            return error.DiagnosticsEmitted;
         }
 
-        const right_bracket_token = self.lexer.next();
+        const right_bracket_token = try self.lexer.next();
         if (right_bracket_token.kind != .RightBracket) {
-            return ParserError.ExpectedRightBracket;
+            try self.diagnostic_store.emitErrorFromToken(right_bracket_token, "expected ']' after array literal");
+            return error.DiagnosticsEmitted;
         }
 
         return self.createNode(.{
@@ -1256,7 +1321,7 @@ pub const Parser = struct {
     }
 
     fn parseIndexAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
-        const left_bracket_token = self.lexer.next();
+        const left_bracket_token = try self.lexer.next();
         if (left_bracket_token.kind != .LeftBracket) {
             unreachable;
         }
@@ -1264,9 +1329,10 @@ pub const Parser = struct {
         const index = self.allocator.create(ast.Node) catch unreachable;
         index.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const right_bracket_token = self.lexer.next();
+        const right_bracket_token = try self.lexer.next();
         if (right_bracket_token.kind != .RightBracket) {
-            return ParserError.ExpectedRightBracket;
+            try self.diagnostic_store.emitErrorFromToken(right_bracket_token, "expected ']' after index expression");
+            return error.DiagnosticsEmitted;
         }
 
         const base = self.allocator.create(ast.Node) catch unreachable;
@@ -1283,14 +1349,15 @@ pub const Parser = struct {
     }
 
     fn parseMemberAccessExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
-        const dot_token = self.lexer.next();
+        const dot_token = try self.lexer.next();
         if (dot_token.kind != .Dot) {
             unreachable;
         }
 
-        const member_name_token = self.lexer.next();
+        const member_name_token = try self.lexer.next();
         if (member_name_token.kind != .Identifier) {
-            return ParserError.ExpectedIdentifier;
+            try self.diagnostic_store.emitErrorFromToken(member_name_token, "expected member name after '.'");
+            return error.DiagnosticsEmitted;
         }
 
         const base = self.allocator.create(ast.Node) catch unreachable;

@@ -2,12 +2,8 @@ const std = @import("std");
 const ast = @import("ast");
 
 pub const ControlFlowValidationError = error{
-    LeaveUsedOutsideOfLoop,
-    ContinueUsedOutsideOfLoop,
-    ItemDefinitionInNonTopLevel,
-    NotAllPathsReturnValue,
-    ReturnWithoutValueInNonUnitFunction,
-    ReturnUsedOutsideOfFunction,
+    OutOfMemory,
+    DiagnosticsEmitted,
 };
 
 pub const ExitBehavior = enum {

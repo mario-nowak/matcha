@@ -1,7 +1,13 @@
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const tokens = @import("token.zig");
 const TokenKind = tokens.TokenKind;
 const Token = tokens.Token;
+
+pub const LexError = error{
+    OutOfMemory,
+    DiagnosticsEmitted,
+};
 
 pub const Lexer = struct {
     source: []const u8,
@@ -10,11 +16,13 @@ pub const Lexer = struct {
     offsetInSource: usize,
     offsetInToken: u32,
     allocator: std.mem.Allocator,
+    diagnostic_store: *diagnostics.DiagnosticStore,
 
-    pub fn init(source: []const u8, allocator: std.mem.Allocator) Lexer {
+    pub fn init(source: []const u8, allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
         return .{
             .source = source,
             .allocator = allocator,
+            .diagnostic_store = diagnostic_store,
             .line = 1,
             .column = 1,
             .offsetInSource = 0,
@@ -26,7 +34,7 @@ pub const Lexer = struct {
         _ = self;
     }
 
-    pub fn next(self: *Lexer) Token {
+    pub fn next(self: *Lexer) LexError!Token {
         self.skipTrivia();
 
         if (self.done()) {
@@ -53,12 +61,12 @@ pub const Lexer = struct {
         return self.lexOperator();
     }
 
-    pub fn peek(self: *Lexer) Token {
+    pub fn peek(self: *Lexer) LexError!Token {
         const lineBeforeNext = self.line;
         const columnBeforeNext = self.column;
         const offsetInSourceBeforeNext = self.offsetInSource;
 
-        const nextToken = self.next();
+        const nextToken = try self.next();
 
         self.line = lineBeforeNext;
         self.column = columnBeforeNext;
@@ -69,6 +77,27 @@ pub const Lexer = struct {
 
     pub fn done(self: *Lexer) bool {
         return self.offsetInSource >= self.source.len;
+    }
+
+    fn emitError(
+        self: *Lexer,
+        line: usize,
+        column: usize,
+        offset_in_source: usize,
+        len_in_source: u32,
+        message: []const u8,
+    ) LexError {
+        self.diagnostic_store.emit(.{
+            .severity = .@"error",
+            .message = message,
+            .span = .{
+                .line = line,
+                .column = column,
+                .byte_offset = offset_in_source,
+                .byte_len = len_in_source,
+            },
+        }) catch return error.OutOfMemory;
+        return error.DiagnosticsEmitted;
     }
 
     fn isAlphabetic(character: u8) bool {
@@ -140,7 +169,7 @@ pub const Lexer = struct {
         return token;
     }
 
-    fn lexStringLiteral(self: *Lexer) Token {
+    fn lexStringLiteral(self: *Lexer) LexError!Token {
         const start_line = self.line;
         const start_column = self.column;
         const start_offset = self.offsetInSource;
@@ -176,13 +205,13 @@ pub const Lexer = struct {
 
                 if (self.done()) {
                     const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-                    return Token{
-                        .line = start_line,
-                        .column = start_column,
-                        .offsetInSource = start_offset,
-                        .lenInSource = total_length,
-                        .kind = .{ .Error = .{ .message = "Unterminated string literal" } },
-                    };
+                    return self.emitError(
+                        start_line,
+                        start_column,
+                        start_offset,
+                        total_length,
+                        "unterminated string literal",
+                    );
                 }
 
                 const escaped_character = self.source[self.offsetInSource];
@@ -196,13 +225,13 @@ pub const Lexer = struct {
                         self.offsetInSource += 1;
                         self.column += 1;
                         const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-                        return Token{
-                            .line = start_line,
-                            .column = start_column,
-                            .offsetInSource = start_offset,
-                            .lenInSource = total_length,
-                            .kind = .{ .Error = .{ .message = "Unknown string escape sequence" } },
-                        };
+                        return self.emitError(
+                            start_line,
+                            start_column,
+                            start_offset,
+                            total_length,
+                            "unknown string escape sequence",
+                        );
                     },
                 };
                 content.append(self.allocator, decoded_character) catch unreachable;
@@ -217,17 +246,16 @@ pub const Lexer = struct {
         }
 
         const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-
-        return Token{
-            .line = start_line,
-            .column = start_column,
-            .offsetInSource = start_offset,
-            .lenInSource = total_length,
-            .kind = .{ .Error = .{ .message = "Unterminated string literal" } },
-        };
+        return self.emitError(
+            start_line,
+            start_column,
+            start_offset,
+            total_length,
+            "unterminated string literal",
+        );
     }
 
-    fn lexOperator(self: *Lexer) Token {
+    fn lexOperator(self: *Lexer) LexError!Token {
         const character = self.source[self.offsetInSource];
         if (self.offsetInSource + 1 < self.source.len) {
             const nextCharacter = self.source[self.offsetInSource + 1];
@@ -258,37 +286,45 @@ pub const Lexer = struct {
             }
         }
 
-        const token = Token{
-            .line = self.line,
-            .column = self.column,
-            .offsetInSource = self.offsetInSource,
-            .lenInSource = 1,
-            .kind = switch (character) {
-                '=' => .Assign,
-                '(' => .LeftParenthesis,
-                ')' => .RightParenthesis,
-                '{' => .LeftBrace,
-                '}' => .RightBrace,
-                '[' => .LeftBracket,
-                ']' => .RightBracket,
-                ':' => .Colon,
-                ';' => .Semicolon,
-                '+' => .Plus,
-                '-' => .Minus,
-                '*' => .Asterisk,
-                '/' => .Slash,
-                '<' => .LessThan,
-                '>' => .GreaterThan,
-                ',' => .Comma,
-                '.' => .Dot,
-                else => .{ .Error = .{ .message = "Unrecognized character" } },
-            },
+        const line = self.line;
+        const column = self.column;
+        const offset_in_source = self.offsetInSource;
+
+        const kind: ?TokenKind = switch (character) {
+            '=' => .Assign,
+            '(' => .LeftParenthesis,
+            ')' => .RightParenthesis,
+            '{' => .LeftBrace,
+            '}' => .RightBrace,
+            '[' => .LeftBracket,
+            ']' => .RightBracket,
+            ':' => .Colon,
+            ';' => .Semicolon,
+            '+' => .Plus,
+            '-' => .Minus,
+            '*' => .Asterisk,
+            '/' => .Slash,
+            '<' => .LessThan,
+            '>' => .GreaterThan,
+            ',' => .Comma,
+            '.' => .Dot,
+            else => null,
         };
 
         self.offsetInSource += 1;
         self.column += 1;
 
-        return token;
+        if (kind) |resolved_kind| {
+            return Token{
+                .line = line,
+                .column = column,
+                .offsetInSource = offset_in_source,
+                .lenInSource = 1,
+                .kind = resolved_kind,
+            };
+        }
+
+        return self.emitError(line, column, offset_in_source, 1, "unrecognized character");
     }
 
     fn asBooleanLiteral(alphanumeric: []const u8) ?TokenKind {

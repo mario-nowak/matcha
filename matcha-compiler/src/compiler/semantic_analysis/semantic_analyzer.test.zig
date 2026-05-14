@@ -1,5 +1,6 @@
 const std = @import("std");
 const helpers = @import("../test_helpers.zig");
+const diagnostics = @import("diagnostics");
 const ast = @import("ast");
 const typing = @import("typing");
 
@@ -14,15 +15,18 @@ fn expectAnalyzeError(expected: anyerror, source: []const u8) !void {
     defer parsed.deinit();
 
     const allocator = parsed.allocator();
-    const name_resolver = @import("semantic_analysis").name_resolution.NameResolver.init(allocator);
+    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
+    defer diagnostic_store.deinit();
+
+    const name_resolver = @import("semantic_analysis").name_resolution.NameResolver.init(allocator, &diagnostic_store);
     const type_seeder = @import("semantic_analysis").type_checking.TypeSeeder.init();
-    const node_type_analyzer = @import("semantic_analysis").type_checking.NodeTypeAnalyzer.init(allocator);
+    const node_type_analyzer = @import("semantic_analysis").type_checking.NodeTypeAnalyzer.init(allocator, &diagnostic_store);
     const type_checker = @import("semantic_analysis").type_checking.TypeChecker.init(
         type_seeder,
         node_type_analyzer,
     );
-    const structural_validator = @import("semantic_analysis").control_flow_validation.StructuralValidator.init();
-    const exit_behavior_analyzer = @import("semantic_analysis").control_flow_validation.ExitBehaviorAnalyzer.init(allocator);
+    const structural_validator = @import("semantic_analysis").control_flow_validation.StructuralValidator.init(&diagnostic_store);
+    const exit_behavior_analyzer = @import("semantic_analysis").control_flow_validation.ExitBehaviorAnalyzer.init(allocator, &diagnostic_store);
     const control_flow_validator = @import("semantic_analysis").control_flow_validation.ControlFlowValidator.init(
         structural_validator,
         exit_behavior_analyzer,
@@ -157,13 +161,13 @@ test "semantic analysis allows match expression as expression-bodied function bo
 }
 
 test "semantic analysis rejects non-boolean if conditions" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\if 1 { val x = 1; }
     );
 }
 
 test "semantic analysis rejects non-boolean while conditions" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\while 1 {
         \\    leave;
         \\}
@@ -171,35 +175,35 @@ test "semantic analysis rejects non-boolean while conditions" {
 }
 
 test "semantic analysis rejects mismatched if expression branches" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val value = if true { 1 } else { false };
     );
 }
 
 test "semantic analysis rejects non-unit if expressions used as statements" {
-    try expectAnalyzeError(error.BlockCannotProduceValue,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\if true { 1 } else { 2 };
     );
 }
 
 test "semantic analysis rejects unary not on integers" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val bad = not 1;
     );
 }
 
 test "semantic analysis rejects non-unit expression-bodied functions with a branch that falls through without a value" {
-    try expectAnalyzeError(error.NotAllPathsReturnValue,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\item f(): int = if true { 1 } else { val x = 1; };
     );
 }
 
 test "semantic analysis rejects loop control outside loops" {
-    try expectAnalyzeError(error.LeaveUsedOutsideOfLoop,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\if true { leave; }
     );
 
-    try expectAnalyzeError(error.ContinueUsedOutsideOfLoop,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\if true { continue; }
     );
 }
@@ -363,7 +367,7 @@ test "semantic analysis type-checks printString with string argument" {
 }
 
 test "semantic analysis rejects printString with integer argument" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\printString(42);
     );
 }
@@ -383,7 +387,7 @@ test "semantic analysis type-checks string-typed function definitions" {
 }
 
 test "semantic analysis rejects assigning integer to string variable" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val greeting: string = 42;
     );
 }
@@ -480,7 +484,7 @@ test "semantic analysis type-checks anonymous structure literals from contextual
 }
 
 test "semantic analysis rejects anonymous structure literals without contextual type" {
-    try expectAnalyzeError(error.CannotInferType,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\item Point = structure { x: int; y: int; };
         \\val point = .{ x = 1, y = 2 };
     );
@@ -730,7 +734,7 @@ test "semantic analysis allows item as an ordinary identifier" {
 }
 
 test "semantic analysis rejects non-array for-in iterables" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\for value in 1 {
         \\    printInt(value);
         \\}
@@ -738,7 +742,7 @@ test "semantic analysis rejects non-array for-in iterables" {
 }
 
 test "semantic analysis rejects assignment to immutable for-in items" {
-    try expectAnalyzeError(error.CannotAssignToImmutable,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val numbers = [1, 2, 3];
         \\for number in numbers {
         \\    number = 4;
@@ -776,11 +780,11 @@ test "semantic analysis type-checks compound assignments" {
 }
 
 test "semantic analysis rejects invalid structure member access" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val x = 1.x;
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
         \\val z = point.z;
@@ -799,51 +803,51 @@ test "semantic analysis allows member and indexed assignment through val binding
 }
 
 test "semantic analysis rejects rebinding of immutable bindings" {
-    try expectAnalyzeError(error.CannotAssignToImmutable,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val answer = 1;
         \\answer = 2;
     );
 }
 
 test "semantic analysis rejects mismatched and read-only place assignment" {
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\item Point = structure { x: int; y: int; };
         \\var point = Point { x = 1, y = 2 };
         \\point.x = false;
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\var numbers = [1, 2, 3];
         \\numbers.length = 4;
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\var flag = true;
         \\flag += 1;
     );
 }
 
 test "semantic analysis rejects non-exhaustive boolean and integer matches without else" {
-    try expectAnalyzeError(error.NonExhaustiveMatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match true {
         \\    true => "yes",
         \\};
     );
 
-    try expectAnalyzeError(error.NonExhaustiveMatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match 1 {
         \\    1 => "one",
         \\};
     );
 
-    try expectAnalyzeError(error.NonExhaustiveMatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match "x" {
         \\    "x" => "yes",
         \\};
     );
 }
 
-test "semantic analysis rejects duplicate and invalid v1 match arms" {
+test "semantic analysis rejects duplicate and invalid match arms" {
     try expectAnalyzeError(error.DuplicateMatchArm,
         \\val label = match true {
         \\    true => "yes",
@@ -852,21 +856,21 @@ test "semantic analysis rejects duplicate and invalid v1 match arms" {
         \\};
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match 1 {
         \\    "two" => "two",
         \\    else => "other",
         \\};
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match "two" {
         \\    2 => "two",
         \\    else => "other",
         \\};
     );
 
-    try expectAnalyzeError(error.TypeMismatch,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\val label = match {
         \\    1 => "one",
         \\    else => "other",
@@ -883,7 +887,7 @@ test "semantic analysis only allows statement-position match when it evaluates t
     );
     defer analyzed.deinit();
 
-    try expectAnalyzeError(error.BlockCannotProduceValue,
+    try expectAnalyzeError(error.DiagnosticsEmitted,
         \\match true {
         \\    true => 1,
         \\    false => 0,
