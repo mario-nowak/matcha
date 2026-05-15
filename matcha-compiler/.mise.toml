@@ -17,9 +17,17 @@ run = "zig build check"
 description = "Build the Matcha compiler"
 run = "zig build"
 
-[tasks.test]
+[tasks.test-compiler]
 description = "Run Matcha compiler tests"
-run = "zig build test"
+run = "zig build test --summary all"
+
+[tasks.test]
+description = "Run all Matcha tests"
+run = "mise run test-compiler && mise run e2e"
+
+[tasks.e2e]
+description = "Run Matcha end-to-end tests"
+run = "zig build && zig test tests/e2e/tests.zig"
 
 [tasks.build-compiler]
 description = "Build an optimized matcha compiler binary"

@@ -6,6 +6,8 @@ const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 
+pub const TestError = error{UnexpectedNodeKind};
+
 pub const ParsedProgram = struct {
     arena: std.heap.ArenaAllocator,
     program: ast.Program,
@@ -85,5 +87,69 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
     return .{
         .parsed = parsed,
         .typed_program = typed_program,
+    };
+}
+
+pub fn expectDeclarationNode(node: *const ast.Node) TestError!ast.Declaration {
+    return switch (node.kind) {
+        .Declaration => |declaration| declaration,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectBlockNode(node: *const ast.Node) TestError!ast.Block {
+    return switch (node.kind) {
+        .Block => |block| block,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectWhileNode(node: *const ast.Node) TestError!ast.While {
+    return switch (node.kind) {
+        .While => |while_statement| while_statement,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectForInNode(node: *const ast.Node) TestError!ast.ForIn {
+    return switch (node.kind) {
+        .ForIn => |for_in| for_in,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectItemDefinitionNode(node: *const ast.Node) TestError!ast.ItemDefinition {
+    return switch (node.kind) {
+        .ItemDefinition => |item_definition| item_definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectFunctionItem(node: *const ast.Node) TestError!ast.Function {
+    const item_definition = try expectItemDefinitionNode(node);
+    return switch (item_definition.item) {
+        .Function => |definition| definition,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectCallExpressionNode(node: *const ast.Node) TestError!ast.CallExpression {
+    return switch (node.kind) {
+        .CallExpression => |call_expression| call_expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectMatchExpressionNode(node: *const ast.Node) TestError!ast.MatchExpression {
+    return switch (node.kind) {
+        .MatchExpression => |match_expression| match_expression,
+        else => return TestError.UnexpectedNodeKind,
+    };
+}
+
+pub fn expectIndexAccessNode(node: *const ast.Node) TestError!ast.IndexAccess {
+    return switch (node.kind) {
+        .IndexAccess => |index_access| index_access,
+        else => return TestError.UnexpectedNodeKind,
     };
 }
