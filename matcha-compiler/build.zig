@@ -147,6 +147,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/tests.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "compiler", .module = compiler_module },
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },

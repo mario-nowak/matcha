@@ -93,17 +93,3 @@ fn stemWithoutMatchaExtension(input_path: []const u8) []const u8 {
     }
     return input_path;
 }
-
-test "default llvm output path strips final matcha extension" {
-    const output_path = try defaultLlvmOutputPath(std.testing.allocator, "examples/v0.1/learning-matcha.mt");
-    defer std.testing.allocator.free(output_path);
-
-    try std.testing.expectEqualStrings("examples/v0.1/learning-matcha-emission.ll", output_path);
-}
-
-test "default binary output path strips final matcha extension" {
-    const output_path = try defaultBinaryOutputPath(std.testing.allocator, "examples/customer-import-audit.mt");
-    defer std.testing.allocator.free(output_path);
-
-    try std.testing.expectEqualStrings("examples/customer-import-audit", output_path);
-}

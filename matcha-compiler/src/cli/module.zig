@@ -3,3 +3,7 @@ pub const parser = @import("parser.zig");
 pub const runner = @import("runner.zig");
 
 pub const run = runner.run;
+
+test {
+    _ = @import("parser.test.zig");
+}

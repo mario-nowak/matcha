@@ -27,6 +27,22 @@ fn emit(source: []const u8) ![]const u8 {
     return try std.testing.allocator.dupe(u8, llvm_ir);
 }
 
+fn expectIrContains(llvm_ir: []const u8, needle: []const u8) !void {
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, needle) != null);
+}
+
+fn expectIrNotContains(llvm_ir: []const u8, needle: []const u8) !void {
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, needle) == null);
+}
+
+fn expectIrCountAtLeast(llvm_ir: []const u8, needle: []const u8, minimum_count: usize) !void {
+    try std.testing.expect(std.mem.count(u8, llvm_ir, needle) >= minimum_count);
+}
+
+fn expectIrCount(llvm_ir: []const u8, needle: []const u8, expected_count: usize) !void {
+    try std.testing.expectEqual(expected_count, std.mem.count(u8, llvm_ir, needle));
+}
+
 test "llvm emission handles boolean operators comparisons and if expressions" {
     const source =
         \\val flag = not false and true;

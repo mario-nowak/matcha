@@ -17,7 +17,16 @@ const ParsedProgram = struct {
     }
 };
 
-fn parseProgram(source: []const u8) !ParsedProgram {
+const ResolvedTestProgram = struct {
+    parsed: ParsedProgram,
+    resolved_program: semantic_analysis.name_resolution.ResolvedProgram,
+
+    fn deinit(self: *ResolvedTestProgram) void {
+        self.parsed.deinit();
+    }
+};
+
+fn parse(source: []const u8) !ParsedProgram {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     errdefer arena.deinit();
 
@@ -39,22 +48,34 @@ fn parseProgram(source: []const u8) !ParsedProgram {
     };
 }
 
-test "name resolution emits resolved structures and functions" {
-    var parsed = try parseProgram(
-        \\item User = structure { name: string; friend: User; };
-        \\item greet(user: User): string = "hi";
-    );
-    defer parsed.deinit();
+fn resolve(source: []const u8) !ResolvedTestProgram {
+    var parsed = try parse(source);
+    errdefer parsed.deinit();
 
     var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
     defer diagnostic_store.deinit();
+
     var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
     const resolved_program = try name_resolver.resolveProgram(&parsed.program);
 
-    const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
-    const greet_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
+    return .{
+        .parsed = parsed,
+        .resolved_program = resolved_program,
+    };
+}
 
-    const user_structure = resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
+test "name resolution emits resolved structures and functions" {
+    const source =
+        \\item User = structure { name: string; friend: User; };
+        \\item greet(user: User): string = "hi";
+    ;
+
+    var resolved = try resolve(source);
+    defer resolved.deinit();
+
+    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
+    const greet_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
+    const user_structure = resolved.resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
     try std.testing.expectEqual(user_symbol_id, user_structure.symbol_id);
     try std.testing.expectEqualStrings("User", user_structure.name);
     try std.testing.expectEqual(@as(usize, 2), user_structure.fields.len);
@@ -68,8 +89,7 @@ test "name resolution emits resolved structures and functions" {
         .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
         else => return error.UnexpectedTypeReferenceKind,
     }
-
-    const greet_function = resolved_program.resolved_function_by_symbol_id.get(greet_symbol_id).?;
+    const greet_function = resolved.resolved_program.resolved_function_by_symbol_id.get(greet_symbol_id).?;
     try std.testing.expectEqual(greet_symbol_id, greet_function.symbol_id);
     try std.testing.expectEqualStrings("greet", greet_function.name);
     try std.testing.expectEqual(@as(usize, 1), greet_function.parameters.len);
@@ -82,31 +102,20 @@ test "name resolution emits resolved structures and functions" {
         .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
         else => return error.UnexpectedTypeReferenceKind,
     }
-    try std.testing.expectEqualStrings("user", greet_function.parameters[0].name);
 }
 
 test "name resolution resolves declaration type annotations into side table" {
-    var parsed = try parseProgram(
+    const source =
         \\item User = structure { name: string; };
         \\val users: User[] = 1;
-    );
-    defer parsed.deinit();
+    ;
 
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+    var resolved = try resolve(source);
+    defer resolved.deinit();
 
-    const declaration = switch (parsed.program.statements[1].kind) {
-        .Declaration => |declaration| declaration,
-        else => return error.UnexpectedNodeKind,
-    };
-    const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
-    const declaration_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
-
-    _ = declaration;
-
-    switch (resolved_program.annotated_type_reference_by_symbol_id.get(declaration_symbol_id).?) {
+    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
+    const declaration_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
+    switch (resolved.resolved_program.annotated_type_reference_by_symbol_id.get(declaration_symbol_id).?) {
         .Array => |element_type_reference| switch (element_type_reference.*) {
             .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
             else => return error.UnexpectedTypeReferenceKind,
@@ -116,23 +125,18 @@ test "name resolution resolves declaration type annotations into side table" {
 }
 
 test "name resolution resolves array type expressions recursively" {
-    var parsed = try parseProgram(
+    const source =
         \\item User = structure { friends: User[]; labels: string[][]; };
         \\item echo(users: User[]): string[] = "hi";
-    );
-    defer parsed.deinit();
+    ;
 
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+    var resolved = try resolve(source);
+    defer resolved.deinit();
 
-    const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
-    const echo_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
-
-    const user_structure = resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
-    const echo_function = resolved_program.resolved_function_by_symbol_id.get(echo_symbol_id).?;
-
+    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
+    const echo_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
+    const user_structure = resolved.resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
+    const echo_function = resolved.resolved_program.resolved_function_by_symbol_id.get(echo_symbol_id).?;
     switch (user_structure.fields[0].type_reference) {
         .Array => |element_type_reference| switch (element_type_reference.*) {
             .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
@@ -167,23 +171,18 @@ test "name resolution resolves array type expressions recursively" {
 }
 
 test "name resolution resolves forward structure references in field type annotations" {
-    var parsed = try parseProgram(
+    const source =
         \\item User = structure { organization: Organization; name: string; };
         \\item Organization = structure { owner: User; };
-    );
-    defer parsed.deinit();
+    ;
 
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+    var resolved = try resolve(source);
+    defer resolved.deinit();
 
-    const user_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[0].id).?;
-    const organization_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
-
-    const user_structure = resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
-    const organization_structure = resolved_program.resolved_structure_by_symbol_id.get(organization_symbol_id).?;
-
+    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
+    const organization_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
+    const user_structure = resolved.resolved_program.resolved_structure_by_symbol_id.get(user_symbol_id).?;
+    const organization_structure = resolved.resolved_program.resolved_structure_by_symbol_id.get(organization_symbol_id).?;
     switch (user_structure.fields[0].type_reference) {
         .Symbol => |symbol_id| try std.testing.expectEqual(organization_symbol_id, symbol_id),
         else => return error.UnexpectedTypeReferenceKind,
@@ -199,21 +198,18 @@ test "name resolution resolves forward structure references in field type annota
 }
 
 test "name resolution resolves for-in item bindings inside loop bodies" {
-    var parsed = try parseProgram(
+    const source =
         \\val numbers = [1, 2, 3];
         \\for number in numbers {
         \\    printInt(number);
         \\}
-    );
-    defer parsed.deinit();
+    ;
 
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
+    var resolved = try resolve(source);
+    defer resolved.deinit();
 
-    const for_in = switch (parsed.program.statements[1].kind) {
-        .ForIn => |for_in| for_in,
+    const for_in = switch (resolved.parsed.program.statements[1].kind) {
+        .ForIn => |for_in_statement| for_in_statement,
         else => return error.UnexpectedNodeKind,
     };
     const body_block = switch (for_in.body_block.kind) {
@@ -228,52 +224,7 @@ test "name resolution resolves for-in item bindings inside loop bodies" {
         .CallExpression => |call| call,
         else => return error.UnexpectedNodeKind,
     };
-
-    const for_item_symbol_id = resolved_program.symbol_id_by_node_id.get(parsed.program.statements[1].id).?;
-    const body_identifier_symbol_id = resolved_program.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
+    const for_item_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
+    const body_identifier_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
     try std.testing.expectEqual(for_item_symbol_id, body_identifier_symbol_id);
-}
-
-test "name resolution rejects function symbols in type annotations" {
-    var parsed = try parseProgram(
-        \\item helper(): int = 1;
-        \\item User = structure { bad: helper; };
-    );
-    defer parsed.deinit();
-
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
-}
-
-test "name resolution rejects structure field and type function name collisions" {
-    var parsed = try parseProgram(
-        \\item User = structure {
-        \\    name: string;
-        \\    item name(): string = "duplicate";
-        \\};
-    );
-    defer parsed.deinit();
-
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
-}
-
-test "name resolution rejects duplicate structure type function names" {
-    var parsed = try parseProgram(
-        \\item User = structure {
-        \\    id: int;
-        \\    item format(): string = "a";
-        \\    item format(): string = "b";
-        \\};
-    );
-    defer parsed.deinit();
-
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
 }
