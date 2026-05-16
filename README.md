@@ -59,18 +59,23 @@ other_point.print();
 > [!WARNING]
 > Matcha is early-stage software. The language, compiler, runtime, CLI, and tooling may all change significantly.
 
-## Quick try
+## Quick try on macOS
 
 ```sh
-cd matcha-compiler
-brew install mise llvm@20 bdw-gc
-mise trust
-mise install
-mise run build
-./zig-out/bin/matcha run examples/learning-matcha.mt
+brew tap mario-nowak/tap
+brew install mario-nowak/tap/matcha-lang
+git clone https://github.com/mario-nowak/matcha.git
+cd matcha/matcha-compiler
+matcha run examples/learning-matcha.mt
 ```
 
-For full setup and compiler usage, see [`matcha-compiler/README.md`](./matcha-compiler/README.md).
+If `clang` is not available yet, install Xcode Command Line Tools:
+
+```sh
+xcode-select --install
+```
+
+For full setup, source builds, and compiler usage, see [`matcha-compiler/README.md`](./matcha-compiler/README.md).
 
 ## Current status
 
