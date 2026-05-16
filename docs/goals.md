@@ -201,7 +201,16 @@ Features should compose in ways that are understandable. Hidden magic should be 
 
 ### Strong defaults, explicit escape hatches
 
-The default path should be ergonomic and safe. More specialized behavior should still be possible, but it should be chosen on purpose.
+The default path should be ergonomic, readable, and safe for common application code. But when code crosses an important boundary, I want that step to become explicit rather than invisible.
+
+That includes things like:
+
+- moving from open structural data into an exact domain type
+- moving from a plain primitive into a meaning-carrying opaque type
+- introducing stronger invariants through constructors or opaque structures
+- choosing stricter modeling when convenience alone would be too loose
+
+Matcha should make the common case pleasant without making important distinctions disappear. I want convenience by default, but I do not want convenience that erases meaning.
 
 ### Compiler help over runtime surprise
 
