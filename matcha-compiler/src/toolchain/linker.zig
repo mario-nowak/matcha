@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const compiler = @import("compiler");
 const diagnostics = compiler.diagnostics;
@@ -33,24 +34,41 @@ pub fn runFile(allocator: std.mem.Allocator, input_path: []const u8, program_arg
 
 fn linkNativeBinary(allocator: std.mem.Allocator, llvm_ir_path: []const u8, binary_output_path: []const u8) !void {
     const runtime_library_path = try resolveRuntimeLibraryPath(allocator);
-    const gc_prefix = try brewPrefix(allocator, "bdw-gc");
-    const gc_library_dir = try std.fs.path.join(allocator, &.{ gc_prefix, "lib" });
 
     if (std.fs.path.dirname(binary_output_path)) |directory| {
         try std.fs.cwd().makePath(directory);
     }
 
-    const argv = [_][]const u8{
+    var argv: std.ArrayList([]const u8) = .empty;
+    defer argv.deinit(allocator);
+
+    try argv.appendSlice(allocator, &.{
         "clang",
         llvm_ir_path,
         runtime_library_path,
-        try std.fmt.allocPrint(allocator, "-L{s}", .{gc_library_dir}),
-        "-lgc",
+    });
+    try appendGarbageCollectorLinkerFlags(allocator, &argv);
+    try argv.appendSlice(allocator, &.{
         "-o",
         binary_output_path,
-    };
+    });
 
-    try runChildProcess(allocator, &argv, .inherit);
+    try runChildProcess(allocator, argv.items, .inherit);
+}
+
+fn appendGarbageCollectorLinkerFlags(allocator: std.mem.Allocator, argv: *std.ArrayList([]const u8)) !void {
+    switch (builtin.os.tag) {
+        .macos => {
+            const gc_prefix = try brewPrefix(allocator, "bdw-gc");
+            const gc_library_dir = try std.fs.path.join(allocator, &.{ gc_prefix, "lib" });
+            try argv.append(allocator, try std.fmt.allocPrint(allocator, "-L{s}", .{gc_library_dir}));
+            try argv.append(allocator, "-lgc");
+        },
+        .linux => {
+            try argv.append(allocator, "-lgc");
+        },
+        else => return error.UnsupportedHostPlatform,
+    }
 }
 
 fn runNativeBinary(allocator: std.mem.Allocator, binary_path: []const u8, program_arguments: []const []const u8) !u8 {
