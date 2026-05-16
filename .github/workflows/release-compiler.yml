@@ -1,0 +1,105 @@
+name: Release compiler
+
+on:
+  push:
+    tags:
+      - 'matcha-compiler-v*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform_name }} release
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            platform_name: Linux x86_64
+            arch: x86_64
+          - os: macos-14
+            platform: macos
+            platform_name: macOS arm64
+            arch: arm64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.1
+
+      - name: Build compiler
+        working-directory: matcha-compiler
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          package_name="${tag}-${{ matrix.platform }}-${{ matrix.arch }}"
+          package_dir="$RUNNER_TEMP/$package_name"
+
+          mkdir -p "$package_dir/bin" "$package_dir/lib"
+          cp matcha-compiler/zig-out/bin/matcha "$package_dir/bin/"
+          cp matcha-compiler/zig-out/lib/libmatcha_runtime.a "$package_dir/lib/"
+
+          tar -C "$RUNNER_TEMP" -czf "$package_name.tar.gz" "$package_name"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.arch }}-archive
+          path: ${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Derive release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#matcha-compiler-}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten downloaded artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -type f -name '*.tar.gz' -exec mv {} dist/ \;
+          find dist -type d -empty -delete
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.tar.gz > SHA256SUMS.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Matcha Compiler ${{ steps.version.outputs.version }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
