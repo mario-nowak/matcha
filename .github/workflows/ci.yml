@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-ubuntu:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libgc-dev
+
+      - name: Run compiler tests
+        working-directory: matcha-compiler
+        run: zig build test --summary all
+
+      - name: Run end-to-end tests
+        working-directory: matcha-compiler
+        run: |
+          zig build
+          zig test tests/e2e/tests.zig

@@ -1,5 +1,7 @@
 # Matcha
 
+[![CI](https://github.com/mario-nowak/matcha/actions/workflows/ci.yml/badge.svg)](https://github.com/mario-nowak/matcha/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="./assets/matcha-1024.png" alt="Matcha logo" width="180" />
 </p>
