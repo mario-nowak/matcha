@@ -50,6 +50,25 @@ Many real programs are mostly case analysis:
 
 Matcha should make that style feel natural. Multi-way branching should be clearer and safer than long chains of special cases. Exhaustiveness checking should be normal. Complex branching should stay readable.
 
+```matcha
+val label = match response {
+    .Ok(user) => user.name,
+    .NotFound => "missing",
+    .Unauthorized => "forbidden",
+};
+```
+
+I also want subjectless `match` to make condition chains feel like one coherent branching construct instead of a pile of `else if` cases:
+
+```matcha
+val bucket = match {
+    score >= 90 => "excellent",
+    score >= 75 => "good",
+    score >= 60 => "pass",
+    else => "fail",
+};
+```
+
 ### 2. Structural data modeling with guardrails
 
 A lot of application programming is not about pointer tricks or manual memory management. It is about modeling data honestly.
@@ -64,6 +83,60 @@ Matcha should make it easy to express:
 
 I want the language to support convenient data shaping, but without the accidental conformance and ambiguity that often show up in more weakly disciplined structural systems.
 
+For example, I want a clear distinction between exact structures and open structural requirements:
+
+```matcha
+item User = structure { name: string; };
+item UserUpdate = structure { name: string; wasValidated: boolean; };
+
+item greetExact(user: { name: string }) = "Hello, " + user.name;
+item greetOpen(user: { name: string, .. }) = "Hello, " + user.name;
+
+val update = UserUpdate { name = "Tom", wasValidated = true };
+
+greetOpen(update);  // OK
+// greetExact(update); // error: extra field at exact boundary
+```
+
+Open shapes are useful when a function needs certain data. Exact boundaries are useful when a function means exactly what it says.
+
+That same idea should carry through boundaries. If a value has more fields than a target type expects, crossing that boundary should be explicit rather than accidental:
+
+```matcha
+item User = structure { name: string; };
+item UserUpdateDto = structure { name: string; wasValidated: boolean; };
+
+val dto: UserUpdateDto = .{ name = "Tom", wasValidated = true };
+val user = User { ..dto };
+```
+
+I also want Matcha to make semantic meaning easy to express, especially when plain primitives are too weak:
+
+```matcha
+item UserId = opaque string;
+item OrgId = opaque string;
+
+item loadUser(id: UserId) = { /* ... */ };
+
+val userId = UserId("abc");
+val orgId = OrgId("xyz");
+
+loadUser(userId); // OK
+loadUser(orgId);  // error
+```
+
+And for some domains, I want nominal boundaries and invariants to be available for larger data too. Some values should not be constructible as arbitrary records just because the fields line up.
+
+```matcha
+item Email = opaque structure {
+    public value: string;
+
+    constructor (value: string) {
+        // reject invalid email strings here
+    };
+};
+```
+
 ### 3. Explicitness without unnecessary verbosity
 
 I do not want a language where tiny implicit changes cause major behavioral changes. I also do not want a language where every useful thing takes too much syntax.
@@ -74,6 +147,8 @@ Matcha should aim for:
 - explicit value usage
 - explicit error handling
 - explicit boundary crossing when representation or meaning changes
+
+I want code to read as though the programmer made the important choices on purpose. A change in shape, meaning, or invariants should usually appear as a visible step in the code, not as a silent side effect of type compatibility.
 
 At the same time, it should still feel lightweight to write. The goal is not maximal ceremony. The goal is clarity.
 
