@@ -1,28 +1,53 @@
 {
   "name": "matcha-lang",
   "displayName": "Matcha Language Support",
-  "description": "Syntax highlighting and language support for Matcha",
-  "version": "0.0.1",
+  "description": "Syntax highlighting, comments, brackets, and file icons for Matcha.",
+  "version": "0.1.0",
+  "publisher": "mario-nowak",
+  "license": "MIT",
+  "preview": true,
+  "icon": "images/matcha.png",
   "engines": {
     "vscode": "^1.70.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "keywords": [
+    "matcha",
+    "programming-language",
+    "syntax-highlighting"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mario-nowak/matcha.git",
+    "directory": "tooling/ide-extensions/vs-code-extension"
+  },
+  "homepage": "https://github.com/mario-nowak/matcha",
+  "bugs": {
+    "url": "https://github.com/mario-nowak/matcha/issues"
+  },
+  "galleryBanner": {
+    "color": "#2f855a",
+    "theme": "dark"
+  },
   "contributes": {
     "languages": [
       {
         "id": "matcha",
         "aliases": [
           "Matcha",
-          "matcha",
-          "mt"
+          "matcha"
         ],
         "extensions": [
           ".mt",
           ".matcha"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/matcha-light.svg",
+          "dark": "./icons/matcha-dark.svg"
+        }
       }
     ],
     "grammars": [
