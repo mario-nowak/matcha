@@ -2,37 +2,43 @@
 
 ## Why Matcha exists
 
-Matcha exists because I want a language that makes backend and service code feel more direct, more explicit, and harder to get subtly wrong.
+Matcha exists because I want a language for backend and service code that makes complex data and control flow easier to express with confidence.
 
-A lot of application code is about shaping data, validating assumptions, branching on cases, and carrying that intent through many small transformations. In many mainstream languages, that work is either too dynamic, too implicit, or too noisy. Matcha is my attempt at a language that treats this style of programming as first-class.
+A lot of application programming is not low-level systems work. It is parsing inputs, validating assumptions, branching on cases, transforming structured values, and carrying intent through many small steps. In many mainstream languages, that work is either too dynamic, too implicit, or too noisy.
 
-The core idea is simple:
+I think that part of programming deserves a language that takes it more seriously.
 
-> Matcha should make complex data and control flow easier to express with confidence.
+> Matcha is a compiled language for data-heavy backend code, built around match-first control flow and structural data modeling with guardrails.
 
-I want Matcha to feel good for code that spends its time parsing inputs, modeling structured data, branching on cases, transforming values, and producing reliable outputs.
+Matcha is an attempt to make structured data and branching logic better than they are in most mainstream languages: clearer, more explicit, and harder to get subtly wrong.
+
+If Matcha succeeds, it should make service code feel:
+
+- clear to read
+- hard to misuse accidentally
+- explicit at important boundaries
+- fast to iterate on
+- boring to build and deploy
 
 ## Language story
 
-Matcha is an experimental compiled programming language for application and service code.
+Matcha is an experimental compiled language for application and service code.
 
-The language is centered around a few ideas:
+Its center of gravity is:
 
-- match-oriented control flow
-- strong structural data modeling
-- explicit behavior at boundaries
-- fast feedback from the compiler
-- practical deployment and runtime ergonomics
+- match-first control flow
+- structural data modeling with explicit boundaries
+- fast compiler feedback
+- practical deployment ergonomics
+- runtime performance that is good enough for real workloads
 
-The goal is not to build a language for every domain. The goal is to build a language that is especially pleasant for data-heavy backend work, where correctness, readability, and iteration speed matter a lot.
+The goal is not to build a language for every domain. The goal is to build one that is especially good for data-heavy backend work, where correctness, readability, and iteration speed matter more than maximal abstraction power or low-level control.
 
-If Matcha succeeds, it should let you write service code that is:
+In rough terms, I want Matcha to be:
 
-- fast to understand
-- hard to misuse accidentally
-- explicit without being ceremony-heavy
-- efficient enough for real workloads
-- easy to build and deploy
+- more disciplined than dynamic or highly implicit application languages
+- more focused on service-code ergonomics than systems languages
+- more explicit about data-shape boundaries than structurally typed languages that allow accidental conformance
 
 ## What I want Matcha to optimize for
 
@@ -71,9 +77,9 @@ val bucket = match {
 
 ### 2. Structural data modeling with guardrails
 
-A lot of application programming is not about pointer tricks or manual memory management. It is about modeling data honestly.
+This is one of the most important parts of the language story.
 
-Matcha should make it easy to express:
+A lot of application programming is about modeling data honestly. Matcha should make it easy to express:
 
 - exact data structures
 - open and closed structural constraints
@@ -81,7 +87,7 @@ Matcha should make it easy to express:
 - explicit boundaries between nominal and structural meaning
 - invariants where they matter
 
-I want the language to support convenient data shaping, but without the accidental conformance and ambiguity that often show up in more weakly disciplined structural systems.
+I want convenient data shaping without accidental conformance. If two values happen to have similar fields, that should not silently erase differences in meaning.
 
 For example, I want a clear distinction between exact structures and open structural requirements:
 
@@ -148,9 +154,7 @@ Matcha should aim for:
 - explicit error handling
 - explicit boundary crossing when representation or meaning changes
 
-I want code to read as though the programmer made the important choices on purpose. A change in shape, meaning, or invariants should usually appear as a visible step in the code, not as a silent side effect of type compatibility.
-
-At the same time, it should still feel lightweight to write. The goal is not maximal ceremony. The goal is clarity.
+Important choices should appear in code as visible steps, not as silent side effects of type compatibility. At the same time, the language should still feel lightweight to write. The goal is clarity, not ceremony.
 
 ### 4. Developer velocity
 
@@ -197,7 +201,7 @@ Code should usually say what it means directly. The language should reward strai
 
 ### Honest semantics
 
-Features should compose in ways that are understandable. Hidden magic should be rare. When something is exact, open, nominal, structural, recoverable, or not recoverable, that should be visible in the language model.
+Features should compose in understandable ways. Hidden magic should be rare. When something is exact, open, nominal, structural, recoverable, or not recoverable, that should be visible in the language model.
 
 ### Strong defaults, explicit escape hatches
 
@@ -210,11 +214,13 @@ That includes things like:
 - introducing stronger invariants through constructors or opaque structures
 - choosing stricter modeling when convenience alone would be too loose
 
-Matcha should make the common case pleasant without making important distinctions disappear. I want convenience by default, but I do not want convenience that erases meaning.
+Matcha should make the common case pleasant without making important distinctions disappear.
 
 ### Compiler help over runtime surprise
 
-Whenever practical, mistakes should be caught early:
+Whenever practical, mistakes should be caught early. This is especially important for data-shape mistakes and control-flow mistakes, because those are the kinds of bugs Matcha is supposed to make less common.
+
+Examples include:
 
 - non-exhaustive logic
 - unused values
@@ -224,7 +230,7 @@ Whenever practical, mistakes should be caught early:
 
 ### Practicality over purity
 
-I am not trying to build a mathematically pure language or a research language. I want something useful for real codebases.
+I am not trying to build a mathematically pure language or a research language. I want something useful for real codebases. If a feature is elegant in isolation but makes service code harder to read, harder to explain, or harder to ship, that is a bad trade.
 
 ### A coherent object and type story
 
@@ -250,7 +256,7 @@ Matcha is not optimized for:
 
 I do not currently view ownership and borrow checking as the right default tradeoff for this language.
 
-That does not mean correctness does not matter. It means I want to pursue correctness through different tools.
+That does not mean correctness does not matter. It means I want to pursue correctness through different tools: explicitness, stronger data modeling, exhaustiveness, value-usage rules, and better compiler diagnostics.
 
 ### Matcha is not trying to maximize abstraction power at any cost
 
@@ -264,7 +270,7 @@ This project is intentionally opinionated. It is okay if some people want a lang
 
 ## Current direction
 
-Today, Matcha is still early and incomplete, but the current direction is already visible.
+Matcha is still early and incomplete, but the current direction is already visible.
 
 The compiler already includes a meaningful core of:
 
@@ -279,6 +285,8 @@ The compiler already includes a meaningful core of:
 - a runtime with garbage collection
 
 This is enough to validate the core feel of the language, but not enough yet to call the language broadly complete.
+
+The core bet is already visible: Matcha should feel unusually good for structured data, branching logic, and explicit boundary handling.
 
 ## Features I still want to add
 
@@ -334,6 +342,6 @@ Matcha would be succeeding if it becomes a language where writing backend and se
 - safer by default
 - faster to iterate on
 
-I want it to be a language where structured data and branching logic feel unusually pleasant, and where the compiler helps keep that code honest.
+I want it to be a language where structured data and branching logic feel unusually pleasant, where important representation changes are explicit, and where the compiler helps keep that code honest.
 
 That is the point of the project.
