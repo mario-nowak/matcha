@@ -6,7 +6,25 @@ on:
   pull_request:
 
 jobs:
+  lint-ubuntu:
+    name: Formatting checks (Ubuntu)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.1
+
+      - name: Run formatting checks
+        working-directory: matcha-compiler
+        run: zig fmt --check .
+
   test-ubuntu:
+    name: Compiler and E2E tests (Ubuntu)
     runs-on: ubuntu-latest
 
     steps:
