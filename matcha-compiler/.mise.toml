@@ -17,6 +17,10 @@ run = "zig build check"
 description = "Build the Matcha compiler"
 run = "zig build"
 
+[tasks.lint]
+description = "Run Matcha formatting checks"
+run = "zig fmt --check ."
+
 [tasks.test-compiler]
 description = "Run Matcha compiler tests"
 run = "zig build test --summary all"
