@@ -12,7 +12,7 @@ Syntax highlighting and basic editor support for the Matcha programming language
 
 ## Status
 
-This extension tracks Matcha `v0.1.0` and is still experimental.
+This extension tracks Matcha `v0.1.1` and is still experimental.
 
 Current scope:
 - TextMate grammar-based syntax highlighting
@@ -42,7 +42,7 @@ ext install mario-nowak.matcha-lang
 ### From a packaged VSIX
 
 ```sh
-code --install-extension matcha-lang-0.1.0.vsix
+code --install-extension matcha-lang-0.1.1.vsix
 ```
 
 ## Development
@@ -56,7 +56,7 @@ npx @vscode/vsce package
 Install locally after packaging:
 
 ```sh
-code --install-extension matcha-lang-0.1.0.vsix
+code --install-extension matcha-lang-0.1.1.vsix
 ```
 
 ## Repository
