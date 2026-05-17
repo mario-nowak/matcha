@@ -2,7 +2,7 @@
   "name": "matcha-lang",
   "displayName": "Matcha Language Support",
   "description": "Syntax highlighting, comments, brackets, and file icons for Matcha.",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "publisher": "mario-nowak",
   "license": "MIT",
   "preview": true,
