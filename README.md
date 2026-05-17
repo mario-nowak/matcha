@@ -58,6 +58,11 @@ other_point.invert();
 other_point.print();
 ```
 
+## Start here
+
+- [Matcha goals](./docs/goals.md) explains why the language exists, what it optimizes for, and what it intentionally does not try to be.
+- [learning-matcha.mt](./matcha-compiler/examples/learning-matcha.mt) is a runnable tour of the current language surface.
+
 > [!WARNING]
 > Matcha is early-stage software. The language, compiler, runtime, CLI, and tooling may all change significantly.
 

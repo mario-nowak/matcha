@@ -99,6 +99,7 @@ pub const EmissionResult = struct {
 
 pub const LlvmIrEmitter = struct {
     allocator: std.mem.Allocator,
+    target_triple: []const u8,
     function_symbol_generator: FunctionSymbolGenerator,
     function_ir_builder: FunctionIrBuilder,
     symbol_generator: SymbolGenerator,
@@ -111,6 +112,7 @@ pub const LlvmIrEmitter = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
+        target_triple: []const u8,
         function_symbol_generator: FunctionSymbolGenerator,
         builder: FunctionIrBuilder,
         symbol_generator: SymbolGenerator,
@@ -121,6 +123,7 @@ pub const LlvmIrEmitter = struct {
     ) @This() {
         return .{
             .allocator = allocator,
+            .target_triple = target_triple,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = builder,
             .symbol_generator = symbol_generator,
@@ -235,8 +238,8 @@ pub const LlvmIrEmitter = struct {
 
         const runtime_symbol_declarations = self.runtime_symbol_emitter.emitDeclarations(self.runtime_requirements);
         module_preamble_buffer.writer(self.allocator).print(
-            "{s}\n\n{s}\n{s}",
-            .{ runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
+            "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
+            .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
         ) catch unreachable;
 
         const string_literal_globals_ir = self.string_literal_emitter.renderGlobals();
