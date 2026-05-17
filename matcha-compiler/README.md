@@ -5,7 +5,7 @@
 It is still early in development, but it already reads `.mt` source files, parses and analyzes them, emits LLVM IR, and links that IR together with the Matcha runtime into a native executable. The runtime currently uses Boehm GC (`bdw-gc`), and the final native link step is performed through `clang`.
 
 > [!WARNING]
-> This compiler is still experimental. Matcha is currently best understood as a fast-moving `v0.1.0` hobby language project rather than a stable platform.
+> This compiler is still experimental. Matcha is currently best understood as a fast-moving `v0.1.1` hobby language project rather than a stable platform.
 
 ## What this package contains
 

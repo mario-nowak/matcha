@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const clap = b.dependency("clap", .{});
     const build_options = b.addOptions();
-    build_options.addOption([]const u8, "version", "0.1.0");
+    build_options.addOption([]const u8, "version", "0.1.1");
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
