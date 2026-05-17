@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
@@ -48,6 +49,7 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
     const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(allocator);
     var llvm_ir_emitter = emission.LlvmIrEmitter.init(
         allocator,
+        getLlvmTargetTriple(),
         function_symbol_generator,
         function_ir_builder,
         symbol_generator,
@@ -73,6 +75,22 @@ pub fn defaultLlvmOutputPath(allocator: std.mem.Allocator, input_path: []const u
 
 pub fn defaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
     return allocator.dupe(u8, stemWithoutMatchaExtension(input_path));
+}
+
+pub fn getLlvmTargetTriple() []const u8 {
+    return switch (builtin.os.tag) {
+        .macos => switch (builtin.cpu.arch) {
+            .aarch64 => "arm64-apple-macosx26.4.1",
+            .x86_64 => "x86_64-apple-macosx26.4.1",
+            else => @panic("unsupported macOS architecture"),
+        },
+        .linux => switch (builtin.cpu.arch) {
+            .x86_64 => "x86_64-unknown-linux-gnu",
+            .aarch64 => "aarch64-unknown-linux-gnu",
+            else => @panic("unsupported Linux architecture"),
+        },
+        else => @panic("unsupported host platform"),
+    };
 }
 
 pub fn writeFile(path: []const u8, contents: []const u8) !void {

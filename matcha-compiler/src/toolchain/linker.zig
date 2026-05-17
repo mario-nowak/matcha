@@ -44,6 +44,8 @@ fn linkNativeBinary(allocator: std.mem.Allocator, llvm_ir_path: []const u8, bina
 
     try argv.appendSlice(allocator, &.{
         "clang",
+        "-target",
+        compiler.pipeline.getLlvmTargetTriple(),
         llvm_ir_path,
         runtime_library_path,
     });
