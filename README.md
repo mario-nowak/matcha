@@ -44,8 +44,10 @@ item Point = structure {
         y = self.y + other.y,
     };
 
+    item length(self: Point): int = self.x * self.x + self.y * self.y;
+
     item print(self: Point): unit = printString(
-        "Point { x = " + self.x.toString() + ", y = " + self.y.toString() + " }"
+        "Point { x = " + self.x.toString() + ", y = " + self.y.toString() + " } (length: " + self.length().toString() + ")"
     );
 };
 
@@ -61,18 +63,29 @@ other_point.print();
 
 ## Quick try on macOS
 
+### 1. Optional: install the VS Code extension
+
+Install [Matcha Language Support](https://marketplace.visualstudio.com/items?itemName=mario-nowak.matcha-lang) from the Visual Studio Marketplace for syntax highlighting and basic editor integration.
+
+### 2. Install the compiler
+
 ```sh
 brew tap mario-nowak/tap
 brew install mario-nowak/tap/matcha-lang
-git clone https://github.com/mario-nowak/matcha.git
-cd matcha/matcha-compiler
-matcha run examples/learning-matcha.mt
 ```
 
 If `clang` is not available yet, install Xcode Command Line Tools:
 
 ```sh
 xcode-select --install
+```
+
+### 3. Clone the repository and run an example
+
+```sh
+git clone https://github.com/mario-nowak/matcha.git
+cd matcha/matcha-compiler
+matcha run examples/learning-matcha.mt
 ```
 
 For full setup, source builds, and compiler usage, see [`matcha-compiler/README.md`](./matcha-compiler/README.md).

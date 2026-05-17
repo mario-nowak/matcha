@@ -27,6 +27,18 @@ Not included yet:
 
 ## Installation
 
+### From the Visual Studio Marketplace
+
+Install from the Marketplace:
+
+- https://marketplace.visualstudio.com/items?itemName=mario-nowak.matcha-lang
+
+Or from VS Code Quick Open:
+
+```text
+ext install mario-nowak.matcha-lang
+```
+
 ### From a packaged VSIX
 
 ```sh
