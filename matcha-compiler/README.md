@@ -34,6 +34,32 @@ For the most accurate view of what works today, use the examples in [`examples/`
 
 ## Quick start
 
+### Install released compiler with Homebrew tap
+
+On macOS:
+
+```sh
+brew tap mario-nowak/tap
+brew install mario-nowak/tap/matcha-lang
+matcha --help
+```
+
+Then try an example program from this repository:
+
+```sh
+git clone https://github.com/mario-nowak/matcha.git
+cd matcha/matcha-compiler
+matcha run examples/learning-matcha.mt
+```
+
+If `clang` is not available yet, install Xcode Command Line Tools:
+
+```sh
+xcode-select --install
+```
+
+### Build compiler from source
+
 From `matcha-compiler/` on macOS:
 
 ```sh
@@ -46,7 +72,7 @@ mise run build
 
 ## macOS setup
 
-The documented setup path currently targets macOS and uses Homebrew plus `mise`.
+The documented source-build setup path currently targets macOS and uses Homebrew plus `mise`.
 
 ### 1. Install system dependencies
 
@@ -73,6 +99,26 @@ That gives you:
 - Homebrew LLVM 20 on `PATH`
 - `clang` and LLVM tools for linking and IR workflows
 - `bdw-gc` for the runtime and final native binary
+
+## Installing the released compiler manually
+
+If you prefer release artifacts instead of Homebrew, download the latest compiler release from GitHub and extract it so that the bundled layout stays intact:
+
+```text
+bin/matcha
+lib/libmatcha_runtime.a
+```
+
+`matcha` also expects:
+
+- `clang` on `PATH`
+- `bdw-gc` installed through Homebrew
+
+After extraction, verify the install with:
+
+```sh
+matcha --help
+```
 
 ## Building the compiler
 
