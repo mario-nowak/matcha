@@ -1111,6 +1111,10 @@ pub const Parser = struct {
     }
 
     fn parseIdentifierExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
+        if (isIdentifierNamed(token, "unit")) {
+            return self.createNode(.{ .UnitLiteral = token });
+        }
+
         const post_identifier_token = try self.lexer.peek();
         if (state.allow_structure_construction and post_identifier_token.kind == .LeftBrace) {
             return self.parseStructureConstruction(token);

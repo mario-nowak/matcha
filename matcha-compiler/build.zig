@@ -118,6 +118,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "runtime_emission", .module = runtime_emission_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
         },
     });
     const compiler_module = b.addModule("compiler", .{

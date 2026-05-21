@@ -60,6 +60,7 @@ pub const StructuralValidator = struct {
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
+            .UnitLiteral,
             => {},
         }
     }

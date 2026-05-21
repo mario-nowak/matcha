@@ -1,6 +1,7 @@
 const std = @import("std");
 const ast = @import("ast");
 const helpers = @import("../test_helpers.zig");
+const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 
 const TestError = helpers.TestError;
@@ -13,7 +14,7 @@ fn analyze(source: []const u8) !helpers.AnalyzedProgram {
     return helpers.analyzeProgram(source);
 }
 
-fn expectType(expected: typing.Type, typed_program: *const typing.TypedProgram, actual_type_id: typing.TypeId) !void {
+fn expectType(expected: typing.Type, typed_program: *const semantic_analysis.AnalyzedProgram, actual_type_id: typing.TypeId) !void {
     try std.testing.expectEqual(expected, typed_program.type_store.getType(actual_type_id));
 }
 
@@ -53,6 +54,22 @@ test "semantic analysis resolves parameter references inside function bodies" {
         .Integer,
         &analyzed.typed_program,
         analyzed.typed_program.type_by_node_id.get(function_definition.body_expression.id).?,
+    );
+}
+
+test "semantic analysis assigns the unit type to the unit literal" {
+    const source =
+        \\val value = unit;
+    ;
+
+    var analyzed = try analyze(source);
+    defer analyzed.deinit();
+
+    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[0]);
+    try expectType(
+        .Unit,
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_node_id.get(declaration.value.id).?,
     );
 }
 

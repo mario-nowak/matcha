@@ -33,12 +33,14 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
         structural_validator,
         exit_behavior_analyzer,
     );
+    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(allocator);
     var semantic_analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
         control_flow_validator,
+        runtime_representation_analyzer,
     );
-    const typed_program = try semantic_analyzer.validateProgram(&program);
+    const typed_program = try semantic_analyzer.analyzeProgram(&program);
 
     const function_symbol_generator = emission.FunctionSymbolGenerator.init(allocator);
     const function_ir_builder = emission.FunctionIrBuilder.init(allocator);
