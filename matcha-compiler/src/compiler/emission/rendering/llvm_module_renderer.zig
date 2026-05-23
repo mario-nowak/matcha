@@ -16,7 +16,6 @@ const Storage = function_emission.Storage;
 const FunctionIrBuilder = function_emission.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
 const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
-const RuntimeRequirements = runtime_emission.RuntimeRequirements;
 const RuntimeSymbolEmitter = runtime_emission.RuntimeSymbolEmitter;
 const RuntimeStringParts = runtime_emission.RuntimeStringParts;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
@@ -107,7 +106,6 @@ pub const LlvmModuleRenderer = struct {
     string_literal_renderer: StringLiteralRenderer,
     structure_type_definition_renderer: StructureTypeDefinitionRenderer,
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
-    runtime_requirements: RuntimeRequirements,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -131,7 +129,6 @@ pub const LlvmModuleRenderer = struct {
             .string_literal_renderer = string_literal_renderer,
             .structure_type_definition_renderer = structure_type_renderer,
             .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
-            .runtime_requirements = .{},
         };
     }
 
@@ -156,6 +153,7 @@ pub const LlvmModuleRenderer = struct {
             user_defined_functions.items,
             structure_method_functions.items,
             main_function_ir,
+            typed_program,
         );
     }
 
@@ -198,10 +196,11 @@ pub const LlvmModuleRenderer = struct {
         user_defined_functions: []const []const u8,
         structure_method_functions: []const []const u8,
         main_function_ir: []const u8,
+        typed_program: *const lowering.LoweredProgram,
     ) []const u8 {
         var sections = std.ArrayList([]const u8){};
         defer sections.deinit(self.allocator);
-        sections.append(self.allocator, self.renderModulePreamble()) catch unreachable;
+        sections.append(self.allocator, self.renderModulePreamble(typed_program)) catch unreachable;
         if (user_defined_types.len > 0) {
             sections.append(self.allocator, user_defined_types) catch unreachable;
         }
@@ -227,15 +226,14 @@ pub const LlvmModuleRenderer = struct {
     }
 
     fn resetModuleState(self: *@This()) void {
-        self.runtime_requirements.reset();
         self.string_literal_renderer.resetModuleState();
     }
 
-    fn renderModulePreamble(self: *@This()) []const u8 {
+    fn renderModulePreamble(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
         defer module_preamble_buffer.deinit(self.allocator);
 
-        const runtime_symbol_declarations = self.runtime_symbol_emitter.emitDeclarations(self.runtime_requirements);
+        const runtime_symbol_declarations = self.runtime_symbol_emitter.emitDeclarations(runtimeRequirementsFromPlan(typed_program.runtime_requirements_plan));
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
@@ -246,6 +244,24 @@ pub const LlvmModuleRenderer = struct {
             module_preamble_buffer.writer(self.allocator).print("\n\n{s}", .{string_literal_globals_ir}) catch unreachable;
         }
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
+    }
+
+    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime_emission.RuntimeRequirements {
+        return .{
+            .print_int = plan.print_int,
+            .print_string = plan.print_string,
+            .read_file = plan.read_file,
+            .read_line = plan.read_line,
+            .get_arguments = plan.get_arguments,
+            .string_concatenate = plan.string_concatenate,
+            .string_compare = plan.string_compare,
+            .string_trim = plan.string_trim,
+            .string_split = plan.string_split,
+            .string_to_int = plan.string_to_int,
+            .int_to_string = plan.int_to_string,
+            .panic_index_out_of_bounds = plan.panic_index_out_of_bounds,
+            .array_append_slot = plan.array_append_slot,
+        };
     }
 
     fn resetCurrentFunctionState(self: *@This()) void {
@@ -641,9 +657,8 @@ pub const LlvmModuleRenderer = struct {
                 }
 
                 switch (function_info.implementation) {
-                    .BuiltinPrintInt => self.runtime_requirements.print_int = true,
+                    .BuiltinPrintInt => {},
                     .BuiltinPrintString => {
-                        self.runtime_requirements.print_string = true;
                         self.runtime_call_emitter.emitPrintStringCall(
                             &self.function_ir_builder,
                             self.emitStringParts(argument_registers.items[0]),
@@ -655,7 +670,6 @@ pub const LlvmModuleRenderer = struct {
                         };
                     },
                     .BuiltinReadFile => {
-                        self.runtime_requirements.read_file = true;
                         const result_register = self.runtime_call_emitter.emitReadFileCall(
                             &self.function_ir_builder,
                             &self.function_symbol_generator,
@@ -668,7 +682,6 @@ pub const LlvmModuleRenderer = struct {
                         };
                     },
                     .BuiltinReadLine => {
-                        self.runtime_requirements.read_line = true;
                         const result_register = self.runtime_call_emitter.emitReadLineCall(
                             &self.function_ir_builder,
                             &self.function_symbol_generator,
@@ -678,9 +691,7 @@ pub const LlvmModuleRenderer = struct {
                             .register = result_register,
                         };
                     },
-                    .BuiltinGetArguments => {
-                        self.runtime_requirements.get_arguments = true;
-                    },
+                    .BuiltinGetArguments => {},
                     .UserDefined => {},
                 }
 
@@ -1037,7 +1048,6 @@ pub const LlvmModuleRenderer = struct {
         if (operand_type_id == typed_program.analyzed_program.type_store.string_type_id) {
             return switch (binary_operator) {
                 .Add => concatenate: {
-                    self.runtime_requirements.string_concatenate = true;
                     break :concatenate self.runtime_call_emitter.emitStringConcatenateCall(
                         &self.function_ir_builder,
                         &self.function_symbol_generator,
@@ -1046,7 +1056,6 @@ pub const LlvmModuleRenderer = struct {
                     );
                 },
                 .Equal => compare_equal: {
-                    self.runtime_requirements.string_compare = true;
                     break :compare_equal self.runtime_call_emitter.emitStringCompareCall(
                         &self.function_ir_builder,
                         &self.function_symbol_generator,
@@ -1055,7 +1064,6 @@ pub const LlvmModuleRenderer = struct {
                     );
                 },
                 .NotEqual => compare_not_equal: {
-                    self.runtime_requirements.string_compare = true;
                     const equal_register = self.runtime_call_emitter.emitStringCompareCall(
                         &self.function_ir_builder,
                         &self.function_symbol_generator,
@@ -1668,7 +1676,6 @@ pub const LlvmModuleRenderer = struct {
         self.function_ir_builder.emitBranchInstruction(out_of_bounds_register, &.{ panic_label, ok_label });
 
         self.function_ir_builder.emitLabel(panic_label);
-        self.runtime_requirements.panic_index_out_of_bounds = true;
         const line = index_access.left_bracket.line;
         const column = index_access.left_bracket.column;
         self.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
@@ -1703,8 +1710,6 @@ pub const LlvmModuleRenderer = struct {
         environment: *Environment,
     ) EmissionResult {
         if (call_expression.arguments.len != 1) unreachable;
-
-        self.runtime_requirements.array_append_slot = true;
 
         const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
         if (base_result.exit_label == null) {
@@ -1760,7 +1765,6 @@ pub const LlvmModuleRenderer = struct {
         return switch (string_method) {
             .Trim => {
                 if (call_expression.arguments.len != 0) unreachable;
-                self.runtime_requirements.string_trim = true;
                 const result_register = self.runtime_call_emitter.emitStringTrimCall(
                     &self.function_ir_builder,
                     &self.function_symbol_generator,
@@ -1773,7 +1777,6 @@ pub const LlvmModuleRenderer = struct {
             },
             .Split => {
                 if (call_expression.arguments.len != 1) unreachable;
-                self.runtime_requirements.string_split = true;
 
                 const delimiter_result = self.emitNode(
                     &call_expression.arguments[0],
@@ -1799,7 +1802,6 @@ pub const LlvmModuleRenderer = struct {
             },
             .ToInt => {
                 if (call_expression.arguments.len != 0) unreachable;
-                self.runtime_requirements.string_to_int = true;
 
                 const result_register = self.runtime_call_emitter.emitStringToIntCall(
                     &self.function_ir_builder,
@@ -1832,7 +1834,6 @@ pub const LlvmModuleRenderer = struct {
         return switch (integer_method) {
             .ToString => {
                 if (call_expression.arguments.len != 0) unreachable;
-                self.runtime_requirements.int_to_string = true;
 
                 const result_register = self.runtime_call_emitter.emitIntToStringCall(
                     &self.function_ir_builder,
