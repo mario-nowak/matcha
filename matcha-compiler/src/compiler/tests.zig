@@ -7,5 +7,6 @@ test {
     _ = @import("semantic_analysis/semantic_analyzer.test.zig");
     _ = @import("emission/call_lowerer.test.zig");
     _ = @import("emission/lowering_decisions.test.zig");
+    _ = @import("emission/rendering_architecture.test.zig");
     _ = @import("emission/llvm_ir_emitter.test.zig");
 }
