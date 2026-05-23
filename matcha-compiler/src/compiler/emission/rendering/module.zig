@@ -12,10 +12,10 @@ pub const function_emission = @import("function_emission");
 pub const FunctionIrBuilder = function_emission.FunctionIrBuilder;
 pub const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
 
-pub const runtime_emission = @import("runtime_emission");
-pub const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
-pub const RuntimeSymbolEmitter = runtime_emission.RuntimeSymbolEmitter;
-pub const RuntimeRequirements = runtime_emission.RuntimeRequirements;
+pub const runtime = @import("runtime/module.zig");
+pub const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
+pub const RuntimeSymbolEmitter = runtime.RuntimeSymbolEmitter;
+pub const RuntimeRequirements = runtime.RuntimeRequirements;
 
 pub const StringLiteralRenderer = @import("string_literal_renderer.zig").StringLiteralRenderer;
 pub const SymbolGenerator = @import("symbol_generator.zig").SymbolGenerator;

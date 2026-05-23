@@ -5,7 +5,7 @@ const typing = @import("typing");
 const lowering = @import("lowering");
 
 const function_emission = @import("function_emission");
-const runtime_emission = @import("runtime_emission");
+const runtime = @import("runtime/module.zig");
 const symbol_generator_module = @import("symbol_generator.zig");
 const string_literal_renderer_module = @import("string_literal_renderer.zig");
 const support = @import("node_rendering_support.zig");
@@ -17,8 +17,8 @@ const Register = function_emission.Register;
 const Label = function_emission.Label;
 const FunctionIrBuilder = function_emission.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
-const RuntimeStringParts = runtime_emission.RuntimeStringParts;
+const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
+const RuntimeStringParts = runtime.RuntimeStringParts;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const StringLiteralRenderer = string_literal_renderer_module.StringLiteralRenderer;
 

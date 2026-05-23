@@ -5,14 +5,14 @@ const typing = @import("typing");
 const lowering = @import("lowering");
 
 const function_emission = @import("function_emission");
-const runtime_emission = @import("runtime_emission");
+const runtime = @import("runtime/module.zig");
 const symbol_generator_module = @import("symbol_generator.zig");
 const node_renderer_module = @import("node_renderer.zig");
 
 const Label = function_emission.Label;
 const FunctionIrBuilder = function_emission.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
+const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const NodeRenderer = node_renderer_module.NodeRenderer;
 const Environment = node_renderer_module.Environment;

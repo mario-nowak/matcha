@@ -5,7 +5,7 @@ const typing = @import("typing");
 const lowering = @import("lowering");
 
 const function_emission = @import("function_emission");
-const runtime_emission = @import("runtime_emission");
+const runtime = @import("runtime/module.zig");
 const symbol_generator_module = @import("symbol_generator.zig");
 const string_literal_renderer_module = @import("string_literal_renderer.zig");
 const structure_type_definition_renderer_module = @import("structure_type_definition_renderer.zig");
@@ -17,8 +17,8 @@ const Label = function_emission.Label;
 const Storage = function_emission.Storage;
 const FunctionIrBuilder = function_emission.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime_emission.RuntimeCallEmitter;
-const RuntimeSymbolEmitter = runtime_emission.RuntimeSymbolEmitter;
+const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
+const RuntimeSymbolEmitter = runtime.RuntimeSymbolEmitter;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const StringLiteralRenderer = string_literal_renderer_module.StringLiteralRenderer;
 const StructureTypeDefinitionRenderer = structure_type_definition_renderer_module.StructureTypeDefinitionRenderer;
@@ -188,7 +188,7 @@ pub const LlvmModuleRenderer = struct {
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
     }
 
-    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime_emission.RuntimeRequirements {
+    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime.RuntimeRequirements {
         return .{
             .print_int = plan.print_int,
             .print_string = plan.print_string,
