@@ -267,12 +267,3 @@ pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
 pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
 pub const StructureConstructionLayoutByNodeId = std.AutoHashMap(ast.NodeId, StructureConstructionLayout);
 pub const MemberAccessByNodeId = std.AutoHashMap(ast.NodeId, MemberAccess);
-
-pub const TypedProgram = struct {
-    resolved_program: symbols.ResolvedProgram,
-    type_store: TypeStore,
-    type_by_symbol_id: TypeBySymbolId,
-    type_by_node_id: TypeByNodeId,
-    structure_construction_layout_by_node_id: StructureConstructionLayoutByNodeId,
-    member_access_by_node_id: MemberAccessByNodeId,
-};

@@ -12,6 +12,7 @@ const ValidationContext = type_checking_types.ValidationContext;
 const ExhaustivenessClass = type_checking_types.ExhaustivenessClass;
 const TypeCheckEnvironment = type_checking_types.TypeCheckEnvironment;
 const PlaceInfo = type_checking_types.PlaceInfo;
+const TypeCheckResult = type_checking_types.TypeCheckResult;
 
 pub const NodeTypeAnalyzer = struct {
     allocator: std.mem.Allocator,
@@ -59,9 +60,8 @@ pub const NodeTypeAnalyzer = struct {
         }
     }
 
-    pub fn typedProgram(self: *const @This(), resolved_program: symbols.ResolvedProgram) typing.TypedProgram {
+    pub fn typeCheckResult(self: *const @This()) TypeCheckResult {
         return .{
-            .resolved_program = resolved_program,
             .type_store = self.type_store,
             .type_by_symbol_id = self.type_by_symbol_id,
             .type_by_node_id = self.type_by_node_id,
@@ -99,6 +99,7 @@ pub const NodeTypeAnalyzer = struct {
             .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
             .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
             .StringLiteral => return self.checkStringLiteralNode(node.id),
+            .UnitLiteral => return self.checkUnitLiteralNode(node.id),
             .Identifier => return self.checkIdentifierNode(node.id, environment),
             .IfStatement => |if_statement| return self.checkIfStatementNode(node.id, &if_statement, environment),
             .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, environment),
@@ -855,6 +856,13 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, self.type_store.string_type_id);
     }
 
+    fn checkUnitLiteralNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+    ) TypeError!typing.TypeId {
+        return self.recordNodeType(node_id, self.type_store.unit_type_id);
+    }
+
     fn checkIdentifierNode(
         self: *@This(),
         node_id: ast.NodeId,
@@ -1153,6 +1161,7 @@ pub const NodeTypeAnalyzer = struct {
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
+            .UnitLiteral,
             .Leave,
             .Continue,
             => {},

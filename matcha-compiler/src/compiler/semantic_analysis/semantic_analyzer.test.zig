@@ -1,6 +1,7 @@
 const std = @import("std");
 const ast = @import("ast");
 const helpers = @import("../test_helpers.zig");
+const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 
 const TestError = helpers.TestError;
@@ -13,7 +14,7 @@ fn analyze(source: []const u8) !helpers.AnalyzedProgram {
     return helpers.analyzeProgram(source);
 }
 
-fn expectType(expected: typing.Type, typed_program: *const typing.TypedProgram, actual_type_id: typing.TypeId) !void {
+fn expectType(expected: typing.Type, typed_program: *const semantic_analysis.AnalyzedProgram, actual_type_id: typing.TypeId) !void {
     try std.testing.expectEqual(expected, typed_program.type_store.getType(actual_type_id));
 }
 
@@ -56,6 +57,22 @@ test "semantic analysis resolves parameter references inside function bodies" {
     );
 }
 
+test "semantic analysis assigns the unit type to the unit literal" {
+    const source =
+        \\val value = unit;
+    ;
+
+    var analyzed = try analyze(source);
+    defer analyzed.deinit();
+
+    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[0]);
+    try expectType(
+        .Unit,
+        &analyzed.typed_program,
+        analyzed.typed_program.type_by_node_id.get(declaration.value.id).?,
+    );
+}
+
 test "semantic analysis resolves array types in function signatures" {
     const source =
         \\item identity(values: int[]): int[] = values;
@@ -78,6 +95,37 @@ test "semantic analysis resolves array types in function signatures" {
         &analyzed.typed_program,
         analyzed.typed_program.type_by_symbol_id.get(resolved_function.parameters[0].symbol_id).?,
     );
+}
+
+test "semantic analysis seeds runtime representation by type id" {
+    const source =
+        \\item Empty = structure { value: unit; };
+        \\val empty = Empty { value = unit };
+        \\val values = [unit];
+    ;
+
+    var analyzed = try analyze(source);
+    defer analyzed.deinit();
+
+    const empty_structure_symbol_id = expectStatementSymbolId(&analyzed, 0);
+    const empty_structure_type_id = analyzed.typed_program.type_by_symbol_id.get(empty_structure_symbol_id).?;
+    switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_type_id.get(empty_structure_type_id).?) {
+        .None => {},
+        else => return TestError.UnexpectedNodeKind,
+    }
+
+    const empty_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
+    switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_node_id.get(empty_declaration.value.id).?) {
+        .None => {},
+        else => return TestError.UnexpectedNodeKind,
+    }
+
+    const values_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const values_type_id = analyzed.typed_program.type_by_node_id.get(values_declaration.value.id).?;
+    switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_type_id.get(values_type_id).?) {
+        .Array => |array_runtime_representation| try std.testing.expectEqual(analyzed.typed_program.type_store.unit_type_id, array_runtime_representation.element_type_id),
+        else => return TestError.UnexpectedNodeKind,
+    }
 }
 
 test "semantic analysis records structure construction layout in source order" {

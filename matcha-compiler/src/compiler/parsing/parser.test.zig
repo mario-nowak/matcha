@@ -145,6 +145,18 @@ test "parser treats bare identifier while conditions as conditions, not structur
     try expectNodeTag(while_statement.condition, .Identifier);
 }
 
+test "parser treats unit as a literal in expression context" {
+    const source =
+        \\val value = unit;
+    ;
+
+    var parsed = try parse(source);
+    defer parsed.deinit();
+
+    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
+    try expectNodeTag(declaration.value, .UnitLiteral);
+}
+
 test "parser treats item as a contextual definition keyword" {
     const source =
         \\val item = 1;

@@ -2,6 +2,7 @@ const std = @import("std");
 const ast = @import("ast");
 const symbols = @import("symbols");
 const typing = @import("typing");
+const semantic_analysis = @import("semantic_analysis");
 
 const function_emission = @import("function_emission");
 const llvm_type_lowering = @import("llvm_type_lowering.zig");
@@ -142,7 +143,7 @@ pub const LlvmIrEmitter = struct {
         self.llvm_matcha_type_by_type_id.deinit();
     }
 
-    pub fn emitLlvmIr(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
+    pub fn emitLlvmIr(self: *@This(), typed_program: *const semantic_analysis.AnalyzedProgram) []const u8 {
         self.resetModuleState();
 
         const structure_type_definitions = self.structure_type_definition_emitter.emitStructureTypeDefinitions(typed_program);
@@ -162,7 +163,7 @@ pub const LlvmIrEmitter = struct {
 
     fn emitTopLevelFunctionDefinitions(
         self: *@This(),
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) std.ArrayList([]const u8) {
         var user_defined_functions = std.ArrayList([]const u8){};
         for (typed_program.resolved_program.program.statements) |*statement| {
@@ -263,7 +264,7 @@ pub const LlvmIrEmitter = struct {
         return self.function_ir_builder.render(function_name, return_llvm_ir_type, parameter_list);
     }
 
-    fn emitMainFunction(self: *@This(), typed_program: *const typing.TypedProgram) []const u8 {
+    fn emitMainFunction(self: *@This(), typed_program: *const semantic_analysis.AnalyzedProgram) []const u8 {
         self.resetCurrentFunctionState();
 
         var environment = Environment.init(self.allocator, null, typed_program.type_store.integer_type_id);
@@ -297,7 +298,7 @@ pub const LlvmIrEmitter = struct {
         function_definition: *const ast.Function,
         resolved_function: *const symbols.ResolvedFunction,
         owning_structure_symbol: ?symbols.Symbol,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) []const u8 {
         self.resetCurrentFunctionState();
 
@@ -398,7 +399,7 @@ pub const LlvmIrEmitter = struct {
         self: *@This(),
         node: *const ast.Node,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         switch (node.kind) {
@@ -460,6 +461,7 @@ pub const LlvmIrEmitter = struct {
                     &self.function_ir_builder,
                 ),
             },
+            .UnitLiteral => unreachable,
             .Identifier => {
                 const symbol_id = typed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
@@ -1033,7 +1035,7 @@ pub const LlvmIrEmitter = struct {
         operand_type_id: typing.TypeId,
         left_register: Register,
         right_register: Register,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) Register {
         if (operand_type_id == typed_program.type_store.string_type_id) {
             return switch (binary_operator) {
@@ -1107,7 +1109,7 @@ pub const LlvmIrEmitter = struct {
         node: *const ast.Node,
         member_access: *const ast.MemberAccess,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const resolved_member_access = typed_program.member_access_by_node_id.get(node.id) orelse unreachable;
@@ -1198,7 +1200,7 @@ pub const LlvmIrEmitter = struct {
         self: *@This(),
         target: *const ast.Node,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         switch (target.kind) {
@@ -1231,7 +1233,7 @@ pub const LlvmIrEmitter = struct {
         node_id: ast.NodeId,
         member_access: *const ast.MemberAccess,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(
@@ -1285,7 +1287,7 @@ pub const LlvmIrEmitter = struct {
         node: *const ast.Node,
         fields: []const ast.StructureConstructionField,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const node_type_id = typed_program.type_by_node_id.get(node.id) orelse unreachable;
@@ -1352,7 +1354,7 @@ pub const LlvmIrEmitter = struct {
         node: *const ast.Node,
         for_in: *const ast.ForIn,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const iterable_result = self.emitNode(
@@ -1475,7 +1477,7 @@ pub const LlvmIrEmitter = struct {
         node: *const ast.Node,
         array_literal: *const ast.ArrayLiteral,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const array_type_id = typed_program.type_by_node_id.get(node.id) orelse unreachable;
@@ -1569,7 +1571,7 @@ pub const LlvmIrEmitter = struct {
         node: *const ast.Node,
         index_access: *const ast.IndexAccess,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         _ = node;
@@ -1603,7 +1605,7 @@ pub const LlvmIrEmitter = struct {
         self: *@This(),
         index_access: *const ast.IndexAccess,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(index_access.base, entry_label, typed_program, environment);
@@ -1700,7 +1702,7 @@ pub const LlvmIrEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         if (call_expression.arguments.len != 1) unreachable;
@@ -1750,7 +1752,7 @@ pub const LlvmIrEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
@@ -1822,7 +1824,7 @@ pub const LlvmIrEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
@@ -1850,7 +1852,7 @@ pub const LlvmIrEmitter = struct {
 
     fn getStructureSymbolForTypeId(
         self: *@This(),
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         type_id: typing.TypeId,
     ) symbols.Symbol {
         _ = self;
@@ -1873,7 +1875,7 @@ pub const LlvmIrEmitter = struct {
 
     fn emitStructureMethodFunctionDefinitions(
         self: *@This(),
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) std.ArrayList([]const u8) {
         var method_definitions = std.ArrayList([]const u8){};
 
@@ -1904,7 +1906,7 @@ pub const LlvmIrEmitter = struct {
         method_definitions: *std.ArrayList([]const u8),
         structure_definition: ast.Structure,
         structure_symbol: symbols.Symbol,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
         for (structure_definition.function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
@@ -1935,7 +1937,7 @@ pub const LlvmIrEmitter = struct {
         decision_construct: DecisionConstruct,
         label_names: DecisionLabelNames,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         var current_label = entry_label;
@@ -2128,7 +2130,7 @@ pub const LlvmIrEmitter = struct {
     fn emitLoopConstruct(
         self: *@This(),
         loop_construct: LoopConstruct,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         const loop_header_label = self.function_symbol_generator.generateLabel("loop_header");
@@ -2195,7 +2197,7 @@ pub const LlvmIrEmitter = struct {
         self: *@This(),
         block: ast.Block,
         entry_label: Label,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
         environment: *Environment,
     ) EmissionResult {
         var current_label = entry_label;
