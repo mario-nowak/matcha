@@ -577,8 +577,8 @@ pub const LlvmModuleRenderer = struct {
                     environment,
                 );
                 const left_operand_type = typed_program.analyzed_program.type_by_node_id.get(binary_expression.left.id).?;
-                const result_register = self.emitBinaryOperation(
-                    binary_expression.operator,
+                const result_register = self.emitLoweredBinaryOperation(
+                    typed_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                     left_operand_type,
                     left_result.register.?,
                     right_result.register.?,
@@ -689,8 +689,12 @@ pub const LlvmModuleRenderer = struct {
                             };
                         }
 
-                        const result_register = self.emitBinaryOperation(
-                            binary_operator,
+                        const result_register = self.emitLoweredBinaryOperation(
+                            lowering.BinaryOperationLowerer.decisionFor(
+                                binary_operator,
+                                value_type_id,
+                                typed_program.analyzed_program,
+                            ),
                             value_type_id,
                             current_value_register,
                             value_result.register.?,
@@ -1140,76 +1144,70 @@ pub const LlvmModuleRenderer = struct {
         };
     }
 
-    fn emitBinaryOperation(
+    fn emitLoweredBinaryOperation(
         self: *@This(),
-        binary_operator: ast.BinaryOperator,
+        decision: lowering.lowering_types.BinaryOperationDecision,
         operand_type_id: typing.TypeId,
         left_register: Register,
         right_register: Register,
         typed_program: *const lowering.LoweredProgram,
     ) Register {
-        if (operand_type_id == typed_program.analyzed_program.type_store.string_type_id) {
-            return switch (binary_operator) {
-                .Add => concatenate: {
-                    break :concatenate self.runtime_call_emitter.emitStringConcatenateCall(
-                        &self.function_ir_builder,
-                        &self.function_symbol_generator,
-                        self.emitStringParts(left_register),
-                        self.emitStringParts(right_register),
-                    );
-                },
-                .Equal => compare_equal: {
-                    break :compare_equal self.runtime_call_emitter.emitStringCompareCall(
-                        &self.function_ir_builder,
-                        &self.function_symbol_generator,
-                        self.emitStringParts(left_register),
-                        self.emitStringParts(right_register),
-                    );
-                },
-                .NotEqual => compare_not_equal: {
-                    const equal_register = self.runtime_call_emitter.emitStringCompareCall(
-                        &self.function_ir_builder,
-                        &self.function_symbol_generator,
-                        self.emitStringParts(left_register),
-                        self.emitStringParts(right_register),
-                    );
-                    const result_register = self.function_symbol_generator.generateRegister();
-                    self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                        self.allocator,
-                        "{s} = xor i1 {s}, 1",
-                        .{ result_register, equal_register },
-                    ) catch unreachable);
-                    break :compare_not_equal result_register;
-                },
-                else => unreachable,
-            };
-        }
+        return switch (decision) {
+            .PrimitiveOperation => |primitive_operation| {
+                const llvm_ir_type = typed_program.llvmIrType(operand_type_id);
+                const operator_instruction = switch (primitive_operation) {
+                    .Add => "add",
+                    .Subtract => "sub",
+                    .Multiply => "mul",
+                    .Divide => "sdiv",
+                    .Equal => "icmp eq",
+                    .NotEqual => "icmp ne",
+                    .LessThan => "icmp slt",
+                    .LessThanOrEqual => "icmp sle",
+                    .GreaterThan => "icmp sgt",
+                    .GreaterThanOrEqual => "icmp sge",
+                    .And => "and",
+                    .Or => "or",
+                };
 
-        const llvm_ir_type = typed_program.llvmIrType(operand_type_id);
-        const operator_instruction = switch (binary_operator) {
-            .Add => "add",
-            .Subtract => "sub",
-            .Multiply => "mul",
-            .Divide => "sdiv",
-            .Equal => "icmp eq",
-            .NotEqual => "icmp ne",
-            .LessThan => "icmp slt",
-            .LessThanOrEqual => "icmp sle",
-            .GreaterThan => "icmp sgt",
-            .GreaterThanOrEqual => "icmp sge",
-            .And => "and",
-            .Or => "or",
+                const result_register = self.function_symbol_generator.generateRegister();
+                const instruction = std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = {s} {s} {s}, {s}",
+                    .{ result_register, operator_instruction, llvm_ir_type, left_register, right_register },
+                ) catch unreachable;
+                self.function_ir_builder.emitInstruction(instruction);
+
+                return result_register;
+            },
+            .StringConcatenate => self.runtime_call_emitter.emitStringConcatenateCall(
+                &self.function_ir_builder,
+                &self.function_symbol_generator,
+                self.emitStringParts(left_register),
+                self.emitStringParts(right_register),
+            ),
+            .StringCompareEqual => self.runtime_call_emitter.emitStringCompareCall(
+                &self.function_ir_builder,
+                &self.function_symbol_generator,
+                self.emitStringParts(left_register),
+                self.emitStringParts(right_register),
+            ),
+            .StringCompareNotEqual => compare_not_equal: {
+                const equal_register = self.runtime_call_emitter.emitStringCompareCall(
+                    &self.function_ir_builder,
+                    &self.function_symbol_generator,
+                    self.emitStringParts(left_register),
+                    self.emitStringParts(right_register),
+                );
+                const result_register = self.function_symbol_generator.generateRegister();
+                self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = xor i1 {s}, 1",
+                    .{ result_register, equal_register },
+                ) catch unreachable);
+                break :compare_not_equal result_register;
+            },
         };
-
-        const result_register = self.function_symbol_generator.generateRegister();
-        const instruction = std.fmt.allocPrint(
-            self.allocator,
-            "{s} = {s} {s} {s}, {s}",
-            .{ result_register, operator_instruction, llvm_ir_type, left_register, right_register },
-        ) catch unreachable;
-        self.function_ir_builder.emitInstruction(instruction);
-
-        return result_register;
     }
 
     fn emitMemberAccess(
@@ -1220,59 +1218,55 @@ pub const LlvmModuleRenderer = struct {
         typed_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const resolved_member_access = typed_program.analyzed_program.member_access_by_node_id.get(node.id) orelse unreachable;
-        switch (resolved_member_access) {
-            .ArrayInstanceFieldAccess => |array_field| switch (array_field) {
-                .Length => {
-                    const base_result = self.emitNode(
-                        member_access.base,
-                        entry_label,
-                        typed_program,
-                        environment,
-                    );
-                    if (base_result.exit_label == null) {
-                        return .{ .exit_label = null, .register = null };
-                    }
+        const member_access_decision = typed_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
+        switch (member_access_decision) {
+            .ArrayLength => {
+                const base_result = self.emitNode(
+                    member_access.base,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (base_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
 
-                    const length_pointer_register = self.function_symbol_generator.generateRegister();
-                    self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                        self.allocator,
-                        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-                        .{ length_pointer_register, base_result.register orelse unreachable },
-                    ) catch unreachable);
+                const length_pointer_register = self.function_symbol_generator.generateRegister();
+                self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+                    self.allocator,
+                    "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
+                    .{ length_pointer_register, base_result.register orelse unreachable },
+                ) catch unreachable);
 
-                    const length_register = self.function_symbol_generator.generateRegister();
-                    self.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
+                const length_register = self.function_symbol_generator.generateRegister();
+                self.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
 
-                    return .{
-                        .exit_label = base_result.exit_label,
-                        .register = length_register,
-                    };
-                },
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = length_register,
+                };
             },
-            .StringInstanceFieldAccess => |string_field| switch (string_field) {
-                .Length => {
-                    const base_result = self.emitNode(
-                        member_access.base,
-                        entry_label,
-                        typed_program,
-                        environment,
-                    );
-                    if (base_result.exit_label == null) {
-                        return .{ .exit_label = null, .register = null };
-                    }
+            .StringLength => {
+                const base_result = self.emitNode(
+                    member_access.base,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (base_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
 
-                    const string_parts = self.emitStringParts(base_result.register orelse unreachable);
-                    return .{
-                        .exit_label = base_result.exit_label,
-                        .register = string_parts.length_register,
-                    };
-                },
+                const string_parts = self.emitStringParts(base_result.register orelse unreachable);
+                return .{
+                    .exit_label = base_result.exit_label,
+                    .register = string_parts.length_register,
+                };
             },
-            .StructureInstanceFieldAccess => {
-                const member_pointer_result = self.emitMemberAccessPointer(
-                    node.id,
+            .StructureField => |structure_field| {
+                const member_pointer_result = self.emitStructureFieldPointer(
                     member_access,
+                    structure_field.field_index,
                     entry_label,
                     typed_program,
                     environment,
@@ -1296,11 +1290,11 @@ pub const LlvmModuleRenderer = struct {
                     .register = member_register,
                 };
             },
-            .StructureInstanceMethodAccess => unreachable,
-            .StructureTypeFunctionAccess => unreachable,
-            .ArrayInstanceMethodAccess => unreachable,
-            .StringInstanceMethodAccess => unreachable,
-            .IntegerInstanceMethodAccess => unreachable,
+            .StructureMethod => unreachable,
+            .StructureTypeFunction => unreachable,
+            .ArrayMethod => unreachable,
+            .StringMethod => unreachable,
+            .IntegerMethod => unreachable,
         }
     }
 
@@ -1311,35 +1305,44 @@ pub const LlvmModuleRenderer = struct {
         typed_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        switch (target.kind) {
-            .Identifier => {
-                const symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(target.id).?;
-                return .{
-                    .exit_label = entry_label,
-                    .register = environment.storage_by_symbol_id.get(symbol_id).?,
-                };
+        const place_decision = typed_program.place_decision_by_node_id.get(target.id) orelse unreachable;
+        return switch (place_decision) {
+            .IdentifierBinding => |identifier_binding| .{
+                .exit_label = entry_label,
+                .register = environment.storage_by_symbol_id.get(identifier_binding.symbol_id).?,
             },
-            .MemberAccess => |member_access| return self.emitMemberAccessPointer(
-                target.id,
-                &member_access,
-                entry_label,
-                typed_program,
-                environment,
-            ),
-            .IndexAccess => |index_access| return self.emitIndexAccessPointer(
-                &index_access,
-                entry_label,
-                typed_program,
-                environment,
-            ),
-            else => unreachable,
-        }
+            .StructureField => |structure_field| {
+                const member_access = switch (target.kind) {
+                    .MemberAccess => |resolved_member_access| resolved_member_access,
+                    else => unreachable,
+                };
+                return self.emitStructureFieldPointer(
+                    &member_access,
+                    structure_field.field_index,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+            },
+            .ArrayElement => {
+                const index_access = switch (target.kind) {
+                    .IndexAccess => |resolved_index_access| resolved_index_access,
+                    else => unreachable,
+                };
+                return self.emitIndexAccessPointer(
+                    &index_access,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+            },
+        };
     }
 
-    fn emitMemberAccessPointer(
+    fn emitStructureFieldPointer(
         self: *@This(),
-        node_id: ast.NodeId,
         member_access: *const ast.MemberAccess,
+        field_index: u32,
         entry_label: Label,
         typed_program: *const lowering.LoweredProgram,
         environment: *Environment,
@@ -1356,18 +1359,6 @@ pub const LlvmModuleRenderer = struct {
                 .register = null,
             };
         }
-
-        const resolved_member_access = typed_program.analyzed_program.member_access_by_node_id.get(node_id) orelse unreachable;
-        const field_index = switch (resolved_member_access) {
-            .StructureInstanceFieldAccess => |structure_field| structure_field.field_index,
-            .StructureInstanceMethodAccess => unreachable,
-            .ArrayInstanceFieldAccess => unreachable,
-            .StructureTypeFunctionAccess => unreachable,
-            .ArrayInstanceMethodAccess => unreachable,
-            .StringInstanceFieldAccess => unreachable,
-            .StringInstanceMethodAccess => unreachable,
-            .IntegerInstanceMethodAccess => unreachable,
-        };
 
         const base_type_id = typed_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
         switch (typed_program.analyzed_program.type_store.getType(base_type_id)) {
@@ -2092,8 +2083,12 @@ pub const LlvmModuleRenderer = struct {
                     }
                     current_label = pattern_result.exit_label.?;
 
-                    const comparison_register = self.emitBinaryOperation(
-                        .Equal,
+                    const comparison_register = self.emitLoweredBinaryOperation(
+                        lowering.BinaryOperationLowerer.decisionFor(
+                            .Equal,
+                            subject_type_id.?,
+                            typed_program.analyzed_program,
+                        ),
                         subject_type_id.?,
                         subject_register.?,
                         pattern_result.register.?,
