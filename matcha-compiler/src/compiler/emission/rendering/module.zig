@@ -1,4 +1,8 @@
 pub const LlvmModuleRenderer = @import("llvm_module_renderer.zig").LlvmModuleRenderer;
+pub const FunctionRenderer = @import("function_renderer.zig").FunctionRenderer;
+pub const NodeRenderer = @import("node_renderer.zig").NodeRenderer;
+pub const Environment = @import("node_renderer.zig").Environment;
+pub const EmissionResult = @import("node_renderer.zig").EmissionResult;
 
 pub const lowering = @import("lowering");
 pub const function_emission = @import("function_emission");
