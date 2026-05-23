@@ -13,7 +13,7 @@ const StringLiteralGlobal = struct {
     len: usize,
 };
 
-pub const StringLiteralEmitter = struct {
+pub const StringLiteralRenderer = struct {
     allocator: std.mem.Allocator,
     string_literal_globals: std.ArrayList(StringLiteralGlobal),
     string_literal_global_name_by_node_id: std.AutoHashMap(ast.NodeId, []const u8),

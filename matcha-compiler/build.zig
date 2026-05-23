@@ -109,6 +109,29 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const lowering_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/emission/lowering/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+        },
+    });
+
+    const rendering_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/emission/rendering/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "function_emission", .module = function_emission_module },
+            .{ .name = "runtime_emission", .module = runtime_emission_module },
+            .{ .name = "lowering", .module = lowering_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+        },
+    });
+
     const emission_module = b.addModule("emission", .{
         .root_source_file = b.path("src/compiler/emission/module.zig"),
         .target = target,
@@ -116,6 +139,8 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "function_emission", .module = function_emission_module },
             .{ .name = "runtime_emission", .module = runtime_emission_module },
+            .{ .name = "lowering", .module = lowering_module },
+            .{ .name = "rendering", .module = rendering_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },

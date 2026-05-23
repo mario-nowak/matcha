@@ -47,8 +47,8 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
     const symbol_generator = emission.SymbolGenerator.init(allocator);
     const runtime_call_emitter = emission.RuntimeCallEmitter.init(allocator);
     const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(allocator);
-    const string_literal_emitter = emission.StringLiteralEmitter.init(allocator);
-    const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(allocator);
+    const string_literal_renderer = emission.StringLiteralRenderer.init(allocator);
+    const structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(allocator);
     var llvm_ir_emitter = emission.LlvmIrEmitter.init(
         allocator,
         getLlvmTargetTriple(),
@@ -57,8 +57,8 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
         symbol_generator,
         runtime_call_emitter,
         runtime_symbol_emitter,
-        string_literal_emitter,
-        structure_type_definition_emitter,
+        string_literal_renderer,
+        structure_type_definition_renderer,
     );
     return llvm_ir_emitter.emitLlvmIr(&typed_program);
 }
