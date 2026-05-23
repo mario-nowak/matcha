@@ -184,7 +184,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
         node_id: ast.NodeId,
         context: AnalysisContext,
     ) void {
-        const type_id = context.type_check_result.type_by_node_id.get(node_id) orelse unreachable;
+        const type_id = context.type_check_result.type_by_node_id.get(node_id) orelse return;
         self.recordNodeRuntimeRepresentation(node_id, self.runtimeRepresentationForType(type_id));
     }
 
@@ -204,6 +204,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
     }
 
     fn analyzeItemDefinitionNode(self: *@This(), node_id: ast.NodeId, item_definition: ast.ItemDefinition, context: AnalysisContext) anyerror!void {
+        _ = node_id;
         switch (item_definition.item) {
             .Function => |function_definition| {
                 try self.analyzeNode(function_definition.body_expression, context);
@@ -214,8 +215,6 @@ pub const RuntimeRepresentationAnalyzer = struct {
                 }
             },
         }
-
-        self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
     fn analyzeReturnNode(self: *@This(), node_id: ast.NodeId, return_statement: ast.Return, context: AnalysisContext) anyerror!void {
