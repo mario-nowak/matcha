@@ -267,4 +267,3 @@ pub const TypeBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
 pub const TypeByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
 pub const StructureConstructionLayoutByNodeId = std.AutoHashMap(ast.NodeId, StructureConstructionLayout);
 pub const MemberAccessByNodeId = std.AutoHashMap(ast.NodeId, MemberAccess);
-
