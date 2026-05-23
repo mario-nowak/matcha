@@ -31,6 +31,18 @@ pub const RuntimeCallEmitter = struct {
         builder.emitInstruction(init_instruction);
     }
 
+    pub fn emitPrintIntCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        integer_register: Register,
+    ) void {
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i64 {s})",
+            .{ runtime_symbols.runtime_print_int_function_name, integer_register },
+        ) catch unreachable);
+    }
+
     pub fn emitPrintStringCall(
         self: *const @This(),
         builder: *FunctionIrBuilder,
@@ -72,6 +84,20 @@ pub const RuntimeCallEmitter = struct {
             symbol_generator,
             runtime_symbols.runtime_read_line_function_name,
         );
+    }
+
+    pub fn emitGetArgumentsCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+    ) Register {
+        const result_register = symbol_generator.generateRegister();
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @{s}()",
+            .{ result_register, runtime_symbols.runtime_get_arguments_function_name },
+        ) catch unreachable);
+        return result_register;
     }
 
     pub fn emitStringConcatenateCall(

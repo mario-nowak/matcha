@@ -549,208 +549,13 @@ pub const LlvmModuleRenderer = struct {
                     .register = null,
                 };
             },
-            .CallExpression => |call_expression| {
-                var structure_symbol_id: ?symbols.SymbolId = null;
-                var instance_method_receiver: ?*const ast.Node = null;
-                const callee_symbol_id = switch (call_expression.callee.kind) {
-                    .MemberAccess => |callee_member_access| member_access_callee_symbol_id: {
-                        const member_access = typed_program.analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable;
-                        switch (member_access) {
-                            .StructureInstanceMethodAccess => |structure_method| {
-                                structure_symbol_id = structure_method.structure_symbol_id;
-                                instance_method_receiver = callee_member_access.base;
-                                break :member_access_callee_symbol_id structure_method.function_symbol_id;
-                            },
-                            .StructureTypeFunctionAccess => |structure_function| {
-                                structure_symbol_id = structure_function.structure_symbol_id;
-                                break :member_access_callee_symbol_id structure_function.function_symbol_id;
-                            },
-                            .ArrayInstanceMethodAccess => |array_method| {
-                                return switch (array_method) {
-                                    .Append => self.emitArrayAppendCall(
-                                        &callee_member_access,
-                                        &call_expression,
-                                        entry_label,
-                                        typed_program,
-                                        environment,
-                                    ),
-                                };
-                            },
-                            .StringInstanceMethodAccess => |string_method| {
-                                return self.emitStringMethodCall(
-                                    string_method,
-                                    &callee_member_access,
-                                    &call_expression,
-                                    entry_label,
-                                    typed_program,
-                                    environment,
-                                );
-                            },
-                            .IntegerInstanceMethodAccess => |integer_method| {
-                                return self.emitIntegerMethodCall(
-                                    integer_method,
-                                    &callee_member_access,
-                                    &call_expression,
-                                    entry_label,
-                                    typed_program,
-                                    environment,
-                                );
-                            },
-                            else => unreachable,
-                        }
-                    },
-                    else => typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
-                        call_expression.callee.id,
-                    ) orelse unreachable,
-                };
-                const callee_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
-                const function_info = switch (callee_symbol.kind) {
-                    .Function => |function_info| function_info,
-                    else => unreachable,
-                };
-
-                const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
-                var current_label = entry_label;
-                var argument_registers = std.ArrayList(Register){};
-                defer argument_registers.deinit(self.allocator);
-
-                if (instance_method_receiver) |receiver| {
-                    const receiver_result = self.emitNode(
-                        receiver,
-                        current_label,
-                        typed_program,
-                        environment,
-                    );
-                    if (receiver_result.exit_label) |exit_label| {
-                        current_label = exit_label;
-                    } else {
-                        return .{
-                            .exit_label = null,
-                            .register = null,
-                        };
-                    }
-                    argument_registers.append(
-                        self.allocator,
-                        receiver_result.register orelse unreachable,
-                    ) catch unreachable;
-                }
-
-                for (call_expression.arguments) |*argument| {
-                    const argument_result = self.emitNode(
-                        argument,
-                        current_label,
-                        typed_program,
-                        environment,
-                    );
-                    if (argument_result.exit_label) |exit_label| {
-                        current_label = exit_label;
-                    } else {
-                        return .{
-                            .exit_label = null,
-                            .register = null,
-                        };
-                    }
-                    argument_registers.append(
-                        self.allocator,
-                        argument_result.register orelse unreachable,
-                    ) catch unreachable;
-                }
-
-                switch (function_info.implementation) {
-                    .BuiltinPrintInt => {},
-                    .BuiltinPrintString => {
-                        self.runtime_call_emitter.emitPrintStringCall(
-                            &self.function_ir_builder,
-                            self.emitStringParts(argument_registers.items[0]),
-                        );
-
-                        return .{
-                            .exit_label = current_label,
-                            .register = null,
-                        };
-                    },
-                    .BuiltinReadFile => {
-                        const result_register = self.runtime_call_emitter.emitReadFileCall(
-                            &self.function_ir_builder,
-                            &self.function_symbol_generator,
-                            self.emitStringParts(argument_registers.items[0]),
-                        );
-
-                        return .{
-                            .exit_label = current_label,
-                            .register = result_register,
-                        };
-                    },
-                    .BuiltinReadLine => {
-                        const result_register = self.runtime_call_emitter.emitReadLineCall(
-                            &self.function_ir_builder,
-                            &self.function_symbol_generator,
-                        );
-                        return .{
-                            .exit_label = current_label,
-                            .register = result_register,
-                        };
-                    },
-                    .BuiltinGetArguments => {},
-                    .UserDefined => {},
-                }
-
-                var argument_list_buffer = std.ArrayList(u8){};
-                defer argument_list_buffer.deinit(self.allocator);
-                for (resolved_function.parameters, argument_registers.items, 0..) |parameter, argument_register, index| {
-                    const parameter_type_id = typed_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
-                    if (index > 0) {
-                        argument_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
-                    }
-                    argument_list_buffer.writer(self.allocator).print(
-                        "{s} {s}",
-                        .{
-                            typed_program.llvmIrType(parameter_type_id),
-                            argument_register,
-                        },
-                    ) catch unreachable;
-                }
-
-                const function_name = if (structure_symbol_id) |owning_structure_symbol_id|
-                    self.symbol_generator.generateStructureFunctionName(
-                        typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(owning_structure_symbol_id),
-                        callee_symbol,
-                    )
-                else
-                    self.symbol_generator.generateFunctionName(callee_symbol);
-                const function_type_id = typed_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
-                const function_return_type_id = switch (typed_program.analyzed_program.type_store.getType(function_type_id)) {
-                    .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
-                    else => unreachable,
-                };
-                const function_return_llvm_ir_type = typed_program.llvmIrType(function_return_type_id);
-                if (function_return_type_id == typed_program.analyzed_program.type_store.unit_type_id) {
-                    const call_instruction = std.fmt.allocPrint(
-                        self.allocator,
-                        "call {s} @{s}({s})",
-                        .{ function_return_llvm_ir_type, function_name, argument_list_buffer.items },
-                    ) catch unreachable;
-                    self.function_ir_builder.emitInstruction(call_instruction);
-
-                    return .{
-                        .exit_label = current_label,
-                        .register = null,
-                    };
-                }
-
-                const result_register = self.function_symbol_generator.generateRegister();
-                const call_instruction = std.fmt.allocPrint(
-                    self.allocator,
-                    "{s} = call {s} @{s}({s})",
-                    .{ result_register, function_return_llvm_ir_type, function_name, argument_list_buffer.items },
-                ) catch unreachable;
-                self.function_ir_builder.emitInstruction(call_instruction);
-
-                return .{
-                    .exit_label = current_label,
-                    .register = result_register,
-                };
-            },
+            .CallExpression => |call_expression| return self.emitCallExpression(
+                node,
+                &call_expression,
+                entry_label,
+                typed_program,
+                environment,
+            ),
             .MemberAccess => |member_access| return self.emitMemberAccess(
                 node,
                 &member_access,
@@ -1035,6 +840,304 @@ pub const LlvmModuleRenderer = struct {
                 environment,
             ),
         }
+    }
+
+    fn emitCallExpression(
+        self: *@This(),
+        node: *const ast.Node,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const lowering.LoweredProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        const call_dispatch = typed_program.call_dispatch_decision_by_node_id.get(node.id) orelse unreachable;
+
+        return switch (call_dispatch) {
+            .UserFunction => |user_function| self.emitUserFunctionCall(
+                user_function,
+                call_expression,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            .Builtin => |builtin_call_kind| self.emitBuiltinCall(
+                builtin_call_kind,
+                call_expression,
+                entry_label,
+                typed_program,
+                environment,
+            ),
+            .ArrayMethod => |array_method| {
+                const callee_member_access = switch (call_expression.callee.kind) {
+                    .MemberAccess => |member_access| member_access,
+                    else => unreachable,
+                };
+                return switch (array_method) {
+                    .Append => self.emitArrayAppendCall(
+                        &callee_member_access,
+                        call_expression,
+                        entry_label,
+                        typed_program,
+                        environment,
+                    ),
+                };
+            },
+            .StringMethod => |string_method| {
+                const callee_member_access = switch (call_expression.callee.kind) {
+                    .MemberAccess => |member_access| member_access,
+                    else => unreachable,
+                };
+                return self.emitStringMethodCall(
+                    string_method,
+                    &callee_member_access,
+                    call_expression,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+            },
+            .IntegerMethod => |integer_method| {
+                const callee_member_access = switch (call_expression.callee.kind) {
+                    .MemberAccess => |member_access| member_access,
+                    else => unreachable,
+                };
+                return self.emitIntegerMethodCall(
+                    integer_method,
+                    &callee_member_access,
+                    call_expression,
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+            },
+        };
+    }
+
+    fn emitUserFunctionCall(
+        self: *@This(),
+        user_function: anytype,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const lowering.LoweredProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        var current_label = entry_label;
+        var argument_registers = std.ArrayList(Register){};
+        defer argument_registers.deinit(self.allocator);
+
+        if (user_function.receiver_node_id) |receiver_node_id| {
+            const callee_member_access = switch (call_expression.callee.kind) {
+                .MemberAccess => |member_access| member_access,
+                else => unreachable,
+            };
+            if (callee_member_access.base.id != receiver_node_id) unreachable;
+
+            const receiver_result = self.emitNode(
+                callee_member_access.base,
+                current_label,
+                typed_program,
+                environment,
+            );
+            if (receiver_result.exit_label) |exit_label| {
+                current_label = exit_label;
+            } else {
+                return .{ .exit_label = null, .register = null };
+            }
+            argument_registers.append(
+                self.allocator,
+                receiver_result.register orelse unreachable,
+            ) catch unreachable;
+        }
+
+        for (call_expression.arguments) |*argument| {
+            const argument_result = self.emitNode(
+                argument,
+                current_label,
+                typed_program,
+                environment,
+            );
+            if (argument_result.exit_label) |exit_label| {
+                current_label = exit_label;
+            } else {
+                return .{ .exit_label = null, .register = null };
+            }
+            argument_registers.append(
+                self.allocator,
+                argument_result.register orelse unreachable,
+            ) catch unreachable;
+        }
+
+        return self.emitDirectFunctionCall(
+            user_function.function_symbol_id,
+            user_function.owning_structure_symbol_id,
+            argument_registers.items,
+            current_label,
+            typed_program,
+        );
+    }
+
+    fn emitBuiltinCall(
+        self: *@This(),
+        builtin_call_kind: lowering.lowering_types.BuiltinCallKind,
+        call_expression: *const ast.CallExpression,
+        entry_label: Label,
+        typed_program: *const lowering.LoweredProgram,
+        environment: *Environment,
+    ) EmissionResult {
+        return switch (builtin_call_kind) {
+            .PrintInt => {
+                if (call_expression.arguments.len != 1) unreachable;
+                const argument_result = self.emitNode(
+                    &call_expression.arguments[0],
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (argument_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
+
+                self.runtime_call_emitter.emitPrintIntCall(
+                    &self.function_ir_builder,
+                    argument_result.register orelse unreachable,
+                );
+                return .{
+                    .exit_label = argument_result.exit_label,
+                    .register = null,
+                };
+            },
+            .PrintString => {
+                if (call_expression.arguments.len != 1) unreachable;
+                const argument_result = self.emitNode(
+                    &call_expression.arguments[0],
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (argument_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
+
+                self.runtime_call_emitter.emitPrintStringCall(
+                    &self.function_ir_builder,
+                    self.emitStringParts(argument_result.register orelse unreachable),
+                );
+                return .{
+                    .exit_label = argument_result.exit_label,
+                    .register = null,
+                };
+            },
+            .ReadFile => {
+                if (call_expression.arguments.len != 1) unreachable;
+                const path_result = self.emitNode(
+                    &call_expression.arguments[0],
+                    entry_label,
+                    typed_program,
+                    environment,
+                );
+                if (path_result.exit_label == null) {
+                    return .{ .exit_label = null, .register = null };
+                }
+
+                const result_register = self.runtime_call_emitter.emitReadFileCall(
+                    &self.function_ir_builder,
+                    &self.function_symbol_generator,
+                    self.emitStringParts(path_result.register orelse unreachable),
+                );
+                return .{
+                    .exit_label = path_result.exit_label,
+                    .register = result_register,
+                };
+            },
+            .ReadLine => {
+                if (call_expression.arguments.len != 0) unreachable;
+                return .{
+                    .exit_label = entry_label,
+                    .register = self.runtime_call_emitter.emitReadLineCall(
+                        &self.function_ir_builder,
+                        &self.function_symbol_generator,
+                    ),
+                };
+            },
+            .GetArguments => {
+                if (call_expression.arguments.len != 0) unreachable;
+                return .{
+                    .exit_label = entry_label,
+                    .register = self.runtime_call_emitter.emitGetArgumentsCall(
+                        &self.function_ir_builder,
+                        &self.function_symbol_generator,
+                    ),
+                };
+            },
+        };
+    }
+
+    fn emitDirectFunctionCall(
+        self: *@This(),
+        callee_symbol_id: symbols.SymbolId,
+        owning_structure_symbol_id: ?symbols.SymbolId,
+        argument_registers: []const Register,
+        current_label: Label,
+        typed_program: *const lowering.LoweredProgram,
+    ) EmissionResult {
+        const callee_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
+        const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+
+        var argument_list_buffer = std.ArrayList(u8){};
+        defer argument_list_buffer.deinit(self.allocator);
+        for (resolved_function.parameters, argument_registers, 0..) |parameter, argument_register, index| {
+            const parameter_type_id = typed_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+            if (index > 0) {
+                argument_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+            }
+            argument_list_buffer.writer(self.allocator).print(
+                "{s} {s}",
+                .{
+                    typed_program.llvmIrType(parameter_type_id),
+                    argument_register,
+                },
+            ) catch unreachable;
+        }
+
+        const function_name = if (owning_structure_symbol_id) |structure_symbol_id|
+            self.symbol_generator.generateStructureFunctionName(
+                typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id),
+                callee_symbol,
+            )
+        else
+            self.symbol_generator.generateFunctionName(callee_symbol);
+        const function_type_id = typed_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+        const function_return_type_id = switch (typed_program.analyzed_program.type_store.getType(function_type_id)) {
+            .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
+            else => unreachable,
+        };
+        const function_return_llvm_ir_type = typed_program.llvmIrType(function_return_type_id);
+        if (function_return_type_id == typed_program.analyzed_program.type_store.unit_type_id) {
+            const call_instruction = std.fmt.allocPrint(
+                self.allocator,
+                "call {s} @{s}({s})",
+                .{ function_return_llvm_ir_type, function_name, argument_list_buffer.items },
+            ) catch unreachable;
+            self.function_ir_builder.emitInstruction(call_instruction);
+
+            return .{
+                .exit_label = current_label,
+                .register = null,
+            };
+        }
+
+        const result_register = self.function_symbol_generator.generateRegister();
+        const call_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call {s} @{s}({s})",
+            .{ result_register, function_return_llvm_ir_type, function_name, argument_list_buffer.items },
+        ) catch unreachable;
+        self.function_ir_builder.emitInstruction(call_instruction);
+
+        return .{
+            .exit_label = current_label,
+            .register = result_register,
+        };
     }
 
     fn emitBinaryOperation(
