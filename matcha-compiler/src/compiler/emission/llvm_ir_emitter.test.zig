@@ -1,4 +1,5 @@
 const std = @import("std");
+const compiler = @import("compiler");
 const emission = @import("emission");
 const helpers = @import("../test_helpers.zig");
 
@@ -11,17 +12,18 @@ fn emit(source: []const u8) ![]const u8 {
     const symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
     const runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
     const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
-    const string_literal_emitter = emission.StringLiteralEmitter.init(analyzed.allocator());
-    const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(analyzed.allocator());
+    const string_literal_renderer = emission.StringLiteralRenderer.init(analyzed.allocator());
+    const structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(analyzed.allocator());
     var llvm_ir_emitter = emission.LlvmIrEmitter.init(
         analyzed.allocator(),
+        compiler.pipeline.getLlvmTargetTriple(),
         function_symbol_generator,
         function_ir_builder,
         symbol_generator,
         runtime_call_emitter,
         runtime_symbol_emitter,
-        string_literal_emitter,
-        structure_type_definition_emitter,
+        string_literal_renderer,
+        structure_type_definition_renderer,
     );
     const llvm_ir = llvm_ir_emitter.emitLlvmIr(&analyzed.typed_program);
     return try std.testing.allocator.dupe(u8, llvm_ir);
