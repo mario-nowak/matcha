@@ -21,16 +21,25 @@ pub const LoweringAnalyzer = struct {
     node_value_kind_lowerer: NodeValueKindLowerer,
     runtime_requirements_lowerer: RuntimeRequirementsLowerer,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(
+        llvm_type_table_lowerer: LlvmTypeTableLowerer,
+        structure_symbol_lowerer: StructureSymbolLowerer,
+        call_lowerer: CallLowerer,
+        member_access_lowerer: MemberAccessLowerer,
+        binary_operation_lowerer: BinaryOperationLowerer,
+        place_lowerer: PlaceLowerer,
+        node_value_kind_lowerer: NodeValueKindLowerer,
+        runtime_requirements_lowerer: RuntimeRequirementsLowerer,
+    ) @This() {
         return .{
-            .llvm_type_table_lowerer = LlvmTypeTableLowerer.init(allocator),
-            .structure_symbol_lowerer = StructureSymbolLowerer.init(allocator),
-            .call_lowerer = CallLowerer.init(allocator),
-            .member_access_lowerer = MemberAccessLowerer.init(allocator),
-            .binary_operation_lowerer = BinaryOperationLowerer.init(allocator),
-            .place_lowerer = PlaceLowerer.init(allocator),
-            .node_value_kind_lowerer = NodeValueKindLowerer.init(allocator),
-            .runtime_requirements_lowerer = RuntimeRequirementsLowerer.init(),
+            .llvm_type_table_lowerer = llvm_type_table_lowerer,
+            .structure_symbol_lowerer = structure_symbol_lowerer,
+            .call_lowerer = call_lowerer,
+            .member_access_lowerer = member_access_lowerer,
+            .binary_operation_lowerer = binary_operation_lowerer,
+            .place_lowerer = place_lowerer,
+            .node_value_kind_lowerer = node_value_kind_lowerer,
+            .runtime_requirements_lowerer = runtime_requirements_lowerer,
         };
     }
 

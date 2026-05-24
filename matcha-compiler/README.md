@@ -198,6 +198,8 @@ mise run build          # build the compiler and runtime
 mise run test-compiler  # run Zig unit/integration tests wired through build.zig
 mise run e2e            # run end-to-end tests
 mise run test           # run compiler tests and e2e tests
+mise run verify         # lint + build + compiler tests + e2e
+mise run checkfix       # format, then run full verification
 mise run build-compiler # optimized ReleaseFast build
 ```
 
@@ -206,6 +208,7 @@ Raw Zig equivalents:
 ```sh
 zig build check
 zig build
+zig fmt --check .
 zig build test --summary all
 zig test tests/e2e/tests.zig
 ```
@@ -217,6 +220,7 @@ The test suite covers both internal compiler behavior and real compile-and-run w
 - `zig build test --summary all` runs unit and integration tests through `build.zig`
 - `zig test tests/e2e/tests.zig` runs end-to-end tests against real Matcha source programs
 - `mise run test` runs the full local test workflow
+- `mise run verify` runs the same local verification sequence expected by CI
 
 Run end-to-end tests with:
 

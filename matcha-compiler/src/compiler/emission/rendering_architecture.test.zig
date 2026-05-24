@@ -4,28 +4,30 @@ fn expectNotContains(haystack: []const u8, needle: []const u8) !void {
     try std.testing.expect(std.mem.indexOf(u8, haystack, needle) == null);
 }
 
-test "extracted renderers avoid direct semantic policy switches" {
-    const value_renderer = @embedFile("rendering/value_renderer.zig");
-    const construction_renderer = @embedFile("rendering/construction_renderer.zig");
-    const control_flow_renderer = @embedFile("rendering/control_flow_renderer.zig");
+test "node renderer avoids direct semantic policy switches for lowered decisions" {
+    const node_renderer = @embedFile("rendering/node_renderer.zig");
 
-    try expectNotContains(value_renderer, "BuiltinPrintInt");
-    try expectNotContains(value_renderer, "BuiltinPrintString");
-    try expectNotContains(value_renderer, "BuiltinReadFile");
-    try expectNotContains(value_renderer, "BuiltinReadLine");
-    try expectNotContains(value_renderer, "BuiltinGetArguments");
-    try expectNotContains(value_renderer, "StructureInstanceMethodAccess");
-    try expectNotContains(value_renderer, "ArrayInstanceMethodAccess");
-    try expectNotContains(value_renderer, "StringInstanceMethodAccess");
-    try expectNotContains(value_renderer, "IntegerInstanceMethodAccess");
+    try expectNotContains(node_renderer, "BuiltinPrintInt");
+    try expectNotContains(node_renderer, "BuiltinPrintString");
+    try expectNotContains(node_renderer, "BuiltinReadFile");
+    try expectNotContains(node_renderer, "BuiltinReadLine");
+    try expectNotContains(node_renderer, "BuiltinGetArguments");
+    try expectNotContains(node_renderer, "StructureInstanceFieldAccess");
+    try expectNotContains(node_renderer, "ArrayInstanceFieldAccess");
+    try expectNotContains(node_renderer, "StringInstanceFieldAccess");
+    try expectNotContains(node_renderer, "StructureInstanceMethodAccess");
+    try expectNotContains(node_renderer, "ArrayInstanceMethodAccess");
+    try expectNotContains(node_renderer, "StringInstanceMethodAccess");
+    try expectNotContains(node_renderer, "IntegerInstanceMethodAccess");
+    try expectNotContains(node_renderer, "member_access_by_node_id");
+}
 
-    try expectNotContains(construction_renderer, "member_access_by_node_id");
-    try expectNotContains(construction_renderer, "StructureInstanceFieldAccess");
-    try expectNotContains(construction_renderer, "ArrayInstanceFieldAccess");
-    try expectNotContains(construction_renderer, "StringInstanceFieldAccess");
+test "lowering analyzer uses injected collaborators" {
+    const lowering_analyzer = @embedFile("lowering/lowering_analyzer.zig");
 
-    try expectNotContains(control_flow_renderer, "member_access_by_node_id");
-    try expectNotContains(control_flow_renderer, "BuiltinPrintInt");
+    try expectNotContains(lowering_analyzer, "pub fn init(allocator: std.mem.Allocator)");
+    try std.testing.expect(std.mem.indexOf(u8, lowering_analyzer, "llvm_type_table_lowerer: LlvmTypeTableLowerer") != null);
+    try std.testing.expect(std.mem.indexOf(u8, lowering_analyzer, "runtime_requirements_lowerer: RuntimeRequirementsLowerer") != null);
 }
 
 test "rendering module exposes runtime helpers from rendering runtime layout" {
