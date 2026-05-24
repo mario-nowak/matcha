@@ -55,7 +55,7 @@ pub const NodeRenderer = struct {
             .string_literal_renderer = string_literal_renderer,
         };
     }
-    fn emitStringParts(self: *@This(), string_register: Register) RuntimeStringParts {
+    pub fn emitStringParts(self: *@This(), string_register: Register) RuntimeStringParts {
         const pointer_register = self.function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
@@ -515,7 +515,7 @@ pub const NodeRenderer = struct {
         }
     }
 
-    fn emitCallExpression(
+    pub fn emitCallExpression(
         self: *@This(),
         node: *const ast.Node,
         call_expression: *const ast.CallExpression,
@@ -526,7 +526,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitCallExpression(self, node, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitUserFunctionCall(
+    pub fn emitUserFunctionCall(
         self: *@This(),
         user_function: anytype,
         call_expression: *const ast.CallExpression,
@@ -537,7 +537,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitUserFunctionCall(self, user_function, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitBuiltinCall(
+    pub fn emitBuiltinCall(
         self: *@This(),
         builtin_call_kind: lowering.lowering_types.BuiltinCallKind,
         call_expression: *const ast.CallExpression,
@@ -548,7 +548,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitBuiltinCall(self, builtin_call_kind, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitDirectFunctionCall(
+    pub fn emitDirectFunctionCall(
         self: *@This(),
         callee_symbol_id: symbols.SymbolId,
         owning_structure_symbol_id: ?symbols.SymbolId,
@@ -559,7 +559,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitDirectFunctionCall(self, callee_symbol_id, owning_structure_symbol_id, argument_registers, current_label, typed_program);
     }
 
-    fn emitLoweredBinaryOperation(
+    pub fn emitLoweredBinaryOperation(
         self: *@This(),
         decision: lowering.lowering_types.BinaryOperationDecision,
         operand_type_id: typing.TypeId,
@@ -570,7 +570,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitLoweredBinaryOperation(self, decision, operand_type_id, left_register, right_register, typed_program);
     }
 
-    fn emitMemberAccess(
+    pub fn emitMemberAccess(
         self: *@This(),
         node: *const ast.Node,
         member_access: *const ast.MemberAccess,
@@ -581,7 +581,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitMemberAccess(self, node, member_access, entry_label, typed_program, environment);
     }
 
-    fn emitPlace(
+    pub fn emitPlace(
         self: *@This(),
         target: *const ast.Node,
         entry_label: Label,
@@ -591,7 +591,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitPlace(self, target, entry_label, typed_program, environment);
     }
 
-    fn emitStructureFieldPointer(
+    pub fn emitStructureFieldPointer(
         self: *@This(),
         member_access: *const ast.MemberAccess,
         field_index: u32,
@@ -602,7 +602,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitStructureFieldPointer(self, member_access, field_index, entry_label, typed_program, environment);
     }
 
-    fn emitStructureConstruction(
+    pub fn emitStructureConstruction(
         self: *@This(),
         node: *const ast.Node,
         fields: []const ast.StructureConstructionField,
@@ -613,7 +613,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitStructureConstruction(self, node, fields, entry_label, typed_program, environment);
     }
 
-    fn emitForInArrayLoop(
+    pub fn emitForInArrayLoop(
         self: *@This(),
         node: *const ast.Node,
         for_in: *const ast.ForIn,
@@ -624,7 +624,7 @@ pub const NodeRenderer = struct {
         return control_flow_renderer.emitForInArrayLoop(self, node, for_in, entry_label, typed_program, environment);
     }
 
-    fn emitArrayLiteral(
+    pub fn emitArrayLiteral(
         self: *@This(),
         node: *const ast.Node,
         array_literal: *const ast.ArrayLiteral,
@@ -635,7 +635,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitArrayLiteral(self, node, array_literal, entry_label, typed_program, environment);
     }
 
-    fn emitIndexAccess(
+    pub fn emitIndexAccess(
         self: *@This(),
         node: *const ast.Node,
         index_access: *const ast.IndexAccess,
@@ -646,7 +646,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitIndexAccess(self, node, index_access, entry_label, typed_program, environment);
     }
 
-    fn emitIndexAccessPointer(
+    pub fn emitIndexAccessPointer(
         self: *@This(),
         index_access: *const ast.IndexAccess,
         entry_label: Label,
@@ -656,7 +656,7 @@ pub const NodeRenderer = struct {
         return construction_renderer.emitIndexAccessPointer(self, index_access, entry_label, typed_program, environment);
     }
 
-    fn emitArrayAppendCall(
+    pub fn emitArrayAppendCall(
         self: *@This(),
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
@@ -667,7 +667,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitArrayAppendCall(self, callee_member_access, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitStringMethodCall(
+    pub fn emitStringMethodCall(
         self: *@This(),
         string_method: typing.StringInstanceMethod,
         callee_member_access: *const ast.MemberAccess,
@@ -679,7 +679,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitStringMethodCall(self, string_method, callee_member_access, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitIntegerMethodCall(
+    pub fn emitIntegerMethodCall(
         self: *@This(),
         integer_method: typing.IntegerInstanceMethod,
         callee_member_access: *const ast.MemberAccess,
@@ -691,7 +691,7 @@ pub const NodeRenderer = struct {
         return value_renderer.emitIntegerMethodCall(self, integer_method, callee_member_access, call_expression, entry_label, typed_program, environment);
     }
 
-    fn emitDecisionConstruct(
+    pub fn emitDecisionConstruct(
         self: *@This(),
         node: *const ast.Node,
         decision_construct: DecisionConstruct,
@@ -703,7 +703,7 @@ pub const NodeRenderer = struct {
         return control_flow_renderer.emitDecisionConstruct(self, node, decision_construct, label_names, entry_label, typed_program, environment);
     }
 
-    fn emitLoopConstruct(
+    pub fn emitLoopConstruct(
         self: *@This(),
         loop_construct: LoopConstruct,
         typed_program: *const lowering.LoweredProgram,
@@ -712,7 +712,7 @@ pub const NodeRenderer = struct {
         return control_flow_renderer.emitLoopConstruct(self, loop_construct, typed_program, environment);
     }
 
-    fn emitBlock(
+    pub fn emitBlock(
         self: *@This(),
         block: ast.Block,
         entry_label: Label,

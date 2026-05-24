@@ -438,11 +438,19 @@ test "llvm emission lowers match expressions to compare-and-branch chains" {
         \\    first == 7 => 1,
         \\    else => 0,
         \\};
+        \\val fourth = match "pro" {
+        \\    "basic" => 1,
+        \\    "pro" => 2,
+        \\    else => 3,
+        \\};
+        \\printInt(fourth);
     );
     defer std.testing.allocator.free(llvm_ir);
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i1 1, 1") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i64") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare i1 @matcha_string_compare(ptr, i64, ptr, i64)") != null);
+    try std.testing.expect(std.mem.count(u8, llvm_ir, "call i1 @matcha_string_compare(") >= 2);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi i64") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi %String") != null);
 }

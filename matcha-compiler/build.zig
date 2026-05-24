@@ -105,6 +105,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/emission/lowering/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "ast", .module = ast_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
