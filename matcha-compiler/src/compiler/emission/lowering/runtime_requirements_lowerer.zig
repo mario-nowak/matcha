@@ -60,6 +60,10 @@ pub const RuntimeRequirementsLowerer = struct {
             .MatchExpression => |match_expression| {
                 if (match_expression.subject) |subject| {
                     analyzeNode(subject, analyzed_program, plan);
+                    const subject_type_id = analyzed_program.type_by_node_id.get(subject.id) orelse unreachable;
+                    if (subject_type_id == analyzed_program.type_store.string_type_id and match_expression.arms.len > 0) {
+                        plan.string_compare = true;
+                    }
                 }
                 for (match_expression.arms) |arm| {
                     analyzeNode(arm.pattern_or_condition, analyzed_program, plan);
