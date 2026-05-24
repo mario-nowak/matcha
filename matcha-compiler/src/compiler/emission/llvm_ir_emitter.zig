@@ -28,7 +28,16 @@ pub const LlvmIrEmitter = struct {
         structure_type_definition_renderer: StructureTypeDefinitionRenderer,
     ) @This() {
         return .{
-            .lowering_analyzer = lowering.LoweringAnalyzer.init(allocator),
+            .lowering_analyzer = lowering.LoweringAnalyzer.init(
+                lowering.LlvmTypeTableLowerer.init(allocator),
+                lowering.StructureSymbolLowerer.init(allocator),
+                lowering.CallLowerer.init(allocator),
+                lowering.MemberAccessLowerer.init(allocator),
+                lowering.BinaryOperationLowerer.init(allocator),
+                lowering.PlaceLowerer.init(allocator),
+                lowering.NodeValueKindLowerer.init(allocator),
+                lowering.RuntimeRequirementsLowerer.init(),
+            ),
             .module_renderer = rendering.LlvmModuleRenderer.init(
                 allocator,
                 target_triple,

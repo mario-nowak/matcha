@@ -33,6 +33,14 @@ run = "mise run test-compiler && mise run e2e"
 description = "Run Matcha end-to-end tests"
 run = "zig build && zig test tests/e2e/tests.zig"
 
+[tasks.verify]
+description = "Run the full local verification workflow"
+run = "mise run lint && mise run build && mise run test-compiler && mise run e2e"
+
+[tasks.checkfix]
+description = "Format the repo, then run full verification"
+run = "zig fmt . && mise run verify"
+
 [tasks.build-compiler]
 description = "Build an optimized matcha compiler binary"
 run = "zig build -Doptimize=ReleaseFast"

@@ -1,9 +1,6 @@
 pub const LlvmModuleRenderer = @import("llvm_module_renderer.zig").LlvmModuleRenderer;
 pub const FunctionRenderer = @import("function_renderer.zig").FunctionRenderer;
 pub const NodeRenderer = @import("node_renderer.zig").NodeRenderer;
-pub const ValueRenderer = @import("value_renderer.zig");
-pub const ConstructionRenderer = @import("construction_renderer.zig");
-pub const ControlFlowRenderer = @import("control_flow_renderer.zig");
 pub const Environment = @import("node_renderer.zig").Environment;
 pub const EmissionResult = @import("node_renderer.zig").EmissionResult;
 
