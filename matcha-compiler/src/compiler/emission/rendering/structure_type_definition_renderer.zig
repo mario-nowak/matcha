@@ -13,6 +13,10 @@ pub const StructureTypeDefinitionRenderer = struct {
         };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn emitStructureTypeDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,

@@ -10,6 +10,10 @@ pub const RuntimeSymbolEmitter = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn emitDeclarations(
         self: *const @This(),
         requirements: RuntimeRequirements,

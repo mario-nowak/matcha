@@ -107,6 +107,11 @@ pub const NodeRenderer = struct {
             .string_literal_renderer = string_literal_renderer,
         };
     }
+
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     fn emitStringParts(self: *@This(), string_register: Register) RuntimeStringParts {
         const pointer_register = self.function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(

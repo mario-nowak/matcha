@@ -53,8 +53,6 @@ pub const LlvmModuleRenderer = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        self.function_renderer.function_ir_builder.deinit();
-        self.string_literal_renderer.deinit();
         self.llvm_matcha_type_by_type_id.deinit();
     }
 

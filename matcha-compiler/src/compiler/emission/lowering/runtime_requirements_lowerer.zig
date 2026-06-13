@@ -6,6 +6,10 @@ pub const RuntimeRequirementsLowerer = struct {
         return .{};
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn lower(self: *const @This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.RuntimeRequirementsPlan {
         _ = self;
 

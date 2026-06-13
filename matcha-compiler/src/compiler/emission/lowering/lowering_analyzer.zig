@@ -12,24 +12,24 @@ const NodeValueKindLowerer = @import("node_value_kind_lowerer.zig").NodeValueKin
 const RuntimeRequirementsLowerer = @import("runtime_requirements_lowerer.zig").RuntimeRequirementsLowerer;
 
 pub const LoweringAnalyzer = struct {
-    llvm_type_table_lowerer: LlvmTypeTableLowerer,
-    structure_symbol_lowerer: StructureSymbolLowerer,
-    call_lowerer: CallLowerer,
-    member_access_lowerer: MemberAccessLowerer,
-    binary_operation_lowerer: BinaryOperationLowerer,
-    place_lowerer: PlaceLowerer,
-    node_value_kind_lowerer: NodeValueKindLowerer,
-    runtime_requirements_lowerer: RuntimeRequirementsLowerer,
+    llvm_type_table_lowerer: *LlvmTypeTableLowerer,
+    structure_symbol_lowerer: *StructureSymbolLowerer,
+    call_lowerer: *CallLowerer,
+    member_access_lowerer: *MemberAccessLowerer,
+    binary_operation_lowerer: *BinaryOperationLowerer,
+    place_lowerer: *PlaceLowerer,
+    node_value_kind_lowerer: *NodeValueKindLowerer,
+    runtime_requirements_lowerer: *const RuntimeRequirementsLowerer,
 
     pub fn init(
-        llvm_type_table_lowerer: LlvmTypeTableLowerer,
-        structure_symbol_lowerer: StructureSymbolLowerer,
-        call_lowerer: CallLowerer,
-        member_access_lowerer: MemberAccessLowerer,
-        binary_operation_lowerer: BinaryOperationLowerer,
-        place_lowerer: PlaceLowerer,
-        node_value_kind_lowerer: NodeValueKindLowerer,
-        runtime_requirements_lowerer: RuntimeRequirementsLowerer,
+        llvm_type_table_lowerer: *LlvmTypeTableLowerer,
+        structure_symbol_lowerer: *StructureSymbolLowerer,
+        call_lowerer: *CallLowerer,
+        member_access_lowerer: *MemberAccessLowerer,
+        binary_operation_lowerer: *BinaryOperationLowerer,
+        place_lowerer: *PlaceLowerer,
+        node_value_kind_lowerer: *NodeValueKindLowerer,
+        runtime_requirements_lowerer: *const RuntimeRequirementsLowerer,
     ) @This() {
         return .{
             .llvm_type_table_lowerer = llvm_type_table_lowerer,
@@ -43,14 +43,8 @@ pub const LoweringAnalyzer = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.llvm_type_table_lowerer.deinit();
-        self.structure_symbol_lowerer.deinit();
-        self.call_lowerer.deinit();
-        self.member_access_lowerer.deinit();
-        self.binary_operation_lowerer.deinit();
-        self.place_lowerer.deinit();
-        self.node_value_kind_lowerer.deinit();
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
     }
 
     pub fn analyzeProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {

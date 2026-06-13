@@ -7,24 +7,51 @@ fn emit(source: []const u8) ![]const u8 {
     var analyzed = try helpers.analyzeProgram(source);
     defer analyzed.deinit();
 
+    var llvm_type_table_lowerer = emission.lowering.LlvmTypeTableLowerer.init(analyzed.allocator());
+    defer llvm_type_table_lowerer.deinit();
+    var structure_symbol_lowerer = emission.lowering.StructureSymbolLowerer.init(analyzed.allocator());
+    defer structure_symbol_lowerer.deinit();
+    var call_lowerer = emission.lowering.CallLowerer.init(analyzed.allocator());
+    defer call_lowerer.deinit();
+    var member_access_lowerer = emission.lowering.MemberAccessLowerer.init(analyzed.allocator());
+    defer member_access_lowerer.deinit();
+    var binary_operation_lowerer = emission.lowering.BinaryOperationLowerer.init(analyzed.allocator());
+    defer binary_operation_lowerer.deinit();
+    var place_lowerer = emission.lowering.PlaceLowerer.init(analyzed.allocator());
+    defer place_lowerer.deinit();
+    var node_value_kind_lowerer = emission.lowering.NodeValueKindLowerer.init(analyzed.allocator());
+    defer node_value_kind_lowerer.deinit();
+    var runtime_requirements_lowerer = emission.lowering.RuntimeRequirementsLowerer.init();
+    defer runtime_requirements_lowerer.deinit();
+
     var lowering_analyzer = emission.lowering.LoweringAnalyzer.init(
-        emission.lowering.LlvmTypeTableLowerer.init(analyzed.allocator()),
-        emission.lowering.StructureSymbolLowerer.init(analyzed.allocator()),
-        emission.lowering.CallLowerer.init(analyzed.allocator()),
-        emission.lowering.MemberAccessLowerer.init(analyzed.allocator()),
-        emission.lowering.BinaryOperationLowerer.init(analyzed.allocator()),
-        emission.lowering.PlaceLowerer.init(analyzed.allocator()),
-        emission.lowering.NodeValueKindLowerer.init(analyzed.allocator()),
-        emission.lowering.RuntimeRequirementsLowerer.init(),
+        &llvm_type_table_lowerer,
+        &structure_symbol_lowerer,
+        &call_lowerer,
+        &member_access_lowerer,
+        &binary_operation_lowerer,
+        &place_lowerer,
+        &node_value_kind_lowerer,
+        &runtime_requirements_lowerer,
     );
+    defer lowering_analyzer.deinit();
+
     var function_symbol_generator = emission.FunctionSymbolGenerator.init(analyzed.allocator());
+    defer function_symbol_generator.deinit();
     var function_ir_builder = emission.FunctionIrBuilder.init(analyzed.allocator());
+    defer function_ir_builder.deinit();
     var symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
-    const runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
-    const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
+    defer symbol_generator.deinit();
+    var runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
+    defer runtime_call_emitter.deinit();
+    var runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
+    defer runtime_symbol_emitter.deinit();
     var string_literal_renderer = emission.StringLiteralRenderer.init(analyzed.allocator());
+    defer string_literal_renderer.deinit();
     var structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(analyzed.allocator());
-    const node_renderer = emission.rendering.NodeRenderer.init(
+    defer structure_type_definition_renderer.deinit();
+
+    var node_renderer = emission.rendering.NodeRenderer.init(
         analyzed.allocator(),
         &function_symbol_generator,
         &function_ir_builder,
@@ -32,14 +59,18 @@ fn emit(source: []const u8) ![]const u8 {
         &runtime_call_emitter,
         &string_literal_renderer,
     );
+    defer node_renderer.deinit();
+
     var function_renderer = emission.rendering.FunctionRenderer.init(
         analyzed.allocator(),
         &function_symbol_generator,
         &function_ir_builder,
         &symbol_generator,
         &runtime_call_emitter,
-        node_renderer,
+        &node_renderer,
     );
+    defer function_renderer.deinit();
+
     var llvm_module_renderer = emission.rendering.LlvmModuleRenderer.init(
         analyzed.allocator(),
         compiler.pipeline.getLlvmTargetTriple(),
@@ -48,6 +79,8 @@ fn emit(source: []const u8) ![]const u8 {
         &string_literal_renderer,
         &structure_type_definition_renderer,
     );
+    defer llvm_module_renderer.deinit();
+
     var llvm_ir_emitter = emission.LlvmIrEmitter.init(&lowering_analyzer, &llvm_module_renderer);
     defer llvm_ir_emitter.deinit();
     const llvm_ir = llvm_ir_emitter.emitLlvmIr(&analyzed.typed_program);

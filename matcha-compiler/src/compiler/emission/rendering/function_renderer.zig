@@ -23,7 +23,7 @@ pub const FunctionRenderer = struct {
     function_ir_builder: *FunctionIrBuilder,
     symbol_generator: *SymbolGenerator,
     runtime_call_emitter: *const RuntimeCallEmitter,
-    node_renderer: NodeRenderer,
+    node_renderer: *NodeRenderer,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -31,7 +31,7 @@ pub const FunctionRenderer = struct {
         function_ir_builder: *FunctionIrBuilder,
         symbol_generator: *SymbolGenerator,
         runtime_call_emitter: *const RuntimeCallEmitter,
-        node_renderer: NodeRenderer,
+        node_renderer: *NodeRenderer,
     ) @This() {
         return .{
             .allocator = allocator,
@@ -41,6 +41,10 @@ pub const FunctionRenderer = struct {
             .runtime_call_emitter = runtime_call_emitter,
             .node_renderer = node_renderer,
         };
+    }
+
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
     }
 
     pub fn emitMainFunction(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {

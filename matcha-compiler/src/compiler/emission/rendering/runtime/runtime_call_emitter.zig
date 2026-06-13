@@ -19,6 +19,10 @@ pub const RuntimeCallEmitter = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn emitInitializeArgumentsCall(
         self: *const @This(),
         builder: *FunctionIrBuilder,

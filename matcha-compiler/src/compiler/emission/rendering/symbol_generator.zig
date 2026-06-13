@@ -9,6 +9,10 @@ pub const SymbolGenerator = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn generateStructureFunctionName(
         self: *@This(),
         structure_symbol: symbols.Symbol,

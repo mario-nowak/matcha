@@ -17,12 +17,14 @@ pub const LlvmIrEmitter = struct {
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.lowering_analyzer.deinit();
-        self.module_renderer.deinit();
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
     }
 
-    pub fn emitLlvmIr(self: *@This(), typed_program: *const semantic_analysis.AnalyzedProgram) []const u8 {
+    pub fn emitLlvmIr(
+        self: *@This(),
+        typed_program: *const semantic_analysis.AnalyzedProgram,
+    ) []const u8 {
         const lowered_program = self.lowering_analyzer.analyzeProgram(typed_program);
         return self.module_renderer.emitLlvmIr(&lowered_program);
     }
