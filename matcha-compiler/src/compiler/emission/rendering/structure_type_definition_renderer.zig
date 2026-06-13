@@ -67,7 +67,7 @@ pub const StructureTypeDefinitionRenderer = struct {
             } else {
                 structure_definition_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
             }
-            const field_type_id = llvm_type_lowering.typeIdFromResolvedTypeReference(lowered_program.analyzed_program, field.type_reference);
+            const field_type_id = llvm_type_lowering.getTypeIdFromResolvedTypeReference(lowered_program.analyzed_program, field.type_reference);
             structure_definition_buffer.writer(self.allocator).print(
                 "{s}",
                 .{lowered_program.llvmIrType(field_type_id)},

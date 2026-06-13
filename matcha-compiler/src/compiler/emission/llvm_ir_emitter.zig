@@ -1,54 +1,19 @@
-const std = @import("std");
 const semantic_analysis = @import("semantic_analysis");
 
 const lowering = @import("lowering");
 const rendering = @import("rendering");
 
-const FunctionIrBuilder = rendering.FunctionIrBuilder;
-const FunctionSymbolGenerator = rendering.FunctionSymbolGenerator;
-const RuntimeCallEmitter = rendering.RuntimeCallEmitter;
-const RuntimeSymbolEmitter = rendering.RuntimeSymbolEmitter;
-const StringLiteralRenderer = rendering.StringLiteralRenderer;
-const StructureTypeDefinitionRenderer = rendering.StructureTypeDefinitionRenderer;
-const SymbolGenerator = rendering.SymbolGenerator;
-
 pub const LlvmIrEmitter = struct {
-    lowering_analyzer: lowering.LoweringAnalyzer,
-    module_renderer: rendering.LlvmModuleRenderer,
+    lowering_analyzer: *lowering.LoweringAnalyzer,
+    module_renderer: *rendering.LlvmModuleRenderer,
 
     pub fn init(
-        allocator: std.mem.Allocator,
-        target_triple: []const u8,
-        function_symbol_generator: FunctionSymbolGenerator,
-        function_ir_builder: FunctionIrBuilder,
-        symbol_generator: SymbolGenerator,
-        runtime_call_emitter: RuntimeCallEmitter,
-        runtime_symbol_emitter: RuntimeSymbolEmitter,
-        string_literal_renderer: StringLiteralRenderer,
-        structure_type_definition_renderer: StructureTypeDefinitionRenderer,
+        lowering_analyzer: *lowering.LoweringAnalyzer,
+        module_renderer: *rendering.LlvmModuleRenderer,
     ) @This() {
         return .{
-            .lowering_analyzer = lowering.LoweringAnalyzer.init(
-                lowering.LlvmTypeTableLowerer.init(allocator),
-                lowering.StructureSymbolLowerer.init(allocator),
-                lowering.CallLowerer.init(allocator),
-                lowering.MemberAccessLowerer.init(allocator),
-                lowering.BinaryOperationLowerer.init(allocator),
-                lowering.PlaceLowerer.init(allocator),
-                lowering.NodeValueKindLowerer.init(allocator),
-                lowering.RuntimeRequirementsLowerer.init(),
-            ),
-            .module_renderer = rendering.LlvmModuleRenderer.init(
-                allocator,
-                target_triple,
-                function_symbol_generator,
-                function_ir_builder,
-                symbol_generator,
-                runtime_call_emitter,
-                runtime_symbol_emitter,
-                string_literal_renderer,
-                structure_type_definition_renderer,
-            ),
+            .lowering_analyzer = lowering_analyzer,
+            .module_renderer = module_renderer,
         };
     }
 

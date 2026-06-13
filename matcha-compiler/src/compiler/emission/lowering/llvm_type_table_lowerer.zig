@@ -25,7 +25,7 @@ pub const LlvmTypeTableLowerer = struct {
             const type_id: typing.TypeId = @intCast(index);
             self.llvm_ir_type_by_type_id.append(
                 self.allocator,
-                llvm_type.llvmIrType(&analyzed_program.type_store, type_id),
+                llvm_type.getLlvmIrTypeByMatchaType(&analyzed_program.type_store, type_id),
             ) catch unreachable;
         }
 

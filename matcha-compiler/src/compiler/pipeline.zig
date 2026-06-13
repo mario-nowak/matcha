@@ -42,24 +42,49 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
     );
     const typed_program = try semantic_analyzer.analyzeProgram(&program);
 
-    const function_symbol_generator = emission.FunctionSymbolGenerator.init(allocator);
-    const function_ir_builder = emission.FunctionIrBuilder.init(allocator);
-    const symbol_generator = emission.SymbolGenerator.init(allocator);
+    var lowering_analyzer = emission.lowering.LoweringAnalyzer.init(
+        emission.lowering.LlvmTypeTableLowerer.init(allocator),
+        emission.lowering.StructureSymbolLowerer.init(allocator),
+        emission.lowering.CallLowerer.init(allocator),
+        emission.lowering.MemberAccessLowerer.init(allocator),
+        emission.lowering.BinaryOperationLowerer.init(allocator),
+        emission.lowering.PlaceLowerer.init(allocator),
+        emission.lowering.NodeValueKindLowerer.init(allocator),
+        emission.lowering.RuntimeRequirementsLowerer.init(),
+    );
+    var function_symbol_generator = emission.FunctionSymbolGenerator.init(allocator);
+    var function_ir_builder = emission.FunctionIrBuilder.init(allocator);
+    var symbol_generator = emission.SymbolGenerator.init(allocator);
     const runtime_call_emitter = emission.RuntimeCallEmitter.init(allocator);
     const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(allocator);
-    const string_literal_renderer = emission.StringLiteralRenderer.init(allocator);
-    const structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(allocator);
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(
+    var string_literal_renderer = emission.StringLiteralRenderer.init(allocator);
+    var structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(allocator);
+    const node_renderer = emission.rendering.NodeRenderer.init(
+        allocator,
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        &string_literal_renderer,
+    );
+    var function_renderer = emission.rendering.FunctionRenderer.init(
+        allocator,
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        node_renderer,
+    );
+    var llvm_module_renderer = emission.rendering.LlvmModuleRenderer.init(
         allocator,
         getLlvmTargetTriple(),
-        function_symbol_generator,
-        function_ir_builder,
-        symbol_generator,
-        runtime_call_emitter,
-        runtime_symbol_emitter,
-        string_literal_renderer,
-        structure_type_definition_renderer,
+        &function_renderer,
+        &runtime_symbol_emitter,
+        &string_literal_renderer,
+        &structure_type_definition_renderer,
     );
+    var llvm_ir_emitter = emission.LlvmIrEmitter.init(&lowering_analyzer, &llvm_module_renderer);
+    defer llvm_ir_emitter.deinit();
     return llvm_ir_emitter.emitLlvmIr(&typed_program);
 }
 

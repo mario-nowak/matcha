@@ -3,7 +3,7 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const semantic_analysis = @import("semantic_analysis");
 
-pub fn llvmIrType(type_store: *const typing.TypeStore, type_id: typing.TypeId) []const u8 {
+pub fn getLlvmIrTypeByMatchaType(type_store: *const typing.TypeStore, type_id: typing.TypeId) []const u8 {
     return switch (type_store.getType(type_id)) {
         .Unit => "void",
         .Boolean => "i1",
@@ -16,7 +16,7 @@ pub fn llvmIrType(type_store: *const typing.TypeStore, type_id: typing.TypeId) [
     };
 }
 
-pub fn typeIdFromResolvedTypeReference(
+pub fn getTypeIdFromResolvedTypeReference(
     typed_program: *const semantic_analysis.AnalyzedProgram,
     type_reference: symbols.ResolvedTypeReference,
 ) typing.TypeId {
@@ -29,17 +29,17 @@ pub fn typeIdFromResolvedTypeReference(
         },
         .Symbol => |symbol_id| typed_program.type_by_symbol_id.get(symbol_id) orelse unreachable,
         .Array => |element_type_reference| typed_program.type_store.getArrayType(
-            typeIdFromResolvedTypeReference(typed_program, element_type_reference.*),
+            getTypeIdFromResolvedTypeReference(typed_program, element_type_reference.*),
         ) orelse unreachable,
     };
 }
 
-pub fn llvmIrTypeFromResolvedTypeReference(
+pub fn getLlvmIrTypeFromResolvedTypeReference(
     typed_program: *const semantic_analysis.AnalyzedProgram,
     type_reference: symbols.ResolvedTypeReference,
 ) []const u8 {
-    return llvmIrType(
+    return getLlvmIrTypeByMatchaType(
         &typed_program.type_store,
-        typeIdFromResolvedTypeReference(typed_program, type_reference),
+        getTypeIdFromResolvedTypeReference(typed_program, type_reference),
     );
 }

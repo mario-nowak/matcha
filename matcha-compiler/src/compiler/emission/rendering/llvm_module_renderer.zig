@@ -4,26 +4,15 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const lowering = @import("lowering");
 
-const function_emission = @import("function_emission");
 const runtime = @import("runtime/module.zig");
-const symbol_generator_module = @import("symbol_generator.zig");
 const string_literal_renderer_module = @import("string_literal_renderer.zig");
 const structure_type_definition_renderer_module = @import("structure_type_definition_renderer.zig");
 const function_renderer_module = @import("function_renderer.zig");
-const node_renderer_module = @import("node_renderer.zig");
 
-const Register = function_emission.Register;
-const Label = function_emission.Label;
-const Storage = function_emission.Storage;
-const FunctionIrBuilder = function_emission.FunctionIrBuilder;
-const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
 const RuntimeSymbolEmitter = runtime.RuntimeSymbolEmitter;
-const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const StringLiteralRenderer = string_literal_renderer_module.StringLiteralRenderer;
 const StructureTypeDefinitionRenderer = structure_type_definition_renderer_module.StructureTypeDefinitionRenderer;
 const FunctionRenderer = function_renderer_module.FunctionRenderer;
-const NodeRenderer = node_renderer_module.NodeRenderer;
 
 // A string is a header containing a pointer to the data and the length.
 const llvm_string_type_definition = "%String = type { i8*, i64 }";
@@ -38,33 +27,24 @@ const LlvmTypeDefinition = struct {
 pub const LlvmModuleRenderer = struct {
     allocator: std.mem.Allocator,
     target_triple: []const u8,
-    function_symbol_generator: FunctionSymbolGenerator,
-    function_ir_builder: FunctionIrBuilder,
-    symbol_generator: SymbolGenerator,
-    runtime_call_emitter: RuntimeCallEmitter,
-    runtime_symbol_emitter: RuntimeSymbolEmitter,
-    string_literal_renderer: StringLiteralRenderer,
-    structure_type_definition_renderer: StructureTypeDefinitionRenderer,
+    function_renderer: *FunctionRenderer,
+    runtime_symbol_emitter: *const RuntimeSymbolEmitter,
+    string_literal_renderer: *StringLiteralRenderer,
+    structure_type_definition_renderer: *StructureTypeDefinitionRenderer,
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
 
     pub fn init(
         allocator: std.mem.Allocator,
         target_triple: []const u8,
-        function_symbol_generator: FunctionSymbolGenerator,
-        builder: FunctionIrBuilder,
-        symbol_generator: SymbolGenerator,
-        runtime_call_emitter: RuntimeCallEmitter,
-        runtime_symbol_emitter: RuntimeSymbolEmitter,
-        string_literal_renderer: StringLiteralRenderer,
-        structure_type_renderer: StructureTypeDefinitionRenderer,
+        function_renderer: *FunctionRenderer,
+        runtime_symbol_emitter: *const RuntimeSymbolEmitter,
+        string_literal_renderer: *StringLiteralRenderer,
+        structure_type_renderer: *StructureTypeDefinitionRenderer,
     ) @This() {
         return .{
             .allocator = allocator,
             .target_triple = target_triple,
-            .function_symbol_generator = function_symbol_generator,
-            .function_ir_builder = builder,
-            .symbol_generator = symbol_generator,
-            .runtime_call_emitter = runtime_call_emitter,
+            .function_renderer = function_renderer,
             .runtime_symbol_emitter = runtime_symbol_emitter,
             .string_literal_renderer = string_literal_renderer,
             .structure_type_definition_renderer = structure_type_renderer,
@@ -73,7 +53,7 @@ pub const LlvmModuleRenderer = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        self.function_ir_builder.deinit();
+        self.function_renderer.function_ir_builder.deinit();
         self.string_literal_renderer.deinit();
         self.llvm_matcha_type_by_type_id.deinit();
     }
@@ -86,8 +66,7 @@ pub const LlvmModuleRenderer = struct {
         defer user_defined_functions.deinit(self.allocator);
         var structure_method_functions = self.emitStructureMethodFunctionDefinitions(typed_program);
         defer structure_method_functions.deinit(self.allocator);
-        var function_renderer = self.functionRenderer();
-        const main_function_ir = function_renderer.emitMainFunction(typed_program);
+        const main_function_ir = self.function_renderer.emitMainFunction(typed_program);
 
         return self.renderModule(
             structure_type_definitions,
@@ -102,7 +81,6 @@ pub const LlvmModuleRenderer = struct {
         self: *@This(),
         typed_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
-        var function_renderer = self.functionRenderer();
         var user_defined_functions = std.ArrayList([]const u8){};
         for (typed_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
@@ -114,7 +92,7 @@ pub const LlvmModuleRenderer = struct {
                         const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(
                             function_symbol_id,
                         ) orelse unreachable;
-                        const function_ir = function_renderer.emitFunctionDefinition(
+                        const function_ir = self.function_renderer.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
                             &resolved_function,
@@ -206,34 +184,10 @@ pub const LlvmModuleRenderer = struct {
         };
     }
 
-    fn functionRenderer(self: *@This()) FunctionRenderer {
-        const node_renderer = self.nodeRenderer();
-        return FunctionRenderer.init(
-            self.allocator,
-            &self.function_symbol_generator,
-            &self.function_ir_builder,
-            &self.symbol_generator,
-            &self.runtime_call_emitter,
-            node_renderer,
-        );
-    }
-
-    fn nodeRenderer(self: *@This()) NodeRenderer {
-        return NodeRenderer.init(
-            self.allocator,
-            &self.function_symbol_generator,
-            &self.function_ir_builder,
-            &self.symbol_generator,
-            &self.runtime_call_emitter,
-            &self.string_literal_renderer,
-        );
-    }
-
     fn emitStructureMethodFunctionDefinitions(
         self: *@This(),
         typed_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
-        var function_renderer = self.functionRenderer();
         var method_definitions = std.ArrayList([]const u8){};
 
         for (typed_program.analyzed_program.resolved_program.program.statements) |*statement| {
@@ -248,7 +202,6 @@ pub const LlvmModuleRenderer = struct {
             const structure_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
             const structure_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
             self.appendStructureMethodDefinitions(
-                &function_renderer,
                 &method_definitions,
                 structure_definition,
                 structure_symbol,
@@ -261,7 +214,6 @@ pub const LlvmModuleRenderer = struct {
 
     fn appendStructureMethodDefinitions(
         self: *@This(),
-        function_renderer: *FunctionRenderer,
         method_definitions: *std.ArrayList([]const u8),
         structure_definition: ast.Structure,
         structure_symbol: symbols.Symbol,
@@ -279,7 +231,7 @@ pub const LlvmModuleRenderer = struct {
                 function_definition_node.id,
             ) orelse unreachable;
             const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
-            const function_definition_emission = function_renderer.emitFunctionDefinition(
+            const function_definition_emission = self.function_renderer.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
                 &resolved_function,

@@ -274,9 +274,9 @@ matcha-compiler/
 
 Example programs live in [`examples/`](./examples):
 
-- [`learning-matcha.mt`](./examples/learning-matcha.mt) — a guided tour of the currently implemented language
-- [`aoc-2024-01.mt`](./examples/aoc-2024-01.mt) — Advent of Code-style parsing and list processing
-- [`customer-import-audit.mt`](./examples/customer-import-audit.mt) — a more idiomatic example with structures, normalization, and decision logic
+- [`learning-matcha.mt`](./examples/learning-matcha.mt), which gives a guided tour of the currently implemented language
+- [`aoc-2024-01.mt`](./examples/aoc-2024-01.mt), which shows Advent of Code-style parsing and list processing
+- [`customer-import-audit.mt`](./examples/customer-import-audit.mt), which offers a more idiomatic example with structures, normalization, and decision logic
 
 If you want one file to read first, start with [`examples/learning-matcha.mt`](./examples/learning-matcha.mt).
 

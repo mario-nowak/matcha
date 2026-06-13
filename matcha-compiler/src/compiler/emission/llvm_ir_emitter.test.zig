@@ -7,24 +7,49 @@ fn emit(source: []const u8) ![]const u8 {
     var analyzed = try helpers.analyzeProgram(source);
     defer analyzed.deinit();
 
-    const function_symbol_generator = emission.FunctionSymbolGenerator.init(analyzed.allocator());
-    const function_ir_builder = emission.FunctionIrBuilder.init(analyzed.allocator());
-    const symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
+    var lowering_analyzer = emission.lowering.LoweringAnalyzer.init(
+        emission.lowering.LlvmTypeTableLowerer.init(analyzed.allocator()),
+        emission.lowering.StructureSymbolLowerer.init(analyzed.allocator()),
+        emission.lowering.CallLowerer.init(analyzed.allocator()),
+        emission.lowering.MemberAccessLowerer.init(analyzed.allocator()),
+        emission.lowering.BinaryOperationLowerer.init(analyzed.allocator()),
+        emission.lowering.PlaceLowerer.init(analyzed.allocator()),
+        emission.lowering.NodeValueKindLowerer.init(analyzed.allocator()),
+        emission.lowering.RuntimeRequirementsLowerer.init(),
+    );
+    var function_symbol_generator = emission.FunctionSymbolGenerator.init(analyzed.allocator());
+    var function_ir_builder = emission.FunctionIrBuilder.init(analyzed.allocator());
+    var symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
     const runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
     const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
-    const string_literal_renderer = emission.StringLiteralRenderer.init(analyzed.allocator());
-    const structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(analyzed.allocator());
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(
+    var string_literal_renderer = emission.StringLiteralRenderer.init(analyzed.allocator());
+    var structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(analyzed.allocator());
+    const node_renderer = emission.rendering.NodeRenderer.init(
+        analyzed.allocator(),
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        &string_literal_renderer,
+    );
+    var function_renderer = emission.rendering.FunctionRenderer.init(
+        analyzed.allocator(),
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        node_renderer,
+    );
+    var llvm_module_renderer = emission.rendering.LlvmModuleRenderer.init(
         analyzed.allocator(),
         compiler.pipeline.getLlvmTargetTriple(),
-        function_symbol_generator,
-        function_ir_builder,
-        symbol_generator,
-        runtime_call_emitter,
-        runtime_symbol_emitter,
-        string_literal_renderer,
-        structure_type_definition_renderer,
+        &function_renderer,
+        &runtime_symbol_emitter,
+        &string_literal_renderer,
+        &structure_type_definition_renderer,
     );
+    var llvm_ir_emitter = emission.LlvmIrEmitter.init(&lowering_analyzer, &llvm_module_renderer);
+    defer llvm_ir_emitter.deinit();
     const llvm_ir = llvm_ir_emitter.emitLlvmIr(&analyzed.typed_program);
     return try std.testing.allocator.dupe(u8, llvm_ir);
 }
