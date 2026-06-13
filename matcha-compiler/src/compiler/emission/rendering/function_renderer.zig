@@ -92,7 +92,7 @@ pub const FunctionRenderer = struct {
             .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
             else => unreachable,
         };
-        const function_return_llvm_ir_type = typed_program.llvmIrType(function_return_type_id);
+        const function_return_llvm_ir_type = typed_program.getLlvmIrType(function_return_type_id);
 
         var parameter_list_buffer = std.ArrayList(u8){};
         defer parameter_list_buffer.deinit(self.allocator);
@@ -101,7 +101,7 @@ pub const FunctionRenderer = struct {
 
         for (resolved_function.parameters, 0..) |parameter, index| {
             const parameter_type_id = typed_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
-            const parameter_llvm_ir_type = typed_program.llvmIrType(parameter_type_id);
+            const parameter_llvm_ir_type = typed_program.getLlvmIrType(parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,
                 "%arg_{d}_{s}",

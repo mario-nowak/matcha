@@ -14,11 +14,11 @@ pub const LoweredProgram = struct {
     node_value_kind_by_node_id: lowering_types.NodeValueKindByNodeId,
     runtime_requirements_plan: lowering_types.RuntimeRequirementsPlan,
 
-    pub fn llvmIrType(self: *const @This(), type_id: typing.TypeId) []const u8 {
+    pub fn getLlvmIrType(self: *const @This(), type_id: typing.TypeId) []const u8 {
         return self.llvm_ir_type_by_type_id[@intCast(type_id)];
     }
 
-    pub fn structureSymbolForTypeId(self: *const @This(), type_id: typing.TypeId) symbols.Symbol {
+    pub fn getStructureSymbolForTypeId(self: *const @This(), type_id: typing.TypeId) symbols.Symbol {
         const symbol_id = self.structure_symbol_id_by_type_id[@intCast(type_id)] orelse unreachable;
         return self.analyzed_program.resolved_program.symbol_table.getSymbol(symbol_id);
     }

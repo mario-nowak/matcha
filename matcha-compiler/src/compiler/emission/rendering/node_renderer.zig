@@ -162,7 +162,7 @@ pub const NodeRenderer = struct {
                         self.allocator,
                         "ret {s} {s}",
                         .{
-                            typed_program.llvmIrType(environment.function_return_type_id),
+                            typed_program.getLlvmIrType(environment.function_return_type_id),
                             value_result.register.?,
                         },
                     ) catch unreachable;
@@ -205,7 +205,7 @@ pub const NodeRenderer = struct {
             .Identifier => {
                 const symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
-                const llvm_ir_type = typed_program.llvmIrType(
+                const llvm_ir_type = typed_program.getLlvmIrType(
                     typed_program.analyzed_program.type_by_node_id.get(node.id).?,
                 );
                 const register = self.function_symbol_generator.generateRegister();
@@ -325,7 +325,7 @@ pub const NodeRenderer = struct {
                 );
                 const result_register = self.function_symbol_generator.generateRegister();
                 const operation_type = typed_program.analyzed_program.type_by_node_id.get(node.id).?;
-                const instruction_type = typed_program.llvmIrType(operation_type);
+                const instruction_type = typed_program.getLlvmIrType(operation_type);
                 const instruction = switch (unary_expression.operator) {
                     .Negate => std.fmt.allocPrint(
                         self.allocator,
@@ -354,7 +354,7 @@ pub const NodeRenderer = struct {
                 );
                 const symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const value_type_id = typed_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
-                const llvm_ir_type = typed_program.llvmIrType(value_type_id);
+                const llvm_ir_type = typed_program.getLlvmIrType(value_type_id);
 
                 const storage = self.function_symbol_generator.generateStorage();
                 self.function_ir_builder.emitAlloca(storage, llvm_ir_type);
@@ -382,7 +382,7 @@ pub const NodeRenderer = struct {
                 }
 
                 const value_type_id = typed_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
-                const llvm_ir_type = typed_program.llvmIrType(value_type_id);
+                const llvm_ir_type = typed_program.getLlvmIrType(value_type_id);
                 switch (assignment.operator) {
                     .Assign => {
                         const value_result = self.emitNode(
@@ -823,7 +823,7 @@ pub const NodeRenderer = struct {
             argument_list_buffer.writer(self.allocator).print(
                 "{s} {s}",
                 .{
-                    typed_program.llvmIrType(parameter_type_id),
+                    typed_program.getLlvmIrType(parameter_type_id),
                     argument_register,
                 },
             ) catch unreachable;
@@ -841,7 +841,7 @@ pub const NodeRenderer = struct {
             .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
             else => unreachable,
         };
-        const function_return_llvm_ir_type = typed_program.llvmIrType(function_return_type_id);
+        const function_return_llvm_ir_type = typed_program.getLlvmIrType(function_return_type_id);
         if (function_return_type_id == typed_program.analyzed_program.type_store.unit_type_id) {
             const call_instruction = std.fmt.allocPrint(
                 self.allocator,
@@ -880,7 +880,7 @@ pub const NodeRenderer = struct {
     ) Register {
         return switch (decision) {
             .PrimitiveOperation => |primitive_operation| {
-                const llvm_ir_type = typed_program.llvmIrType(operand_type_id);
+                const llvm_ir_type = typed_program.getLlvmIrType(operand_type_id);
                 const operator_instruction = switch (primitive_operation) {
                     .Add => "add",
                     .Subtract => "sub",
@@ -961,7 +961,7 @@ pub const NodeRenderer = struct {
             .Array => |element_type_id| element_type_id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.llvmIrType(element_type_id);
+        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
 
         // The runtime helper grows the backing storage if needed and returns the slot for the new element.
         const slot_register = self.runtime_call_emitter.emitArrayAppendSlotCall(
@@ -1155,7 +1155,7 @@ pub const NodeRenderer = struct {
                 self.function_ir_builder.emitLoad(
                     member_register,
                     member_pointer_result.register.?,
-                    typed_program.llvmIrType(typed_program.analyzed_program.type_by_node_id.get(node.id).?),
+                    typed_program.getLlvmIrType(typed_program.analyzed_program.type_by_node_id.get(node.id).?),
                 );
 
                 return .{
@@ -1238,7 +1238,7 @@ pub const NodeRenderer = struct {
             .Structure => {},
             else => unreachable,
         }
-        const structure_symbol = typed_program.structureSymbolForTypeId(base_type_id);
+        const structure_symbol = typed_program.getStructureSymbolForTypeId(base_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
 
         const field_pointer_register = self.function_symbol_generator.generateRegister();
@@ -1263,7 +1263,7 @@ pub const NodeRenderer = struct {
         environment: *Environment,
     ) EmissionResult {
         const node_type_id = typed_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
-        const structure_symbol = typed_program.structureSymbolForTypeId(node_type_id);
+        const structure_symbol = typed_program.getStructureSymbolForTypeId(node_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
         const structure_type_id = switch (typed_program.analyzed_program.type_store.getType(node_type_id)) {
             .Structure => |id| id,
@@ -1307,7 +1307,7 @@ pub const NodeRenderer = struct {
                 .{ field_pointer_register, structure_llvm_type_name, memory_register, field_index },
             ) catch unreachable);
 
-            const field_llvm_ir_type = typed_program.llvmIrType(structure_field.type_id);
+            const field_llvm_ir_type = typed_program.getLlvmIrType(structure_field.type_id);
             self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
                 self.allocator,
                 "store {s} {s}, ptr {s}",
@@ -1334,7 +1334,7 @@ pub const NodeRenderer = struct {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.llvmIrType(element_type_id);
+        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
         const length = array_literal.elements.len;
 
         const header_register = self.function_symbol_generator.generateRegister();
@@ -1439,7 +1439,7 @@ pub const NodeRenderer = struct {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.llvmIrType(element_type_id);
+        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
 
         const result_register = self.function_symbol_generator.generateRegister();
         self.function_ir_builder.emitLoad(result_register, pointer_result.register orelse unreachable, element_llvm_type);
@@ -1472,7 +1472,7 @@ pub const NodeRenderer = struct {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.llvmIrType(element_type_id);
+        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
 
         const length_pointer_register = self.function_symbol_generator.generateRegister();
         self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
@@ -1568,7 +1568,7 @@ pub const NodeRenderer = struct {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.llvmIrType(element_type_id);
+        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
 
         const item_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
         const item_storage = self.function_symbol_generator.generateStorage();
@@ -1856,7 +1856,7 @@ pub const NodeRenderer = struct {
             "{s} = phi {s} {s}",
             .{
                 result_register,
-                typed_program.llvmIrType(result_type_id),
+                typed_program.getLlvmIrType(result_type_id),
                 phi_incoming_buffer.items,
             },
         ) catch unreachable;
