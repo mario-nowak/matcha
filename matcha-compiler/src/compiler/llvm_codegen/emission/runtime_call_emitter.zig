@@ -1,11 +1,10 @@
 const std = @import("std");
-const function_emission = @import("function_emission");
+const runtime_symbols = @import("runtime_symbols");
 
-const runtime_symbols = @import("runtime_symbols.zig");
-
-const FunctionIrBuilder = function_emission.FunctionIrBuilder;
-const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const Register = function_emission.Register;
+const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
+const function_symbol_generator_module = @import("function_symbol_generator.zig");
+const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
+const Register = function_symbol_generator_module.Register;
 
 pub const RuntimeStringParts = struct {
     pointer_register: Register,

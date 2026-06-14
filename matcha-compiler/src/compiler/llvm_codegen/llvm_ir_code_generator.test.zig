@@ -1,30 +1,30 @@
 const std = @import("std");
 const compiler = @import("compiler");
-const emission = @import("emission");
+const llvm_codegen = @import("llvm_codegen");
 const helpers = @import("../test_helpers.zig");
 
 fn emit(source: []const u8) ![]const u8 {
     var analyzed = try helpers.analyzeProgram(source);
     defer analyzed.deinit();
 
-    var llvm_type_table_lowerer = emission.lowering.LlvmTypeTableLowerer.init(analyzed.allocator());
+    var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(analyzed.allocator());
     defer llvm_type_table_lowerer.deinit();
-    var structure_symbol_lowerer = emission.lowering.StructureSymbolLowerer.init(analyzed.allocator());
+    var structure_symbol_lowerer = llvm_codegen.lowering.StructureSymbolLowerer.init(analyzed.allocator());
     defer structure_symbol_lowerer.deinit();
-    var call_lowerer = emission.lowering.CallLowerer.init(analyzed.allocator());
+    var call_lowerer = llvm_codegen.lowering.CallLowerer.init(analyzed.allocator());
     defer call_lowerer.deinit();
-    var member_access_lowerer = emission.lowering.MemberAccessLowerer.init(analyzed.allocator());
+    var member_access_lowerer = llvm_codegen.lowering.MemberAccessLowerer.init(analyzed.allocator());
     defer member_access_lowerer.deinit();
-    var binary_operation_lowerer = emission.lowering.BinaryOperationLowerer.init(analyzed.allocator());
+    var binary_operation_lowerer = llvm_codegen.lowering.BinaryOperationLowerer.init(analyzed.allocator());
     defer binary_operation_lowerer.deinit();
-    var place_lowerer = emission.lowering.PlaceLowerer.init(analyzed.allocator());
+    var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(analyzed.allocator());
     defer place_lowerer.deinit();
-    var node_value_kind_lowerer = emission.lowering.NodeValueKindLowerer.init(analyzed.allocator());
+    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(analyzed.allocator());
     defer node_value_kind_lowerer.deinit();
-    var runtime_requirements_lowerer = emission.lowering.RuntimeRequirementsLowerer.init();
+    var runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
     defer runtime_requirements_lowerer.deinit();
 
-    var lowering_analyzer = emission.lowering.LoweringAnalyzer.init(
+    var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
         &structure_symbol_lowerer,
         &call_lowerer,
@@ -36,54 +36,60 @@ fn emit(source: []const u8) ![]const u8 {
     );
     defer lowering_analyzer.deinit();
 
-    var function_symbol_generator = emission.FunctionSymbolGenerator.init(analyzed.allocator());
+    var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(analyzed.allocator());
     defer function_symbol_generator.deinit();
-    var function_ir_builder = emission.FunctionIrBuilder.init(analyzed.allocator());
+    var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(analyzed.allocator());
     defer function_ir_builder.deinit();
-    var symbol_generator = emission.SymbolGenerator.init(analyzed.allocator());
+    var symbol_generator = llvm_codegen.SymbolGenerator.init(analyzed.allocator());
     defer symbol_generator.deinit();
-    var runtime_call_emitter = emission.RuntimeCallEmitter.init(analyzed.allocator());
+    var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(analyzed.allocator());
     defer runtime_call_emitter.deinit();
-    var runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(analyzed.allocator());
-    defer runtime_symbol_emitter.deinit();
-    var string_literal_renderer = emission.StringLiteralRenderer.init(analyzed.allocator());
+    var runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(analyzed.allocator());
+    defer runtime_symbol_renderer.deinit();
+    var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(analyzed.allocator());
     defer string_literal_renderer.deinit();
-    var structure_type_definition_renderer = emission.StructureTypeDefinitionRenderer.init(analyzed.allocator());
-    defer structure_type_definition_renderer.deinit();
+    var string_literal_pool = llvm_codegen.StringLiteralPool.init(analyzed.allocator());
+    defer string_literal_pool.deinit();
+    var string_literal_emitter = llvm_codegen.StringLiteralEmitter.init(analyzed.allocator());
+    defer string_literal_emitter.deinit();
+    var structure_type_renderer = llvm_codegen.StructureTypeRenderer.init(analyzed.allocator());
+    defer structure_type_renderer.deinit();
 
-    var node_renderer = emission.rendering.NodeRenderer.init(
+    var node_emitter = llvm_codegen.NodeEmitter.init(
         analyzed.allocator(),
         &function_symbol_generator,
         &function_ir_builder,
         &symbol_generator,
         &runtime_call_emitter,
-        &string_literal_renderer,
+        &string_literal_pool,
+        &string_literal_emitter,
     );
-    defer node_renderer.deinit();
+    defer node_emitter.deinit();
 
-    var function_renderer = emission.rendering.FunctionRenderer.init(
+    var function_emitter = llvm_codegen.FunctionEmitter.init(
         analyzed.allocator(),
         &function_symbol_generator,
         &function_ir_builder,
         &symbol_generator,
         &runtime_call_emitter,
-        &node_renderer,
+        &node_emitter,
     );
-    defer function_renderer.deinit();
+    defer function_emitter.deinit();
 
-    var llvm_module_renderer = emission.rendering.LlvmModuleRenderer.init(
+    var llvm_module_renderer = llvm_codegen.rendering.LlvmModuleRenderer.init(
         analyzed.allocator(),
         compiler.pipeline.getLlvmTargetTriple(),
-        &function_renderer,
-        &runtime_symbol_emitter,
+        &function_emitter,
+        &runtime_symbol_renderer,
+        &string_literal_pool,
         &string_literal_renderer,
-        &structure_type_definition_renderer,
+        &structure_type_renderer,
     );
     defer llvm_module_renderer.deinit();
 
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(&lowering_analyzer, &llvm_module_renderer);
-    defer llvm_ir_emitter.deinit();
-    const llvm_ir = llvm_ir_emitter.emitLlvmIr(&analyzed.typed_program);
+    var llvm_ir_code_generator = llvm_codegen.LlvmIrCodeGenerator.init(&lowering_analyzer, &llvm_module_renderer);
+    defer llvm_ir_code_generator.deinit();
+    const llvm_ir = llvm_ir_code_generator.generateLlvmIr(&analyzed.typed_program);
     return try std.testing.allocator.dupe(u8, llvm_ir);
 }
 
@@ -103,7 +109,7 @@ fn expectIrCount(llvm_ir: []const u8, needle: []const u8, expected_count: usize)
     try std.testing.expectEqual(expected_count, std.mem.count(u8, llvm_ir, needle));
 }
 
-test "llvm emission handles boolean operators comparisons and if expressions" {
+test "llvm codegen handles boolean operators comparisons and if expressions" {
     const source =
         \\val flag = not false and true;
         \\if flag { val left = 1; } else { val right = 2; };
@@ -123,7 +129,7 @@ test "llvm emission handles boolean operators comparisons and if expressions" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
-test "llvm emission skips phi for unit if expressions" {
+test "llvm codegen skips phi for unit if expressions" {
     const llvm_ir = try emit(
         \\if true { val left = 1; } else { val right = 2; };
         \\val exit_code = 0;
@@ -133,7 +139,7 @@ test "llvm emission skips phi for unit if expressions" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi ") == null);
 }
 
-test "llvm emission produces phi for boolean if expressions" {
+test "llvm codegen produces phi for boolean if expressions" {
     const llvm_ir = try emit(
         \\val flag = if true { true } else { false };
         \\val exit_code = if flag { 1 } else { 0 };
@@ -143,7 +149,7 @@ test "llvm emission produces phi for boolean if expressions" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi i1") != null);
 }
 
-test "llvm emission uses continue as the false branch for statement ifs" {
+test "llvm codegen uses continue as the false branch for statement ifs" {
     const llvm_ir = try emit(
         \\if true { val x = 1; }
         \\val exit_code = 0;
@@ -155,7 +161,7 @@ test "llvm emission uses continue as the false branch for statement ifs" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_else_") == null);
 }
 
-test "llvm emission compares booleans with icmp eq i1" {
+test "llvm codegen compares booleans with icmp eq i1" {
     const llvm_ir = try emit(
         \\val same = true == false;
         \\val exit_code = if same { 1 } else { 0 };
@@ -165,7 +171,7 @@ test "llvm emission compares booleans with icmp eq i1" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "icmp eq i1") != null);
 }
 
-test "llvm emission lowers string-subject match comparisons to runtime string compare" {
+test "llvm codegen lowers string-subject match comparisons to runtime string compare" {
     const llvm_ir = try emit(
         \\val tier = "pro";
         \\val score = match tier {
@@ -180,7 +186,7 @@ test "llvm emission lowers string-subject match comparisons to runtime string co
     try std.testing.expect(std.mem.count(u8, llvm_ir, "call i1 @matcha_string_compare(") >= 2);
 }
 
-test "llvm emission stores and loads mutable variables" {
+test "llvm codegen stores and loads mutable variables" {
     const llvm_ir = try emit(
         \\var counter = 1;
         \\counter = counter + 1;
@@ -194,7 +200,7 @@ test "llvm emission stores and loads mutable variables" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store void") == null);
 }
 
-test "llvm emission routes while continue through the update clause" {
+test "llvm codegen routes while continue through the update clause" {
     const llvm_ir = try emit(
         \\var i = 0;
         \\while i < 5 : i = i + 1 {
@@ -208,7 +214,7 @@ test "llvm emission routes while continue through the update clause" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "label_loop_continue_2:\n    %.t_2 = load i64, ptr %.s_0\n    %.t_3 = add i64 %.t_2, 1\n    store i64 %.t_3, ptr %.s_0\n    br label %label_loop_header_0") != null);
 }
 
-test "llvm emission lowers for-in loops over arrays" {
+test "llvm codegen lowers for-in loops over arrays" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
         \\for value in numbers {
@@ -225,7 +231,7 @@ test "llvm emission lowers for-in loops over arrays" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_panic_index_out_of_bounds") == null);
 }
 
-test "llvm emission returns from main without implicit printing" {
+test "llvm codegen returns from main without implicit printing" {
     const llvm_ir = try emit(
         \\val answer = 41 + 1;
     );
@@ -238,7 +244,7 @@ test "llvm emission returns from main without implicit printing" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "ret i32 0") != null);
 }
 
-test "llvm emission emits user-defined functions and calls them from main" {
+test "llvm codegen emits user-defined functions and calls them from main" {
     const llvm_ir = try emit(
         \\item identity(value: int): int = value;
         \\val answer = identity(42);
@@ -250,7 +256,7 @@ test "llvm emission emits user-defined functions and calls them from main" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call i64 @matcha_function_0_identity(i64 42)") != null);
 }
 
-test "llvm emission lowers printInt to a runtime call" {
+test "llvm codegen lowers printInt to a runtime call" {
     const llvm_ir = try emit(
         \\item logValue(value: int): unit = printInt(value);
         \\logValue(7);
@@ -263,7 +269,7 @@ test "llvm emission lowers printInt to a runtime call" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_function_0_logValue(i64 7)") != null);
 }
 
-test "llvm emission lowers string literals to String globals and runtime printString calls" {
+test "llvm codegen lowers string literals to String globals and runtime printString calls" {
     const llvm_ir = try emit(
         \\item echo(x: string): string = x;
         \\printString("hello");
@@ -286,7 +292,7 @@ test "llvm emission lowers string literals to String globals and runtime printSt
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }
 
-test "llvm emission lowers file input and string helper methods to runtime calls" {
+test "llvm codegen lowers file input and string helper methods to runtime calls" {
     const llvm_ir = try emit(
         \\val input = readFile("input.txt");
         \\val trimmed = input.trim();
@@ -310,7 +316,7 @@ test "llvm emission lowers file input and string helper methods to runtime calls
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "extractvalue %String") != null);
 }
 
-test "llvm emission lowers readLine to a runtime call" {
+test "llvm codegen lowers readLine to a runtime call" {
     const llvm_ir = try emit(
         \\val line = readLine();
         \\printInt(line.length);
@@ -323,7 +329,7 @@ test "llvm emission lowers readLine to a runtime call" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr") != null);
 }
 
-test "llvm emission lowers string binary operators to runtime helpers" {
+test "llvm codegen lowers string binary operators to runtime helpers" {
     const llvm_ir = try emit(
         \\var left = "left";
         \\left += "-tail";
@@ -341,7 +347,7 @@ test "llvm emission lowers string binary operators to runtime helpers" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "xor i1") != null);
 }
 
-test "llvm emission lowers getArguments to runtime-backed cloned array access" {
+test "llvm codegen lowers getArguments to runtime-backed cloned array access" {
     const llvm_ir = try emit(
         \\val args = getArguments();
         \\val count = args.length;
@@ -357,7 +363,7 @@ test "llvm emission lowers getArguments to runtime-backed cloned array access" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_get_arguments()") != null);
 }
 
-test "llvm emission emits structure definitions as payload types" {
+test "llvm codegen emits structure definitions as payload types" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
         \\item User = structure { name: string; friend: User; location: Point; };
@@ -368,7 +374,7 @@ test "llvm emission emits structure definitions as payload types" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_1_User = type { %String, ptr, ptr }") != null);
 }
 
-test "llvm emission lowers structure construction" {
+test "llvm codegen lowers structure construction" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
         \\val point = Point { y = 2, x = 1 };
@@ -384,7 +390,7 @@ test "llvm emission lowers structure construction" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
 }
 
-test "llvm emission lowers anonymous structure literals with contextual type" {
+test "llvm codegen lowers anonymous structure literals with contextual type" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
         \\val point: Point = .{ y = 2, x = 1 };
@@ -400,7 +406,7 @@ test "llvm emission lowers anonymous structure literals with contextual type" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 1, ptr %.t_2") != null);
 }
 
-test "llvm emission lowers structure member access to gep plus load" {
+test "llvm codegen lowers structure member access to gep plus load" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
         \\val point = Point { x = 1, y = 2 };
@@ -414,7 +420,7 @@ test "llvm emission lowers structure member access to gep plus load" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, ptr %.t_4") != null);
 }
 
-test "llvm emission lowers mutable structure field assignment to gep plus store" {
+test "llvm codegen lowers mutable structure field assignment to gep plus store" {
     const llvm_ir = try emit(
         \\item Point = structure { x: int; y: int; };
         \\var point = Point { x = 1, y = 2 };
@@ -428,7 +434,7 @@ test "llvm emission lowers mutable structure field assignment to gep plus store"
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 3, ptr %.t_4") != null);
 }
 
-test "llvm emission lowers indexed assignment to bounds-checked store" {
+test "llvm codegen lowers indexed assignment to bounds-checked store" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
         \\numbers[0] = 4;
@@ -443,7 +449,7 @@ test "llvm emission lowers indexed assignment to bounds-checked store" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr") != null);
 }
 
-test "llvm emission lowers compound assignments to load-op-store sequences" {
+test "llvm codegen lowers compound assignments to load-op-store sequences" {
     const llvm_ir = try emit(
         \\var value = 5;
         \\value += 2;
@@ -458,7 +464,7 @@ test "llvm emission lowers compound assignments to load-op-store sequences" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "mul i64") != null);
 }
 
-test "llvm emission lowers array length member access to header load" {
+test "llvm codegen lowers array length member access to header load" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
         \\val length = numbers.length;
@@ -470,7 +476,7 @@ test "llvm emission lowers array length member access to header load" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load i64, ptr") != null);
 }
 
-test "llvm emission lowers array append to runtime slot helper plus typed store" {
+test "llvm codegen lowers array append to runtime slot helper plus typed store" {
     const llvm_ir = try emit(
         \\val numbers = [1, 2, 3];
         \\numbers.append(4);
@@ -482,7 +488,7 @@ test "llvm emission lowers array append to runtime slot helper plus typed store"
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "store i64 4, ptr ") != null);
 }
 
-test "llvm emission lowers match expressions to compare-and-branch chains" {
+test "llvm codegen lowers match expressions to compare-and-branch chains" {
     const llvm_ir = try emit(
         \\val first = match true {
         \\    true => 7,

@@ -1,7 +1,7 @@
 const std = @import("std");
 const helpers = @import("../../test_helpers.zig");
-const emission = @import("emission");
-const MemberAccessLowerer = emission.lowering.MemberAccessLowerer;
+const llvm_codegen = @import("llvm_codegen");
+const MemberAccessLowerer = llvm_codegen.lowering.MemberAccessLowerer;
 
 const TestError = helpers.TestError;
 const expectDeclarationNode = helpers.expectDeclarationNode;

@@ -1,8 +1,8 @@
 const std = @import("std");
 const ast = @import("ast");
 const helpers = @import("../../test_helpers.zig");
-const emission = @import("emission");
-const CallLowerer = emission.lowering.CallLowerer;
+const llvm_codegen = @import("llvm_codegen");
+const CallLowerer = llvm_codegen.lowering.CallLowerer;
 
 const TestError = helpers.TestError;
 const expectDeclarationNode = helpers.expectDeclarationNode;

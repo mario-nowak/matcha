@@ -4,20 +4,23 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const lowering = @import("lowering");
 
-const function_emission = @import("function_emission");
-const runtime = @import("runtime/module.zig");
+const runtime_call_emitter_module = @import("runtime_call_emitter.zig");
+const function_ir_builder_module = @import("function_ir_builder.zig");
+const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const symbol_generator_module = @import("symbol_generator.zig");
-const string_literal_renderer_module = @import("string_literal_renderer.zig");
+const string_literal_pool_module = @import("string_literal_pool.zig");
+const string_literal_emitter_module = @import("string_literal_emitter.zig");
 
-const Register = function_emission.Register;
-const Label = function_emission.Label;
-const Storage = function_emission.Storage;
-const FunctionIrBuilder = function_emission.FunctionIrBuilder;
-const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
-const RuntimeStringParts = runtime.RuntimeStringParts;
+const Register = function_symbol_generator_module.Register;
+const Label = function_symbol_generator_module.Label;
+const Storage = function_symbol_generator_module.Storage;
+const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
+const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
+const RuntimeCallEmitter = runtime_call_emitter_module.RuntimeCallEmitter;
+const RuntimeStringParts = runtime_call_emitter_module.RuntimeStringParts;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
-const StringLiteralRenderer = string_literal_renderer_module.StringLiteralRenderer;
+const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
+const StringLiteralEmitter = string_literal_emitter_module.StringLiteralEmitter;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 
 const LoopContext = struct {
@@ -82,13 +85,14 @@ pub const EmissionResult = struct {
     exit_label: ?Label,
 };
 
-pub const NodeRenderer = struct {
+pub const NodeEmitter = struct {
     allocator: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     symbol_generator: *SymbolGenerator,
     runtime_call_emitter: *const RuntimeCallEmitter,
-    string_literal_renderer: *StringLiteralRenderer,
+    string_literal_pool: *StringLiteralPool,
+    string_literal_emitter: *StringLiteralEmitter,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -96,7 +100,8 @@ pub const NodeRenderer = struct {
         function_ir_builder: *FunctionIrBuilder,
         symbol_generator: *SymbolGenerator,
         runtime_call_emitter: *const RuntimeCallEmitter,
-        string_literal_renderer: *StringLiteralRenderer,
+        string_literal_pool: *StringLiteralPool,
+        string_literal_emitter: *StringLiteralEmitter,
     ) @This() {
         return .{
             .allocator = allocator,
@@ -104,7 +109,8 @@ pub const NodeRenderer = struct {
             .function_ir_builder = function_ir_builder,
             .symbol_generator = symbol_generator,
             .runtime_call_emitter = runtime_call_emitter,
-            .string_literal_renderer = string_literal_renderer,
+            .string_literal_pool = string_literal_pool,
+            .string_literal_emitter = string_literal_emitter,
         };
     }
 
@@ -194,7 +200,8 @@ pub const NodeRenderer = struct {
             },
             .StringLiteral => |token| return .{
                 .exit_label = entry_label,
-                .register = self.string_literal_renderer.emitStringLiteralValue(
+                .register = self.string_literal_emitter.emitStringLiteralValue(
+                    self.string_literal_pool,
                     node.id,
                     token.kind.StringLiteral,
                     self.function_symbol_generator,

@@ -3,7 +3,7 @@ const semantic_analysis = @import("semantic_analysis");
 const lowering = @import("lowering");
 const rendering = @import("rendering");
 
-pub const LlvmIrEmitter = struct {
+pub const LlvmIrCodeGenerator = struct {
     lowering_analyzer: *lowering.LoweringAnalyzer,
     module_renderer: *rendering.LlvmModuleRenderer,
 
@@ -21,11 +21,11 @@ pub const LlvmIrEmitter = struct {
         _ = self;
     }
 
-    pub fn emitLlvmIr(
+    pub fn generateLlvmIr(
         self: *@This(),
         typed_program: *const semantic_analysis.AnalyzedProgram,
     ) []const u8 {
         const lowered_program = self.lowering_analyzer.analyzeProgram(typed_program);
-        return self.module_renderer.emitLlvmIr(&lowered_program);
+        return self.module_renderer.renderLlvmIr(&lowered_program);
     }
 };

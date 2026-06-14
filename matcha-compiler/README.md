@@ -13,7 +13,7 @@ This directory contains:
 
 - the Matcha CLI
 - the compiler frontend and semantic analysis pipeline
-- LLVM IR emission
+- LLVM IR codegen
 - native build and run orchestration
 - the Matcha runtime library
 - unit and end-to-end tests
@@ -157,7 +157,7 @@ Emit LLVM IR:
 By default, this writes:
 
 ```text
-examples/learning-matcha-emission.ll
+examples/learning-matcha-llvm-codegen.ll
 ```
 
 Build a native binary:
@@ -260,7 +260,7 @@ Command behavior:
 matcha-compiler/
 ├── src/
 │   ├── cli/            # command parsing and CLI execution
-│   ├── compiler/       # lexer, parser, semantic analysis, LLVM IR emission
+│   ├── compiler/       # lexer, parser, semantic analysis, LLVM IR codegen
 │   └── toolchain/      # native build/run orchestration and linking
 ├── runtime/            # Matcha runtime linked into compiled programs
 ├── tests/

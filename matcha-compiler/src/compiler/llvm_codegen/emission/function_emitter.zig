@@ -4,26 +4,27 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const lowering = @import("lowering");
 
-const function_emission = @import("function_emission");
-const runtime = @import("runtime/module.zig");
+const runtime_call_emitter_module = @import("runtime_call_emitter.zig");
+const function_ir_builder_module = @import("function_ir_builder.zig");
+const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const symbol_generator_module = @import("symbol_generator.zig");
-const node_renderer_module = @import("node_renderer.zig");
+const node_emitter_module = @import("node_emitter.zig");
 
-const Label = function_emission.Label;
-const FunctionIrBuilder = function_emission.FunctionIrBuilder;
-const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const RuntimeCallEmitter = runtime.RuntimeCallEmitter;
+const Label = function_symbol_generator_module.Label;
+const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
+const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
+const RuntimeCallEmitter = runtime_call_emitter_module.RuntimeCallEmitter;
 const SymbolGenerator = symbol_generator_module.SymbolGenerator;
-const NodeRenderer = node_renderer_module.NodeRenderer;
-const Environment = node_renderer_module.Environment;
+const NodeEmitter = node_emitter_module.NodeEmitter;
+const Environment = node_emitter_module.Environment;
 
-pub const FunctionRenderer = struct {
+pub const FunctionEmitter = struct {
     allocator: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     symbol_generator: *SymbolGenerator,
     runtime_call_emitter: *const RuntimeCallEmitter,
-    node_renderer: *NodeRenderer,
+    node_emitter: *NodeEmitter,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -31,7 +32,7 @@ pub const FunctionRenderer = struct {
         function_ir_builder: *FunctionIrBuilder,
         symbol_generator: *SymbolGenerator,
         runtime_call_emitter: *const RuntimeCallEmitter,
-        node_renderer: *NodeRenderer,
+        node_emitter: *NodeEmitter,
     ) @This() {
         return .{
             .allocator = allocator,
@@ -39,7 +40,7 @@ pub const FunctionRenderer = struct {
             .function_ir_builder = function_ir_builder,
             .symbol_generator = symbol_generator,
             .runtime_call_emitter = runtime_call_emitter,
-            .node_renderer = node_renderer,
+            .node_emitter = node_emitter,
         };
     }
 
@@ -62,7 +63,7 @@ pub const FunctionRenderer = struct {
                 else => {},
             }
 
-            const result = self.node_renderer.emitNode(statement, current_label, typed_program, &environment);
+            const result = self.node_emitter.emitNode(statement, current_label, typed_program, &environment);
             if (result.exit_label) |exit_label| {
                 current_label = exit_label;
             } else {
@@ -122,7 +123,7 @@ pub const FunctionRenderer = struct {
             environment.storage_by_symbol_id.put(parameter.symbol_id, storage) catch unreachable;
         }
 
-        const body_result = self.node_renderer.emitNode(
+        const body_result = self.node_emitter.emitNode(
             function_definition.body_expression,
             "entry",
             typed_program,

@@ -4,15 +4,15 @@ const symbols = @import("symbols");
 const typing = @import("typing");
 const lowering = @import("lowering");
 
-const runtime = @import("runtime/module.zig");
-const string_literal_renderer_module = @import("string_literal_renderer.zig");
-const structure_type_definition_renderer_module = @import("structure_type_definition_renderer.zig");
-const function_renderer_module = @import("function_renderer.zig");
+const runtime_symbols = @import("runtime_symbols");
+const emission = @import("emission");
+const structure_type_renderer_module = @import("structure_type_renderer.zig");
 
-const RuntimeSymbolEmitter = runtime.RuntimeSymbolEmitter;
-const StringLiteralRenderer = string_literal_renderer_module.StringLiteralRenderer;
-const StructureTypeDefinitionRenderer = structure_type_definition_renderer_module.StructureTypeDefinitionRenderer;
-const FunctionRenderer = function_renderer_module.FunctionRenderer;
+const RuntimeSymbolRenderer = @import("runtime_symbol_renderer.zig").RuntimeSymbolRenderer;
+const StringLiteralPool = emission.StringLiteralPool;
+const StringLiteralRenderer = @import("string_literal_renderer.zig").StringLiteralRenderer;
+const StructureTypeRenderer = structure_type_renderer_module.StructureTypeRenderer;
+const FunctionEmitter = emission.FunctionEmitter;
 
 // A string is a header containing a pointer to the data and the length.
 const llvm_string_type_definition = "%String = type { i8*, i64 }";
@@ -27,27 +27,30 @@ const LlvmTypeDefinition = struct {
 pub const LlvmModuleRenderer = struct {
     allocator: std.mem.Allocator,
     target_triple: []const u8,
-    function_renderer: *FunctionRenderer,
-    runtime_symbol_emitter: *const RuntimeSymbolEmitter,
+    function_emitter: *FunctionEmitter,
+    runtime_symbol_renderer: *const RuntimeSymbolRenderer,
+    string_literal_pool: *StringLiteralPool,
     string_literal_renderer: *StringLiteralRenderer,
-    structure_type_definition_renderer: *StructureTypeDefinitionRenderer,
+    structure_type_renderer: *StructureTypeRenderer,
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
 
     pub fn init(
         allocator: std.mem.Allocator,
         target_triple: []const u8,
-        function_renderer: *FunctionRenderer,
-        runtime_symbol_emitter: *const RuntimeSymbolEmitter,
+        function_emitter: *FunctionEmitter,
+        runtime_symbol_renderer: *const RuntimeSymbolRenderer,
+        string_literal_pool: *StringLiteralPool,
         string_literal_renderer: *StringLiteralRenderer,
-        structure_type_renderer: *StructureTypeDefinitionRenderer,
+        structure_type_renderer: *StructureTypeRenderer,
     ) @This() {
         return .{
             .allocator = allocator,
             .target_triple = target_triple,
-            .function_renderer = function_renderer,
-            .runtime_symbol_emitter = runtime_symbol_emitter,
+            .function_emitter = function_emitter,
+            .runtime_symbol_renderer = runtime_symbol_renderer,
+            .string_literal_pool = string_literal_pool,
             .string_literal_renderer = string_literal_renderer,
-            .structure_type_definition_renderer = structure_type_renderer,
+            .structure_type_renderer = structure_type_renderer,
             .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
         };
     }
@@ -56,15 +59,15 @@ pub const LlvmModuleRenderer = struct {
         self.llvm_matcha_type_by_type_id.deinit();
     }
 
-    pub fn emitLlvmIr(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
+    pub fn renderLlvmIr(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
         self.resetModuleState();
 
-        const structure_type_definitions = self.structure_type_definition_renderer.emitStructureTypeDefinitions(typed_program);
-        var user_defined_functions = self.emitTopLevelFunctionDefinitions(typed_program);
+        const structure_type_definitions = self.structure_type_renderer.renderStructureTypeDefinitions(typed_program);
+        var user_defined_functions = self.renderTopLevelFunctionDefinitions(typed_program);
         defer user_defined_functions.deinit(self.allocator);
-        var structure_method_functions = self.emitStructureMethodFunctionDefinitions(typed_program);
+        var structure_method_functions = self.renderStructureMethodFunctionDefinitions(typed_program);
         defer structure_method_functions.deinit(self.allocator);
-        const main_function_ir = self.function_renderer.emitMainFunction(typed_program);
+        const main_function_ir = self.function_emitter.emitMainFunction(typed_program);
 
         return self.renderModule(
             structure_type_definitions,
@@ -75,7 +78,7 @@ pub const LlvmModuleRenderer = struct {
         );
     }
 
-    fn emitTopLevelFunctionDefinitions(
+    fn renderTopLevelFunctionDefinitions(
         self: *@This(),
         typed_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
@@ -90,7 +93,7 @@ pub const LlvmModuleRenderer = struct {
                         const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(
                             function_symbol_id,
                         ) orelse unreachable;
-                        const function_ir = self.function_renderer.emitFunctionDefinition(
+                        const function_ir = self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
                             &resolved_function,
@@ -144,27 +147,27 @@ pub const LlvmModuleRenderer = struct {
     }
 
     fn resetModuleState(self: *@This()) void {
-        self.string_literal_renderer.resetModuleState();
+        self.string_literal_pool.reset();
     }
 
     fn renderModulePreamble(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
         defer module_preamble_buffer.deinit(self.allocator);
 
-        const runtime_symbol_declarations = self.runtime_symbol_emitter.emitDeclarations(runtimeRequirementsFromPlan(typed_program.runtime_requirements_plan));
+        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(runtimeRequirementsFromPlan(typed_program.runtime_requirements_plan));
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
         ) catch unreachable;
 
-        const string_literal_globals_ir = self.string_literal_renderer.renderGlobals();
+        const string_literal_globals_ir = self.string_literal_renderer.renderGlobals(self.string_literal_pool);
         if (string_literal_globals_ir.len > 0) {
             module_preamble_buffer.writer(self.allocator).print("\n\n{s}", .{string_literal_globals_ir}) catch unreachable;
         }
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
     }
 
-    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime.RuntimeRequirements {
+    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime_symbols.RuntimeRequirements {
         return .{
             .print_int = plan.print_int,
             .print_string = plan.print_string,
@@ -182,7 +185,7 @@ pub const LlvmModuleRenderer = struct {
         };
     }
 
-    fn emitStructureMethodFunctionDefinitions(
+    fn renderStructureMethodFunctionDefinitions(
         self: *@This(),
         typed_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
@@ -229,7 +232,7 @@ pub const LlvmModuleRenderer = struct {
                 function_definition_node.id,
             ) orelse unreachable;
             const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
-            const function_definition_emission = self.function_renderer.emitFunctionDefinition(
+            const function_definition_emission = self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
                 &resolved_function,

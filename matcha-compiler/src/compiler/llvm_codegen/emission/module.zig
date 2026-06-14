@@ -1,0 +1,14 @@
+pub const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
+pub const FunctionSymbolGenerator = @import("function_symbol_generator.zig").FunctionSymbolGenerator;
+pub const Register = @import("function_symbol_generator.zig").Register;
+pub const Storage = @import("function_symbol_generator.zig").Storage;
+pub const Label = @import("function_symbol_generator.zig").Label;
+pub const FunctionEmitter = @import("function_emitter.zig").FunctionEmitter;
+pub const NodeEmitter = @import("node_emitter.zig").NodeEmitter;
+pub const Environment = @import("node_emitter.zig").Environment;
+pub const EmissionResult = @import("node_emitter.zig").EmissionResult;
+pub const SymbolGenerator = @import("symbol_generator.zig").SymbolGenerator;
+pub const StringLiteralGlobal = @import("string_literal_pool.zig").StringLiteralGlobal;
+pub const StringLiteralPool = @import("string_literal_pool.zig").StringLiteralPool;
+pub const StringLiteralEmitter = @import("string_literal_emitter.zig").StringLiteralEmitter;
+pub const RuntimeCallEmitter = @import("runtime_call_emitter.zig").RuntimeCallEmitter;

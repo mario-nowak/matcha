@@ -7,7 +7,7 @@ test "default llvm output path strips final matcha extension" {
     const output_path = try pipeline.defaultLlvmOutputPath(std.testing.allocator, input_path);
     defer std.testing.allocator.free(output_path);
 
-    try std.testing.expectEqualStrings("examples/v0.1/learning-matcha-emission.ll", output_path);
+    try std.testing.expectEqualStrings("examples/v0.1/learning-matcha-llvm-codegen.ll", output_path);
 }
 
 test "default binary output path strips final matcha extension" {

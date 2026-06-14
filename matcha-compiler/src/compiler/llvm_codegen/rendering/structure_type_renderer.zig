@@ -4,7 +4,7 @@ const lowering = @import("lowering");
 
 const llvm_type_lowering = lowering.llvm_type;
 
-pub const StructureTypeDefinitionRenderer = struct {
+pub const StructureTypeRenderer = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
@@ -17,7 +17,7 @@ pub const StructureTypeDefinitionRenderer = struct {
         _ = self;
     }
 
-    pub fn emitStructureTypeDefinitions(
+    pub fn renderStructureTypeDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
@@ -42,7 +42,7 @@ pub const StructureTypeDefinitionRenderer = struct {
             }
             structure_definitions_buffer.writer(self.allocator).print(
                 "{s}",
-                .{self.emitStructureTypeDefinition(resolved_structure, lowered_program)},
+                .{self.renderStructureTypeDefinition(resolved_structure, lowered_program)},
             ) catch unreachable;
             has_structure_definition = true;
         }
@@ -50,7 +50,7 @@ pub const StructureTypeDefinitionRenderer = struct {
         return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definitions_buffer.items}) catch unreachable;
     }
 
-    fn emitStructureTypeDefinition(
+    fn renderStructureTypeDefinition(
         self: *@This(),
         resolved_structure: symbols.ResolvedStructure,
         lowered_program: *const lowering.LoweredProgram,

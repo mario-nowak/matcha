@@ -1,9 +1,9 @@
 const std = @import("std");
 
-const runtime_symbols = @import("runtime_symbols.zig");
+const runtime_symbols = @import("runtime_symbols");
 const RuntimeRequirements = runtime_symbols.RuntimeRequirements;
 
-pub const RuntimeSymbolEmitter = struct {
+pub const RuntimeSymbolRenderer = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
@@ -14,7 +14,7 @@ pub const RuntimeSymbolEmitter = struct {
         _ = self;
     }
 
-    pub fn emitDeclarations(
+    pub fn renderDeclarations(
         self: *const @This(),
         requirements: RuntimeRequirements,
     ) []const u8 {

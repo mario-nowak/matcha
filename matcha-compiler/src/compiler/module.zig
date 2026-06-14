@@ -5,5 +5,5 @@ pub const parsing = @import("parsing");
 pub const diagnostics = @import("diagnostics");
 pub const typing = @import("typing");
 pub const semantic_analysis = @import("semantic_analysis");
-pub const emission = @import("emission");
+pub const llvm_codegen = @import("llvm_codegen");
 pub const pipeline = @import("pipeline.zig");

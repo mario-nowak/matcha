@@ -1,7 +1,7 @@
 const std = @import("std");
 const helpers = @import("../../test_helpers.zig");
-const emission = @import("emission");
-const BinaryOperationLowerer = emission.lowering.BinaryOperationLowerer;
+const llvm_codegen = @import("llvm_codegen");
+const BinaryOperationLowerer = llvm_codegen.lowering.BinaryOperationLowerer;
 
 const TestError = helpers.TestError;
 const expectDeclarationNode = helpers.expectDeclarationNode;
