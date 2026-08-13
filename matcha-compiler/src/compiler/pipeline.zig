@@ -6,7 +6,11 @@ const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const llvm_codegen = @import("llvm_codegen");
 
-pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
+pub fn generateLlvmIrFromFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) ![]const u8 {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile(input_path, .{});
     defer file.close();
@@ -28,12 +32,17 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
         node_type_analyzer,
     );
     const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(diagnostic_store);
-    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator, diagnostic_store);
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(
+        allocator,
+        diagnostic_store,
+    );
     const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
         structural_validator,
         exit_behavior_analyzer,
     );
-    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(allocator);
+    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(
+        allocator,
+    );
     var semantic_analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
@@ -130,19 +139,27 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
     return llvm_ir_code_generator.generateLlvmIr(&typed_program);
 }
 
-pub fn emitFile(allocator: std.mem.Allocator, input_path: []const u8, output_path: ?[]const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
-    const llvm_ir = try emitLlvmIrFromFile(allocator, input_path, diagnostic_store);
-    const resolved_output_path = output_path orelse try defaultLlvmOutputPath(allocator, input_path);
+pub fn emitFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    output_path: ?[]const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) !void {
+    const llvm_ir = try generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
+    const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(allocator, input_path);
     try writeFile(resolved_output_path, llvm_ir);
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
-    return resolved_output_path;
 }
 
-pub fn defaultLlvmOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}-llvm-codegen.ll", .{stemWithoutMatchaExtension(input_path)});
+pub fn getDefaultLlvmOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}-llvm-codegen.ll",
+        .{stemWithoutMatchaExtension(input_path)},
+    );
 }
 
-pub fn defaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+pub fn getDefaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
     return allocator.dupe(u8, stemWithoutMatchaExtension(input_path));
 }
 

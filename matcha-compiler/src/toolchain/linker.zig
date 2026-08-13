@@ -4,9 +4,14 @@ const builtin = @import("builtin");
 const compiler = @import("compiler");
 const diagnostics = compiler.diagnostics;
 
-pub fn buildFile(allocator: std.mem.Allocator, input_path: []const u8, output_path: ?[]const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
-    const llvm_ir = try compiler.pipeline.emitLlvmIrFromFile(allocator, input_path, diagnostic_store);
-    const binary_output_path = output_path orelse try compiler.pipeline.defaultBinaryOutputPath(allocator, input_path);
+pub fn buildFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    output_path: ?[]const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) ![]const u8 {
+    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
+    const binary_output_path = output_path orelse try compiler.pipeline.getDefaultBinaryOutputPath(allocator, input_path);
 
     var temp_dir = try TemporaryDirectory.create(allocator);
     defer temp_dir.delete();
@@ -19,16 +24,25 @@ pub fn buildFile(allocator: std.mem.Allocator, input_path: []const u8, output_pa
     return binary_output_path;
 }
 
-pub fn runFile(allocator: std.mem.Allocator, input_path: []const u8, program_arguments: []const []const u8, diagnostic_store: *diagnostics.DiagnosticStore) !u8 {
-    const llvm_ir = try compiler.pipeline.emitLlvmIrFromFile(allocator, input_path, diagnostic_store);
+pub fn runFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    program_arguments: []const []const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) !u8 {
+    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
 
-    var temp_dir = try TemporaryDirectory.create(allocator);
-    defer temp_dir.delete();
+    var temporary_directory = try TemporaryDirectory.create(allocator);
+    defer temporary_directory.delete();
 
-    const llvm_ir_path = try std.fs.path.join(allocator, &.{ temp_dir.path, "program.ll" });
-    const binary_path = try std.fs.path.join(allocator, &.{ temp_dir.path, executableFileName("matcha-run") });
+    const llvm_ir_path = try std.fs.path.join(allocator, &.{ temporary_directory.path, "program.ll" });
+    const binary_path = try std.fs.path.join(
+        allocator,
+        &.{ temporary_directory.path, executableFileName("matcha-run") },
+    );
     try compiler.pipeline.writeFile(llvm_ir_path, llvm_ir);
     try linkNativeBinary(allocator, llvm_ir_path, binary_path);
+
     return runNativeBinary(allocator, binary_path, program_arguments);
 }
 
