@@ -53,7 +53,6 @@ pub const FunctionEmitter = struct {
 
         var environment = Environment.init(self.allocator, null, lowered_program.analyzed_program.type_store.integer_type_id);
         defer environment.deinit();
-        var current_label: Label = "entry";
 
         self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
 
@@ -63,15 +62,10 @@ pub const FunctionEmitter = struct {
                 else => {},
             }
 
-            const result = self.node_emitter.emitNode(statement, current_label, lowered_program, &environment);
-            if (result.exit_label) |exit_label| {
-                current_label = exit_label;
-            } else {
-                break;
-            }
+            _ = self.node_emitter.emitNode(statement, lowered_program, &environment);
         }
 
-        self.function_ir_builder.emitInstruction("ret i32 0");
+        self.function_ir_builder.emitTerminatorInstruction("ret i32 0");
 
         return self.renderCurrentFunction("main", "i32", "i32 %argc, ptr %argv");
     }
@@ -123,23 +117,22 @@ pub const FunctionEmitter = struct {
             environment.storage_by_symbol_id.put(parameter.symbol_id, storage) catch unreachable;
         }
 
-        const body_result = self.node_emitter.emitNode(
+        const body_register = self.node_emitter.emitNode(
             function_definition.body_expression,
-            "entry",
             lowered_program,
             &environment,
         );
 
-        if (body_result.exit_label != null) {
+        if (self.function_ir_builder.currentLabel() != null) {
             switch (lowered_program.analyzed_program.type_store.getType(function_return_type_id)) {
-                .Unit => self.function_ir_builder.emitInstruction("ret void"),
+                .Unit => self.function_ir_builder.emitTerminatorInstruction("ret void"),
                 else => {
                     const return_instruction = std.fmt.allocPrint(
                         self.allocator,
                         "ret {s} {s}",
-                        .{ function_return_llvm_ir_type, body_result.register orelse unreachable },
+                        .{ function_return_llvm_ir_type, body_register orelse unreachable },
                     ) catch unreachable;
-                    self.function_ir_builder.emitInstruction(return_instruction);
+                    self.function_ir_builder.emitTerminatorInstruction(return_instruction);
                 },
             }
         }
