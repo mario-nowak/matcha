@@ -1,6 +1,7 @@
 const std = @import("std");
 const symbols = @import("symbols");
 const typing = @import("typing");
+const semantic_analysis = @import("semantic_analysis");
 
 pub fn llvmIrType(type_store: *const typing.TypeStore, type_id: typing.TypeId) []const u8 {
     return switch (type_store.getType(type_id)) {
@@ -22,7 +23,7 @@ pub fn llvmIrType(type_store: *const typing.TypeStore, type_id: typing.TypeId) [
 }
 
 pub fn typeIdFromResolvedTypeReference(
-    typed_program: *const typing.TypedProgram,
+    typed_program: *const semantic_analysis.AnalyzedProgram,
     type_reference: symbols.ResolvedTypeReference,
 ) typing.TypeId {
     return switch (type_reference) {
@@ -40,7 +41,7 @@ pub fn typeIdFromResolvedTypeReference(
 }
 
 pub fn llvmIrTypeFromResolvedTypeReference(
-    typed_program: *const typing.TypedProgram,
+    typed_program: *const semantic_analysis.AnalyzedProgram,
     type_reference: symbols.ResolvedTypeReference,
 ) []const u8 {
     return llvmIrType(

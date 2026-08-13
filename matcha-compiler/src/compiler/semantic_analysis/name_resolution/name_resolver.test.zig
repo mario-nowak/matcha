@@ -228,3 +228,22 @@ test "name resolution resolves for-in item bindings inside loop bodies" {
     const body_identifier_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
     try std.testing.expectEqual(for_item_symbol_id, body_identifier_symbol_id);
 }
+
+test "name resolution reserves builtin type names for declarations" {
+    const source =
+        \\val unit = 1;
+    ;
+
+    var parsed = try parse(source);
+    defer parsed.deinit();
+
+    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
+    defer diagnostic_store.deinit();
+
+    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
+    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
+
+    const diagnostic_items = diagnostic_store.items();
+    try std.testing.expectEqual(@as(usize, 1), diagnostic_items.len);
+    try std.testing.expectEqualStrings("value name 'unit' is reserved", diagnostic_items[0].message);
+}

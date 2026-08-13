@@ -247,6 +247,7 @@ pub const NameResolver = struct {
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         const function_name = item_definition.identifier_token.kind.Identifier;
+        try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "function");
         module_scope.validateNotInScope(function_name) catch {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "function '{s}' is already defined", .{function_name});
             return error.DiagnosticsEmitted;
@@ -268,6 +269,7 @@ pub const NameResolver = struct {
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         const structure_name = item_definition.identifier_token.kind.Identifier;
+        try self.validateIdentifierIsAvailable(item_definition.identifier_token, structure_name, "structure");
         module_scope.validateNotInScope(structure_name) catch {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure '{s}' is already defined", .{structure_name});
             return error.DiagnosticsEmitted;
@@ -312,6 +314,7 @@ pub const NameResolver = struct {
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
+            .UnitLiteral,
             .Leave,
             .Continue,
             => {},
@@ -361,6 +364,7 @@ pub const NameResolver = struct {
         declaration_name: []const u8,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
+        try self.validateIdentifierIsAvailable(declaration_token, declaration_name, "value");
         if (environment.options.module_shadowing == .Forbidden) {
             if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "value '{s}' is already declared in module scope", .{declaration_name});
@@ -455,6 +459,7 @@ pub const NameResolver = struct {
 
         var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
         const item_name = for_in.item_name.kind.Identifier;
+        try self.validateIdentifierIsAvailable(for_in.item_name, item_name, "loop item");
         const item_symbol = self.symbol_table.insertSymbol(.{
             .name = item_name,
             .declared_at = for_in.item_name,
@@ -647,6 +652,7 @@ pub const NameResolver = struct {
 
         for (function_definition.parameters) |*parameter| {
             const parameter_name = parameter.name.kind.Identifier;
+            try self.validateIdentifierIsAvailable(parameter.name, parameter_name, "parameter");
             function_scope.validateNotInScope(parameter_name) catch {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, parameter.name, "parameter '{s}' is already declared in this function", .{parameter_name});
                 return error.DiagnosticsEmitted;
@@ -707,6 +713,7 @@ pub const NameResolver = struct {
         var member_kind_by_name = std.StringHashMap(StructureMemberKind).init(self.allocator);
         for (structure_definition.fields) |field| {
             const field_name = field.name.kind.Identifier;
+            try self.validateIdentifierIsAvailable(field.name, field_name, "structure member");
             if (member_kind_by_name.get(field_name)) |_| {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "structure member '{s}' is already declared in '{s}'", .{ field_name, structure_name });
                 return error.DiagnosticsEmitted;
@@ -725,6 +732,7 @@ pub const NameResolver = struct {
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
                     .Function => |function_definition| {
                         const function_name = item_definition.identifier_token.kind.Identifier;
+                        try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "structure member");
                         if (member_kind_by_name.get(function_name)) |_| {
                             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
                             return error.DiagnosticsEmitted;
@@ -803,6 +811,18 @@ pub const NameResolver = struct {
 
     fn appendResolvedStructure(self: *@This(), structure: symbols.ResolvedStructure) void {
         self.resolved_structure_by_symbol_id.put(structure.symbol_id, structure) catch unreachable;
+    }
+
+    fn validateIdentifierIsAvailable(
+        self: *@This(),
+        identifier_token: lexing.Token,
+        identifier_name: []const u8,
+        kind_name: []const u8,
+    ) NameResolutionError!void {
+        if (std.mem.eql(u8, identifier_name, "unit")) {
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "{s} name '{s}' is reserved", .{ kind_name, identifier_name });
+            return error.DiagnosticsEmitted;
+        }
     }
 
     fn builtinTypeFromName(name: []const u8) ?symbols.BuiltinType {

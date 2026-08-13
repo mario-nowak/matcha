@@ -23,7 +23,7 @@ pub const ParsedProgram = struct {
 
 pub const AnalyzedProgram = struct {
     parsed: ParsedProgram,
-    typed_program: typing.TypedProgram,
+    typed_program: semantic_analysis.AnalyzedProgram,
 
     pub fn allocator(self: *AnalyzedProgram) std.mem.Allocator {
         return self.parsed.allocator();
@@ -77,12 +77,14 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
         structural_validator,
         exit_behavior_analyzer,
     );
+    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(allocator);
     var analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
         control_flow_validator,
+        runtime_representation_analyzer,
     );
-    const typed_program = try analyzer.validateProgram(&parsed.program);
+    const typed_program = try analyzer.analyzeProgram(&parsed.program);
 
     return .{
         .parsed = parsed,

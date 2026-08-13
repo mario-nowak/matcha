@@ -1,6 +1,7 @@
 const std = @import("std");
 const symbols = @import("symbols");
 const typing = @import("typing");
+const semantic_analysis = @import("semantic_analysis");
 
 const llvm_type_lowering = @import("llvm_type_lowering.zig");
 const llvmIrTypeFromResolvedTypeReference = llvm_type_lowering.llvmIrTypeFromResolvedTypeReference;
@@ -16,7 +17,7 @@ pub const StructureTypeDefinitionEmitter = struct {
 
     pub fn emitStructureTypeDefinitions(
         self: *@This(),
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) []const u8 {
         var structure_definitions_buffer = std.ArrayList(u8){};
         defer structure_definitions_buffer.deinit(self.allocator);
@@ -50,7 +51,7 @@ pub const StructureTypeDefinitionEmitter = struct {
     fn emitStructureTypeDefinition(
         self: *@This(),
         resolved_structure: symbols.ResolvedStructure,
-        typed_program: *const typing.TypedProgram,
+        typed_program: *const semantic_analysis.AnalyzedProgram,
     ) []const u8 {
         const structure_symbol = typed_program.resolved_program.symbol_table.getSymbol(resolved_structure.symbol_id);
         const structure_llvm_type_name = self.generateStructureName(structure_symbol);
