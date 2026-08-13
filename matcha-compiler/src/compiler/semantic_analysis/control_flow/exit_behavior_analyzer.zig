@@ -96,6 +96,7 @@ pub const ExitBehaviorAnalyzer = struct {
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
+            .UnitLiteral,
             => self.markNodeExitBehavior(node, .FallsThroughWithValue),
         };
     }
