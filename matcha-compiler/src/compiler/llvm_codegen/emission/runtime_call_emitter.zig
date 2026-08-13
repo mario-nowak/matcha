@@ -1,11 +1,10 @@
 const std = @import("std");
-const function_emission = @import("function_emission");
+const runtime_symbols = @import("runtime_symbols");
 
-const runtime_symbols = @import("runtime_symbols.zig");
-
-const FunctionIrBuilder = function_emission.FunctionIrBuilder;
-const FunctionSymbolGenerator = function_emission.FunctionSymbolGenerator;
-const Register = function_emission.Register;
+const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
+const function_symbol_generator_module = @import("function_symbol_generator.zig");
+const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
+const Register = function_symbol_generator_module.Register;
 
 pub const RuntimeStringParts = struct {
     pointer_register: Register,
@@ -19,6 +18,10 @@ pub const RuntimeCallEmitter = struct {
         return .{ .allocator = allocator };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn emitInitializeArgumentsCall(
         self: *const @This(),
         builder: *FunctionIrBuilder,
@@ -29,6 +32,18 @@ pub const RuntimeCallEmitter = struct {
             .{runtime_symbols.runtime_init_arguments_function_name},
         ) catch unreachable;
         builder.emitInstruction(init_instruction);
+    }
+
+    pub fn emitPrintIntCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        integer_register: Register,
+    ) void {
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i64 {s})",
+            .{ runtime_symbols.runtime_print_int_function_name, integer_register },
+        ) catch unreachable);
     }
 
     pub fn emitPrintStringCall(
@@ -72,6 +87,20 @@ pub const RuntimeCallEmitter = struct {
             symbol_generator,
             runtime_symbols.runtime_read_line_function_name,
         );
+    }
+
+    pub fn emitGetArgumentsCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+    ) Register {
+        const result_register = symbol_generator.generateRegister();
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @{s}()",
+            .{ result_register, runtime_symbols.runtime_get_arguments_function_name },
+        ) catch unreachable);
+        return result_register;
     }
 
     pub fn emitStringConcatenateCall(

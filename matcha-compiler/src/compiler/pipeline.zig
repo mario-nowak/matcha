@@ -4,9 +4,13 @@ const lexing = @import("lexing");
 const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
-const emission = @import("emission");
+const llvm_codegen = @import("llvm_codegen");
 
-pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
+pub fn generateLlvmIrFromFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) ![]const u8 {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile(input_path, .{});
     defer file.close();
@@ -28,12 +32,17 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
         node_type_analyzer,
     );
     const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(diagnostic_store);
-    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator, diagnostic_store);
+    const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(
+        allocator,
+        diagnostic_store,
+    );
     const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
         structural_validator,
         exit_behavior_analyzer,
     );
-    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(allocator);
+    const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(
+        allocator,
+    );
     var semantic_analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
         type_checker,
@@ -42,40 +51,115 @@ pub fn emitLlvmIrFromFile(allocator: std.mem.Allocator, input_path: []const u8, 
     );
     const typed_program = try semantic_analyzer.analyzeProgram(&program);
 
-    const function_symbol_generator = emission.FunctionSymbolGenerator.init(allocator);
-    const function_ir_builder = emission.FunctionIrBuilder.init(allocator);
-    const symbol_generator = emission.SymbolGenerator.init(allocator);
-    const runtime_call_emitter = emission.RuntimeCallEmitter.init(allocator);
-    const runtime_symbol_emitter = emission.RuntimeSymbolEmitter.init(allocator);
-    const string_literal_emitter = emission.StringLiteralEmitter.init(allocator);
-    const structure_type_definition_emitter = emission.StructureTypeDefinitionEmitter.init(allocator);
-    var llvm_ir_emitter = emission.LlvmIrEmitter.init(
+    var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(allocator);
+    defer llvm_type_table_lowerer.deinit();
+    var structure_symbol_lowerer = llvm_codegen.lowering.StructureSymbolLowerer.init(allocator);
+    defer structure_symbol_lowerer.deinit();
+    var call_lowerer = llvm_codegen.lowering.CallLowerer.init(allocator);
+    defer call_lowerer.deinit();
+    var member_access_lowerer = llvm_codegen.lowering.MemberAccessLowerer.init(allocator);
+    defer member_access_lowerer.deinit();
+    var binary_operation_lowerer = llvm_codegen.lowering.BinaryOperationLowerer.init(allocator);
+    defer binary_operation_lowerer.deinit();
+    var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(allocator);
+    defer place_lowerer.deinit();
+    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(allocator);
+    defer node_value_kind_lowerer.deinit();
+    const runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
+    defer runtime_requirements_lowerer.deinit();
+
+    var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
+        &llvm_type_table_lowerer,
+        &structure_symbol_lowerer,
+        &call_lowerer,
+        &member_access_lowerer,
+        &binary_operation_lowerer,
+        &place_lowerer,
+        &node_value_kind_lowerer,
+        &runtime_requirements_lowerer,
+    );
+    defer lowering_analyzer.deinit();
+    var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(allocator);
+    defer function_symbol_generator.deinit();
+    var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(allocator);
+    defer function_ir_builder.deinit();
+    var symbol_generator = llvm_codegen.SymbolGenerator.init(allocator);
+    defer symbol_generator.deinit();
+    var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(allocator);
+    defer runtime_call_emitter.deinit();
+    var runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(allocator);
+    defer runtime_symbol_renderer.deinit();
+    var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(allocator);
+    defer string_literal_renderer.deinit();
+    var string_literal_pool = llvm_codegen.StringLiteralPool.init(allocator);
+    defer string_literal_pool.deinit();
+    var string_literal_emitter = llvm_codegen.StringLiteralEmitter.init(allocator);
+    defer string_literal_emitter.deinit();
+    var structure_type_renderer = llvm_codegen.StructureTypeRenderer.init(allocator);
+    defer structure_type_renderer.deinit();
+
+    var node_emitter = llvm_codegen.NodeEmitter.init(
+        allocator,
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        &string_literal_pool,
+        &string_literal_emitter,
+    );
+    defer node_emitter.deinit();
+
+    var function_emitter = llvm_codegen.FunctionEmitter.init(
+        allocator,
+        &function_symbol_generator,
+        &function_ir_builder,
+        &symbol_generator,
+        &runtime_call_emitter,
+        &node_emitter,
+    );
+    defer function_emitter.deinit();
+
+    var llvm_module_renderer = llvm_codegen.rendering.LlvmModuleRenderer.init(
         allocator,
         getLlvmTargetTriple(),
-        function_symbol_generator,
-        function_ir_builder,
-        symbol_generator,
-        runtime_call_emitter,
-        runtime_symbol_emitter,
-        string_literal_emitter,
-        structure_type_definition_emitter,
+        &function_emitter,
+        &runtime_symbol_renderer,
+        &string_literal_pool,
+        &string_literal_renderer,
+        &structure_type_renderer,
     );
-    return llvm_ir_emitter.emitLlvmIr(&typed_program);
+    defer llvm_module_renderer.deinit();
+
+    var llvm_ir_code_generator = llvm_codegen.LlvmIrCodeGenerator.init(
+        &lowering_analyzer,
+        &llvm_module_renderer,
+    );
+    defer llvm_ir_code_generator.deinit();
+
+    return llvm_ir_code_generator.generateLlvmIr(&typed_program);
 }
 
-pub fn emitFile(allocator: std.mem.Allocator, input_path: []const u8, output_path: ?[]const u8, diagnostic_store: *diagnostics.DiagnosticStore) ![]const u8 {
-    const llvm_ir = try emitLlvmIrFromFile(allocator, input_path, diagnostic_store);
-    const resolved_output_path = output_path orelse try defaultLlvmOutputPath(allocator, input_path);
+pub fn emitFile(
+    allocator: std.mem.Allocator,
+    input_path: []const u8,
+    output_path: ?[]const u8,
+    diagnostic_store: *diagnostics.DiagnosticStore,
+) !void {
+    const llvm_ir = try generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
+    const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(allocator, input_path);
     try writeFile(resolved_output_path, llvm_ir);
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
-    return resolved_output_path;
 }
 
-pub fn defaultLlvmOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}-emission.ll", .{stemWithoutMatchaExtension(input_path)});
+pub fn getDefaultLlvmOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}-llvm-codegen.ll",
+        .{stemWithoutMatchaExtension(input_path)},
+    );
 }
 
-pub fn defaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+pub fn getDefaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
     return allocator.dupe(u8, stemWithoutMatchaExtension(input_path));
 }
 

@@ -96,28 +96,58 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const function_emission_module = b.addModule("function_emission", .{
-        .root_source_file = b.path("src/compiler/emission/function_emission/module.zig"),
-        .target = target,
-    });
-
-    const runtime_emission_module = b.addModule("runtime_emission", .{
-        .root_source_file = b.path("src/compiler/emission/runtime/module.zig"),
-        .target = target,
-        .imports = &.{
-            .{ .name = "function_emission", .module = function_emission_module },
-        },
-    });
-
-    const emission_module = b.addModule("emission", .{
-        .root_source_file = b.path("src/compiler/emission/module.zig"),
+    const lowering_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/llvm_codegen/lowering/module.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
-            .{ .name = "function_emission", .module = function_emission_module },
-            .{ .name = "runtime_emission", .module = runtime_emission_module },
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+        },
+    });
+
+    const runtime_symbols_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/llvm_codegen/runtime_symbols.zig"),
+        .target = target,
+    });
+
+    const emission_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/llvm_codegen/emission/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "lowering", .module = lowering_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
+        },
+    });
+
+    const rendering_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/llvm_codegen/rendering/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "emission", .module = emission_module },
+            .{ .name = "lowering", .module = lowering_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
+        },
+    });
+
+    const llvm_codegen_module = b.addModule("llvm_codegen", .{
+        .root_source_file = b.path("src/compiler/llvm_codegen/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "lowering", .module = lowering_module },
+            .{ .name = "emission", .module = emission_module },
+            .{ .name = "rendering", .module = rendering_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
         },
     });
@@ -131,8 +161,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "parsing", .module = parsing_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
-            .{ .name = "emission", .module = emission_module },
+            .{ .name = "llvm_codegen", .module = llvm_codegen_module },
         },
     });
 
@@ -156,8 +187,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
-            .{ .name = "emission", .module = emission_module },
+            .{ .name = "llvm_codegen", .module = llvm_codegen_module },
         },
     });
 

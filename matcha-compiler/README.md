@@ -13,7 +13,7 @@ This directory contains:
 
 - the Matcha CLI
 - the compiler frontend and semantic analysis pipeline
-- LLVM IR emission
+- LLVM IR codegen
 - native build and run orchestration
 - the Matcha runtime library
 - unit and end-to-end tests
@@ -157,7 +157,7 @@ Emit LLVM IR:
 By default, this writes:
 
 ```text
-examples/learning-matcha-emission.ll
+examples/learning-matcha-llvm-codegen.ll
 ```
 
 Build a native binary:
@@ -198,6 +198,8 @@ mise run build          # build the compiler and runtime
 mise run test-compiler  # run Zig unit/integration tests wired through build.zig
 mise run e2e            # run end-to-end tests
 mise run test           # run compiler tests and e2e tests
+mise run verify         # lint + build + compiler tests + e2e
+mise run checkfix       # format, then run full verification
 mise run build-compiler # optimized ReleaseFast build
 ```
 
@@ -206,6 +208,7 @@ Raw Zig equivalents:
 ```sh
 zig build check
 zig build
+zig fmt --check .
 zig build test --summary all
 zig test tests/e2e/tests.zig
 ```
@@ -217,6 +220,7 @@ The test suite covers both internal compiler behavior and real compile-and-run w
 - `zig build test --summary all` runs unit and integration tests through `build.zig`
 - `zig test tests/e2e/tests.zig` runs end-to-end tests against real Matcha source programs
 - `mise run test` runs the full local test workflow
+- `mise run verify` runs the same local verification sequence expected by CI
 
 Run end-to-end tests with:
 
@@ -256,7 +260,7 @@ Command behavior:
 matcha-compiler/
 ├── src/
 │   ├── cli/            # command parsing and CLI execution
-│   ├── compiler/       # lexer, parser, semantic analysis, LLVM IR emission
+│   ├── compiler/       # lexer, parser, semantic analysis, LLVM IR codegen
 │   └── toolchain/      # native build/run orchestration and linking
 ├── runtime/            # Matcha runtime linked into compiled programs
 ├── tests/
@@ -270,9 +274,9 @@ matcha-compiler/
 
 Example programs live in [`examples/`](./examples):
 
-- [`learning-matcha.mt`](./examples/learning-matcha.mt) — a guided tour of the currently implemented language
-- [`aoc-2024-01.mt`](./examples/aoc-2024-01.mt) — Advent of Code-style parsing and list processing
-- [`customer-import-audit.mt`](./examples/customer-import-audit.mt) — a more idiomatic example with structures, normalization, and decision logic
+- [`learning-matcha.mt`](./examples/learning-matcha.mt), which gives a guided tour of the currently implemented language
+- [`aoc-2024-01.mt`](./examples/aoc-2024-01.mt), which shows Advent of Code-style parsing and list processing
+- [`customer-import-audit.mt`](./examples/customer-import-audit.mt), which offers a more idiomatic example with structures, normalization, and decision logic
 
 If you want one file to read first, start with [`examples/learning-matcha.mt`](./examples/learning-matcha.mt).
 

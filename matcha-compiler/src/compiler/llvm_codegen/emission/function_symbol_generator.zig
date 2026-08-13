@@ -22,6 +22,10 @@ pub const FunctionSymbolGenerator = struct {
         };
     }
 
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
+    }
+
     pub fn reset(self: *@This()) void {
         self.register_counter = 0;
         self.storage_counter = 0;

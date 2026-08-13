@@ -113,8 +113,8 @@ The documented compiler setup is currently macOS-first.
 
 This repository is a monorepo with two main parts:
 
-- [`matcha-compiler/`](./matcha-compiler) — the compiler, runtime, CLI, tests, and example programs
-- [`tooling/ide-extensions/vs-code-extension/`](./tooling/ide-extensions/vs-code-extension) — a VS Code extension with syntax highlighting and basic editor support
+- [`matcha-compiler/`](./matcha-compiler), which contains compiler, runtime, CLI, tests, and example programs
+- [`tooling/ide-extensions/vs-code-extension/`](./tooling/ide-extensions/vs-code-extension), which provides a VS Code extension with syntax highlighting and basic editor support
 
 ## Monorepo layout
 
@@ -128,8 +128,8 @@ This repository is a monorepo with two main parts:
 
 ## Suggested starting points
 
-- [`matcha-compiler/README.md`](./matcha-compiler/README.md) — compiler setup, commands, and development workflow
-- [`matcha-compiler/examples/learning-matcha.mt`](./matcha-compiler/examples/learning-matcha.mt) — guided tour of the currently implemented language
-- [`matcha-compiler/examples/aoc-2024-01.mt`](./matcha-compiler/examples/aoc-2024-01.mt) — Advent of Code-style parsing and array processing
-- [`matcha-compiler/examples/customer-import-audit.mt`](./matcha-compiler/examples/customer-import-audit.mt) — a more domain-shaped example using structures and `match`
-- [`tooling/ide-extensions/vs-code-extension/README.md`](./tooling/ide-extensions/vs-code-extension/README.md) — VS Code extension documentation
+- [`matcha-compiler/README.md`](./matcha-compiler/README.md) for compiler setup, commands, and development workflow
+- [`matcha-compiler/examples/learning-matcha.mt`](./matcha-compiler/examples/learning-matcha.mt) for a guided tour of the currently implemented language
+- [`matcha-compiler/examples/aoc-2024-01.mt`](./matcha-compiler/examples/aoc-2024-01.mt) for Advent of Code-style parsing and array processing
+- [`matcha-compiler/examples/customer-import-audit.mt`](./matcha-compiler/examples/customer-import-audit.mt) for a more domain-shaped example using structures and `match`
+- [`tooling/ide-extensions/vs-code-extension/README.md`](./tooling/ide-extensions/vs-code-extension/README.md) for VS Code extension documentation

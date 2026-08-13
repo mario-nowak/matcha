@@ -34,31 +34,37 @@ const help_params = clap.parseParamsComptime(
     \\
 );
 
-pub fn parse(allocator: std.mem.Allocator, iter: anytype) !Command {
-    var diag = clap.Diagnostic{};
-    var res = clap.parseEx(clap.Help, &top_level_params, top_level_parsers, iter, .{
-        .allocator = allocator,
-        .diagnostic = &diag,
-        .terminating_positional = 0,
-    }) catch |err| {
-        try diag.reportToFile(.stderr(), err);
-        return err;
+pub fn parse(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+    var diagnostic = clap.Diagnostic{};
+    var result = clap.parseEx(
+        clap.Help,
+        &top_level_params,
+        top_level_parsers,
+        argument_iterator,
+        .{
+            .allocator = allocator,
+            .diagnostic = &diagnostic,
+            .terminating_positional = 0,
+        },
+    ) catch |parsing_error| {
+        try diagnostic.reportToFile(.stderr(), parsing_error);
+        return parsing_error;
     };
-    defer res.deinit();
+    defer result.deinit();
 
-    if (res.args.help != 0) {
+    if (result.args.help != 0) {
         return .{ .help = null };
     }
-    if (res.args.version != 0) {
+    if (result.args.version != 0) {
         return .version;
     }
 
-    const subcommand = res.positionals[0] orelse return .{ .help = null };
+    const subcommand = result.positionals[0] orelse return .{ .help = null };
     return switch (subcommand) {
-        .help => parseHelpCommand(allocator, iter),
-        .emit => parseEmitCommand(allocator, iter),
-        .build => parseBuildCommand(allocator, iter),
-        .run => parseRunCommand(allocator, iter),
+        .help => parseHelpCommand(allocator, argument_iterator),
+        .emit => parseEmitCommand(allocator, argument_iterator),
+        .build => parseBuildCommand(allocator, argument_iterator),
+        .run => parseRunCommand(allocator, argument_iterator),
     };
 }
 
@@ -101,91 +107,115 @@ const run_params = clap.parseParamsComptime(
     \\
 );
 
-fn parseHelpCommand(allocator: std.mem.Allocator, iter: anytype) !Command {
-    var diag = clap.Diagnostic{};
-    var res = clap.parseEx(clap.Help, &help_params, clap.parsers.default, iter, .{
-        .allocator = allocator,
-        .diagnostic = &diag,
-    }) catch |err| {
-        try diag.reportToFile(.stderr(), err);
-        return err;
+fn parseHelpCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+    var diagnostic = clap.Diagnostic{};
+    var result = clap.parseEx(
+        clap.Help,
+        &help_params,
+        clap.parsers.default,
+        argument_iterator,
+        .{
+            .allocator = allocator,
+            .diagnostic = &diagnostic,
+        },
+    ) catch |parsing_error| {
+        try diagnostic.reportToFile(.stderr(), parsing_error);
+        return parsing_error;
     };
-    defer res.deinit();
+    defer result.deinit();
 
     return .{ .help = null };
 }
 
-fn parseEmitCommand(allocator: std.mem.Allocator, iter: anytype) !Command {
-    var diag = clap.Diagnostic{};
-    var res = clap.parseEx(clap.Help, &command_params, clap.parsers.default, iter, .{
-        .allocator = allocator,
-        .diagnostic = &diag,
-    }) catch |err| {
-        try diag.reportToFile(.stderr(), err);
-        return err;
+fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+    var diagnostic = clap.Diagnostic{};
+    var result = clap.parseEx(
+        clap.Help,
+        &command_params,
+        clap.parsers.default,
+        argument_iterator,
+        .{
+            .allocator = allocator,
+            .diagnostic = &diagnostic,
+        },
+    ) catch |parsing_error| {
+        try diagnostic.reportToFile(.stderr(), parsing_error);
+        return parsing_error;
     };
-    defer res.deinit();
+    defer result.deinit();
 
-    if (res.args.help != 0) {
+    if (result.args.help != 0) {
         return .{ .help = .emit };
     }
 
-    const input_path = res.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return error.MissingInputPath;
     return .{ .emit = .{
         .input_path = input_path,
-        .output_path = res.args.output,
+        .output_path = result.args.output,
     } };
 }
 
-fn parseBuildCommand(allocator: std.mem.Allocator, iter: anytype) !Command {
-    var diag = clap.Diagnostic{};
-    var res = clap.parseEx(clap.Help, &command_params, clap.parsers.default, iter, .{
-        .allocator = allocator,
-        .diagnostic = &diag,
-    }) catch |err| {
-        try diag.reportToFile(.stderr(), err);
-        return err;
+fn parseBuildCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+    var diagnostic = clap.Diagnostic{};
+    var result = clap.parseEx(
+        clap.Help,
+        &command_params,
+        clap.parsers.default,
+        argument_iterator,
+        .{
+            .allocator = allocator,
+            .diagnostic = &diagnostic,
+        },
+    ) catch |parsing_error| {
+        try diagnostic.reportToFile(.stderr(), parsing_error);
+        return parsing_error;
     };
-    defer res.deinit();
+    defer result.deinit();
 
-    if (res.args.help != 0) {
+    if (result.args.help != 0) {
         return .{ .help = .build };
     }
 
-    const input_path = res.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return error.MissingInputPath;
     return .{ .build = .{
         .input_path = input_path,
-        .output_path = res.args.output,
+        .output_path = result.args.output,
     } };
 }
 
-fn parseRunCommand(allocator: std.mem.Allocator, iter: anytype) !Command {
-    var diag = clap.Diagnostic{};
-    var res = clap.parseEx(clap.Help, &run_params, clap.parsers.default, iter, .{
-        .allocator = allocator,
-        .diagnostic = &diag,
-        .terminating_positional = 0,
-    }) catch |err| {
-        try diag.reportToFile(.stderr(), err);
-        return err;
+fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+    var diagnostic = clap.Diagnostic{};
+    var result = clap.parseEx(
+        clap.Help,
+        &run_params,
+        clap.parsers.default,
+        argument_iterator,
+        .{
+            .allocator = allocator,
+            .diagnostic = &diagnostic,
+            .terminating_positional = 0,
+        },
+    ) catch |parsing_error| {
+        try diagnostic.reportToFile(.stderr(), parsing_error);
+        return parsing_error;
     };
-    defer res.deinit();
+    defer result.deinit();
 
-    if (res.args.help != 0) {
+    if (result.args.help != 0) {
         return .{ .help = .run };
     }
 
-    const input_path = res.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return error.MissingInputPath;
     var program_arguments: std.ArrayList([]const u8) = .empty;
     defer program_arguments.deinit(allocator);
 
-    if (iter.next()) |argument| {
+    if (argument_iterator.next()) |argument| {
         if (!std.mem.eql(u8, argument, "--")) {
             try program_arguments.append(allocator, argument);
         }
     }
 
-    while (iter.next()) |argument| {
+    while (argument_iterator.next()) |argument| {
         try program_arguments.append(allocator, argument);
     }
 

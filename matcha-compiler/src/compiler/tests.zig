@@ -5,5 +5,9 @@ test {
     _ = @import("pipeline.test.zig");
     _ = @import("semantic_analysis/name_resolution/name_resolver.test.zig");
     _ = @import("semantic_analysis/semantic_analyzer.test.zig");
-    _ = @import("emission/llvm_ir_emitter.test.zig");
+    _ = @import("llvm_codegen/lowering/call_lowerer.test.zig");
+    _ = @import("llvm_codegen/lowering/member_access_lowerer.test.zig");
+    _ = @import("llvm_codegen/lowering/place_lowerer.test.zig");
+    _ = @import("llvm_codegen/lowering/binary_operation_lowerer.test.zig");
+    _ = @import("llvm_codegen/llvm_ir_code_generator.test.zig");
 }

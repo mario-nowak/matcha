@@ -1,5 +1,5 @@
 const std = @import("std");
-const runtime_emission = @import("runtime_emission");
+const runtime_symbols = @import("runtime_symbols");
 const symbols = @import("symbols");
 
 pub const SymbolGenerator = struct {
@@ -7,6 +7,10 @@ pub const SymbolGenerator = struct {
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{ .allocator = allocator };
+    }
+
+    pub fn deinit(self: *const @This()) void {
+        _ = self;
     }
 
     pub fn generateStructureFunctionName(
@@ -32,11 +36,11 @@ pub const SymbolGenerator = struct {
     ) []const u8 {
         switch (function_symbol.kind) {
             .Function => |function_info| switch (function_info.implementation) {
-                .BuiltinPrintInt => return runtime_emission.runtime_print_int_function_name,
-                .BuiltinPrintString => return runtime_emission.runtime_print_string_function_name,
-                .BuiltinReadFile => return runtime_emission.runtime_read_file_function_name,
-                .BuiltinReadLine => return runtime_emission.runtime_read_line_function_name,
-                .BuiltinGetArguments => return runtime_emission.runtime_get_arguments_function_name,
+                .BuiltinPrintInt => return runtime_symbols.runtime_print_int_function_name,
+                .BuiltinPrintString => return runtime_symbols.runtime_print_string_function_name,
+                .BuiltinReadFile => return runtime_symbols.runtime_read_file_function_name,
+                .BuiltinReadLine => return runtime_symbols.runtime_read_line_function_name,
+                .BuiltinGetArguments => return runtime_symbols.runtime_get_arguments_function_name,
                 .UserDefined => {
                     return std.fmt.allocPrint(
                         self.allocator,
