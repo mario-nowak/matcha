@@ -4,21 +4,30 @@ pub const Instruction = []const u8;
 pub const Label = []const u8;
 pub const Storage = []const u8;
 
+const entry_label: Label = "entry";
+
 const Line = union(enum) {
     instruction: Instruction,
     label: Label,
 };
 
+/// Builds the body of a single LLVM IR function while tracking the current
+/// insertion point. `current_label` names the basic block instructions are
+/// appended to; it becomes null after a terminator, which marks the code that
+/// follows as unreachable. Instructions emitted while unreachable are dropped,
+/// so callers never have to thread reachability through their control flow.
 pub const FunctionIrBuilder = struct {
     allocator: std.mem.Allocator,
     storage_allocation_instructions: std.ArrayList(Instruction),
     lines: std.ArrayList(Line),
+    current_label: ?Label,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
             .storage_allocation_instructions = .{},
             .lines = .{},
+            .current_label = entry_label,
         };
     }
 
@@ -31,6 +40,13 @@ pub const FunctionIrBuilder = struct {
         self.deinit();
         self.lines = .{};
         self.storage_allocation_instructions = .{};
+        self.current_label = entry_label;
+    }
+
+    /// The label of the basic block currently being emitted into, or null when
+    /// the last emitted instruction was a terminator and no label followed.
+    pub fn currentLabel(self: *const @This()) ?Label {
+        return self.current_label;
     }
 
     pub fn render(
@@ -78,10 +94,22 @@ pub const FunctionIrBuilder = struct {
 
     pub fn emitLabel(self: *@This(), label: Label) void {
         self.lines.append(self.allocator, .{ .label = label }) catch unreachable;
+        self.current_label = label;
     }
 
     pub fn emitInstruction(self: *@This(), instruction: Instruction) void {
+        if (self.current_label == null) {
+            return;
+        }
         self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
+    }
+
+    /// Emits an instruction that ends the current basic block (ret, br,
+    /// unreachable). Everything emitted afterwards is dropped until the next
+    /// label opens a new block.
+    pub fn emitTerminatorInstruction(self: *@This(), instruction: Instruction) void {
+        self.emitInstruction(instruction);
+        self.current_label = null;
     }
 
     pub fn emitStorageAllocationInstruction(self: *@This(), instruction: Instruction) void {
@@ -102,7 +130,7 @@ pub const FunctionIrBuilder = struct {
             ) catch unreachable,
             else => unreachable,
         };
-        self.emitInstruction(instruction);
+        self.emitTerminatorInstruction(instruction);
     }
 
     pub fn emitAlloca(self: *@This(), storage: Storage, llvm_ir_type: []const u8) void {

@@ -6,7 +6,6 @@ pub const Label = @import("function_symbol_generator.zig").Label;
 pub const FunctionEmitter = @import("function_emitter.zig").FunctionEmitter;
 pub const NodeEmitter = @import("node_emitter.zig").NodeEmitter;
 pub const Environment = @import("node_emitter.zig").Environment;
-pub const EmissionResult = @import("node_emitter.zig").EmissionResult;
 pub const SymbolGenerator = @import("symbol_generator.zig").SymbolGenerator;
 pub const StringLiteralGlobal = @import("string_literal_pool.zig").StringLiteralGlobal;
 pub const StringLiteralPool = @import("string_literal_pool.zig").StringLiteralPool;
