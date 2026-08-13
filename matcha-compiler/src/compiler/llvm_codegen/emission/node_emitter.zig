@@ -145,7 +145,7 @@ pub const NodeEmitter = struct {
         self: *@This(),
         node: *const ast.Node,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         switch (node.kind) {
@@ -154,7 +154,7 @@ pub const NodeEmitter = struct {
                     const value_result = self.emitNode(
                         return_value,
                         entry_label,
-                        typed_program,
+                        lowered_program,
                         environment,
                     );
                     if (value_result.exit_label == null) {
@@ -168,7 +168,7 @@ pub const NodeEmitter = struct {
                         self.allocator,
                         "ret {s} {s}",
                         .{
-                            typed_program.getLlvmIrType(environment.function_return_type_id),
+                            lowered_program.getLlvmIrType(environment.function_return_type_id),
                             value_result.register.?,
                         },
                     ) catch unreachable;
@@ -210,10 +210,10 @@ pub const NodeEmitter = struct {
             },
             .UnitLiteral => unreachable,
             .Identifier => {
-                const symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+                const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
                 const storage = environment.storage_by_symbol_id.get(symbol_id).?;
-                const llvm_ir_type = typed_program.getLlvmIrType(
-                    typed_program.analyzed_program.type_by_node_id.get(node.id).?,
+                const llvm_ir_type = lowered_program.getLlvmIrType(
+                    lowered_program.analyzed_program.type_by_node_id.get(node.id).?,
                 );
                 const register = self.function_symbol_generator.generateRegister();
                 self.function_ir_builder.emitLoad(register, storage, llvm_ir_type);
@@ -237,7 +237,7 @@ pub const NodeEmitter = struct {
 
                 return self.emitLoopConstruct(
                     loop_construct,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -255,7 +255,7 @@ pub const NodeEmitter = struct {
 
                 return self.emitLoopConstruct(
                     loop_construct,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -263,7 +263,7 @@ pub const NodeEmitter = struct {
                 node,
                 &for_in,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .Leave => {
@@ -286,36 +286,36 @@ pub const NodeEmitter = struct {
                 node,
                 &call_expression,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .MemberAccess => |member_access| return self.emitMemberAccess(
                 node,
                 &member_access,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .BinaryExpression => |binary_expression| {
                 const left_result = self.emitNode(
                     binary_expression.left,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 const right_result = self.emitNode(
                     binary_expression.right,
                     left_result.exit_label.?,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
-                const left_operand_type = typed_program.analyzed_program.type_by_node_id.get(binary_expression.left.id).?;
+                const left_operand_type = lowered_program.analyzed_program.type_by_node_id.get(binary_expression.left.id).?;
                 const result_register = self.emitLoweredBinaryOperation(
-                    typed_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
+                    lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                     left_operand_type,
                     left_result.register.?,
                     right_result.register.?,
-                    typed_program,
+                    lowered_program,
                 );
 
                 return .{
@@ -327,12 +327,12 @@ pub const NodeEmitter = struct {
                 const operand_result = self.emitNode(
                     unary_expression.operand,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 const result_register = self.function_symbol_generator.generateRegister();
-                const operation_type = typed_program.analyzed_program.type_by_node_id.get(node.id).?;
-                const instruction_type = typed_program.getLlvmIrType(operation_type);
+                const operation_type = lowered_program.analyzed_program.type_by_node_id.get(node.id).?;
+                const instruction_type = lowered_program.getLlvmIrType(operation_type);
                 const instruction = switch (unary_expression.operator) {
                     .Negate => std.fmt.allocPrint(
                         self.allocator,
@@ -356,12 +356,12 @@ pub const NodeEmitter = struct {
                 const value_declaration_result = self.emitNode(
                     value_declaration.value,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
-                const symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-                const value_type_id = typed_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
-                const llvm_ir_type = typed_program.getLlvmIrType(value_type_id);
+                const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+                const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
+                const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
                 const storage = self.function_symbol_generator.generateStorage();
                 self.function_ir_builder.emitAlloca(storage, llvm_ir_type);
@@ -378,7 +378,7 @@ pub const NodeEmitter = struct {
                 const place_result = self.emitPlace(
                     assignment.target,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (place_result.exit_label == null) {
@@ -388,14 +388,14 @@ pub const NodeEmitter = struct {
                     };
                 }
 
-                const value_type_id = typed_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
-                const llvm_ir_type = typed_program.getLlvmIrType(value_type_id);
+                const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
+                const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
                 switch (assignment.operator) {
                     .Assign => {
                         const value_result = self.emitNode(
                             assignment.value,
                             place_result.exit_label.?,
-                            typed_program,
+                            lowered_program,
                             environment,
                         );
                         self.function_ir_builder.emitStore(value_result.register.?, place_result.register.?, llvm_ir_type);
@@ -405,14 +405,14 @@ pub const NodeEmitter = struct {
                             .register = null,
                         };
                     },
-                    .Compound => |binary_operator| {
+                    .Compound => {
                         const current_value_register = self.function_symbol_generator.generateRegister();
                         self.function_ir_builder.emitLoad(current_value_register, place_result.register.?, llvm_ir_type);
 
                         const value_result = self.emitNode(
                             assignment.value,
                             place_result.exit_label.?,
-                            typed_program,
+                            lowered_program,
                             environment,
                         );
                         if (value_result.exit_label == null) {
@@ -423,15 +423,11 @@ pub const NodeEmitter = struct {
                         }
 
                         const result_register = self.emitLoweredBinaryOperation(
-                            lowering.BinaryOperationLowerer.decisionFor(
-                                binary_operator,
-                                value_type_id,
-                                typed_program.analyzed_program,
-                            ),
+                            lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                             value_type_id,
                             current_value_register,
                             value_result.register.?,
-                            typed_program,
+                            lowered_program,
                         );
 
                         self.function_ir_builder.emitStore(result_register, place_result.register.?, llvm_ir_type);
@@ -445,7 +441,7 @@ pub const NodeEmitter = struct {
             .Block => |block| return self.emitBlock(
                 block,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .IfStatement => |if_statement| {
@@ -467,7 +463,7 @@ pub const NodeEmitter = struct {
                         .continue_label = "continue",
                     },
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -490,7 +486,7 @@ pub const NodeEmitter = struct {
                         .continue_label = "continue",
                     },
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -506,7 +502,7 @@ pub const NodeEmitter = struct {
 
                 const exhaustive_without_else = if (match_expression.subject) |subject|
                     match_expression.else_arm == null and
-                        typed_program.analyzed_program.type_by_node_id.get(subject.id).? == typed_program.analyzed_program.type_store.boolean_type_id
+                        lowered_program.analyzed_program.type_by_node_id.get(subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id
                 else
                     false;
 
@@ -525,7 +521,7 @@ pub const NodeEmitter = struct {
                         .continue_label = "match_continue",
                     },
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -533,7 +529,7 @@ pub const NodeEmitter = struct {
                 const emission_result = self.emitNode(
                     expression_statement.expression,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
 
@@ -552,28 +548,28 @@ pub const NodeEmitter = struct {
                 node,
                 structure_construction.fields,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .AnonymousStructureLiteral => |anonymous_structure_literal| return self.emitStructureConstruction(
                 node,
                 anonymous_structure_literal.fields,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .ArrayLiteral => |array_literal| return self.emitArrayLiteral(
                 node,
                 &array_literal,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .IndexAccess => |index_access| return self.emitIndexAccess(
                 node,
                 &index_access,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
         }
@@ -584,24 +580,24 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const call_dispatch = typed_program.call_dispatch_decision_by_node_id.get(node.id) orelse unreachable;
+        const call_dispatch = lowered_program.call_dispatch_decision_by_node_id.get(node.id) orelse unreachable;
 
         return switch (call_dispatch) {
             .UserFunction => |user_function| self.emitUserFunctionCall(
                 user_function,
                 call_expression,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .Builtin => |builtin_call_kind| self.emitBuiltinCall(
                 builtin_call_kind,
                 call_expression,
                 entry_label,
-                typed_program,
+                lowered_program,
                 environment,
             ),
             .ArrayMethod => |array_method| {
@@ -614,7 +610,7 @@ pub const NodeEmitter = struct {
                         &callee_member_access,
                         call_expression,
                         entry_label,
-                        typed_program,
+                        lowered_program,
                         environment,
                     ),
                 };
@@ -629,7 +625,7 @@ pub const NodeEmitter = struct {
                     &callee_member_access,
                     call_expression,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -643,7 +639,7 @@ pub const NodeEmitter = struct {
                     &callee_member_access,
                     call_expression,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -655,7 +651,7 @@ pub const NodeEmitter = struct {
         user_function: anytype,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         var current_label = entry_label;
@@ -672,7 +668,7 @@ pub const NodeEmitter = struct {
             const receiver_result = self.emitNode(
                 callee_member_access.base,
                 current_label,
-                typed_program,
+                lowered_program,
                 environment,
             );
             if (receiver_result.exit_label) |exit_label| {
@@ -690,7 +686,7 @@ pub const NodeEmitter = struct {
             const argument_result = self.emitNode(
                 argument,
                 current_label,
-                typed_program,
+                lowered_program,
                 environment,
             );
             if (argument_result.exit_label) |exit_label| {
@@ -709,7 +705,7 @@ pub const NodeEmitter = struct {
             user_function.owning_structure_symbol_id,
             argument_registers.items,
             current_label,
-            typed_program,
+            lowered_program,
         );
     }
 
@@ -718,7 +714,7 @@ pub const NodeEmitter = struct {
         builtin_call_kind: lowering.lowering_types.BuiltinCallKind,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         return switch (builtin_call_kind) {
@@ -727,7 +723,7 @@ pub const NodeEmitter = struct {
                 const argument_result = self.emitNode(
                     &call_expression.arguments[0],
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (argument_result.exit_label == null) {
@@ -748,7 +744,7 @@ pub const NodeEmitter = struct {
                 const argument_result = self.emitNode(
                     &call_expression.arguments[0],
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (argument_result.exit_label == null) {
@@ -769,7 +765,7 @@ pub const NodeEmitter = struct {
                 const path_result = self.emitNode(
                     &call_expression.arguments[0],
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (path_result.exit_label == null) {
@@ -815,22 +811,22 @@ pub const NodeEmitter = struct {
         owning_structure_symbol_id: ?symbols.SymbolId,
         argument_registers: []const Register,
         current_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) EmissionResult {
-        const callee_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
-        const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+        const callee_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
+        const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
 
         var argument_list_buffer = std.ArrayList(u8){};
         defer argument_list_buffer.deinit(self.allocator);
         for (resolved_function.parameters, argument_registers, 0..) |parameter, argument_register, index| {
-            const parameter_type_id = typed_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+            const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
             if (index > 0) {
                 argument_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
             }
             argument_list_buffer.writer(self.allocator).print(
                 "{s} {s}",
                 .{
-                    typed_program.getLlvmIrType(parameter_type_id),
+                    lowered_program.getLlvmIrType(parameter_type_id),
                     argument_register,
                 },
             ) catch unreachable;
@@ -838,18 +834,18 @@ pub const NodeEmitter = struct {
 
         const function_name = if (owning_structure_symbol_id) |structure_symbol_id|
             self.symbol_generator.generateStructureFunctionName(
-                typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id),
+                lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id),
                 callee_symbol,
             )
         else
             self.symbol_generator.generateFunctionName(callee_symbol);
-        const function_type_id = typed_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
-        const function_return_type_id = switch (typed_program.analyzed_program.type_store.getType(function_type_id)) {
-            .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
+        const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+        const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
+            .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
             else => unreachable,
         };
-        const function_return_llvm_ir_type = typed_program.getLlvmIrType(function_return_type_id);
-        if (function_return_type_id == typed_program.analyzed_program.type_store.unit_type_id) {
+        const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
+        if (function_return_type_id == lowered_program.analyzed_program.type_store.unit_type_id) {
             const call_instruction = std.fmt.allocPrint(
                 self.allocator,
                 "call {s} @{s}({s})",
@@ -883,11 +879,11 @@ pub const NodeEmitter = struct {
         operand_type_id: typing.TypeId,
         left_register: Register,
         right_register: Register,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) Register {
         return switch (decision) {
             .PrimitiveOperation => |primitive_operation| {
-                const llvm_ir_type = typed_program.getLlvmIrType(operand_type_id);
+                const llvm_ir_type = lowered_program.getLlvmIrType(operand_type_id);
                 const operator_instruction = switch (primitive_operation) {
                     .Add => "add",
                     .Subtract => "sub",
@@ -948,27 +944,27 @@ pub const NodeEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         if (call_expression.arguments.len != 1) unreachable;
 
-        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        const base_result = self.emitNode(callee_member_access.base, entry_label, lowered_program, environment);
         if (base_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const argument_result = self.emitNode(&call_expression.arguments[0], base_result.exit_label.?, typed_program, environment);
+        const argument_result = self.emitNode(&call_expression.arguments[0], base_result.exit_label.?, lowered_program, environment);
         if (argument_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const array_type_id = typed_program.analyzed_program.type_by_node_id.get(callee_member_access.base.id) orelse unreachable;
-        const element_type_id = switch (typed_program.analyzed_program.type_store.getType(array_type_id)) {
+        const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(callee_member_access.base.id) orelse unreachable;
+        const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
+        const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
         // The runtime helper grows the backing storage if needed and returns the slot for the new element.
         const slot_register = self.runtime_call_emitter.emitArrayAppendSlotCall(
@@ -996,10 +992,10 @@ pub const NodeEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        const base_result = self.emitNode(callee_member_access.base, entry_label, lowered_program, environment);
         if (base_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
@@ -1023,7 +1019,7 @@ pub const NodeEmitter = struct {
                 const delimiter_result = self.emitNode(
                     &call_expression.arguments[0],
                     base_result.exit_label.?,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (delimiter_result.exit_label == null) {
@@ -1065,10 +1061,10 @@ pub const NodeEmitter = struct {
         callee_member_access: *const ast.MemberAccess,
         call_expression: *const ast.CallExpression,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const base_result = self.emitNode(callee_member_access.base, entry_label, typed_program, environment);
+        const base_result = self.emitNode(callee_member_access.base, entry_label, lowered_program, environment);
         if (base_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
@@ -1095,16 +1091,16 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         member_access: *const ast.MemberAccess,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const member_access_decision = typed_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
+        const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
         switch (member_access_decision) {
             .ArrayLength => {
                 const base_result = self.emitNode(
                     member_access.base,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (base_result.exit_label == null) {
@@ -1130,7 +1126,7 @@ pub const NodeEmitter = struct {
                 const base_result = self.emitNode(
                     member_access.base,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (base_result.exit_label == null) {
@@ -1148,7 +1144,7 @@ pub const NodeEmitter = struct {
                     member_access,
                     structure_field.field_index,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
                 if (member_pointer_result.exit_label == null) {
@@ -1162,7 +1158,7 @@ pub const NodeEmitter = struct {
                 self.function_ir_builder.emitLoad(
                     member_register,
                     member_pointer_result.register.?,
-                    typed_program.getLlvmIrType(typed_program.analyzed_program.type_by_node_id.get(node.id).?),
+                    lowered_program.getLlvmIrType(lowered_program.analyzed_program.type_by_node_id.get(node.id).?),
                 );
 
                 return .{
@@ -1182,10 +1178,10 @@ pub const NodeEmitter = struct {
         self: *@This(),
         target: *const ast.Node,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const place_decision = typed_program.place_decision_by_node_id.get(target.id) orelse unreachable;
+        const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
         return switch (place_decision) {
             .IdentifierBinding => |identifier_binding| .{
                 .exit_label = entry_label,
@@ -1200,7 +1196,7 @@ pub const NodeEmitter = struct {
                     &member_access,
                     structure_field.field_index,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -1212,7 +1208,7 @@ pub const NodeEmitter = struct {
                 return self.emitIndexAccessPointer(
                     &index_access,
                     entry_label,
-                    typed_program,
+                    lowered_program,
                     environment,
                 );
             },
@@ -1224,13 +1220,13 @@ pub const NodeEmitter = struct {
         member_access: *const ast.MemberAccess,
         field_index: u32,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         const base_result = self.emitNode(
             member_access.base,
             entry_label,
-            typed_program,
+            lowered_program,
             environment,
         );
         if (base_result.exit_label == null) {
@@ -1240,12 +1236,12 @@ pub const NodeEmitter = struct {
             };
         }
 
-        const base_type_id = typed_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
-        switch (typed_program.analyzed_program.type_store.getType(base_type_id)) {
+        const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
+        switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
             .Structure => {},
             else => unreachable,
         }
-        const structure_symbol = typed_program.getStructureSymbolForTypeId(base_type_id);
+        const structure_symbol = lowered_program.getStructureSymbolForTypeId(base_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
 
         const field_pointer_register = self.function_symbol_generator.generateRegister();
@@ -1266,18 +1262,18 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         fields: []const ast.StructureConstructionField,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const node_type_id = typed_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
-        const structure_symbol = typed_program.getStructureSymbolForTypeId(node_type_id);
+        const node_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
+        const structure_symbol = lowered_program.getStructureSymbolForTypeId(node_type_id);
         const structure_llvm_type_name = self.symbol_generator.generateStructureName(structure_symbol);
-        const structure_type_id = switch (typed_program.analyzed_program.type_store.getType(node_type_id)) {
+        const structure_type_id = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
             .Structure => |id| id,
             else => unreachable,
         };
-        const structure_type = typed_program.analyzed_program.type_store.structure_types.items[structure_type_id];
-        const structure_construction_layout = typed_program.analyzed_program.structure_construction_layout_by_node_id.get(
+        const structure_type = lowered_program.analyzed_program.type_store.structure_types.items[structure_type_id];
+        const structure_construction_layout = lowered_program.analyzed_program.structure_construction_layout_by_node_id.get(
             node.id,
         ) orelse unreachable;
 
@@ -1296,7 +1292,7 @@ pub const NodeEmitter = struct {
             const field_value_result = self.emitNode(
                 field.value,
                 current_label,
-                typed_program,
+                lowered_program,
                 environment,
             );
             if (field_value_result.exit_label == null) {
@@ -1314,7 +1310,7 @@ pub const NodeEmitter = struct {
                 .{ field_pointer_register, structure_llvm_type_name, memory_register, field_index },
             ) catch unreachable);
 
-            const field_llvm_ir_type = typed_program.getLlvmIrType(structure_field.type_id);
+            const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
             self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
                 self.allocator,
                 "store {s} {s}, ptr {s}",
@@ -1333,15 +1329,15 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         array_literal: *const ast.ArrayLiteral,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const array_type_id = typed_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
-        const element_type_id = switch (typed_program.analyzed_program.type_store.getType(array_type_id)) {
+        const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
+        const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
+        const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
         const length = array_literal.elements.len;
 
         const header_register = self.function_symbol_generator.generateRegister();
@@ -1360,7 +1356,7 @@ pub const NodeEmitter = struct {
 
         var current_label: Label = entry_label;
         for (array_literal.elements, 0..) |*element, index| {
-            const element_result = self.emitNode(element, current_label, typed_program, environment);
+            const element_result = self.emitNode(element, current_label, lowered_program, environment);
             if (element_result.exit_label == null) {
                 return .{ .exit_label = null, .register = null };
             }
@@ -1427,26 +1423,26 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         index_access: *const ast.IndexAccess,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         _ = node;
         const pointer_result = self.emitIndexAccessPointer(
             index_access,
             entry_label,
-            typed_program,
+            lowered_program,
             environment,
         );
         if (pointer_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const base_type_id = typed_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
-        const element_type_id = switch (typed_program.analyzed_program.type_store.getType(base_type_id)) {
+        const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+        const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
+        const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
         const result_register = self.function_symbol_generator.generateRegister();
         self.function_ir_builder.emitLoad(result_register, pointer_result.register orelse unreachable, element_llvm_type);
@@ -1461,25 +1457,25 @@ pub const NodeEmitter = struct {
         self: *@This(),
         index_access: *const ast.IndexAccess,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
-        const base_result = self.emitNode(index_access.base, entry_label, typed_program, environment);
+        const base_result = self.emitNode(index_access.base, entry_label, lowered_program, environment);
         if (base_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const index_result = self.emitNode(index_access.index, base_result.exit_label.?, typed_program, environment);
+        const index_result = self.emitNode(index_access.index, base_result.exit_label.?, lowered_program, environment);
         if (index_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const base_type_id = typed_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
-        const element_type_id = switch (typed_program.analyzed_program.type_store.getType(base_type_id)) {
+        const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+        const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
+        const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
         const length_pointer_register = self.function_symbol_generator.generateRegister();
         self.function_ir_builder.emitInstruction(std.fmt.allocPrint(
@@ -1557,27 +1553,27 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         for_in: *const ast.ForIn,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         const iterable_result = self.emitNode(
             for_in.iterable,
             entry_label,
-            typed_program,
+            lowered_program,
             environment,
         );
         if (iterable_result.exit_label == null) {
             return .{ .exit_label = null, .register = null };
         }
 
-        const iterable_type_id = typed_program.analyzed_program.type_by_node_id.get(for_in.iterable.id) orelse unreachable;
-        const element_type_id = switch (typed_program.analyzed_program.type_store.getType(iterable_type_id)) {
+        const iterable_type_id = lowered_program.analyzed_program.type_by_node_id.get(for_in.iterable.id) orelse unreachable;
+        const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(iterable_type_id)) {
             .Array => |id| id,
             else => unreachable,
         };
-        const element_llvm_type = typed_program.getLlvmIrType(element_type_id);
+        const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
-        const item_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+        const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
         const item_storage = self.function_symbol_generator.generateStorage();
         self.function_ir_builder.emitAlloca(item_storage, element_llvm_type);
         environment.storage_by_symbol_id.put(item_symbol_id, item_storage) catch unreachable;
@@ -1648,7 +1644,7 @@ pub const NodeEmitter = struct {
             .Block => |block| block,
             else => unreachable,
         };
-        const body_result = self.emitBlock(body_block, loop_body_label, typed_program, environment);
+        const body_result = self.emitBlock(body_block, loop_body_label, lowered_program, environment);
 
         if (body_result.exit_label != null) {
             self.function_ir_builder.emitBranchInstruction(null, &.{loop_continue_label});
@@ -1681,7 +1677,7 @@ pub const NodeEmitter = struct {
         decision_construct: DecisionConstruct,
         label_names: DecisionLabelNames,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         var current_label = entry_label;
@@ -1689,16 +1685,16 @@ pub const NodeEmitter = struct {
         var subject_type_id: ?typing.TypeId = null;
 
         if (decision_construct.subject) |subject| {
-            const subject_result = self.emitNode(subject, current_label, typed_program, environment);
+            const subject_result = self.emitNode(subject, current_label, lowered_program, environment);
             if (subject_result.exit_label == null) {
                 return .{ .exit_label = null, .register = null };
             }
             current_label = subject_result.exit_label.?;
             subject_register = subject_result.register;
-            subject_type_id = typed_program.analyzed_program.type_by_node_id.get(subject.id).?;
+            subject_type_id = lowered_program.analyzed_program.type_by_node_id.get(subject.id).?;
         }
 
-        const result_type_id = typed_program.analyzed_program.type_by_node_id.get(node.id).?;
+        const result_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id).?;
         const continue_label = self.function_symbol_generator.generateLabel(label_names.continue_label);
         var incoming_values = std.ArrayList(PhiIncoming){};
         defer incoming_values.deinit(self.allocator);
@@ -1711,10 +1707,10 @@ pub const NodeEmitter = struct {
 
         if (decision_construct.arms.len == 0 and decision_construct.else_arm != null) {
             const else_arm = decision_construct.else_arm.?;
-            const else_result = self.emitNode(else_arm, current_label, typed_program, environment);
+            const else_result = self.emitNode(else_arm, current_label, lowered_program, environment);
             if (else_result.exit_label) |exit_label| {
                 continue_reachable = true;
-                if (result_type_id != typed_program.analyzed_program.type_store.unit_type_id) {
+                if (result_type_id != lowered_program.analyzed_program.type_store.unit_type_id) {
                     incoming_values.append(self.allocator, .{
                         .label = exit_label,
                         .register = else_result.register.?,
@@ -1750,7 +1746,7 @@ pub const NodeEmitter = struct {
                     const pattern_result = self.emitNode(
                         arm.condition,
                         current_label,
-                        typed_program,
+                        lowered_program,
                         environment,
                     );
                     if (pattern_result.exit_label == null) {
@@ -1759,15 +1755,11 @@ pub const NodeEmitter = struct {
                     current_label = pattern_result.exit_label.?;
 
                     const comparison_register = self.emitLoweredBinaryOperation(
-                        lowering.BinaryOperationLowerer.decisionFor(
-                            .Equal,
-                            subject_type_id.?,
-                            typed_program.analyzed_program,
-                        ),
+                        lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                         subject_type_id.?,
                         subject_register.?,
                         pattern_result.register.?,
-                        typed_program,
+                        lowered_program,
                     );
 
                     self.function_ir_builder.emitBranchInstruction(comparison_register, &.{ arm_label, false_label.? });
@@ -1775,7 +1767,7 @@ pub const NodeEmitter = struct {
                     const condition_result = self.emitNode(
                         arm.condition,
                         current_label,
-                        typed_program,
+                        lowered_program,
                         environment,
                     );
                     if (condition_result.exit_label == null) {
@@ -1787,10 +1779,10 @@ pub const NodeEmitter = struct {
                 }
 
                 self.function_ir_builder.emitLabel(arm_label);
-                const arm_result = self.emitNode(arm.body, arm_label, typed_program, environment);
+                const arm_result = self.emitNode(arm.body, arm_label, lowered_program, environment);
                 if (arm_result.exit_label) |exit_label| {
                     continue_reachable = true;
-                    if (result_type_id != typed_program.analyzed_program.type_store.unit_type_id) {
+                    if (result_type_id != lowered_program.analyzed_program.type_store.unit_type_id) {
                         incoming_values.append(self.allocator, .{
                             .label = exit_label,
                             .register = arm_result.register.?,
@@ -1810,10 +1802,10 @@ pub const NodeEmitter = struct {
             }
 
             if (decision_construct.else_arm) |else_arm| {
-                const else_result = self.emitNode(else_arm, current_label, typed_program, environment);
+                const else_result = self.emitNode(else_arm, current_label, lowered_program, environment);
                 if (else_result.exit_label) |exit_label| {
                     continue_reachable = true;
-                    if (result_type_id != typed_program.analyzed_program.type_store.unit_type_id) {
+                    if (result_type_id != lowered_program.analyzed_program.type_store.unit_type_id) {
                         incoming_values.append(self.allocator, .{
                             .label = exit_label,
                             .register = else_result.register.?,
@@ -1829,7 +1821,7 @@ pub const NodeEmitter = struct {
         }
 
         self.function_ir_builder.emitLabel(continue_label);
-        if (result_type_id == typed_program.analyzed_program.type_store.unit_type_id) {
+        if (result_type_id == lowered_program.analyzed_program.type_store.unit_type_id) {
             return .{
                 .exit_label = continue_label,
                 .register = null,
@@ -1863,7 +1855,7 @@ pub const NodeEmitter = struct {
             "{s} = phi {s} {s}",
             .{
                 result_register,
-                typed_program.getLlvmIrType(result_type_id),
+                lowered_program.getLlvmIrType(result_type_id),
                 phi_incoming_buffer.items,
             },
         ) catch unreachable;
@@ -1878,7 +1870,7 @@ pub const NodeEmitter = struct {
     fn emitLoopConstruct(
         self: *@This(),
         loop_construct: LoopConstruct,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         const loop_header_label = self.function_symbol_generator.generateLabel("loop_header");
@@ -1899,7 +1891,7 @@ pub const NodeEmitter = struct {
             const condition_result = self.emitNode(
                 condition,
                 loop_header_label,
-                typed_program,
+                lowered_program,
                 environment,
             );
             if (condition_result.exit_label == null) {
@@ -1916,7 +1908,7 @@ pub const NodeEmitter = struct {
 
         // Loop body
         self.function_ir_builder.emitLabel(loop_body_label);
-        const body_result = self.emitBlock(loop_construct.body_block.*, loop_body_label, typed_program, environment);
+        const body_result = self.emitBlock(loop_construct.body_block.*, loop_body_label, lowered_program, environment);
 
         // Loop continue
         if (body_result.exit_label != null) {
@@ -1924,7 +1916,7 @@ pub const NodeEmitter = struct {
         }
         self.function_ir_builder.emitLabel(loop_continue_label);
         if (loop_construct.update) |update| {
-            const update_result = self.emitNode(update, loop_continue_label, typed_program, environment);
+            const update_result = self.emitNode(update, loop_continue_label, lowered_program, environment);
             if (update_result.exit_label != null) {
                 self.function_ir_builder.emitBranchInstruction(null, &.{loop_header_label});
             }
@@ -1945,12 +1937,12 @@ pub const NodeEmitter = struct {
         self: *@This(),
         block: ast.Block,
         entry_label: Label,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
     ) EmissionResult {
         var current_label = entry_label;
         for (block.statements) |statement| {
-            const emission_result = self.emitNode(&statement, current_label, typed_program, environment);
+            const emission_result = self.emitNode(&statement, current_label, lowered_program, environment);
             if (emission_result.exit_label) |exit_label| {
                 current_label = exit_label;
             } else {
@@ -1964,7 +1956,7 @@ pub const NodeEmitter = struct {
         // Emit the result expression if it exists
         var result_register: ?Register = null;
         if (block.result) |result_node| {
-            const emission_result = self.emitNode(result_node, current_label, typed_program, environment);
+            const emission_result = self.emitNode(result_node, current_label, lowered_program, environment);
             result_register = emission_result.register;
             if (emission_result.exit_label) |exit_label| {
                 current_label = exit_label;

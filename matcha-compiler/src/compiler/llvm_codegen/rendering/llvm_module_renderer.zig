@@ -59,38 +59,38 @@ pub const LlvmModuleRenderer = struct {
         self.llvm_matcha_type_by_type_id.deinit();
     }
 
-    pub fn renderLlvmIr(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
+    pub fn renderLlvmIr(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
         self.resetModuleState();
 
-        const structure_type_definitions = self.structure_type_renderer.renderStructureTypeDefinitions(typed_program);
-        var user_defined_functions = self.renderTopLevelFunctionDefinitions(typed_program);
+        const structure_type_definitions = self.structure_type_renderer.renderStructureTypeDefinitions(lowered_program);
+        var user_defined_functions = self.renderTopLevelFunctionDefinitions(lowered_program);
         defer user_defined_functions.deinit(self.allocator);
-        var structure_method_functions = self.renderStructureMethodFunctionDefinitions(typed_program);
+        var structure_method_functions = self.renderStructureMethodFunctionDefinitions(lowered_program);
         defer structure_method_functions.deinit(self.allocator);
-        const main_function_ir = self.function_emitter.emitMainFunction(typed_program);
+        const main_function_ir = self.function_emitter.emitMainFunction(lowered_program);
 
         return self.renderModule(
             structure_type_definitions,
             user_defined_functions.items,
             structure_method_functions.items,
             main_function_ir,
-            typed_program,
+            lowered_program,
         );
     }
 
     fn renderTopLevelFunctionDefinitions(
         self: *@This(),
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
         var user_defined_functions = std.ArrayList([]const u8){};
-        for (typed_program.analyzed_program.resolved_program.program.statements) |*statement| {
+        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
                     .Function => |function_definition| {
-                        const function_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
+                        const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
                             statement.id,
                         ) orelse unreachable;
-                        const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(
+                        const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(
                             function_symbol_id,
                         ) orelse unreachable;
                         const function_ir = self.function_emitter.emitFunctionDefinition(
@@ -98,7 +98,7 @@ pub const LlvmModuleRenderer = struct {
                             &function_definition,
                             &resolved_function,
                             null,
-                            typed_program,
+                            lowered_program,
                         );
                         user_defined_functions.append(self.allocator, function_ir) catch unreachable;
                     },
@@ -117,11 +117,11 @@ pub const LlvmModuleRenderer = struct {
         user_defined_functions: []const []const u8,
         structure_method_functions: []const []const u8,
         main_function_ir: []const u8,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         var sections = std.ArrayList([]const u8){};
         defer sections.deinit(self.allocator);
-        sections.append(self.allocator, self.renderModulePreamble(typed_program)) catch unreachable;
+        sections.append(self.allocator, self.renderModulePreamble(lowered_program)) catch unreachable;
         if (user_defined_types.len > 0) {
             sections.append(self.allocator, user_defined_types) catch unreachable;
         }
@@ -150,11 +150,11 @@ pub const LlvmModuleRenderer = struct {
         self.string_literal_pool.reset();
     }
 
-    fn renderModulePreamble(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
+    fn renderModulePreamble(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
         defer module_preamble_buffer.deinit(self.allocator);
 
-        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(runtimeRequirementsFromPlan(typed_program.runtime_requirements_plan));
+        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(runtimeRequirementsFromPlan(lowered_program.runtime_requirements_plan));
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
@@ -187,11 +187,11 @@ pub const LlvmModuleRenderer = struct {
 
     fn renderStructureMethodFunctionDefinitions(
         self: *@This(),
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
         var method_definitions = std.ArrayList([]const u8){};
 
-        for (typed_program.analyzed_program.resolved_program.program.statements) |*statement| {
+        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             const structure_definition = switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.item) {
                     .Structure => |structure| structure,
@@ -200,13 +200,13 @@ pub const LlvmModuleRenderer = struct {
                 else => continue,
             };
 
-            const structure_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
-            const structure_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
+            const structure_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
+            const structure_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
             self.appendStructureMethodDefinitions(
                 &method_definitions,
                 structure_definition,
                 structure_symbol,
-                typed_program,
+                lowered_program,
             );
         }
 
@@ -218,7 +218,7 @@ pub const LlvmModuleRenderer = struct {
         method_definitions: *std.ArrayList([]const u8),
         structure_definition: ast.Structure,
         structure_symbol: symbols.Symbol,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) void {
         for (structure_definition.function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
@@ -228,16 +228,16 @@ pub const LlvmModuleRenderer = struct {
                 },
                 else => unreachable,
             };
-            const function_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
+            const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
                 function_definition_node.id,
             ) orelse unreachable;
-            const resolved_function = typed_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
+            const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
             const function_definition_emission = self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
                 &resolved_function,
                 structure_symbol,
-                typed_program,
+                lowered_program,
             );
             method_definitions.append(self.allocator, function_definition_emission) catch unreachable;
         }

@@ -57,6 +57,14 @@ pub const BinaryOperationLowerer = struct {
             .Assignment => |assignment| {
                 self.lowerNode(assignment.target, analyzed_program);
                 self.lowerNode(assignment.value, analyzed_program);
+                switch (assignment.operator) {
+                    .Assign => {},
+                    .Compound => |binary_operator| {
+                        const target_type_id = analyzed_program.type_by_node_id.get(assignment.target.id) orelse unreachable;
+                        const decision = decisionFor(binary_operator, target_type_id, analyzed_program);
+                        self.decision_by_node_id.put(node.id, decision) catch unreachable;
+                    },
+                }
             },
             .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
             .Leave, .Continue, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
@@ -79,6 +87,9 @@ pub const BinaryOperationLowerer = struct {
             .MatchExpression => |match_expression| {
                 if (match_expression.subject) |subject| {
                     self.lowerNode(subject, analyzed_program);
+                    const subject_type_id = analyzed_program.type_by_node_id.get(subject.id) orelse unreachable;
+                    const subject_comparison_decision = decisionFor(.Equal, subject_type_id, analyzed_program);
+                    self.decision_by_node_id.put(node.id, subject_comparison_decision) catch unreachable;
                 }
                 for (match_expression.arms) |arm| {
                     self.lowerNode(arm.pattern_or_condition, analyzed_program);
@@ -142,7 +153,7 @@ pub const BinaryOperationLowerer = struct {
         self.decision_by_node_id.put(node_id, decision) catch unreachable;
     }
 
-    pub fn decisionFor(
+    fn decisionFor(
         binary_operator: ast.BinaryOperator,
         left_operand_type_id: typing.TypeId,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,

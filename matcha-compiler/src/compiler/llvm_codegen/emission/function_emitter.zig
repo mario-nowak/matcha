@@ -48,22 +48,22 @@ pub const FunctionEmitter = struct {
         _ = self;
     }
 
-    pub fn emitMainFunction(self: *@This(), typed_program: *const lowering.LoweredProgram) []const u8 {
+    pub fn emitMainFunction(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
         self.resetCurrentFunctionState();
 
-        var environment = Environment.init(self.allocator, null, typed_program.analyzed_program.type_store.integer_type_id);
+        var environment = Environment.init(self.allocator, null, lowered_program.analyzed_program.type_store.integer_type_id);
         defer environment.deinit();
         var current_label: Label = "entry";
 
         self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
 
-        for (typed_program.analyzed_program.resolved_program.program.statements) |*statement| {
+        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
                 .ItemDefinition => continue,
                 else => {},
             }
 
-            const result = self.node_emitter.emitNode(statement, current_label, typed_program, &environment);
+            const result = self.node_emitter.emitNode(statement, current_label, lowered_program, &environment);
             if (result.exit_label) |exit_label| {
                 current_label = exit_label;
             } else {
@@ -82,18 +82,18 @@ pub const FunctionEmitter = struct {
         function_definition: *const ast.Function,
         resolved_function: *const symbols.ResolvedFunction,
         owning_structure_symbol: ?symbols.Symbol,
-        typed_program: *const lowering.LoweredProgram,
+        lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         self.resetCurrentFunctionState();
 
-        const function_symbol_id = typed_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
-        const function_symbol = typed_program.analyzed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
-        const function_type_id = typed_program.analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
-        const function_return_type_id = switch (typed_program.analyzed_program.type_store.getType(function_type_id)) {
-            .Function => |id| typed_program.analyzed_program.type_store.function_types.items[id].return_type,
+        const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
+        const function_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
+        const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
+            .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
             else => unreachable,
         };
-        const function_return_llvm_ir_type = typed_program.getLlvmIrType(function_return_type_id);
+        const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
 
         var parameter_list_buffer = std.ArrayList(u8){};
         defer parameter_list_buffer.deinit(self.allocator);
@@ -101,8 +101,8 @@ pub const FunctionEmitter = struct {
         defer environment.deinit();
 
         for (resolved_function.parameters, 0..) |parameter, index| {
-            const parameter_type_id = typed_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
-            const parameter_llvm_ir_type = typed_program.getLlvmIrType(parameter_type_id);
+            const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+            const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,
                 "%arg_{d}_{s}",
@@ -126,12 +126,12 @@ pub const FunctionEmitter = struct {
         const body_result = self.node_emitter.emitNode(
             function_definition.body_expression,
             "entry",
-            typed_program,
+            lowered_program,
             &environment,
         );
 
         if (body_result.exit_label != null) {
-            switch (typed_program.analyzed_program.type_store.getType(function_return_type_id)) {
+            switch (lowered_program.analyzed_program.type_store.getType(function_return_type_id)) {
                 .Unit => self.function_ir_builder.emitInstruction("ret void"),
                 else => {
                     const return_instruction = std.fmt.allocPrint(
