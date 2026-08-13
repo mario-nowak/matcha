@@ -10,29 +10,49 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !u8 {
     const command = try parser.parse(allocator, iter);
 
     switch (command) {
-        .help => |topic| {
-            try parser.writeHelp(topic);
+        .help => |topic_command| {
+            try parser.writeHelp(topic_command);
             return 0;
         },
         .version => {
             try std.fs.File.stdout().deprecatedWriter().print("{s}\n", .{build_options.version});
             return 0;
         },
-        .emit => |emit| {
+        .emit => |emit_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
             defer diagnostic_store.deinit();
 
-            _ = matcha.compiler.pipeline.emitFile(allocator, emit.input_path, emit.output_path, &diagnostic_store) catch |err| {
-                return try handleCompileFailure(allocator, emit.input_path, &diagnostic_store, err);
+            matcha.compiler.pipeline.emitFile(
+                allocator,
+                emit_command.input_path,
+                emit_command.output_path,
+                &diagnostic_store,
+            ) catch |compilation_error| {
+                return try handleCompilationError(
+                    allocator,
+                    emit_command.input_path,
+                    &diagnostic_store,
+                    compilation_error,
+                );
             };
             return 0;
         },
-        .build => |build| {
+        .build => |build_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
             defer diagnostic_store.deinit();
 
-            _ = matcha.toolchain.buildFile(allocator, build.input_path, build.output_path, &diagnostic_store) catch |err| {
-                return try handleCompileFailure(allocator, build.input_path, &diagnostic_store, err);
+            _ = matcha.toolchain.buildFile(
+                allocator,
+                build_command.input_path,
+                build_command.output_path,
+                &diagnostic_store,
+            ) catch |compilation_error| {
+                return try handleCompilationError(
+                    allocator,
+                    build_command.input_path,
+                    &diagnostic_store,
+                    compilation_error,
+                );
             };
             return 0;
         },
@@ -40,27 +60,37 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !u8 {
             var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
             defer diagnostic_store.deinit();
 
-            return matcha.toolchain.runFile(allocator, run_command.input_path, run_command.program_arguments, &diagnostic_store) catch |err| {
-                return try handleCompileFailure(allocator, run_command.input_path, &diagnostic_store, err);
+            return matcha.toolchain.runFile(
+                allocator,
+                run_command.input_path,
+                run_command.program_arguments,
+                &diagnostic_store,
+            ) catch |compilation_error| {
+                return try handleCompilationError(
+                    allocator,
+                    run_command.input_path,
+                    &diagnostic_store,
+                    compilation_error,
+                );
             };
         },
     }
 }
 
-fn handleCompileFailure(
+fn handleCompilationError(
     allocator: std.mem.Allocator,
     input_path: []const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
-    err: anyerror,
+    compilation_error: anyerror,
 ) !u8 {
-    switch (err) {
+    switch (compilation_error) {
         error.DiagnosticsEmitted => {
             const source = try readSourceFile(allocator, input_path);
             defer allocator.free(source);
             try diagnostics.renderStderr(input_path, source, diagnostic_store.items());
             return 1;
         },
-        else => return err,
+        else => return compilation_error,
     }
 }
 
