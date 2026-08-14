@@ -71,12 +71,14 @@ pub fn emitReturn(
             .runtime_representation_result
             .runtime_representation_by_node_id
             .get(return_value.id) orelse unreachable;
-        if (return_value_runtime_representation == .None) {
+
+        const value_register = emitter.emitNode(return_value, lowered_program, environment);
+
+        if (!return_value_runtime_representation.hasRuntimeRepresentation()) {
             emitter.function_ir_builder.emitTerminatorInstruction("ret void");
             return null;
         }
 
-        const value_register = emitter.emitNode(return_value, lowered_program, environment);
         const return_instruction = std.fmt.allocPrint(
             emitter.allocator,
             "ret {s} {s}",

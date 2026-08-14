@@ -131,7 +131,21 @@ pub fn emitArrayLiteral(
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     const length = array_literal.elements.len;
+    const runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(array_type_id) orelse unreachable;
+    const element_runtime_representation = switch (runtime_representation) {
+        .Array => |array_runtime_representation| lowered_program
+            .analyzed_program
+            .runtime_representation_result
+            .runtime_representation_by_type_id
+            .get(array_runtime_representation.element_type_id) orelse unreachable,
+        else => unreachable,
+    };
 
+    // Array header register
     const header_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
@@ -139,28 +153,35 @@ pub fn emitArrayLiteral(
         .{header_register},
     ) catch unreachable);
 
-    const data_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64))",
-        .{ data_register, element_llvm_type, length },
-    ) catch unreachable);
+    var data_register = emitter.function_symbol_generator.generateRegister();
+    if (element_runtime_representation.hasRuntimeRepresentation()) {
+        builder.emitInstruction(std.fmt.allocPrint(
+            emitter.allocator,
+            "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64))",
+            .{ data_register, element_llvm_type, length },
+        ) catch unreachable);
+    } else {
+        // In case the element type does not have a runtime representation, we can just set the data pointer to null.
+        data_register = "null";
+    }
 
     for (array_literal.elements, 0..) |*element, index| {
         const element_register = emitter.emitNode(element, lowered_program, environment);
 
-        const element_pointer_register = emitter.function_symbol_generator.generateRegister();
-        builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {d}",
-            .{ element_pointer_register, element_llvm_type, data_register, index },
-        ) catch unreachable);
+        if (element_runtime_representation.hasRuntimeRepresentation()) {
+            const element_pointer_register = emitter.function_symbol_generator.generateRegister();
+            builder.emitInstruction(std.fmt.allocPrint(
+                emitter.allocator,
+                "{s} = getelementptr inbounds {s}, ptr {s}, i64 {d}",
+                .{ element_pointer_register, element_llvm_type, data_register, index },
+            ) catch unreachable);
 
-        builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "store {s} {s}, ptr {s}",
-            .{ element_llvm_type, element_register orelse unreachable, element_pointer_register },
-        ) catch unreachable);
+            builder.emitInstruction(std.fmt.allocPrint(
+                emitter.allocator,
+                "store {s} {s}, ptr {s}",
+                .{ element_llvm_type, element_register orelse unreachable, element_pointer_register },
+            ) catch unreachable);
+        }
     }
 
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
@@ -217,10 +238,18 @@ pub fn emitIndexAccess(
         .Array => |id| id,
         else => unreachable,
     };
-    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
+    const element_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(element_type_id) orelse unreachable;
+    if (!element_runtime_representation.hasRuntimeRepresentation()) {
+        return null;
+    }
 
+    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     const result_register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitLoad(result_register, pointer_register orelse unreachable, element_llvm_type);
+    emitter.function_ir_builder.emitLoad(result_register, pointer_register, element_llvm_type);
 
     return result_register;
 }

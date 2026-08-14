@@ -27,9 +27,8 @@ pub fn emitDeclaration(
         .runtime_representation_by_node_id
         .get(value_declaration.value.id) orelse unreachable;
 
-    switch (runtime_representation) {
-        .None => return null,
-        .Present, .Array => {},
+    if (!runtime_representation.hasRuntimeRepresentation()) {
+        return null;
     }
 
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
@@ -146,18 +145,18 @@ pub fn emitIndexAccessPointer(
     index_access: *const ast.IndexAccess,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) Register {
     const builder = emitter.function_ir_builder;
     const base_register = emitter.emitNode(index_access.base, lowered_program, environment);
-    const index_register = emitter.emitNode(index_access.index, lowered_program, environment);
+    const index_register = emitter.emitNode(index_access.index, lowered_program, environment) orelse unreachable;
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,
     };
-    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
+    // Perform bounds check
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
@@ -175,21 +174,18 @@ pub fn emitIndexAccessPointer(
         .{ data_pointer_register, base_register orelse unreachable },
     ) catch unreachable);
 
-    const data_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(data_register, data_pointer_register, "ptr");
-
     const negative_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, 0",
-        .{ negative_check_register, index_register orelse unreachable },
+        .{ negative_check_register, index_register },
     ) catch unreachable);
 
     const overflow_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp sge i64 {s}, {s}",
-        .{ overflow_check_register, index_register orelse unreachable, length_register },
+        .{ overflow_check_register, index_register, length_register },
     ) catch unreachable);
 
     const out_of_bounds_register = emitter.function_symbol_generator.generateRegister();
@@ -210,17 +206,29 @@ pub fn emitIndexAccessPointer(
         builder,
         line,
         column,
-        index_register orelse unreachable,
+        index_register,
         length_register,
     );
     builder.emitTerminatorInstruction("unreachable");
 
     builder.emitLabel(ok_label);
+    const element_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(element_type_id) orelse unreachable;
+    // Compute the pointer to the element at the given index if bounds check passes
+    if (!element_runtime_representation.hasRuntimeRepresentation()) {
+        return "null";
+    }
+    const data_register = emitter.function_symbol_generator.generateRegister();
+    builder.emitLoad(data_register, data_pointer_register, "ptr");
     const element_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
-        .{ element_pointer_register, element_llvm_type, data_register, index_register orelse unreachable },
+        .{ element_pointer_register, element_llvm_type, data_register, index_register },
     ) catch unreachable);
 
     return element_pointer_register;
