@@ -163,11 +163,20 @@ pub fn getDefaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []co
     return allocator.dupe(u8, stemWithoutMatchaExtension(input_path));
 }
 
+// The macOS version the compiler was built on. Baking it into the triple keeps
+// the linked binaries consistent with libmatcha_runtime.a, which zig builds for
+// the same native version in the same `zig build`.
+const native_macos_version = if (builtin.os.tag == .macos)
+blk: {
+    const version = builtin.target.os.version_range.semver.min;
+    break :blk std.fmt.comptimePrint("{d}.{d}.{d}", .{ version.major, version.minor, version.patch });
+} else "";
+
 pub fn getLlvmTargetTriple() []const u8 {
     return switch (builtin.os.tag) {
         .macos => switch (builtin.cpu.arch) {
-            .aarch64 => "arm64-apple-macosx26.4.1",
-            .x86_64 => "x86_64-apple-macosx26.4.1",
+            .aarch64 => "arm64-apple-macosx" ++ native_macos_version,
+            .x86_64 => "x86_64-apple-macosx" ++ native_macos_version,
             else => @panic("unsupported macOS architecture"),
         },
         .linux => switch (builtin.cpu.arch) {

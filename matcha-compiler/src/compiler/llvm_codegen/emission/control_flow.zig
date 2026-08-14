@@ -259,9 +259,10 @@ pub fn emitForInArrayLoop(
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
+    // todo: handle elements without runtime representation
     const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
     const item_storage = emitter.function_symbol_generator.generateStorage();
-    builder.emitAlloca(item_storage, element_llvm_type);
+    builder.emitAlloca(item_storage, element_llvm_type); // don't
     environment.storage_by_symbol_id.put(item_symbol_id, item_storage) catch unreachable;
 
     const index_storage = emitter.function_symbol_generator.generateStorage();

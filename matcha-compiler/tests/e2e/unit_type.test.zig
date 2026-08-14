@@ -122,7 +122,7 @@ test "the values of an array of unit elements are evaluated" {
 test "an array of unit elements can be iterated over" {
     const source =
         \\val unit_array: unit[] = [unit, unit, unit];
-        \\for (element in unit_array) {
+        \\for element in unit_array {
         \\    printString("Hello, world!");
         \\}
     ;
@@ -131,4 +131,17 @@ test "an array of unit elements can be iterated over" {
     defer result.deinit();
 
     try e2e.expectSuccessOutput(&result, "Hello, world!\nHello, world!\nHello, world!\n");
+}
+
+test "an array of unit elements can be appended to" {
+    const source =
+        \\var unit_array: unit[] = [unit, unit, unit];
+        \\unit_array.append(unit);
+        \\printInt(unit_array.length);
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "4\n");
 }
