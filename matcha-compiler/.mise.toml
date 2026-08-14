@@ -8,6 +8,7 @@ _.path = [
 
 [tools]
 zig = "0.15.1"
+zls = "0.15.1"
 
 [tasks.check]
 description = "Check that the Matcha compiler compiles"

@@ -49,7 +49,7 @@ pub fn generateLlvmIrFromFile(
         control_flow_validator,
         runtime_representation_analyzer,
     );
-    const typed_program = try semantic_analyzer.analyzeProgram(&program);
+    const analyzed_program = try semantic_analyzer.analyzeProgram(&program);
 
     var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(allocator);
     defer llvm_type_table_lowerer.deinit();
@@ -136,7 +136,7 @@ pub fn generateLlvmIrFromFile(
     );
     defer llvm_ir_code_generator.deinit();
 
-    return llvm_ir_code_generator.generateLlvmIr(&typed_program);
+    return llvm_ir_code_generator.generateLlvmIr(&analyzed_program);
 }
 
 pub fn emitFile(

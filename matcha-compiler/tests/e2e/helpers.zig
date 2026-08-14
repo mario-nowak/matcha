@@ -5,7 +5,7 @@ const matcha_binary_path = "zig-out/bin/matcha";
 
 pub const Result = struct {
     allocator: std.mem.Allocator,
-    exit_code: u8,
+    exit_code: u32,
     stdout: []u8,
     stderr: []u8,
 
@@ -49,19 +49,20 @@ pub fn runSourceWith(file_name: []const u8, source: []const u8, options: RunOpti
 }
 
 pub fn expectSuccessOutput(result: *const Result, expected_stdout: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 0), result.exit_code);
     try std.testing.expectEqualStrings(expected_stdout, result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(u32, 0), result.exit_code);
 }
 
 pub fn expectCompileDiagnostic(result: *const Result, expected_message: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 1), result.exit_code);
+    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
     try std.testing.expectEqualStrings("", result.stdout);
     try expectContains(result.stderr, "error:");
     try expectContains(result.stderr, expected_message);
 }
 
 pub fn expectRuntimeError(result: *const Result, expected_message: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 1), result.exit_code);
+    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
     try std.testing.expectEqualStrings("", result.stdout);
     try expectContains(result.stderr, expected_message);
 }
@@ -119,8 +120,23 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
     const term = try child.wait();
 
     const exit_code = switch (term) {
-        .Exited => |code| code,
-        else => return error.UnexpectedProcessTermination,
+        .Exited => |code| @as(u32, code),
+        .Signal => |code| block: {
+            // std.debug.print("encountered signal {any}", .{code});
+            // return error.UnexpectedProcessTermination;
+            break :block code;
+        },
+        .Stopped => |code| block: {
+            break :block code;
+            // std.debug.print("encountered stopped {any}", .{code});
+            // return error.UnexpectedProcessTermination;
+        },
+        .Unknown => |code| block: {
+            break :block code;
+            // std.debug.print("encountered unknown", .{});
+            // return error.UnexpectedProcessTermination;
+        },
+        // else => return error.UnexpectedProcessTermination,
     };
 
     return .{

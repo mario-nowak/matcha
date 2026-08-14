@@ -47,7 +47,7 @@ pub const LoweringAnalyzer = struct {
         _ = self;
     }
 
-    pub fn analyzeProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {
+    pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {
         const llvm_ir_type_by_type_id = self.llvm_type_table_lowerer.lower(analyzed_program);
         const structure_symbol_id_by_type_id = self.structure_symbol_lowerer.lower(analyzed_program);
         const call_dispatch_decision_by_node_id = self.call_lowerer.lower(analyzed_program);
