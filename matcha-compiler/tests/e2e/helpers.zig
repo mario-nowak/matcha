@@ -49,8 +49,8 @@ pub fn runSourceWith(file_name: []const u8, source: []const u8, options: RunOpti
 }
 
 pub fn expectSuccessOutput(result: *const Result, expected_stdout: []const u8) !void {
-    try std.testing.expectEqualStrings(expected_stdout, result.stdout);
     try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqualStrings(expected_stdout, result.stdout);
     try std.testing.expectEqual(@as(u32, 0), result.exit_code);
 }
 
@@ -79,7 +79,26 @@ pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
     return error.ExpectedSubstringNotFound;
 }
 
+var rebuild_compiler_once = std.once(rebuildCompiler);
+
+// The e2e tests run whatever binary sits in zig-out. Rebuild it once per test
+// process so tests never run against a stale compiler.
+fn rebuildCompiler() void {
+    const result = std.process.Child.run(.{
+        .allocator = std.heap.page_allocator,
+        .argv = &.{ "zig", "build" },
+        .cwd = compiler_root,
+        .max_output_bytes = 1024 * 1024,
+    }) catch @panic("failed to spawn zig build");
+    if (result.term != .Exited or result.term.Exited != 0) {
+        std.debug.print("zig build failed:\n{s}\n", .{result.stderr});
+        @panic("zig build failed");
+    }
+}
+
 fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOptions) !Result {
+    rebuild_compiler_once.call();
+
     var argv: std.ArrayList([]const u8) = .empty;
     defer argv.deinit(allocator);
 

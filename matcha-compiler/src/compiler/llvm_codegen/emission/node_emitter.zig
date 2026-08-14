@@ -140,7 +140,7 @@ pub const NodeEmitter = struct {
                 self.function_symbol_generator,
                 self.function_ir_builder,
             ),
-            .UnitLiteral => unreachable,
+            .UnitLiteral => return null,
             .Identifier => return values.emitIdentifier(self, node, lowered_program, environment),
             .Loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
             .While => |while_statement| return control_flow.emitWhile(

@@ -813,8 +813,7 @@ pub const NodeTypeAnalyzer = struct {
         const context = environment.context;
         const contextual_type_id = environment.contextual_type_id;
         if (context == .Expression and block.result == null) {
-            try self.diagnostic_store.emitErrorFromToken(block.left_brace, "block must produce a value in this context");
-            return error.DiagnosticsEmitted;
+            return self.recordNodeType(node_id, self.type_store.unit_type_id);
         }
         if (context == .Statement and block.result != null) {
             try self.diagnostic_store.emitErrorFromToken(block.left_brace, "block cannot have a trailing expression in statement context");

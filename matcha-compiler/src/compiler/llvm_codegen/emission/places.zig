@@ -17,7 +17,21 @@ pub fn emitDeclaration(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) ?Register {
+    // Regardless of the runtime representation of the value node, we still must emit it because it may have side
+    // effects. For example, a function call that returns unit may still have side effects.
     const value_register = emitter.emitNode(value_declaration.value, lowered_program, environment);
+
+    const runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_node_id
+        .get(value_declaration.value.id) orelse unreachable;
+
+    switch (runtime_representation) {
+        .None => return null,
+        .Present, .Array => {},
+    }
+
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
     const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
