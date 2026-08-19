@@ -28,6 +28,26 @@ const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
 const StringLiteralEmitter = string_literal_emitter_module.StringLiteralEmitter;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
 
+/// The outcome of emitting a single AST node.
+pub const EmissionResult = union(enum) {
+    /// The node is an expression whose value lives in this register.
+    register: Register,
+    /// The node is an expression that was fully evaluated (including side effects), but its type has no runtime
+    /// representation, so there is no register.
+    zero_sized,
+    /// The node is a statement; no value exists.
+    statement,
+
+    /// Unwraps the register of an expression that must have a runtime representation. Reaching this on a
+    /// `zero_sized` or `statement` result is a compiler bug at the call site.
+    pub fn expectRegister(self: @This()) Register {
+        return switch (self) {
+            .register => |register| register,
+            .zero_sized, .statement => unreachable,
+        };
+    }
+};
+
 pub const LoopContext = struct {
     continue_label: function_symbol_generator_module.Label,
     leave_label: function_symbol_generator_module.Label,
@@ -55,9 +75,9 @@ pub const Environment = struct {
     }
 };
 
-/// Emit functions return the register holding the node's value, or null when
-/// the node produces no value. Reachability is not threaded through calls:
-/// it lives in the FunctionIrBuilder cursor (see its doc comment).
+/// Emit functions return an EmissionResult describing what the node produced.
+/// Reachability is not threaded through calls: it lives in the
+/// FunctionIrBuilder cursor (see its doc comment).
 pub const NodeEmitter = struct {
     allocator: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
@@ -119,7 +139,7 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
-    ) ?Register {
+    ) EmissionResult {
         switch (node.kind) {
             .Return => |return_statement| return control_flow.emitReturn(
                 self,
@@ -127,20 +147,20 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .IntegerLiteral => |token| return std.fmt.allocPrint(
+            .IntegerLiteral => |token| return .{ .register = std.fmt.allocPrint(
                 self.allocator,
                 "{d}",
                 .{token.kind.IntLiteral},
-            ) catch unreachable,
-            .BooleanLiteral => |token| return if (token.kind.BooleanLiteral) "1" else "0",
-            .StringLiteral => |token| return self.string_literal_emitter.emitStringLiteralValue(
+            ) catch unreachable },
+            .BooleanLiteral => |token| return .{ .register = if (token.kind.BooleanLiteral) "1" else "0" },
+            .StringLiteral => |token| return .{ .register = self.string_literal_emitter.emitStringLiteralValue(
                 self.string_literal_pool,
                 node.id,
                 token.kind.StringLiteral,
                 self.function_symbol_generator,
                 self.function_ir_builder,
-            ),
-            .UnitLiteral => return null,
+            ) },
+            .UnitLiteral => return .zero_sized,
             .Identifier => return values.emitIdentifier(self, node, lowered_program, environment),
             .Loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
             .While => |while_statement| return control_flow.emitWhile(
@@ -158,11 +178,11 @@ pub const NodeEmitter = struct {
             ),
             .Leave => {
                 self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
-                return null;
+                return .statement;
             },
             .Continue => {
                 self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
-                return null;
+                return .statement;
             },
             .CallExpression => |call_expression| return calls.emitCallExpression(
                 self,
@@ -230,9 +250,9 @@ pub const NodeEmitter = struct {
             ),
             .ExpressionStatement => |expression_statement| {
                 _ = self.emitNode(expression_statement.expression, lowered_program, environment);
-                return null;
+                return .statement;
             },
-            .ItemDefinition => return null,
+            .ItemDefinition => return .statement,
             .StructureConstruction => |structure_construction| return aggregates.emitStructureConstruction(
                 self,
                 node,

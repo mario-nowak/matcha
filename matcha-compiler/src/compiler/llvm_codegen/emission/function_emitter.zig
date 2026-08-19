@@ -130,7 +130,7 @@ pub const FunctionEmitter = struct {
                     const return_instruction = std.fmt.allocPrint(
                         self.allocator,
                         "ret {s} {s}",
-                        .{ function_return_llvm_ir_type, body_register orelse unreachable },
+                        .{ function_return_llvm_ir_type, body_register.expectRegister() },
                     ) catch unreachable;
                     self.function_ir_builder.emitTerminatorInstruction(return_instruction);
                 },

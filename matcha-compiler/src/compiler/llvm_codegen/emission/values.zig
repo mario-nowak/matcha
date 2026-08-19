@@ -8,6 +8,7 @@ const node_emitter_module = @import("node_emitter.zig");
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
+const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
 pub fn emitIdentifier(
@@ -15,7 +16,7 @@ pub fn emitIdentifier(
     node: *const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
     const storage = environment.storage_by_symbol_id.get(symbol_id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(
@@ -24,7 +25,7 @@ pub fn emitIdentifier(
     const register = emitter.function_symbol_generator.generateRegister();
     emitter.function_ir_builder.emitLoad(register, storage, llvm_ir_type);
 
-    return register;
+    return .{ .register = register };
 }
 
 pub fn emitBinaryExpression(
@@ -33,19 +34,19 @@ pub fn emitBinaryExpression(
     binary_expression: *const ast.BinaryExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment);
     const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment);
     const left_operand_type = lowered_program.analyzed_program.type_by_node_id.get(binary_expression.left.id).?;
 
-    return emitLoweredBinaryOperation(
+    return .{ .register = emitLoweredBinaryOperation(
         emitter,
         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
         left_operand_type,
-        left_register.?,
-        right_register.?,
+        left_register.expectRegister(),
+        right_register.expectRegister(),
         lowered_program,
-    );
+    ) };
 }
 
 pub fn emitUnaryExpression(
@@ -54,8 +55,8 @@ pub fn emitUnaryExpression(
     unary_expression: *const ast.UnaryExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
-    const operand_register = emitter.emitNode(unary_expression.operand, lowered_program, environment);
+) EmissionResult {
+    const operand_register = emitter.emitNode(unary_expression.operand, lowered_program, environment).expectRegister();
     const result_register = emitter.function_symbol_generator.generateRegister();
     const operation_type = lowered_program.analyzed_program.type_by_node_id.get(node.id).?;
     const instruction_type = lowered_program.getLlvmIrType(operation_type);
@@ -63,17 +64,17 @@ pub fn emitUnaryExpression(
         .Negate => std.fmt.allocPrint(
             emitter.allocator,
             "{s} = sub {s} 0, {s}",
-            .{ result_register, instruction_type, operand_register.? },
+            .{ result_register, instruction_type, operand_register },
         ) catch unreachable,
         .Not => std.fmt.allocPrint(
             emitter.allocator,
             "{s} = xor {s} {s}, 1",
-            .{ result_register, instruction_type, operand_register.? },
+            .{ result_register, instruction_type, operand_register },
         ) catch unreachable,
     };
     emitter.function_ir_builder.emitInstruction(instruction);
 
-    return result_register;
+    return .{ .register = result_register };
 }
 
 pub fn emitLoweredBinaryOperation(

@@ -8,6 +8,7 @@ const places = @import("places.zig");
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
+const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
 pub fn emitMemberAccess(
@@ -16,7 +17,7 @@ pub fn emitMemberAccess(
     member_access: *const ast.MemberAccess,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
         .ArrayLength => {
@@ -26,19 +27,19 @@ pub fn emitMemberAccess(
             emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-                .{ length_pointer_register, base_register orelse unreachable },
+                .{ length_pointer_register, base_register.expectRegister() },
             ) catch unreachable);
 
             const length_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
 
-            return length_register;
+            return .{ .register = length_register };
         },
         .StringLength => {
             const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
-            const string_parts = emitter.emitStringParts(base_register orelse unreachable);
+            const string_parts = emitter.emitStringParts(base_register.expectRegister());
 
-            return string_parts.length_register;
+            return .{ .register = string_parts.length_register };
         },
         .StructureField => |structure_field| {
             const member_pointer_register = places.emitStructureFieldPointer(
@@ -52,11 +53,11 @@ pub fn emitMemberAccess(
             const member_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitLoad(
                 member_register,
-                member_pointer_register.?,
+                member_pointer_register,
                 lowered_program.getLlvmIrType(lowered_program.analyzed_program.type_by_node_id.get(node.id).?),
             );
 
-            return member_register;
+            return .{ .register = member_register };
         },
         .StructureMethod => unreachable,
         .StructureTypeFunction => unreachable,
@@ -72,7 +73,7 @@ pub fn emitStructureConstruction(
     fields: []const ast.StructureConstructionField,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const node_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
     const structure_symbol = lowered_program.getStructureSymbolForTypeId(node_type_id);
     const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
@@ -96,7 +97,7 @@ pub fn emitStructureConstruction(
 
     for (fields, structure_construction_layout.field_indices) |field, field_index| {
         const structure_field = structure_type.fields[@intCast(field_index)];
-        const field_value_register = emitter.emitNode(field.value, lowered_program, environment);
+        const field_value_register = emitter.emitNode(field.value, lowered_program, environment).expectRegister();
 
         const field_pointer_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
@@ -106,14 +107,10 @@ pub fn emitStructureConstruction(
         ) catch unreachable);
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "store {s} {s}, ptr {s}",
-            .{ field_llvm_ir_type, field_value_register orelse unreachable, field_pointer_register },
-        ) catch unreachable);
+        emitter.function_ir_builder.emitStore(field_value_register, field_pointer_register, field_llvm_ir_type);
     }
 
-    return memory_register;
+    return .{ .register = memory_register };
 }
 
 pub fn emitArrayLiteral(
@@ -122,7 +119,7 @@ pub fn emitArrayLiteral(
     array_literal: *const ast.ArrayLiteral,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const builder = emitter.function_ir_builder;
     const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
@@ -176,11 +173,7 @@ pub fn emitArrayLiteral(
                 .{ element_pointer_register, element_llvm_type, data_register, index },
             ) catch unreachable);
 
-            builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
-                "store {s} {s}, ptr {s}",
-                .{ element_llvm_type, element_register orelse unreachable, element_pointer_register },
-            ) catch unreachable);
+            builder.emitStore(element_register.expectRegister(), element_pointer_register, element_llvm_type);
         }
     }
 
@@ -190,11 +183,9 @@ pub fn emitArrayLiteral(
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
         .{ length_pointer_register, header_register },
     ) catch unreachable);
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "store i64 {d}, ptr {s}",
-        .{ length, length_pointer_register },
-    ) catch unreachable);
+
+    const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
+    builder.emitStore(length_number_string, length_pointer_register, "i64");
 
     const capacity_pointer_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
@@ -202,11 +193,7 @@ pub fn emitArrayLiteral(
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 1",
         .{ capacity_pointer_register, header_register },
     ) catch unreachable);
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "store i64 {d}, ptr {s}",
-        .{ length, capacity_pointer_register },
-    ) catch unreachable);
+    builder.emitStore(length_number_string, capacity_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
@@ -214,13 +201,9 @@ pub fn emitArrayLiteral(
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
         .{ data_pointer_register, header_register },
     ) catch unreachable);
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "store ptr {s}, ptr {s}",
-        .{ data_register, data_pointer_register },
-    ) catch unreachable);
+    builder.emitStore(data_register, data_pointer_register, "ptr");
 
-    return header_register;
+    return .{ .register = header_register };
 }
 
 pub fn emitIndexAccess(
@@ -229,7 +212,7 @@ pub fn emitIndexAccess(
     index_access: *const ast.IndexAccess,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     _ = node;
     const pointer_register = places.emitIndexAccessPointer(emitter, index_access, lowered_program, environment);
 
@@ -244,12 +227,12 @@ pub fn emitIndexAccess(
         .runtime_representation_by_type_id
         .get(element_type_id) orelse unreachable;
     if (!element_runtime_representation.hasRuntimeRepresentation()) {
-        return null;
+        return .zero_sized;
     }
 
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     const result_register = emitter.function_symbol_generator.generateRegister();
     emitter.function_ir_builder.emitLoad(result_register, pointer_register, element_llvm_type);
 
-    return result_register;
+    return .{ .register = result_register };
 }

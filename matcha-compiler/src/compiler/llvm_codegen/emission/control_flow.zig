@@ -10,6 +10,7 @@ const values = @import("values.zig");
 const Register = function_symbol_generator_module.Register;
 const Label = function_symbol_generator_module.Label;
 const NodeEmitter = node_emitter_module.NodeEmitter;
+const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 const LoopContext = node_emitter_module.LoopContext;
 
@@ -48,7 +49,7 @@ pub fn emitBlock(
     block: ast.Block,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     for (block.statements) |statement| {
         _ = emitter.emitNode(&statement, lowered_program, environment);
     }
@@ -56,7 +57,10 @@ pub fn emitBlock(
     if (block.result) |result_node| {
         return emitter.emitNode(result_node, lowered_program, environment);
     }
-    return null;
+    // A result-less block is `zero_sized` in expression context (it evaluates to unit) but a statement in statement
+    // context. We cannot distinguish the two here (no node id, so no type-table lookup), so we return `zero_sized`:
+    // statement-context callers discard the result anyway, while expression-context callers need the accurate value.
+    return .zero_sized;
 }
 
 pub fn emitReturn(
@@ -64,7 +68,7 @@ pub fn emitReturn(
     return_statement: *const ast.Return,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     if (return_statement.value) |return_value| {
         const return_value_runtime_representation = lowered_program
             .analyzed_program
@@ -76,7 +80,7 @@ pub fn emitReturn(
 
         if (!return_value_runtime_representation.hasRuntimeRepresentation()) {
             emitter.function_ir_builder.emitTerminatorInstruction("ret void");
-            return null;
+            return .statement;
         }
 
         const return_instruction = std.fmt.allocPrint(
@@ -84,14 +88,14 @@ pub fn emitReturn(
             "ret {s} {s}",
             .{
                 lowered_program.getLlvmIrType(environment.function_return_type_id),
-                value_register.?,
+                value_register.expectRegister(),
             },
         ) catch unreachable;
         emitter.function_ir_builder.emitTerminatorInstruction(return_instruction);
     } else {
         emitter.function_ir_builder.emitTerminatorInstruction("ret void");
     }
-    return null;
+    return .statement;
 }
 
 pub fn emitIfStatement(
@@ -100,7 +104,7 @@ pub fn emitIfStatement(
     if_statement: *const ast.IfStatement,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
         .condition = if_statement.condition,
         .body = if_statement.then_branch,
@@ -130,7 +134,7 @@ pub fn emitIfExpression(
     if_expression: *const ast.IfExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
         .condition = if_expression.condition,
         .body = if_expression.then_block,
@@ -160,7 +164,7 @@ pub fn emitMatchExpression(
     match_expression: *const ast.MatchExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     var decision_arms = std.ArrayList(DecisionArm){};
     defer decision_arms.deinit(emitter.allocator);
     for (match_expression.arms) |arm| {
@@ -201,7 +205,7 @@ pub fn emitLoop(
     loop: *const ast.Loop,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const body_block = switch (loop.body_block.kind) {
         .Block => |*block| block,
         else => unreachable,
@@ -224,7 +228,7 @@ pub fn emitWhile(
     while_statement: *const ast.While,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const body_block = switch (while_statement.body_block.kind) {
         .Block => |*block| block,
         else => unreachable,
@@ -248,9 +252,9 @@ pub fn emitForInArrayLoop(
     for_in: *const ast.ForIn,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const iterable_register = emitter.emitNode(for_in.iterable, lowered_program, environment);
+    const iterable_register = emitter.emitNode(for_in.iterable, lowered_program, environment).expectRegister();
 
     const iterable_type_id = lowered_program.analyzed_program.type_by_node_id.get(for_in.iterable.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(iterable_type_id)) {
@@ -258,12 +262,20 @@ pub fn emitForInArrayLoop(
         else => unreachable,
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
+    const element_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(element_type_id) orelse unreachable;
 
     // todo: handle elements without runtime representation
-    const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-    const item_storage = emitter.function_symbol_generator.generateStorage();
-    builder.emitAlloca(item_storage, element_llvm_type); // don't
-    environment.storage_by_symbol_id.put(item_symbol_id, item_storage) catch unreachable;
+    var item_storage: ?function_symbol_generator_module.Storage = null;
+    if (element_runtime_representation.hasRuntimeRepresentation()) {
+        const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
+        item_storage = emitter.function_symbol_generator.generateStorage();
+        builder.emitAlloca(item_storage orelse unreachable, element_llvm_type); // don't
+        environment.storage_by_symbol_id.put(item_symbol_id, item_storage orelse unreachable) catch unreachable;
+    }
 
     const index_storage = emitter.function_symbol_generator.generateStorage();
     builder.emitAlloca(index_storage, "i64");
@@ -273,7 +285,7 @@ pub fn emitForInArrayLoop(
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, iterable_register orelse unreachable },
+        .{ length_pointer_register, iterable_register },
     ) catch unreachable);
 
     const length_register = emitter.function_symbol_generator.generateRegister();
@@ -283,7 +295,7 @@ pub fn emitForInArrayLoop(
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, iterable_register orelse unreachable },
+        .{ data_pointer_register, iterable_register },
     ) catch unreachable);
 
     const data_register = emitter.function_symbol_generator.generateRegister();
@@ -315,16 +327,17 @@ pub fn emitForInArrayLoop(
 
     builder.emitLabel(loop_body_label);
 
-    const element_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
-        .{ element_pointer_register, element_llvm_type, data_register, current_index_register },
-    ) catch unreachable);
-
-    const element_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(element_register, element_pointer_register, element_llvm_type);
-    builder.emitStore(element_register, item_storage, element_llvm_type);
+    if (item_storage) |storage| {
+        const element_pointer_register = emitter.function_symbol_generator.generateRegister();
+        builder.emitInstruction(std.fmt.allocPrint(
+            emitter.allocator,
+            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
+            .{ element_pointer_register, element_llvm_type, data_register, current_index_register },
+        ) catch unreachable);
+        const element_register = emitter.function_symbol_generator.generateRegister();
+        builder.emitLoad(element_register, element_pointer_register, element_llvm_type);
+        builder.emitStore(element_register, storage, element_llvm_type);
+    }
 
     const body_block = switch (for_in.body_block.kind) {
         .Block => |block| block,
@@ -349,7 +362,7 @@ pub fn emitForInArrayLoop(
     builder.emitLabel(loop_exit_label);
     environment.loop_context = previous_loop_context;
 
-    return null;
+    return .statement;
 }
 
 fn emitLoopConstruct(
@@ -357,7 +370,7 @@ fn emitLoopConstruct(
     loop_construct: LoopConstruct,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const builder = emitter.function_ir_builder;
     const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
     const loop_body_label = emitter.function_symbol_generator.generateLabel("loop_body");
@@ -374,7 +387,7 @@ fn emitLoopConstruct(
     builder.emitLabel(loop_header_label);
     if (loop_construct.condition) |condition| {
         const condition_register = emitter.emitNode(condition, lowered_program, environment);
-        builder.emitBranchInstruction(condition_register.?, &.{ loop_body_label, loop_exit_label });
+        builder.emitBranchInstruction(condition_register.expectRegister(), &.{ loop_body_label, loop_exit_label });
     } else {
         builder.emitBranchInstruction(null, &.{loop_body_label});
     }
@@ -394,7 +407,7 @@ fn emitLoopConstruct(
     builder.emitLabel(loop_exit_label);
     environment.loop_context = previous_loop_context;
 
-    return null;
+    return .statement;
 }
 
 fn emitDecisionConstruct(
@@ -404,13 +417,13 @@ fn emitDecisionConstruct(
     label_names: DecisionLabelNames,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const builder = emitter.function_ir_builder;
     var subject_register: ?Register = null;
     var subject_type_id: ?typing.TypeId = null;
 
     if (decision_construct.subject) |subject| {
-        subject_register = emitter.emitNode(subject, lowered_program, environment);
+        subject_register = emitter.emitNode(subject, lowered_program, environment).expectRegister();
         subject_type_id = lowered_program.analyzed_program.type_by_node_id.get(subject.id).?;
     }
 
@@ -433,7 +446,7 @@ fn emitDecisionConstruct(
             if (produces_value) {
                 incoming_values.append(emitter.allocator, .{
                     .label = exit_label,
-                    .register = else_register.?,
+                    .register = else_register.expectRegister(),
                 }) catch unreachable;
             }
             builder.emitBranchInstruction(null, &.{continue_label});
@@ -467,13 +480,13 @@ fn emitDecisionConstruct(
                     lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                     subject_type_id.?,
                     subject_register.?,
-                    pattern_register.?,
+                    pattern_register.expectRegister(),
                     lowered_program,
                 );
                 builder.emitBranchInstruction(comparison_register, &.{ arm_label, false_label.? });
             } else {
                 const condition_register = emitter.emitNode(arm.condition, lowered_program, environment);
-                builder.emitBranchInstruction(condition_register.?, &.{ arm_label, false_label.? });
+                builder.emitBranchInstruction(condition_register.expectRegister(), &.{ arm_label, false_label.? });
             }
 
             builder.emitLabel(arm_label);
@@ -483,7 +496,7 @@ fn emitDecisionConstruct(
                 if (produces_value) {
                     incoming_values.append(emitter.allocator, .{
                         .label = exit_label,
-                        .register = arm_register.?,
+                        .register = arm_register.expectRegister(),
                     }) catch unreachable;
                 }
                 builder.emitBranchInstruction(null, &.{continue_label});
@@ -503,7 +516,7 @@ fn emitDecisionConstruct(
                 if (produces_value) {
                     incoming_values.append(emitter.allocator, .{
                         .label = exit_label,
-                        .register = else_register.?,
+                        .register = else_register.expectRegister(),
                     }) catch unreachable;
                 }
                 builder.emitBranchInstruction(null, &.{continue_label});
@@ -514,18 +527,21 @@ fn emitDecisionConstruct(
     if (!continue_reachable) {
         // Every path through the construct diverged; the cursor is already
         // null, so the poison register below is never used in emitted code.
-        return if (produces_value) emitter.function_symbol_generator.generateRegister() else null;
+        return if (produces_value)
+            .{ .register = emitter.function_symbol_generator.generateRegister() }
+        else
+            .zero_sized;
     }
 
     builder.emitLabel(continue_label);
     if (!produces_value) {
-        return null;
+        return .zero_sized;
     }
     if (incoming_values.items.len == 0) {
-        return emitter.function_symbol_generator.generateRegister();
+        return .{ .register = emitter.function_symbol_generator.generateRegister() };
     }
     if (incoming_values.items.len == 1) {
-        return incoming_values.items[0].register;
+        return .{ .register = incoming_values.items[0].register };
     }
 
     var phi_incoming_buffer = std.ArrayList(u8){};
@@ -552,5 +568,5 @@ fn emitDecisionConstruct(
     ) catch unreachable;
     builder.emitInstruction(phi_instruction);
 
-    return result_register;
+    return .{ .register = result_register };
 }

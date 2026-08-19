@@ -8,6 +8,7 @@ const values = @import("values.zig");
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
+const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
 pub fn emitDeclaration(
@@ -16,7 +17,7 @@ pub fn emitDeclaration(
     value_declaration: *const ast.Declaration,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     // Regardless of the runtime representation of the value node, we still must emit it because it may have side
     // effects. For example, a function call that returns unit may still have side effects.
     const value_register = emitter.emitNode(value_declaration.value, lowered_program, environment);
@@ -28,7 +29,7 @@ pub fn emitDeclaration(
         .get(value_declaration.value.id) orelse unreachable;
 
     if (!runtime_representation.hasRuntimeRepresentation()) {
-        return null;
+        return .statement;
     }
 
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
@@ -37,11 +38,11 @@ pub fn emitDeclaration(
 
     const storage = emitter.function_symbol_generator.generateStorage();
     emitter.function_ir_builder.emitAlloca(storage, llvm_ir_type);
-    emitter.function_ir_builder.emitStore(value_register.?, storage, llvm_ir_type);
+    emitter.function_ir_builder.emitStore(value_register.expectRegister(), storage, llvm_ir_type);
 
     environment.storage_by_symbol_id.put(symbol_id, storage) catch unreachable;
 
-    return null;
+    return .statement;
 }
 
 pub fn emitAssignment(
@@ -50,7 +51,7 @@ pub fn emitAssignment(
     assignment: *const ast.Assignment,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const place_register = emitPlace(emitter, assignment.target, lowered_program, environment);
 
     const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
@@ -58,11 +59,11 @@ pub fn emitAssignment(
     switch (assignment.operator) {
         .Assign => {
             const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
-            emitter.function_ir_builder.emitStore(value_register.?, place_register.?, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(value_register.expectRegister(), place_register, llvm_ir_type);
         },
         .Compound => {
             const current_value_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitLoad(current_value_register, place_register.?, llvm_ir_type);
+            emitter.function_ir_builder.emitLoad(current_value_register, place_register, llvm_ir_type);
 
             const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
             const result_register = values.emitLoweredBinaryOperation(
@@ -70,13 +71,13 @@ pub fn emitAssignment(
                 lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                 value_type_id,
                 current_value_register,
-                value_register.?,
+                value_register.expectRegister(),
                 lowered_program,
             );
-            emitter.function_ir_builder.emitStore(result_register, place_register.?, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(result_register, place_register, llvm_ir_type);
         },
     }
-    return null;
+    return .statement;
 }
 
 pub fn emitPlace(
@@ -84,7 +85,7 @@ pub fn emitPlace(
     target: *const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) Register {
     const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
     switch (place_decision) {
         .IdentifierBinding => |identifier_binding| {
@@ -119,7 +120,7 @@ pub fn emitStructureFieldPointer(
     field_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) Register {
     const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
@@ -134,7 +135,7 @@ pub fn emitStructureFieldPointer(
     emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-        .{ field_pointer_register, structure_llvm_type_name, base_register orelse unreachable, field_index },
+        .{ field_pointer_register, structure_llvm_type_name, base_register.expectRegister(), field_index },
     ) catch unreachable);
 
     return field_pointer_register;
@@ -147,8 +148,8 @@ pub fn emitIndexAccessPointer(
     environment: *Environment,
 ) Register {
     const builder = emitter.function_ir_builder;
-    const base_register = emitter.emitNode(index_access.base, lowered_program, environment);
-    const index_register = emitter.emitNode(index_access.index, lowered_program, environment) orelse unreachable;
+    const base_register = emitter.emitNode(index_access.base, lowered_program, environment).expectRegister();
+    const index_register = emitter.emitNode(index_access.index, lowered_program, environment).expectRegister();
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
@@ -161,7 +162,7 @@ pub fn emitIndexAccessPointer(
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, base_register orelse unreachable },
+        .{ length_pointer_register, base_register },
     ) catch unreachable);
 
     const length_register = emitter.function_symbol_generator.generateRegister();
@@ -171,7 +172,7 @@ pub fn emitIndexAccessPointer(
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, base_register orelse unreachable },
+        .{ data_pointer_register, base_register },
     ) catch unreachable);
 
     const negative_check_register = emitter.function_symbol_generator.generateRegister();

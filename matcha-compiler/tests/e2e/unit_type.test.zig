@@ -145,3 +145,99 @@ test "an array of unit elements can be appended to" {
 
     try e2e.expectSuccessOutput(&result, "4\n");
 }
+
+test "an element of an array of unit elements can be assigned to" {
+    const source =
+        \\var unit_array: unit[] = [unit, unit, unit];
+        \\unit_array[1] = printString("evaluated");
+        \\printInt(unit_array.length);
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "evaluated\n3\n");
+}
+
+test "assigning to an element of an array of unit elements out of bounds results in a panic" {
+    const source =
+        \\var unit_array: unit[] = [unit, unit, unit];
+        \\unit_array[3] = unit;
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectRuntimeError(&result, "runtime error: array index out of bounds");
+}
+
+test "the elements of an array of unit elements can be used in a for-in loop" {
+    const source =
+        \\val unit_array: unit[] = [unit, unit, unit];
+        \\for element in unit_array {
+        \\    val x: unit = element;
+        \\    printString("iterated");
+        \\}
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "iterated\niterated\niterated\n");
+}
+
+test "an empty array of unit elements can be appended to" {
+    const source =
+        \\var unit_array: unit[] = [];
+        \\unit_array.append(unit);
+        \\unit_array.append(unit);
+        \\printInt(unit_array.length);
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "2\n");
+}
+
+test "the argument of an append to an array of unit elements is evaluated" {
+    const source =
+        \\var unit_array: unit[] = [unit];
+        \\unit_array.append(printString("evaluated"));
+        \\printInt(unit_array.length);
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "evaluated\n2\n");
+}
+
+test "an array of unit elements can be passed to and returned from functions" {
+    const source =
+        \\item makeArray(): unit[] = {
+        \\    return [unit, unit];
+        \\};
+        \\item countOf(array: unit[]): int = {
+        \\    return array.length;
+        \\};
+        \\printInt(countOf(makeArray()));
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "2\n");
+}
+
+test "an array of arrays of unit elements can be constructed and accessed" {
+    const source =
+        \\val nested: unit[][] = [[unit], [unit, unit]];
+        \\printInt(nested[1].length);
+    ;
+
+    var result = try e2e.runSource("unit_literal_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "2\n");
+}
