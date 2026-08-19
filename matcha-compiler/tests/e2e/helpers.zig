@@ -1,8 +1,5 @@
 const std = @import("std");
 
-const compiler_root = ".";
-const matcha_binary_path = "zig-out/bin/matcha";
-
 pub const Result = struct {
     allocator: std.mem.Allocator,
     exit_code: u32,
@@ -79,25 +76,14 @@ pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
     return error.ExpectedSubstringNotFound;
 }
 
-var rebuild_compiler_once = std.once(rebuildCompiler);
-
-// The e2e tests run whatever binary sits in zig-out. Rebuild it once per test
-// process so tests never run against a stale compiler.
-fn rebuildCompiler() void {
-    const result = std.process.Child.run(.{
-        .allocator = std.heap.page_allocator,
-        .argv = &.{ "zig", "build" },
-        .cwd = compiler_root,
-        .max_output_bytes = 1024 * 1024,
-    }) catch @panic("failed to spawn zig build");
-    if (result.term != .Exited or result.term.Exited != 0) {
-        std.debug.print("zig build failed:\n{s}\n", .{result.stderr});
-        @panic("zig build failed");
-    }
-}
-
 fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOptions) !Result {
-    rebuild_compiler_once.call();
+    // The build system installs the compiler before running the e2e tests and
+    // hands over its location, so the tests never run against a stale binary.
+    const matcha_binary_path = std.process.getEnvVarOwned(allocator, "MATCHA_BINARY_PATH") catch |err| switch (err) {
+        error.EnvironmentVariableNotFound => @panic("MATCHA_BINARY_PATH is not set; run the e2e tests via `zig build e2e`"),
+        else => return err,
+    };
+    defer allocator.free(matcha_binary_path);
 
     var argv: std.ArrayList([]const u8) = .empty;
     defer argv.deinit(allocator);
@@ -115,7 +101,6 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
     child.stdin_behavior = if (options.stdin == null) .Ignore else .Pipe;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
-    child.cwd = compiler_root;
 
     try child.spawn();
     errdefer {

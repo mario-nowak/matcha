@@ -232,7 +232,7 @@ pub fn emitIndexAccess(
 
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     const result_register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitLoad(result_register, pointer_register, element_llvm_type);
+    emitter.function_ir_builder.emitLoad(result_register, pointer_register.expectRegister(), element_llvm_type);
 
     return .{ .register = result_register };
 }

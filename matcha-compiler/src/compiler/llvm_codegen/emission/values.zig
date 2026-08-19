@@ -17,6 +17,15 @@ pub fn emitIdentifier(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
+    const runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_node_id
+        .get(node.id) orelse unreachable;
+    if (!runtime_representation.hasRuntimeRepresentation()) {
+        return .zero_sized;
+    }
+
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
     const storage = environment.storage_by_symbol_id.get(symbol_id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(
