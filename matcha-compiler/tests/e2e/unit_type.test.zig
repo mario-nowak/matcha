@@ -241,3 +241,17 @@ test "an array of arrays of unit elements can be constructed and accessed" {
 
     try e2e.expectSuccessOutput(&result, "2\n");
 }
+
+test "fields of structures can be of unit type" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\val instance: UnitStruct = .{ field = unit };
+    ;
+
+    var result = try e2e.runSource("unit_literal_struct.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "");
+}
