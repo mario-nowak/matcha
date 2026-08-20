@@ -7,6 +7,10 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    // Show the full reference trace for compile errors that originate in the standard library
+    // (for example a bad format string), so the failing call site in our own code is visible.
+    // A `-freference-trace=N` flag on the command line still wins.
+    if (b.reference_trace == null) b.reference_trace = 20;
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options

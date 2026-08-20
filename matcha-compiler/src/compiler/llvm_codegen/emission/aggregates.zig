@@ -94,12 +94,13 @@ pub fn emitStructureConstruction(
 
     var structure_header_register: ?Register = null;
     if (structure_type_runtime_representation.hasRuntimeRepresentation()) {
-        structure_header_register = emitter.function_symbol_generator.generateRegister();
+        const header_register = emitter.function_symbol_generator.generateRegister();
+        structure_header_register = header_register;
         emitter.function_ir_builder.emitInstruction(
             std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
-                .{ structure_header_register, structure_llvm_type_name },
+                .{ header_register, structure_llvm_type_name },
             ) catch unreachable,
         );
     }
@@ -121,7 +122,7 @@ pub fn emitStructureConstruction(
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
             emitter.allocator,
             "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-            .{ field_pointer_register, structure_llvm_type_name, structure_header_register, field_index },
+            .{ field_pointer_register, structure_llvm_type_name, structure_header_register.?, field_index },
         ) catch unreachable);
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
