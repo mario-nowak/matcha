@@ -69,6 +69,20 @@ pub const PlaceDecision = union(enum) {
     ArrayElement,
 };
 
+pub const RuntimeFieldIndex = union(enum) {
+    Absent,
+    Index: u32,
+};
+
+pub const StructureLayout = struct {
+    runtime_field_index_by_semantic_index: []const RuntimeFieldIndex,
+};
+
+pub const StructureLayoutKind = union(enum) {
+    Absent,
+    Present: StructureLayout,
+};
+
 pub const NodeValueKind = enum {
     NoValue,
     Value,
@@ -99,3 +113,4 @@ pub const MemberAccessDecisionByNodeId = std.AutoHashMap(NodeId, MemberAccessDec
 pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperationDecision);
 pub const PlaceDecisionByNodeId = std.AutoHashMap(NodeId, PlaceDecision);
 pub const NodeValueKindByNodeId = std.AutoHashMap(NodeId, NodeValueKind);
+pub const StructureLayoutKindByTypeId = std.AutoHashMap(typing.TypeId, StructureLayoutKind);

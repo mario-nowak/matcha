@@ -85,7 +85,7 @@ pub fn emitStructureConstruction(
         .analyzed_program
         .runtime_representation_result
         .runtime_representation_by_type_id
-        .get(structure_type_id) orelse unreachable;
+        .get(node_type_id) orelse unreachable;
 
     const structure_type = lowered_program.analyzed_program.type_store.structure_types.items[structure_type_id];
     const structure_construction_layout = lowered_program.analyzed_program.structure_construction_layout_by_node_id.get(
@@ -105,7 +105,6 @@ pub fn emitStructureConstruction(
         );
     }
     for (fields, structure_construction_layout.field_indices) |field, field_index| {
-        // todo: This must stay even for structures without runtime representation
         const field_value_emission_result = emitter.emitNode(field.value, lowered_program, environment);
         const structure_field = structure_type.fields[@intCast(field_index)];
         const field_value_runtime_representation = lowered_program
