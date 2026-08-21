@@ -52,7 +52,13 @@ pub const StructureTypeRenderer = struct {
             }
             structure_definitions_buffer.writer(self.allocator).print(
                 "{s}",
-                .{self.renderStructureTypeDefinition(resolved_structure, lowered_program)},
+                .{
+                    self.renderStructureTypeDefinition(
+                        resolved_structure,
+                        structure_layout,
+                        lowered_program,
+                    ),
+                },
             ) catch unreachable;
             has_structure_definition = true;
         }
@@ -76,27 +82,23 @@ pub const StructureTypeRenderer = struct {
             "%{s} = type {{",
             .{structure_llvm_type_name},
         ) catch unreachable;
-        var index: u32 = 0;
-        for (resolved_structure.fields) |field| {
-            if (index == 0) {
+        for (resolved_structure.fields, 0..) |field, field_index_in_structure_definition| {
+            const field_index = switch (structure_layout.field_index_by_definition_index[field_index_in_structure_definition]) {
+                .Absent => continue,
+                .Index => |field_index| field_index,
+            };
+
+            if (field_index == 0) {
                 structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
             } else {
                 structure_definition_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
             }
+
             const field_type_id = llvm_type_lowering.getTypeIdFromResolvedTypeReference(lowered_program.analyzed_program, field.type_reference);
-            const field_type_runtime_representation = lowered_program
-                .analyzed_program
-                .runtime_representation_result
-                .runtime_representation_by_type_id
-                .get(field_type_id) orelse unreachable;
-            if (!field_type_runtime_representation.hasRuntimeRepresentation()) {
-                continue;
-            }
             structure_definition_buffer.writer(self.allocator).print(
                 "{s}",
                 .{lowered_program.getLlvmIrType(field_type_id)},
             ) catch unreachable;
-            index += 1;
         }
         if (resolved_structure.fields.len > 0) {
             structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;

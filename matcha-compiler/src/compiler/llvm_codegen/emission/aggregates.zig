@@ -81,11 +81,8 @@ pub fn emitStructureConstruction(
         .Structure => |id| id,
         else => unreachable,
     };
-    const structure_type_runtime_representation = lowered_program
-        .analyzed_program
-        .runtime_representation_result
-        .runtime_representation_by_type_id
-        .get(node_type_id) orelse unreachable;
+    const structure_layout_kind = lowered_program
+        .structure_layout_kind_by_type_id.get(node_type_id) orelse unreachable;
 
     const structure_type = lowered_program.analyzed_program.type_store.structure_types.items[structure_type_id];
     const structure_construction_layout = lowered_program.analyzed_program.structure_construction_layout_by_node_id.get(
@@ -93,7 +90,7 @@ pub fn emitStructureConstruction(
     ) orelse unreachable;
 
     var structure_header_register: ?Register = null;
-    if (structure_type_runtime_representation.hasRuntimeRepresentation()) {
+    if (structure_layout_kind == .Present) {
         const header_register = emitter.function_symbol_generator.generateRegister();
         structure_header_register = header_register;
         emitter.function_ir_builder.emitInstruction(
@@ -107,21 +104,19 @@ pub fn emitStructureConstruction(
     for (fields, structure_construction_layout.field_indices) |field, field_index| {
         const field_value_emission_result = emitter.emitNode(field.value, lowered_program, environment);
         const structure_field = structure_type.fields[@intCast(field_index)];
-        const field_value_runtime_representation = lowered_program
-            .analyzed_program
-            .runtime_representation_result
-            .runtime_representation_by_type_id
-            .get(structure_field.type_id) orelse unreachable;
-        if (!structure_type_runtime_representation.hasRuntimeRepresentation() or !field_value_runtime_representation.hasRuntimeRepresentation()) {
-            // If either the structure or the field value does not have a runtime representation, we can skip storing the field value.
-            continue;
-        }
+        const layout_field_index = switch (structure_layout_kind) {
+            .Absent => continue,
+            .Present => |structure_layout| switch (structure_layout.field_index_by_definition_index[field_index]) {
+                .Absent => continue,
+                .Index => |layout_field_index| layout_field_index,
+            },
+        };
 
         const field_pointer_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
             emitter.allocator,
             "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-            .{ field_pointer_register, structure_llvm_type_name, structure_header_register.?, field_index },
+            .{ field_pointer_register, structure_llvm_type_name, structure_header_register.?, layout_field_index },
         ) catch unreachable);
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
@@ -132,11 +127,10 @@ pub fn emitStructureConstruction(
         );
     }
 
-    if (structure_type_runtime_representation.hasRuntimeRepresentation()) {
-        return .{ .register = structure_header_register.? };
-    } else {
-        return .zero_sized;
-    }
+    return switch (structure_layout_kind) {
+        .Absent => .zero_sized,
+        .Present => .{ .register = structure_header_register.? },
+    };
 }
 
 pub fn emitArrayLiteral(

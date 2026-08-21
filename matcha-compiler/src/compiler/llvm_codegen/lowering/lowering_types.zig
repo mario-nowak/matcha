@@ -75,7 +75,7 @@ pub const RuntimeFieldIndex = union(enum) {
 };
 
 pub const StructureLayout = struct {
-    runtime_field_index_by_semantic_index: []const RuntimeFieldIndex,
+    field_index_by_definition_index: []const RuntimeFieldIndex,
 };
 
 pub const StructureLayoutKind = union(enum) {
