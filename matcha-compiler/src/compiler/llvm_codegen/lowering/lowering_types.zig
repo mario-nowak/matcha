@@ -24,6 +24,22 @@ pub const CallDispatchDecision = union(enum) {
     IntegerMethod: typing.IntegerInstanceMethod,
 };
 
+pub const FunctionParameterIndex = union(enum) {
+    Absent,
+    Index: u32,
+};
+
+pub const RuntimeReturnKind = enum {
+    Absent,
+    Present,
+};
+
+pub const FunctionLayout = struct {
+    // TODO: rename this to parameter layout index kind by definition index
+    parameter_index_by_definition_index: []const FunctionParameterIndex,
+    runtime_return_kind: RuntimeReturnKind,
+};
+
 pub const MemberAccessDecision = union(enum) {
     StructureField: struct {
         field_index: u32,
@@ -114,3 +130,4 @@ pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperat
 pub const PlaceDecisionByNodeId = std.AutoHashMap(NodeId, PlaceDecision);
 pub const NodeValueKindByNodeId = std.AutoHashMap(NodeId, NodeValueKind);
 pub const StructureLayoutKindByTypeId = std.AutoHashMap(typing.TypeId, StructureLayoutKind);
+pub const FunctionLayoutBySymbolId = std.AutoHashMap(symbols.SymbolId, FunctionLayout);

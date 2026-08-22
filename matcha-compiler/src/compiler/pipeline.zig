@@ -69,6 +69,8 @@ pub fn generateLlvmIrFromFile(
     defer runtime_requirements_lowerer.deinit();
     var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(allocator);
     defer structure_layout_lowerer.deinit();
+    var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(allocator);
+    defer function_layout_lowerer.deinit();
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
@@ -80,6 +82,7 @@ pub fn generateLlvmIrFromFile(
         &node_value_kind_lowerer,
         &runtime_requirements_lowerer,
         &structure_layout_lowerer,
+        &function_layout_lowerer,
     );
     defer lowering_analyzer.deinit();
     var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(allocator);

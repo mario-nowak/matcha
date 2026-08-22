@@ -10,4 +10,5 @@ pub const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
 pub const NodeValueKindLowerer = @import("node_value_kind_lowerer.zig").NodeValueKindLowerer;
 pub const RuntimeRequirementsLowerer = @import("runtime_requirements_lowerer.zig").RuntimeRequirementsLowerer;
 pub const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
+pub const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
 pub const llvm_type = @import("llvm_type.zig");

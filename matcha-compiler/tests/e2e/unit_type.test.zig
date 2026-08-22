@@ -275,6 +275,49 @@ test "structures with only unit type fields can have functions" {
     try e2e.expectSuccessOutput(&result, "Hello, world!\n");
 }
 
+test "structures with only unit type fields can have type functions" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\
+        \\    item printSomething(something: string): unit = {
+        \\        printString(something);
+        \\    };
+        \\};
+        \\UnitStruct.printSomething("Hello, world!");
+    ;
+
+    var result = try e2e.runSource("unit_literal_struct.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "Hello, world!\n");
+}
+
+test "functions can have parameters with types that don't have any runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\
+        \\    item printSomething(self: UnitStruct, something: string): unit = {
+        \\        printString(something);
+        \\    };
+        \\};
+        \\
+        \\item functionAcceptingUnitStruct(message: string, unit_struct: UnitStruct, additional_message: string): unit = {
+        \\    unit_struct.printSomething(message);
+        \\    printString(additional_message);
+        \\};
+        \\
+        \\val instance: UnitStruct = .{ field = unit };
+        \\functionAcceptingUnitStruct("message", instance, "additional_message");
+    ;
+
+    var result = try e2e.runSource("unit_literal_struct.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "message\nadditional_message\n");
+}
+
 test "structures can have fields with unit type and fields of other types" {
     const source =
         \\item MixedUnitStruct = structure {
