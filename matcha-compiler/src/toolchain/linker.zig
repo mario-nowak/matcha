@@ -84,6 +84,9 @@ fn appendGarbageCollectorLinkerFlags(allocator: std.mem.Allocator, argv: *std.Ar
             // Ubuntu's clang defaults to PIE executables, but the current runtime
             // static library is not built with PIE-compatible relocations.
             try argv.append(allocator, "-no-pie");
+            // Zig-generated objects omit GNU-stack metadata. Mark the final binary
+            // explicitly so GNU ld does not infer an executable stack or warn.
+            try argv.append(allocator, "-Wl,-z,noexecstack");
             try argv.append(allocator, "-lgc");
         },
         else => return error.UnsupportedHostPlatform,
