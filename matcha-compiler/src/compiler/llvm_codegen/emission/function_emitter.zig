@@ -116,7 +116,6 @@ pub const FunctionEmitter = struct {
                 .{ parameter_llvm_ir_type, parameter_register },
             ) catch unreachable;
 
-            // TODO: wtf was this for again?
             const storage = self.function_symbol_generator.generateStorage();
             self.function_ir_builder.emitAlloca(storage, parameter_llvm_ir_type);
             self.function_ir_builder.emitStore(parameter_register, storage, parameter_llvm_ir_type);

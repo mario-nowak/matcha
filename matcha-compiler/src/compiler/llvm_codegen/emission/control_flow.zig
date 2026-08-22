@@ -432,7 +432,6 @@ fn emitDecisionConstruct(
         .runtime_representation_result
         .runtime_representation_by_type_id
         .get(result_type_id) orelse undefined;
-    // TODO:
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
     const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
     var incoming_values = std.ArrayList(PhiIncoming){};

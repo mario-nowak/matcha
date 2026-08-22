@@ -125,22 +125,7 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
 
     const exit_code = switch (term) {
         .Exited => |code| @as(u32, code),
-        .Signal => |code| block: {
-            // std.debug.print("encountered signal {any}", .{code});
-            // return error.UnexpectedProcessTermination;
-            break :block code;
-        },
-        .Stopped => |code| block: {
-            break :block code;
-            // std.debug.print("encountered stopped {any}", .{code});
-            // return error.UnexpectedProcessTermination;
-        },
-        .Unknown => |code| block: {
-            break :block code;
-            // std.debug.print("encountered unknown", .{});
-            // return error.UnexpectedProcessTermination;
-        },
-        // else => return error.UnexpectedProcessTermination,
+        else => return error.UnexpectedProcessTermination,
     };
 
     return .{

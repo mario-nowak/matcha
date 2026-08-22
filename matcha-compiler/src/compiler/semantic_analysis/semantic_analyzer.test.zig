@@ -2,6 +2,7 @@ const std = @import("std");
 const ast = @import("ast");
 const helpers = @import("../test_helpers.zig");
 const semantic_analysis = @import("semantic_analysis");
+const symbols = @import("symbols");
 const typing = @import("typing");
 
 const TestError = helpers.TestError;
@@ -18,7 +19,7 @@ fn expectType(expected: typing.Type, typed_program: *const semantic_analysis.Ana
     try std.testing.expectEqual(expected, typed_program.type_store.getType(actual_type_id));
 }
 
-fn expectStatementSymbolId(analyzed: *const helpers.AnalyzedProgram, statement_index: usize) typing.SymbolId {
+fn expectStatementSymbolId(analyzed: *const helpers.AnalyzedProgram, statement_index: usize) symbols.SymbolId {
     return analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[statement_index].id).?;
 }
 

@@ -6,9 +6,9 @@ const PlaceLowerer = llvm_codegen.lowering.PlaceLowerer;
 
 const TestError = helpers.TestError;
 
-fn expectExpressionStatement(node: *const ast.Node) TestError!ast.ExpressionStatement {
+fn expectAssignment(node: *const ast.Node) TestError!ast.Assignment {
     return switch (node.kind) {
-        .ExpressionStatement => |expression_statement| expression_statement,
+        .Assignment => |assignment| assignment,
         else => return TestError.UnexpectedNodeKind,
     };
 }
@@ -29,21 +29,12 @@ test "place lowering records field element and binding targets" {
     defer lowerer.deinit();
 
     const decisions = lowerer.lower(&analyzed.typed_program);
-    const field_assignment = try expectExpressionStatement(&analyzed.parsed.program.statements[2]);
-    const field_assignment_target = switch (field_assignment.expression.kind) {
-        .Assignment => |assignment| assignment.target,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    const index_assignment = try expectExpressionStatement(&analyzed.parsed.program.statements[4]);
-    const index_assignment_target = switch (index_assignment.expression.kind) {
-        .Assignment => |assignment| assignment.target,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    const counter_assignment = try expectExpressionStatement(&analyzed.parsed.program.statements[6]);
-    const counter_assignment_target = switch (counter_assignment.expression.kind) {
-        .Assignment => |assignment| assignment.target,
-        else => return TestError.UnexpectedNodeKind,
-    };
+    const field_assignment = try expectAssignment(&analyzed.parsed.program.statements[2]);
+    const field_assignment_target = field_assignment.target;
+    const index_assignment = try expectAssignment(&analyzed.parsed.program.statements[4]);
+    const index_assignment_target = index_assignment.target;
+    const counter_assignment = try expectAssignment(&analyzed.parsed.program.statements[6]);
+    const counter_assignment_target = counter_assignment.target;
     const counter_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[5].id).?;
 
     switch (decisions.get(field_assignment_target.id).?) {

@@ -86,7 +86,6 @@ pub const BuiltinType = enum {
     String,
 };
 
-// TODO: Why did I add this? Why not just use a type_id?
 pub const ResolvedTypeReference = union(enum) {
     Builtin: BuiltinType,
     Symbol: SymbolId,
