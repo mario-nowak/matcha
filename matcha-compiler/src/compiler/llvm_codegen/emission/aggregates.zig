@@ -111,7 +111,7 @@ pub fn emitStructureConstruction(
         const structure_field = structure_type.fields[@intCast(field_index)];
         const layout_field_index = switch (structure_layout_kind) {
             .Absent => continue,
-            .Present => |structure_layout| switch (structure_layout.field_index_by_definition_index[field_index]) {
+            .Present => |structure_layout| switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
                 .Absent => continue,
                 .Index => |layout_field_index| layout_field_index,
             },

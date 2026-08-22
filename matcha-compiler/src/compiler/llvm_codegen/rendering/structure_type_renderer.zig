@@ -82,7 +82,7 @@ pub const StructureTypeRenderer = struct {
             .{structure_llvm_type_name},
         ) catch unreachable;
         for (resolved_structure.fields, 0..) |field, field_index_in_structure_definition| {
-            const field_index = switch (structure_layout.field_index_by_definition_index[field_index_in_structure_definition]) {
+            const field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index_in_structure_definition]) {
                 .Absent => continue,
                 .Index => |field_index| field_index,
             };

@@ -5,9 +5,9 @@ const symbols = @import("symbols");
 
 const FunctionLayout = llvm_codegen.lowering.lowering_types.FunctionLayout;
 const FunctionLayoutLowerer = llvm_codegen.lowering.FunctionLayoutLowerer;
-const FunctionParameterIndex = llvm_codegen.lowering.lowering_types.FunctionParameterIndex;
+const FunctionLayoutParameterIndexKind = llvm_codegen.lowering.lowering_types.FunctionLayoutParameterIndexKind;
 
-fn expectParameterIndex(expected: ?u32, actual: FunctionParameterIndex) !void {
+fn expectParameterIndex(expected: ?u32, actual: FunctionLayoutParameterIndexKind) !void {
     if (expected) |expected_index| {
         switch (actual) {
             .Absent => return error.TestExpectedEqual,
@@ -24,13 +24,13 @@ fn expectParameterIndex(expected: ?u32, actual: FunctionParameterIndex) !void {
 fn expectFunctionLayout(
     layout: FunctionLayout,
     expected_parameter_indices: []const ?u32,
-    expected_return_kind: llvm_codegen.lowering.lowering_types.RuntimeReturnKind,
+    expected_return_type_value_kind: llvm_codegen.lowering.lowering_types.FunctionLayoutReturnTypeValueKind,
 ) !void {
-    try std.testing.expectEqual(expected_parameter_indices.len, layout.parameter_index_by_definition_index.len);
-    for (expected_parameter_indices, layout.parameter_index_by_definition_index) |expected, actual| {
+    try std.testing.expectEqual(expected_parameter_indices.len, layout.parameter_index_kind_by_definition_index.len);
+    for (expected_parameter_indices, layout.parameter_index_kind_by_definition_index) |expected, actual| {
         try expectParameterIndex(expected, actual);
     }
-    try std.testing.expectEqual(expected_return_kind, layout.runtime_return_kind);
+    try std.testing.expectEqual(expected_return_type_value_kind, layout.return_type_value_kind);
 }
 
 fn statementSymbolId(analyzed: *const helpers.AnalyzedProgram, statement_index: usize) symbols.SymbolId {

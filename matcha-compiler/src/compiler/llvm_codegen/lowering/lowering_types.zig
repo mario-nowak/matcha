@@ -24,20 +24,19 @@ pub const CallDispatchDecision = union(enum) {
     IntegerMethod: typing.IntegerInstanceMethod,
 };
 
-pub const FunctionParameterIndex = union(enum) {
+pub const FunctionLayoutParameterIndexKind = union(enum) {
     Absent,
     Index: u32,
 };
 
-pub const RuntimeReturnKind = enum {
+pub const FunctionLayoutReturnTypeValueKind = enum {
     Absent,
     Present,
 };
 
 pub const FunctionLayout = struct {
-    // TODO: rename this to parameter layout index kind by definition index
-    parameter_index_by_definition_index: []const FunctionParameterIndex,
-    runtime_return_kind: RuntimeReturnKind,
+    parameter_index_kind_by_definition_index: []const FunctionLayoutParameterIndexKind,
+    return_type_value_kind: FunctionLayoutReturnTypeValueKind,
 };
 
 pub const MemberAccessDecision = union(enum) {
@@ -85,13 +84,13 @@ pub const PlaceDecision = union(enum) {
     ArrayElement,
 };
 
-pub const RuntimeFieldIndex = union(enum) {
+pub const StructureLayoutFieldIndexKind = union(enum) {
     Absent,
     Index: u32,
 };
 
 pub const StructureLayout = struct {
-    field_index_by_definition_index: []const RuntimeFieldIndex,
+    field_index_kind_by_definition_index: []const StructureLayoutFieldIndexKind,
 };
 
 pub const StructureLayoutKind = union(enum) {

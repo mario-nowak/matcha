@@ -2,10 +2,10 @@ const std = @import("std");
 const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
 
-const RuntimeFieldIndex = llvm_codegen.lowering.lowering_types.RuntimeFieldIndex;
+const StructureLayoutFieldIndexKind = llvm_codegen.lowering.lowering_types.StructureLayoutFieldIndexKind;
 const StructureLayoutLowerer = llvm_codegen.lowering.StructureLayoutLowerer;
 
-fn expectFieldIndex(expected: ?u32, actual: RuntimeFieldIndex) !void {
+fn expectFieldIndex(expected: ?u32, actual: StructureLayoutFieldIndexKind) !void {
     if (expected) |expected_index| {
         switch (actual) {
             .Absent => return error.TestExpectedEqual,
@@ -53,9 +53,9 @@ test "structure layout lowering erases fields without runtime representation" {
         .Absent => return error.TestExpectedEqual,
         .Present => |layout| layout,
     };
-    try std.testing.expectEqual(@as(usize, 4), mixed_layout.field_index_by_definition_index.len);
-    try expectFieldIndex(0, mixed_layout.field_index_by_definition_index[0]);
-    try expectFieldIndex(null, mixed_layout.field_index_by_definition_index[1]);
-    try expectFieldIndex(null, mixed_layout.field_index_by_definition_index[2]);
-    try expectFieldIndex(1, mixed_layout.field_index_by_definition_index[3]);
+    try std.testing.expectEqual(@as(usize, 4), mixed_layout.field_index_kind_by_definition_index.len);
+    try expectFieldIndex(0, mixed_layout.field_index_kind_by_definition_index[0]);
+    try expectFieldIndex(null, mixed_layout.field_index_kind_by_definition_index[1]);
+    try expectFieldIndex(null, mixed_layout.field_index_kind_by_definition_index[2]);
+    try expectFieldIndex(1, mixed_layout.field_index_kind_by_definition_index[3]);
 }

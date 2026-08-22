@@ -159,7 +159,7 @@ pub fn emitStructureFieldPointer(
         .Absent => return .zero_sized,
         .Present => |structure_layout| structure_layout,
     };
-    const field_layout_index = switch (structure_layout.field_index_by_definition_index[field_index]) {
+    const field_layout_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
         .Absent => return .zero_sized,
         .Index => |field_layout_index| field_layout_index,
     };

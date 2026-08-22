@@ -23,7 +23,7 @@ pub const StructureLayoutLowerer = struct {
         while (layouts.next()) |layout| {
             switch (layout.*) {
                 .Absent => {},
-                .Present => |present| self.allocator.free(present.field_index_by_definition_index),
+                .Present => |present| self.allocator.free(present.field_index_kind_by_definition_index),
             }
         }
         self.structure_layout_kind_by_type_id.clearRetainingCapacity();
@@ -48,8 +48,8 @@ pub const StructureLayoutLowerer = struct {
                     ) catch unreachable;
                 },
                 .Present => {
-                    var field_index_by_definition_index = std.ArrayList(lowering_types.RuntimeFieldIndex){};
-                    defer field_index_by_definition_index.deinit(self.allocator);
+                    var field_index_kind_by_definition_index = std.ArrayList(lowering_types.StructureLayoutFieldIndexKind){};
+                    defer field_index_kind_by_definition_index.deinit(self.allocator);
                     var runtime_field_index: u32 = 0;
 
                     for (structure_type.fields) |field| {
@@ -57,7 +57,7 @@ pub const StructureLayoutLowerer = struct {
                             .runtime_representation_result
                             .runtime_representation_by_type_id
                             .get(field.type_id) orelse unreachable;
-                        const field_index: lowering_types.RuntimeFieldIndex = switch (field_runtime_representation) {
+                        const field_index_kind: lowering_types.StructureLayoutFieldIndexKind = switch (field_runtime_representation) {
                             .Present, .Array => block: {
                                 const index = runtime_field_index;
                                 runtime_field_index += 1;
@@ -66,9 +66,9 @@ pub const StructureLayoutLowerer = struct {
                             .None => .Absent,
                         };
 
-                        field_index_by_definition_index.append(
+                        field_index_kind_by_definition_index.append(
                             self.allocator,
-                            field_index,
+                            field_index_kind,
                         ) catch unreachable;
                     }
 
@@ -76,7 +76,7 @@ pub const StructureLayoutLowerer = struct {
                         structure_type_id,
                         .{
                             .Present = .{
-                                .field_index_by_definition_index = field_index_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
+                                .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
                             },
                         },
                     ) catch unreachable;

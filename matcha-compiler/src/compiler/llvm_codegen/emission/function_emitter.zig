@@ -95,7 +95,7 @@ pub const FunctionEmitter = struct {
         defer environment.deinit();
 
         for (resolved_function.parameters, 0..) |parameter, index| {
-            const parameter_index = switch (function_layout.parameter_index_by_definition_index[index]) {
+            const parameter_index = switch (function_layout.parameter_index_kind_by_definition_index[index]) {
                 .Absent => continue,
                 .Index => |parameter_index| parameter_index,
             };
@@ -128,13 +128,13 @@ pub const FunctionEmitter = struct {
             &environment,
         );
 
-        const function_return_llvm_ir_type = switch (function_layout.runtime_return_kind) {
+        const function_return_llvm_ir_type = switch (function_layout.return_type_value_kind) {
             .Present => lowered_program.getLlvmIrType(function_return_type_id),
             .Absent => "void",
         };
 
         if (self.function_ir_builder.currentLabel() != null) {
-            switch (function_layout.runtime_return_kind) {
+            switch (function_layout.return_type_value_kind) {
                 .Absent => self.function_ir_builder.emitTerminatorInstruction("ret void"),
                 .Present => {
                     const return_instruction = std.fmt.allocPrint(

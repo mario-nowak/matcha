@@ -23,7 +23,7 @@ pub const FunctionLayoutLowerer = struct {
     fn clearLayouts(self: *@This()) void {
         var layouts = self.function_layout_by_symbol_id.valueIterator();
         while (layouts.next()) |layout| {
-            self.allocator.free(layout.parameter_index_by_definition_index);
+            self.allocator.free(layout.parameter_index_kind_by_definition_index);
         }
         self.function_layout_by_symbol_id.clearRetainingCapacity();
     }
@@ -41,7 +41,7 @@ pub const FunctionLayoutLowerer = struct {
 
             const function_symbol_id = entry.key_ptr.*;
             var parameter_layout_index: u32 = 0;
-            var parameter_index_by_definition_index = std.ArrayList(lowering_types.FunctionParameterIndex){};
+            var parameter_index_kind_by_definition_index = std.ArrayList(lowering_types.FunctionLayoutParameterIndexKind){};
 
             for (resolved_function.parameters) |parameter| {
                 const parameter_type_id = analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
@@ -50,13 +50,13 @@ pub const FunctionLayoutLowerer = struct {
                     .runtime_representation_by_type_id
                     .get(parameter_type_id) orelse unreachable;
 
-                const parameter_index: lowering_types.FunctionParameterIndex = if (runtime_representation.hasRuntimeRepresentation()) block: {
-                    const parameter_layout: lowering_types.FunctionParameterIndex = .{ .Index = parameter_layout_index };
+                const parameter_index_kind: lowering_types.FunctionLayoutParameterIndexKind = if (runtime_representation.hasRuntimeRepresentation()) block: {
+                    const present_parameter_index_kind: lowering_types.FunctionLayoutParameterIndexKind = .{ .Index = parameter_layout_index };
                     parameter_layout_index += 1;
-                    break :block parameter_layout;
+                    break :block present_parameter_index_kind;
                 } else .Absent;
 
-                parameter_index_by_definition_index.append(self.allocator, parameter_index) catch unreachable;
+                parameter_index_kind_by_definition_index.append(self.allocator, parameter_index_kind) catch unreachable;
             }
 
             const function_type_id = analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
@@ -68,14 +68,14 @@ pub const FunctionLayoutLowerer = struct {
                 .runtime_representation_result
                 .runtime_representation_by_type_id
                 .get(return_type_id) orelse unreachable;
-            const runtime_return_kind: lowering_types.RuntimeReturnKind = if (return_runtime_representation.hasRuntimeRepresentation())
+            const return_type_value_kind: lowering_types.FunctionLayoutReturnTypeValueKind = if (return_runtime_representation.hasRuntimeRepresentation())
                 .Present
             else
                 .Absent;
 
             const function_layout = lowering_types.FunctionLayout{
-                .parameter_index_by_definition_index = parameter_index_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
-                .runtime_return_kind = runtime_return_kind,
+                .parameter_index_kind_by_definition_index = parameter_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
+                .return_type_value_kind = return_type_value_kind,
             };
 
             self.function_layout_by_symbol_id.put(function_symbol_id, function_layout) catch unreachable;

@@ -196,7 +196,7 @@ fn emitDirectFunctionCall(
     var argument_list_buffer = std.ArrayList(u8){};
     defer argument_list_buffer.deinit(emitter.allocator);
 
-    for (function_layout.parameter_index_by_definition_index, 0..) |parameter_layout_index_kind, parameter_definition_index| {
+    for (function_layout.parameter_index_kind_by_definition_index, 0..) |parameter_layout_index_kind, parameter_definition_index| {
         const parameter_layout_index = switch (parameter_layout_index_kind) {
             .Absent => continue,
             .Index => |index| index,
@@ -229,7 +229,7 @@ fn emitDirectFunctionCall(
     };
     const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
 
-    switch (function_layout.runtime_return_kind) {
+    switch (function_layout.return_type_value_kind) {
         .Absent => {
             const call_instruction = std.fmt.allocPrint(
                 emitter.allocator,
