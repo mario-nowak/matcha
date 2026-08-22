@@ -11,7 +11,6 @@ pub const LoweredProgram = struct {
     member_access_decision_by_node_id: lowering_types.MemberAccessDecisionByNodeId,
     binary_operation_decision_by_node_id: lowering_types.BinaryOperationDecisionByNodeId,
     place_decision_by_node_id: lowering_types.PlaceDecisionByNodeId,
-    node_value_kind_by_node_id: lowering_types.NodeValueKindByNodeId,
     runtime_requirements_plan: lowering_types.RuntimeRequirementsPlan,
     structure_layout_kind_by_type_id: lowering_types.StructureLayoutKindByTypeId,
     function_layout_by_symbol_id: lowering_types.FunctionLayoutBySymbolId,

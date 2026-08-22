@@ -18,7 +18,6 @@ pub const StructureTypeRenderer = struct {
         _ = self;
     }
 
-    // todo
     pub fn renderStructureTypeDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
@@ -69,7 +68,7 @@ pub const StructureTypeRenderer = struct {
     fn renderStructureTypeDefinition(
         self: *@This(),
         resolved_structure: symbols.ResolvedStructure,
-        structure_layout: lowering_types.StructureLayout, // todo: start using this
+        structure_layout: lowering_types.StructureLayout,
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         const structure_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(resolved_structure.symbol_id);

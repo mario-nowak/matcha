@@ -8,7 +8,6 @@ const CallLowerer = @import("call_lowerer.zig").CallLowerer;
 const MemberAccessLowerer = @import("member_access_lowerer.zig").MemberAccessLowerer;
 const BinaryOperationLowerer = @import("binary_operation_lowerer.zig").BinaryOperationLowerer;
 const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
-const NodeValueKindLowerer = @import("node_value_kind_lowerer.zig").NodeValueKindLowerer;
 const RuntimeRequirementsLowerer = @import("runtime_requirements_lowerer.zig").RuntimeRequirementsLowerer;
 const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
 const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
@@ -20,7 +19,6 @@ pub const LoweringAnalyzer = struct {
     member_access_lowerer: *MemberAccessLowerer,
     binary_operation_lowerer: *BinaryOperationLowerer,
     place_lowerer: *PlaceLowerer,
-    node_value_kind_lowerer: *NodeValueKindLowerer,
     runtime_requirements_lowerer: *const RuntimeRequirementsLowerer,
     structure_layout_lowerer: *StructureLayoutLowerer,
     function_layout_lowerer: *FunctionLayoutLowerer,
@@ -32,7 +30,6 @@ pub const LoweringAnalyzer = struct {
         member_access_lowerer: *MemberAccessLowerer,
         binary_operation_lowerer: *BinaryOperationLowerer,
         place_lowerer: *PlaceLowerer,
-        node_value_kind_lowerer: *NodeValueKindLowerer,
         runtime_requirements_lowerer: *const RuntimeRequirementsLowerer,
         structure_layout_lowerer: *StructureLayoutLowerer,
         function_layout_lowerer: *FunctionLayoutLowerer,
@@ -44,7 +41,6 @@ pub const LoweringAnalyzer = struct {
             .member_access_lowerer = member_access_lowerer,
             .binary_operation_lowerer = binary_operation_lowerer,
             .place_lowerer = place_lowerer,
-            .node_value_kind_lowerer = node_value_kind_lowerer,
             .runtime_requirements_lowerer = runtime_requirements_lowerer,
             .structure_layout_lowerer = structure_layout_lowerer,
             .function_layout_lowerer = function_layout_lowerer,
@@ -62,7 +58,6 @@ pub const LoweringAnalyzer = struct {
         const member_access_decision_by_node_id = self.member_access_lowerer.lower(analyzed_program);
         const binary_operation_decision_by_node_id = self.binary_operation_lowerer.lower(analyzed_program);
         const place_decision_by_node_id = self.place_lowerer.lower(analyzed_program);
-        const node_value_kind_by_node_id = self.node_value_kind_lowerer.lower(analyzed_program);
         const runtime_requirements_plan = self.runtime_requirements_lowerer.lower(analyzed_program);
         const structure_layout_kind_by_type_id = self.structure_layout_lowerer.lower(analyzed_program);
         const function_layout_by_symbol_id = self.function_layout_lowerer.lower(analyzed_program);
@@ -75,7 +70,6 @@ pub const LoweringAnalyzer = struct {
             .member_access_decision_by_node_id = member_access_decision_by_node_id,
             .binary_operation_decision_by_node_id = binary_operation_decision_by_node_id,
             .place_decision_by_node_id = place_decision_by_node_id,
-            .node_value_kind_by_node_id = node_value_kind_by_node_id,
             .runtime_requirements_plan = runtime_requirements_plan,
             .structure_layout_kind_by_type_id = structure_layout_kind_by_type_id,
             .function_layout_by_symbol_id = function_layout_by_symbol_id,

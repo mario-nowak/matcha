@@ -98,8 +98,17 @@ pub fn emitPlace(
     environment: *Environment,
 ) EmissionResult {
     const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
+
     switch (place_decision) {
         .IdentifierBinding => |identifier_binding| {
+            const target_runtime_representation = lowered_program
+                .analyzed_program
+                .runtime_representation_result
+                .runtime_representation_by_node_id
+                .get(target.id) orelse unreachable;
+            if (!target_runtime_representation.hasRuntimeRepresentation()) {
+                return .zero_sized;
+            }
             return .{ .register = environment.storage_by_symbol_id.get(identifier_binding.symbol_id).? };
         },
         .StructureField => |structure_field| {
@@ -107,13 +116,13 @@ pub fn emitPlace(
                 .MemberAccess => |resolved_member_access| resolved_member_access,
                 else => unreachable,
             };
-            return .{ .register = emitStructureFieldPointer(
+            return emitStructureFieldPointer(
                 emitter,
                 &member_access,
                 structure_field.field_index,
                 lowered_program,
                 environment,
-            ) };
+            );
         },
         .ArrayElement => {
             const index_access = switch (target.kind) {
@@ -131,14 +140,29 @@ pub fn emitStructureFieldPointer(
     field_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) Register {
-    const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
+) EmissionResult {
+    // First check if the base expression of the member access has a runtime representation and exit early if not
+    const base_emission_result = emitter.emitNode(member_access.base, lowered_program, environment);
+    const base_register = switch (base_emission_result) {
+        .register => |register| register,
+        .zero_sized => return .zero_sized,
+        .statement => unreachable,
+    };
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
     switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Structure => {},
         else => unreachable,
     }
+
+    const structure_layout = switch (lowered_program.structure_layout_kind_by_type_id.get(base_type_id) orelse unreachable) {
+        .Absent => return .zero_sized,
+        .Present => |structure_layout| structure_layout,
+    };
+    const field_layout_index = switch (structure_layout.field_index_by_definition_index[field_index]) {
+        .Absent => return .zero_sized,
+        .Index => |field_layout_index| field_layout_index,
+    };
     const structure_symbol = lowered_program.getStructureSymbolForTypeId(base_type_id);
     const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
 
@@ -146,10 +170,10 @@ pub fn emitStructureFieldPointer(
     emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-        .{ field_pointer_register, structure_llvm_type_name, base_register.expectRegister(), field_index },
+        .{ field_pointer_register, structure_llvm_type_name, base_register, field_layout_index },
     ) catch unreachable);
 
-    return field_pointer_register;
+    return .{ .register = field_pointer_register };
 }
 
 pub fn emitIndexAccessPointer(

@@ -11,6 +11,18 @@ test "the unit literal can be assigned to variables" {
     try e2e.expectSuccessOutput(&result, "");
 }
 
+test "variables with unit type can be reassigned and values are evaluated" {
+    const source =
+        \\var value: unit = unit;
+        \\value = printString("evaluated");
+    ;
+
+    var result = try e2e.runSource("unit_variable_reassignment.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "evaluated\n");
+}
+
 test "the unit literal can be returned from functions" {
     const source =
         \\item printHelloWorld(): unit = {
@@ -66,6 +78,44 @@ test "a block that evaluates to unit can be used as an expression" {
     defer result.deinit();
 
     try e2e.expectSuccessOutput(&result, "Hello, world!\n");
+}
+
+test "if expressions can evaluate to unit" {
+    const source =
+        \\val then_result: unit = if true {
+        \\    printString("then");
+        \\} else {
+        \\    printString("not then");
+        \\};
+        \\val else_result: unit = if false {
+        \\    printString("not else");
+        \\} else {
+        \\    printString("else");
+        \\};
+    ;
+
+    var result = try e2e.runSource("unit_if_expression.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "then\nelse\n");
+}
+
+test "match expressions can evaluate to unit" {
+    const source =
+        \\val true_result: unit = match true {
+        \\    true => printString("true"),
+        \\    false => printString("not true"),
+        \\};
+        \\val false_result: unit = match false {
+        \\    true => printString("not false"),
+        \\    false => printString("false"),
+        \\};
+    ;
+
+    var result = try e2e.runSource("unit_match_expression.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "true\nfalse\n");
 }
 
 test "an array can be constructed with unit elements" {
@@ -331,4 +381,255 @@ test "structures can have fields with unit type and fields of other types" {
     defer result.deinit();
 
     try e2e.expectSuccessOutput(&result, "");
+}
+
+test "represented structure fields after erased fields can be read" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    erased: unit;
+        \\    value: int;
+        \\};
+        \\val instance: MixedUnitStruct = .{ erased = unit, value = 42 };
+        \\printInt(instance.value);
+    ;
+
+    var result = try e2e.runSource("unit_structure_field_read.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "42\n");
+}
+
+test "represented structure fields after erased fields can be assigned" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    erased: unit;
+        \\    value: int;
+        \\};
+        \\var instance: MixedUnitStruct = .{ erased = unit, value = 42 };
+        \\instance.value = 43;
+        \\printInt(instance.value);
+    ;
+
+    var result = try e2e.runSource("unit_structure_field_assignment.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "43\n");
+}
+
+test "erased structure fields can be read" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    erased: unit;
+        \\    value: int;
+        \\};
+        \\val instance: MixedUnitStruct = .{ erased = unit, value = 42 };
+        \\val erased: unit = instance.erased;
+    ;
+
+    var result = try e2e.runSource("erased_structure_field_read.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "");
+}
+
+test "erased structure fields can be assigned and values are evaluated" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    erased: unit;
+        \\    value: int;
+        \\};
+        \\var instance: MixedUnitStruct = .{ erased = unit, value = 42 };
+        \\instance.erased = printString("assigned");
+        \\printInt(instance.value);
+    ;
+
+    var result = try e2e.runSource("erased_structure_field_assignment.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "assigned\n42\n");
+}
+
+test "represented fields separated by an erased field use compact runtime indices" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    first: int;
+        \\    erased: unit;
+        \\    second: int;
+        \\};
+        \\val instance: MixedUnitStruct = .{ first = 41, erased = unit, second = 42 };
+        \\printInt(instance.first);
+        \\printInt(instance.second);
+    ;
+
+    var result = try e2e.runSource("interleaved_unit_structure_fields.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "41\n42\n");
+}
+
+test "functions can return structures without runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\item makeUnitStruct(): UnitStruct = .{
+        \\    field = printString("constructed"),
+        \\};
+        \\val instance: UnitStruct = makeUnitStruct();
+    ;
+
+    var result = try e2e.runSource("unit_structure_return.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "constructed\n");
+}
+
+test "arrays can contain structures without runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\var instances: UnitStruct[] = [UnitStruct { field = unit }, UnitStruct { field = unit }];
+        \\instances.append(UnitStruct { field = printString("appended") });
+        \\val first: UnitStruct = instances[0];
+        \\printInt(instances.length);
+    ;
+
+    var result = try e2e.runSource("unit_structure_array.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "appended\n3\n");
+}
+
+test "multiple erased function arguments are evaluated in order" {
+    const source =
+        \\item selectValue(first: unit, value: int, second: unit): int = {
+        \\    return value;
+        \\};
+        \\printInt(selectValue(
+        \\    printString("first"),
+        \\    42,
+        \\    printString("second")
+        \\));
+    ;
+
+    var result = try e2e.runSource("erased_function_argument_order.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "first\nsecond\n42\n");
+}
+
+test "structure fields can be constructed out of definition order when fields are erased" {
+    const source =
+        \\item MixedUnitStruct = structure {
+        \\    first: int;
+        \\    erased: unit;
+        \\    second: int;
+        \\};
+        \\val instance: MixedUnitStruct = .{
+        \\    second = 42,
+        \\    erased = unit,
+        \\    first = 41,
+        \\};
+        \\printInt(instance.first);
+        \\printInt(instance.second);
+    ;
+
+    var result = try e2e.runSource("reordered_unit_structure_fields.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "41\n42\n");
+}
+
+test "if expressions can return structures without runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\item makeUnitStruct(message: string): UnitStruct = .{
+        \\    field = printString(message),
+        \\};
+        \\val then_result: UnitStruct = if true {
+        \\    makeUnitStruct("then")
+        \\} else {
+        \\    makeUnitStruct("not then")
+        \\};
+        \\val else_result: UnitStruct = if false {
+        \\    makeUnitStruct("not else")
+        \\} else {
+        \\    makeUnitStruct("else")
+        \\};
+    ;
+
+    var result = try e2e.runSource("unit_structure_if_expression.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "then\nelse\n");
+}
+
+test "match expressions can return structures without runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\item makeUnitStruct(message: string): UnitStruct = .{
+        \\    field = printString(message),
+        \\};
+        \\val true_result: UnitStruct = match true {
+        \\    true => makeUnitStruct("true"),
+        \\    false => makeUnitStruct("not true"),
+        \\};
+        \\val false_result: UnitStruct = match false {
+        \\    true => makeUnitStruct("not false"),
+        \\    false => makeUnitStruct("false"),
+        \\};
+    ;
+
+    var result = try e2e.runSource("unit_structure_match_expression.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "true\nfalse\n");
+}
+
+test "functions can have only erased parameters" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\item getValue(first: unit, second: UnitStruct): int = {
+        \\    return 42;
+        \\};
+        \\printInt(getValue(
+        \\    printString("first"),
+        \\    UnitStruct { field = printString("second") }
+        \\));
+    ;
+
+    var result = try e2e.runSource("only_erased_function_parameters.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "first\nsecond\n42\n");
+}
+
+test "structures can contain nested structures without runtime representation" {
+    const source =
+        \\item UnitStruct = structure {
+        \\    field: unit;
+        \\};
+        \\item Outer = structure {
+        \\    nested: UnitStruct;
+        \\    value: int;
+        \\};
+        \\val outer: Outer = .{
+        \\    nested = UnitStruct { field = printString("nested") },
+        \\    value = 42,
+        \\};
+        \\val nested: UnitStruct = outer.nested;
+        \\printInt(outer.value);
+    ;
+
+    var result = try e2e.runSource("nested_unit_structure_field.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "nested\n42\n");
 }

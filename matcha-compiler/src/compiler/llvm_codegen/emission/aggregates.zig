@@ -42,13 +42,18 @@ pub fn emitMemberAccess(
             return .{ .register = string_parts.length_register };
         },
         .StructureField => |structure_field| {
-            const member_pointer_register = places.emitStructureFieldPointer(
+            const member_pointer_emission_result = places.emitStructureFieldPointer(
                 emitter,
                 member_access,
                 structure_field.field_index,
                 lowered_program,
                 environment,
             );
+            const member_pointer_register = switch (member_pointer_emission_result) {
+                .register => |register| register,
+                .zero_sized => return .zero_sized,
+                .statement => unreachable,
+            };
 
             const member_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitLoad(

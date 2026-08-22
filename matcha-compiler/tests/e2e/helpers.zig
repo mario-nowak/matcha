@@ -59,9 +59,9 @@ pub fn expectCompileDiagnostic(result: *const Result, expected_message: []const 
 }
 
 pub fn expectRuntimeError(result: *const Result, expected_message: []const u8) !void {
-    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
     try std.testing.expectEqualStrings("", result.stdout);
     try expectContains(result.stderr, expected_message);
+    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
 }
 
 pub fn expectContains(haystack: []const u8, needle: []const u8) !void {

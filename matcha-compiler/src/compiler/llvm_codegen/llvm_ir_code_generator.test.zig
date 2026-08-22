@@ -19,8 +19,6 @@ fn emit(source: []const u8) ![]const u8 {
     defer binary_operation_lowerer.deinit();
     var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(analyzed.allocator());
     defer place_lowerer.deinit();
-    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(analyzed.allocator());
-    defer node_value_kind_lowerer.deinit();
     var runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
     defer runtime_requirements_lowerer.deinit();
 
@@ -31,7 +29,6 @@ fn emit(source: []const u8) ![]const u8 {
         &member_access_lowerer,
         &binary_operation_lowerer,
         &place_lowerer,
-        &node_value_kind_lowerer,
         &runtime_requirements_lowerer,
     );
     defer lowering_analyzer.deinit();

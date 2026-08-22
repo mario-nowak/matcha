@@ -63,8 +63,6 @@ pub fn generateLlvmIrFromFile(
     defer binary_operation_lowerer.deinit();
     var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(allocator);
     defer place_lowerer.deinit();
-    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(allocator);
-    defer node_value_kind_lowerer.deinit();
     const runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
     defer runtime_requirements_lowerer.deinit();
     var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(allocator);
@@ -79,7 +77,6 @@ pub fn generateLlvmIrFromFile(
         &member_access_lowerer,
         &binary_operation_lowerer,
         &place_lowerer,
-        &node_value_kind_lowerer,
         &runtime_requirements_lowerer,
         &structure_layout_lowerer,
         &function_layout_lowerer,

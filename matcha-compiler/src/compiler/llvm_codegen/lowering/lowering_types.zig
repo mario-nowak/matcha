@@ -99,11 +99,6 @@ pub const StructureLayoutKind = union(enum) {
     Present: StructureLayout,
 };
 
-pub const NodeValueKind = enum {
-    NoValue,
-    Value,
-};
-
 pub const RuntimeRequirementsPlan = struct {
     print_int: bool = false,
     print_string: bool = false,
@@ -128,6 +123,5 @@ pub const CallDispatchDecisionByNodeId = std.AutoHashMap(NodeId, CallDispatchDec
 pub const MemberAccessDecisionByNodeId = std.AutoHashMap(NodeId, MemberAccessDecision);
 pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperationDecision);
 pub const PlaceDecisionByNodeId = std.AutoHashMap(NodeId, PlaceDecision);
-pub const NodeValueKindByNodeId = std.AutoHashMap(NodeId, NodeValueKind);
 pub const StructureLayoutKindByTypeId = std.AutoHashMap(typing.TypeId, StructureLayoutKind);
 pub const FunctionLayoutBySymbolId = std.AutoHashMap(symbols.SymbolId, FunctionLayout);

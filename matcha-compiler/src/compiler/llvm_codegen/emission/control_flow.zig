@@ -268,7 +268,6 @@ pub fn emitForInArrayLoop(
         .runtime_representation_by_type_id
         .get(element_type_id) orelse unreachable;
 
-    // todo: handle elements without runtime representation
     var item_storage: ?function_symbol_generator_module.Storage = null;
     if (element_runtime_representation.hasRuntimeRepresentation()) {
         const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
@@ -428,7 +427,13 @@ fn emitDecisionConstruct(
     }
 
     const result_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id).?;
-    const produces_value = result_type_id != lowered_program.analyzed_program.type_store.unit_type_id;
+    const result_type_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(result_type_id) orelse undefined;
+    // TODO:
+    const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
     const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
     var incoming_values = std.ArrayList(PhiIncoming){};
     defer incoming_values.deinit(emitter.allocator);
