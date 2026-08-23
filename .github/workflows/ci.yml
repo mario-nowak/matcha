@@ -43,10 +43,8 @@ jobs:
 
       - name: Run compiler tests
         working-directory: matcha-compiler
-        run: zig build test --summary all
+        run: zig build unit-test --summary all
 
       - name: Run end-to-end tests
         working-directory: matcha-compiler
-        run: |
-          zig build
-          zig test tests/e2e/tests.zig
+        run: zig build e2e --summary all

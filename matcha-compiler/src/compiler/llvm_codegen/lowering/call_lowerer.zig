@@ -1,7 +1,9 @@
 const std = @import("std");
 const ast = @import("ast");
+
 const semantic_analysis = @import("semantic_analysis");
 const symbols = @import("symbols");
+
 const lowering_types = @import("lowering_types.zig");
 
 pub const CallLowerer = struct {

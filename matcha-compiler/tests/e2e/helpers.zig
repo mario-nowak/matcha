@@ -1,11 +1,8 @@
 const std = @import("std");
 
-const compiler_root = ".";
-const matcha_binary_path = "zig-out/bin/matcha";
-
 pub const Result = struct {
     allocator: std.mem.Allocator,
-    exit_code: u8,
+    exit_code: u32,
     stdout: []u8,
     stderr: []u8,
 
@@ -49,21 +46,22 @@ pub fn runSourceWith(file_name: []const u8, source: []const u8, options: RunOpti
 }
 
 pub fn expectSuccessOutput(result: *const Result, expected_stdout: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 0), result.exit_code);
+    try std.testing.expectEqualStrings("", result.stderr);
     try std.testing.expectEqualStrings(expected_stdout, result.stdout);
+    try std.testing.expectEqual(@as(u32, 0), result.exit_code);
 }
 
 pub fn expectCompileDiagnostic(result: *const Result, expected_message: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 1), result.exit_code);
+    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
     try std.testing.expectEqualStrings("", result.stdout);
     try expectContains(result.stderr, "error:");
     try expectContains(result.stderr, expected_message);
 }
 
 pub fn expectRuntimeError(result: *const Result, expected_message: []const u8) !void {
-    try std.testing.expectEqual(@as(u8, 1), result.exit_code);
     try std.testing.expectEqualStrings("", result.stdout);
     try expectContains(result.stderr, expected_message);
+    try std.testing.expectEqual(@as(u32, 1), result.exit_code);
 }
 
 pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
@@ -79,6 +77,14 @@ pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
 }
 
 fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOptions) !Result {
+    // The build system installs the compiler before running the e2e tests and
+    // hands over its location, so the tests never run against a stale binary.
+    const matcha_binary_path = std.process.getEnvVarOwned(allocator, "MATCHA_BINARY_PATH") catch |err| switch (err) {
+        error.EnvironmentVariableNotFound => @panic("MATCHA_BINARY_PATH is not set; run the e2e tests via `zig build e2e`"),
+        else => return err,
+    };
+    defer allocator.free(matcha_binary_path);
+
     var argv: std.ArrayList([]const u8) = .empty;
     defer argv.deinit(allocator);
 
@@ -95,7 +101,6 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
     child.stdin_behavior = if (options.stdin == null) .Ignore else .Pipe;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
-    child.cwd = compiler_root;
 
     try child.spawn();
     errdefer {
@@ -119,7 +124,7 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
     const term = try child.wait();
 
     const exit_code = switch (term) {
-        .Exited => |code| code,
+        .Exited => |code| @as(u32, code),
         else => return error.UnexpectedProcessTermination,
     };
 

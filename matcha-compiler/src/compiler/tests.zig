@@ -9,5 +9,7 @@ test {
     _ = @import("llvm_codegen/lowering/member_access_lowerer.test.zig");
     _ = @import("llvm_codegen/lowering/place_lowerer.test.zig");
     _ = @import("llvm_codegen/lowering/binary_operation_lowerer.test.zig");
+    _ = @import("llvm_codegen/lowering/structure_layout_lowerer.test.zig");
+    _ = @import("llvm_codegen/lowering/function_layout_lowerer.test.zig");
     _ = @import("llvm_codegen/llvm_ir_code_generator.test.zig");
 }

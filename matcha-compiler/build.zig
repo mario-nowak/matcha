@@ -7,6 +7,10 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    // Show the full reference trace for compile errors that originate in the standard library
+    // (for example a bad format string), so the failing call site in our own code is visible.
+    // A `-freference-trace=N` flag on the command line still wins.
+    if (b.reference_trace == null) b.reference_trace = 20;
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -17,6 +21,11 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
     const clap = b.dependency("clap", .{});
+    const test_filters = b.option(
+        []const []const u8,
+        "test-filter",
+        "Only run tests whose names match the filter",
+    ) orelse &.{};
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "version", "0.1.1");
     // It's also possible to define more custom flags to toggle optional features
@@ -228,16 +237,6 @@ pub fn build(b: *std.Build) void {
     });
     cli_module.addOptions("build_options", build_options);
 
-    const matcha_test_root_module = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .imports = &.{
-            .{ .name = "compiler", .module = compiler_module },
-            .{ .name = "toolchain", .module = toolchain_module },
-            .{ .name = "matcha_tests", .module = matcha_tests_module },
-        },
-    });
-
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
@@ -342,8 +341,13 @@ pub fn build(b: *std.Build) void {
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
+    //
+    // The unit test module must be the root module of the test executable:
+    // `test` blocks in non-root modules are never analyzed, so routing the
+    // tests through an intermediate root module silently drops them.
     const mod_tests = b.addTest(.{
-        .root_module = matcha_test_root_module,
+        .root_module = matcha_tests_module,
+        .filters = test_filters,
     });
 
     // A run step that will run the test executable.
@@ -354,17 +358,43 @@ pub fn build(b: *std.Build) void {
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
+        .filters = test_filters,
     });
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
+    const unit_test_step = b.step("unit-test", "Run compiler unit tests");
+    unit_test_step.dependOn(&run_mod_tests.step);
+    unit_test_step.dependOn(&run_exe_tests.step);
+
+    // The e2e tests exercise the installed matcha binary, so their run step
+    // depends on the install step and receives the binary location through the
+    // environment instead of assuming a working directory.
+    const e2e_tests_module = b.createModule(.{
+        .root_source_file = b.path("tests/e2e/tests.zig"),
+        .target = target,
+    });
+    const e2e_tests = b.addTest(.{
+        .root_module = e2e_tests_module,
+        .filters = test_filters,
+    });
+    const run_e2e_tests = b.addRunArtifact(e2e_tests);
+    run_e2e_tests.setEnvironmentVariable("MATCHA_BINARY_PATH", b.getInstallPath(.bin, "matcha"));
+    run_e2e_tests.setCwd(b.path("."));
+    run_e2e_tests.step.dependOn(b.getInstallStep());
+    // The run step cannot see that the e2e tests depend on the content of the
+    // installed compiler, so it must not be cached on the test binary alone.
+    run_e2e_tests.has_side_effects = true;
+    const e2e_step = b.step("e2e", "Run end-to-end tests");
+    e2e_step.dependOn(&run_e2e_tests.step);
+
     // A top level step for running all tests. dependOn can be called multiple
-    // times and since the two run steps do not depend on one another, this will
-    // make the two of them run in parallel.
-    const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_mod_tests.step);
-    test_step.dependOn(&run_exe_tests.step);
+    // times and since the run steps do not depend on one another, this will
+    // make them run in parallel.
+    const test_step = b.step("test", "Run all tests");
+    test_step.dependOn(unit_test_step);
+    test_step.dependOn(e2e_step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

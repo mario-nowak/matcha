@@ -49,7 +49,7 @@ pub fn generateLlvmIrFromFile(
         control_flow_validator,
         runtime_representation_analyzer,
     );
-    const typed_program = try semantic_analyzer.analyzeProgram(&program);
+    const analyzed_program = try semantic_analyzer.analyzeProgram(&program);
 
     var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(allocator);
     defer llvm_type_table_lowerer.deinit();
@@ -63,10 +63,12 @@ pub fn generateLlvmIrFromFile(
     defer binary_operation_lowerer.deinit();
     var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(allocator);
     defer place_lowerer.deinit();
-    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(allocator);
-    defer node_value_kind_lowerer.deinit();
     const runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
     defer runtime_requirements_lowerer.deinit();
+    var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(allocator);
+    defer structure_layout_lowerer.deinit();
+    var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(allocator);
+    defer function_layout_lowerer.deinit();
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
@@ -75,8 +77,9 @@ pub fn generateLlvmIrFromFile(
         &member_access_lowerer,
         &binary_operation_lowerer,
         &place_lowerer,
-        &node_value_kind_lowerer,
         &runtime_requirements_lowerer,
+        &structure_layout_lowerer,
+        &function_layout_lowerer,
     );
     defer lowering_analyzer.deinit();
     var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(allocator);
@@ -136,7 +139,7 @@ pub fn generateLlvmIrFromFile(
     );
     defer llvm_ir_code_generator.deinit();
 
-    return llvm_ir_code_generator.generateLlvmIr(&typed_program);
+    return llvm_ir_code_generator.generateLlvmIr(&analyzed_program);
 }
 
 pub fn emitFile(
@@ -163,11 +166,20 @@ pub fn getDefaultBinaryOutputPath(allocator: std.mem.Allocator, input_path: []co
     return allocator.dupe(u8, stemWithoutMatchaExtension(input_path));
 }
 
+// The macOS version the compiler was built on. Baking it into the triple keeps
+// the linked binaries consistent with libmatcha_runtime.a, which zig builds for
+// the same native version in the same `zig build`.
+const native_macos_version = if (builtin.os.tag == .macos)
+blk: {
+    const version = builtin.target.os.version_range.semver.min;
+    break :blk std.fmt.comptimePrint("{d}.{d}.{d}", .{ version.major, version.minor, version.patch });
+} else "";
+
 pub fn getLlvmTargetTriple() []const u8 {
     return switch (builtin.os.tag) {
         .macos => switch (builtin.cpu.arch) {
-            .aarch64 => "arm64-apple-macosx26.4.1",
-            .x86_64 => "x86_64-apple-macosx26.4.1",
+            .aarch64 => "arm64-apple-macosx" ++ native_macos_version,
+            .x86_64 => "x86_64-apple-macosx" ++ native_macos_version,
             else => @panic("unsupported macOS architecture"),
         },
         .linux => switch (builtin.cpu.arch) {

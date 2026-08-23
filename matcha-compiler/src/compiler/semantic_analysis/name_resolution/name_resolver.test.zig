@@ -3,6 +3,7 @@ const lexing = @import("lexing");
 const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
+const symbols = @import("symbols");
 
 const ParsedProgram = struct {
     arena: std.heap.ArenaAllocator,
@@ -19,7 +20,7 @@ const ParsedProgram = struct {
 
 const ResolvedTestProgram = struct {
     parsed: ParsedProgram,
-    resolved_program: semantic_analysis.name_resolution.ResolvedProgram,
+    resolved_program: symbols.ResolvedProgram,
 
     fn deinit(self: *ResolvedTestProgram) void {
         self.parsed.deinit();

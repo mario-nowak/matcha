@@ -8,6 +8,7 @@ const values = @import("values.zig");
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
+const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
 pub fn emitDeclaration(
@@ -16,19 +17,32 @@ pub fn emitDeclaration(
     value_declaration: *const ast.Declaration,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
+    // Regardless of the runtime representation of the value node, we still must emit it because it may have side
+    // effects. For example, a function call that returns unit may still have side effects.
     const value_register = emitter.emitNode(value_declaration.value, lowered_program, environment);
+
+    const runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_node_id
+        .get(value_declaration.value.id) orelse unreachable;
+
+    if (!runtime_representation.hasRuntimeRepresentation()) {
+        return .zero_sized;
+    }
+
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
     const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
     const storage = emitter.function_symbol_generator.generateStorage();
     emitter.function_ir_builder.emitAlloca(storage, llvm_ir_type);
-    emitter.function_ir_builder.emitStore(value_register.?, storage, llvm_ir_type);
+    emitter.function_ir_builder.emitStore(value_register.expectRegister(), storage, llvm_ir_type);
 
     environment.storage_by_symbol_id.put(symbol_id, storage) catch unreachable;
 
-    return null;
+    return .statement;
 }
 
 pub fn emitAssignment(
@@ -37,33 +51,44 @@ pub fn emitAssignment(
     assignment: *const ast.Assignment,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
-    const place_register = emitPlace(emitter, assignment.target, lowered_program, environment);
+) EmissionResult {
+    const place_emission_result = emitPlace(emitter, assignment.target, lowered_program, environment);
 
     const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
     switch (assignment.operator) {
         .Assign => {
             const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
-            emitter.function_ir_builder.emitStore(value_register.?, place_register.?, llvm_ir_type);
+            const place_register = switch (place_emission_result) {
+                .zero_sized => return .statement,
+                .register => |place_register| place_register,
+                .statement => unreachable,
+            };
+            emitter.function_ir_builder.emitStore(value_register.expectRegister(), place_register, llvm_ir_type);
         },
         .Compound => {
-            const current_value_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitLoad(current_value_register, place_register.?, llvm_ir_type);
-
             const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
+            const place_register = switch (place_emission_result) {
+                .zero_sized => return .statement,
+                .register => |place_register| place_register,
+                .statement => unreachable,
+            };
+
+            const current_value_register = emitter.function_symbol_generator.generateRegister();
+            emitter.function_ir_builder.emitLoad(current_value_register, place_register, llvm_ir_type);
+
             const result_register = values.emitLoweredBinaryOperation(
                 emitter,
                 lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                 value_type_id,
                 current_value_register,
-                value_register.?,
+                value_register.expectRegister(),
                 lowered_program,
             );
-            emitter.function_ir_builder.emitStore(result_register, place_register.?, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(result_register, place_register, llvm_ir_type);
         },
     }
-    return null;
+    return .statement;
 }
 
 pub fn emitPlace(
@@ -71,11 +96,20 @@ pub fn emitPlace(
     target: *const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
+
     switch (place_decision) {
         .IdentifierBinding => |identifier_binding| {
-            return environment.storage_by_symbol_id.get(identifier_binding.symbol_id).?;
+            const target_runtime_representation = lowered_program
+                .analyzed_program
+                .runtime_representation_result
+                .runtime_representation_by_node_id
+                .get(target.id) orelse unreachable;
+            if (!target_runtime_representation.hasRuntimeRepresentation()) {
+                return .zero_sized;
+            }
+            return .{ .register = environment.storage_by_symbol_id.get(identifier_binding.symbol_id).? };
         },
         .StructureField => |structure_field| {
             const member_access = switch (target.kind) {
@@ -106,14 +140,29 @@ pub fn emitStructureFieldPointer(
     field_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
-    const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
+) EmissionResult {
+    // First check if the base expression of the member access has a runtime representation and exit early if not
+    const base_emission_result = emitter.emitNode(member_access.base, lowered_program, environment);
+    const base_register = switch (base_emission_result) {
+        .register => |register| register,
+        .zero_sized => return .zero_sized,
+        .statement => unreachable,
+    };
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
     switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Structure => {},
         else => unreachable,
     }
+
+    const structure_layout = switch (lowered_program.structure_layout_kind_by_type_id.get(base_type_id) orelse unreachable) {
+        .Absent => return .zero_sized,
+        .Present => |structure_layout| structure_layout,
+    };
+    const field_layout_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
+        .Absent => return .zero_sized,
+        .Index => |field_layout_index| field_layout_index,
+    };
     const structure_symbol = lowered_program.getStructureSymbolForTypeId(base_type_id);
     const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
 
@@ -121,10 +170,10 @@ pub fn emitStructureFieldPointer(
     emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-        .{ field_pointer_register, structure_llvm_type_name, base_register orelse unreachable, field_index },
+        .{ field_pointer_register, structure_llvm_type_name, base_register, field_layout_index },
     ) catch unreachable);
 
-    return field_pointer_register;
+    return .{ .register = field_pointer_register };
 }
 
 pub fn emitIndexAccessPointer(
@@ -132,23 +181,23 @@ pub fn emitIndexAccessPointer(
     index_access: *const ast.IndexAccess,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) ?Register {
+) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const base_register = emitter.emitNode(index_access.base, lowered_program, environment);
-    const index_register = emitter.emitNode(index_access.index, lowered_program, environment);
+    const base_register = emitter.emitNode(index_access.base, lowered_program, environment).expectRegister();
+    const index_register = emitter.emitNode(index_access.index, lowered_program, environment).expectRegister();
 
     const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,
     };
-    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
+    // Perform bounds check
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, base_register orelse unreachable },
+        .{ length_pointer_register, base_register },
     ) catch unreachable);
 
     const length_register = emitter.function_symbol_generator.generateRegister();
@@ -158,24 +207,21 @@ pub fn emitIndexAccessPointer(
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, base_register orelse unreachable },
+        .{ data_pointer_register, base_register },
     ) catch unreachable);
-
-    const data_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(data_register, data_pointer_register, "ptr");
 
     const negative_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, 0",
-        .{ negative_check_register, index_register orelse unreachable },
+        .{ negative_check_register, index_register },
     ) catch unreachable);
 
     const overflow_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp sge i64 {s}, {s}",
-        .{ overflow_check_register, index_register orelse unreachable, length_register },
+        .{ overflow_check_register, index_register, length_register },
     ) catch unreachable);
 
     const out_of_bounds_register = emitter.function_symbol_generator.generateRegister();
@@ -196,18 +242,30 @@ pub fn emitIndexAccessPointer(
         builder,
         line,
         column,
-        index_register orelse unreachable,
+        index_register,
         length_register,
     );
     builder.emitTerminatorInstruction("unreachable");
 
     builder.emitLabel(ok_label);
+    const element_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(element_type_id) orelse unreachable;
+    // Compute the pointer to the element at the given index if bounds check passes
+    if (!element_runtime_representation.hasRuntimeRepresentation()) {
+        return .zero_sized;
+    }
+    const data_register = emitter.function_symbol_generator.generateRegister();
+    builder.emitLoad(data_register, data_pointer_register, "ptr");
     const element_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
-        .{ element_pointer_register, element_llvm_type, data_register, index_register orelse unreachable },
+        .{ element_pointer_register, element_llvm_type, data_register, index_register },
     ) catch unreachable);
 
-    return element_pointer_register;
+    return .{ .register = element_pointer_register };
 }
