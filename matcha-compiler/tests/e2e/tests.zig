@@ -12,4 +12,5 @@ comptime {
     _ = @import("io.test.zig");
     _ = @import("runtime.test.zig");
     _ = @import("smoke.test.zig");
+    _ = @import("unit_type.test.zig");
 }

@@ -24,6 +24,21 @@ pub const CallDispatchDecision = union(enum) {
     IntegerMethod: typing.IntegerInstanceMethod,
 };
 
+pub const FunctionLayoutParameterIndexKind = union(enum) {
+    Absent,
+    Index: u32,
+};
+
+pub const FunctionLayoutReturnTypeValueKind = enum {
+    Absent,
+    Present,
+};
+
+pub const FunctionLayout = struct {
+    parameter_index_kind_by_definition_index: []const FunctionLayoutParameterIndexKind,
+    return_type_value_kind: FunctionLayoutReturnTypeValueKind,
+};
+
 pub const MemberAccessDecision = union(enum) {
     StructureField: struct {
         field_index: u32,
@@ -69,9 +84,18 @@ pub const PlaceDecision = union(enum) {
     ArrayElement,
 };
 
-pub const NodeValueKind = enum {
-    NoValue,
-    Value,
+pub const StructureLayoutFieldIndexKind = union(enum) {
+    Absent,
+    Index: u32,
+};
+
+pub const StructureLayout = struct {
+    field_index_kind_by_definition_index: []const StructureLayoutFieldIndexKind,
+};
+
+pub const StructureLayoutKind = union(enum) {
+    Absent,
+    Present: StructureLayout,
 };
 
 pub const RuntimeRequirementsPlan = struct {
@@ -98,4 +122,5 @@ pub const CallDispatchDecisionByNodeId = std.AutoHashMap(NodeId, CallDispatchDec
 pub const MemberAccessDecisionByNodeId = std.AutoHashMap(NodeId, MemberAccessDecision);
 pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperationDecision);
 pub const PlaceDecisionByNodeId = std.AutoHashMap(NodeId, PlaceDecision);
-pub const NodeValueKindByNodeId = std.AutoHashMap(NodeId, NodeValueKind);
+pub const StructureLayoutKindByTypeId = std.AutoHashMap(typing.TypeId, StructureLayoutKind);
+pub const FunctionLayoutBySymbolId = std.AutoHashMap(symbols.SymbolId, FunctionLayout);

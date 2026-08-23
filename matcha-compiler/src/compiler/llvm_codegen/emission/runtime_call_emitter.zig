@@ -272,6 +272,7 @@ pub const RuntimeCallEmitter = struct {
                 element_llvm_type,
             },
         ) catch unreachable);
+
         return slot_register;
     }
 
@@ -297,6 +298,7 @@ pub const RuntimeCallEmitter = struct {
 
         const result_register = symbol_generator.generateRegister();
         builder.emitLoad(result_register, result_storage, "%String");
+
         return result_register;
     }
 

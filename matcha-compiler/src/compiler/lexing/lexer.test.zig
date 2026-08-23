@@ -5,19 +5,22 @@ const lexing = @import("lexing");
 const TokenTag = std.meta.Tag(lexing.TokenKind);
 
 const LexedSource = struct {
-    diagnostic_store: diagnostics.DiagnosticStore,
+    diagnostic_store: *diagnostics.DiagnosticStore,
     lexer: lexing.Lexer,
 
     fn init(source: []const u8) LexedSource {
-        var lexed: LexedSource = undefined;
-        lexed.diagnostic_store = diagnostics.DiagnosticStore.init(std.heap.page_allocator);
-        lexed.lexer = lexing.Lexer.init(source, std.heap.page_allocator, &lexed.diagnostic_store);
-        return lexed;
+        const diagnostic_store = std.heap.page_allocator.create(diagnostics.DiagnosticStore) catch unreachable;
+        diagnostic_store.* = diagnostics.DiagnosticStore.init(std.heap.page_allocator);
+        return .{
+            .diagnostic_store = diagnostic_store,
+            .lexer = lexing.Lexer.init(source, std.heap.page_allocator, diagnostic_store),
+        };
     }
 
     fn deinit(self: *LexedSource) void {
         self.lexer.deinit();
         self.diagnostic_store.deinit();
+        std.heap.page_allocator.destroy(self.diagnostic_store);
     }
 };
 

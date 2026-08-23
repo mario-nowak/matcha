@@ -8,6 +8,7 @@ _.path = [
 
 [tools]
 zig = "0.15.1"
+zls = "0.15.1"
 
 [tasks.check]
 description = "Check that the Matcha compiler compiles"
@@ -23,15 +24,15 @@ run = "zig fmt --check ."
 
 [tasks.test-compiler]
 description = "Run Matcha compiler tests"
-run = "zig build test --summary all"
+run = "zig build unit-test --summary all"
 
 [tasks.test]
 description = "Run all Matcha tests"
-run = "mise run test-compiler && mise run e2e"
+run = "zig build test --summary all"
 
 [tasks.e2e]
 description = "Run Matcha end-to-end tests"
-run = "zig build && zig test tests/e2e/tests.zig"
+run = "zig build e2e --summary all"
 
 [tasks.verify]
 description = "Run the full local verification workflow"

@@ -87,7 +87,7 @@ pub const FunctionEmitter = struct {
             .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
             else => unreachable,
         };
-        const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
+        const function_layout = lowered_program.function_layout_by_symbol_id.get(function_symbol_id) orelse unreachable;
 
         var parameter_list_buffer = std.ArrayList(u8){};
         defer parameter_list_buffer.deinit(self.allocator);
@@ -95,15 +95,20 @@ pub const FunctionEmitter = struct {
         defer environment.deinit();
 
         for (resolved_function.parameters, 0..) |parameter, index| {
+            const parameter_index = switch (function_layout.parameter_index_kind_by_definition_index[index]) {
+                .Absent => continue,
+                .Index => |parameter_index| parameter_index,
+            };
+
             const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,
                 "%arg_{d}_{s}",
-                .{ index, parameter.name },
+                .{ parameter_index, parameter.name },
             ) catch unreachable;
 
-            if (index > 0) {
+            if (parameter_index > 0) {
                 parameter_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
             }
             parameter_list_buffer.writer(self.allocator).print(
@@ -123,14 +128,19 @@ pub const FunctionEmitter = struct {
             &environment,
         );
 
+        const function_return_llvm_ir_type = switch (function_layout.return_type_value_kind) {
+            .Present => lowered_program.getLlvmIrType(function_return_type_id),
+            .Absent => "void",
+        };
+
         if (self.function_ir_builder.currentLabel() != null) {
-            switch (lowered_program.analyzed_program.type_store.getType(function_return_type_id)) {
-                .Unit => self.function_ir_builder.emitTerminatorInstruction("ret void"),
-                else => {
+            switch (function_layout.return_type_value_kind) {
+                .Absent => self.function_ir_builder.emitTerminatorInstruction("ret void"),
+                .Present => {
                     const return_instruction = std.fmt.allocPrint(
                         self.allocator,
                         "ret {s} {s}",
-                        .{ function_return_llvm_ir_type, body_register orelse unreachable },
+                        .{ function_return_llvm_ir_type, body_register.expectRegister() },
                     ) catch unreachable;
                     self.function_ir_builder.emitTerminatorInstruction(return_instruction);
                 },

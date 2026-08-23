@@ -49,6 +49,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(self.allocator);
         self.analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(self.allocator);
 
+        // First we need to seed the runtime representation of every type that we encountered during the type analysis.
         try self.seedRuntimeRepresentationByTypeId(&type_check_result.type_store);
 
         const context = AnalysisContext{
@@ -57,6 +58,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .type_check_result = type_check_result,
         };
 
+        // Next we analyse the runtime representation of every single node in the AST.
         for (resolved_program.program.statements) |*statement| {
             try self.analyzeNode(statement, context);
         }
@@ -83,12 +85,19 @@ pub const RuntimeRepresentationAnalyzer = struct {
         type_id: typing.TypeId,
     ) anyerror!RuntimeRepresentation {
         if (self.analysis_state_by_type_id.get(type_id)) |analysis_state| {
+            // If we re-encounter a type that we already encountered during our recursive decent, we assume that the
+            // type is self-recursive and therefore must have a runtime representation.
+            // Example: `item Foo = Structure { bar: unit, baz: Foo };` requires a runtime representation, despite it
+            // not being able to hold any real values.
+            // This is more of a theoretical right now because `Foo` could be defined but not constructed in the current
+            // version of matcha.
             return switch (analysis_state) {
                 .Resolving => .Present,
                 .Resolved => |runtime_representation| runtime_representation,
             };
         }
 
+        // If we have not encountered the type yet, we set it as resolving before doing a potential recursive decent.
         try self.analysis_state_by_type_id.put(type_id, .Resolving);
 
         const runtime_representation = switch (type_store.getType(type_id)) {
@@ -108,6 +117,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
         try self.analysis_state_by_type_id.put(type_id, .{ .Resolved = runtime_representation });
         try self.runtime_representation_by_type_id.put(type_id, runtime_representation);
+
         return runtime_representation;
     }
 

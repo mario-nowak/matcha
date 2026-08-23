@@ -19,10 +19,12 @@ fn emit(source: []const u8) ![]const u8 {
     defer binary_operation_lowerer.deinit();
     var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(analyzed.allocator());
     defer place_lowerer.deinit();
-    var node_value_kind_lowerer = llvm_codegen.lowering.NodeValueKindLowerer.init(analyzed.allocator());
-    defer node_value_kind_lowerer.deinit();
     var runtime_requirements_lowerer = llvm_codegen.lowering.RuntimeRequirementsLowerer.init();
     defer runtime_requirements_lowerer.deinit();
+    var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(analyzed.allocator());
+    defer structure_layout_lowerer.deinit();
+    var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(analyzed.allocator());
+    defer function_layout_lowerer.deinit();
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
@@ -31,8 +33,9 @@ fn emit(source: []const u8) ![]const u8 {
         &member_access_lowerer,
         &binary_operation_lowerer,
         &place_lowerer,
-        &node_value_kind_lowerer,
         &runtime_requirements_lowerer,
+        &structure_layout_lowerer,
+        &function_layout_lowerer,
     );
     defer lowering_analyzer.deinit();
 
@@ -137,6 +140,76 @@ test "llvm codegen skips phi for unit if expressions" {
     defer std.testing.allocator.free(llvm_ir);
 
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "phi ") == null);
+}
+
+test "llvm codegen erases unit fields parameters returns and storage" {
+    const llvm_ir = try emit(
+        \\item UnitOnly = structure {
+        \\    field: unit;
+        \\};
+        \\item Mixed = structure {
+        \\    first: int;
+        \\    erased: unit;
+        \\    nested: UnitOnly;
+        \\    last: string;
+        \\};
+        \\item use(first: unit, nested: UnitOnly, value: int): UnitOnly = .{
+        \\    field = first,
+        \\};
+        \\val mixed: Mixed = .{
+        \\    first = 42,
+        \\    erased = unit,
+        \\    nested = UnitOnly { field = unit },
+        \\    last = "value",
+        \\};
+        \\val result: UnitOnly = use(unit, mixed.nested, mixed.first);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try expectIrContains(llvm_ir, "Mixed = type { i64, %String }");
+    try expectIrContains(llvm_ir, "_use(i64 %arg_0_value)");
+    try expectIrContains(llvm_ir, "call void @matcha_function_");
+    try expectIrNotContains(llvm_ir, "UnitOnly");
+    try expectIrNotContains(llvm_ir, "alloca void");
+    try expectIrNotContains(llvm_ir, "load void");
+    try expectIrNotContains(llvm_ir, "store void");
+    try expectIrNotContains(llvm_ir, "phi void");
+}
+
+test "llvm codegen skips phi for structure types without runtime representation" {
+    const llvm_ir = try emit(
+        \\item UnitOnly = structure {
+        \\    field: unit;
+        \\};
+        \\item choose(flag: boolean): UnitOnly = if flag {
+        \\    UnitOnly { field = unit }
+        \\} else {
+        \\    UnitOnly { field = unit }
+        \\};
+        \\item matchValue(flag: boolean): UnitOnly = match flag {
+        \\    true => UnitOnly { field = unit },
+        \\    false => UnitOnly { field = unit },
+        \\};
+        \\val chosen: UnitOnly = choose(true);
+        \\val matched: UnitOnly = matchValue(false);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try expectIrNotContains(llvm_ir, "phi ");
+    try expectIrNotContains(llvm_ir, "UnitOnly");
+}
+
+test "llvm codegen omits storage for unit array elements" {
+    const llvm_ir = try emit(
+        \\val values: unit[] = [unit, unit];
+        \\printInt(values.length);
+    );
+    defer std.testing.allocator.free(llvm_ir);
+
+    try expectIrContains(llvm_ir, "store ptr null");
+    try expectIrCount(llvm_ir, "call ptr @matcha_allocate(", 1);
+    try expectIrNotContains(llvm_ir, "getelementptr inbounds void");
+    try expectIrNotContains(llvm_ir, "store void");
 }
 
 test "llvm codegen produces phi for boolean if expressions" {
