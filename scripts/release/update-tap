@@ -38,11 +38,7 @@ else
 fi
 
 "$repository_root/scripts/release/set-homebrew-formula-version" Formula/matcha-lang.rb "$version" "$sha256"
-ruby -c Formula/matcha-lang.rb
-brew style --fix Formula/matcha-lang.rb
-ruby -c Formula/matcha-lang.rb
-brew style Formula/matcha-lang.rb
-brew audit --strict Formula/matcha-lang.rb
+"$repository_root/scripts/release/verify-homebrew-formula" "$tap_directory" Formula/matcha-lang.rb
 
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

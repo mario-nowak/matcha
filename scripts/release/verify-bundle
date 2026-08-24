@@ -26,11 +26,4 @@ printf '%s\n' "$macos_sha" | grep -Eq '^[0-9a-f]{64}$' || fail "macOS archive ch
 
 [[ -f "$formula" ]] || fail "Homebrew formula not found: $formula"
 "$repository_root/scripts/release/set-homebrew-formula-version" "$formula" "$version" "$macos_sha"
-(
-    cd "$tap_directory"
-    ruby -c "$relative_formula"
-    brew style --fix "$relative_formula"
-    ruby -c "$relative_formula"
-    brew style "$relative_formula"
-    brew audit --strict "$relative_formula"
-)
+"$repository_root/scripts/release/verify-homebrew-formula" "$tap_directory" "$relative_formula"
