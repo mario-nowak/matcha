@@ -24,7 +24,7 @@ The rehearsal:
 4. Creates and checks both release archives.
 5. Generates `SHA256SUMS.txt`.
 6. Updates a temporary copy of the current Homebrew formula.
-7. Runs Ruby and Homebrew formula checks.
+7. Applies Homebrew style corrections, then runs Ruby and strict Homebrew formula checks.
 
 The rehearsal does not create commits, tags, releases, branches, or pull requests.
 
@@ -53,7 +53,7 @@ The workflow safely resumes matching draft releases and tags. It rejects conflic
 3. Keep the release marked as a prerelease.
 4. Select **Publish release**.
 
-Publishing triggers the `Update Homebrew tap` workflow. That workflow validates the published release, updates `Formula/matcha-lang.rb`, and opens or reuses the tap pull request.
+Publishing triggers the `Update Homebrew tap` workflow. That workflow validates the published release, updates and formats `Formula/matcha-lang.rb`, and opens or reuses the tap pull request.
 
 If the tap workflow fails, rerun it from its existing workflow run. You can also run `Update Homebrew tap` manually with the published compiler tag.
 

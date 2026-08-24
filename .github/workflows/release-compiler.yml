@@ -135,11 +135,17 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: mario-nowak/homebrew-tap
+          path: tap
+
       - name: Generate and verify release bundle
         shell: bash
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: scripts/release/verify-bundle "$VERSION" dist "$RUNNER_TEMP/matcha-lang.rb"
+        run: scripts/release/verify-bundle "$VERSION" dist tap/Formula/matcha-lang.rb
 
   create-draft:
     name: Create compiler draft prerelease

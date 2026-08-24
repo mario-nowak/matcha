@@ -204,4 +204,21 @@ if "$repository_root/scripts/release/set-homebrew-formula-version" "$formula_fix
     fail "accepted invalid formula version"
 fi
 
+formula_tap="$temporary_directory/homebrew-tap"
+brew_log="$temporary_directory/brew.log"
+mkdir -p "$formula_tap/Formula"
+formula_tap=$(CDPATH='' cd -- "$formula_tap" && pwd)
+cp "$formula_fixture" "$formula_tap/Formula/matcha-lang.rb"
+cat > "$fake_bin/brew" <<'EOF'
+#!/bin/sh
+printf '%s|%s\n' "$PWD" "$*" >> "$FAKE_BREW_LOG"
+EOF
+chmod +x "$fake_bin/brew"
+FAKE_BREW_LOG="$brew_log" \
+PATH="$fake_bin:$PATH" \
+    "$repository_root/scripts/release/verify-bundle" 0.1.2 "$package_output" "$formula_tap/Formula/matcha-lang.rb"
+assert_contains "$formula_tap|style --fix Formula/matcha-lang.rb" "$brew_log"
+assert_contains "$formula_tap|style Formula/matcha-lang.rb" "$brew_log"
+assert_contains "$formula_tap|audit --strict Formula/matcha-lang.rb" "$brew_log"
+
 printf 'Release tool tests passed.\n'

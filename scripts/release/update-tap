@@ -39,6 +39,8 @@ fi
 
 "$repository_root/scripts/release/set-homebrew-formula-version" Formula/matcha-lang.rb "$version" "$sha256"
 ruby -c Formula/matcha-lang.rb
+brew style --fix Formula/matcha-lang.rb
+ruby -c Formula/matcha-lang.rb
 brew style Formula/matcha-lang.rb
 brew audit --strict Formula/matcha-lang.rb
 
