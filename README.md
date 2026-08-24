@@ -129,6 +129,7 @@ This repository is a monorepo with two main parts:
 ## Suggested starting points
 
 - [`matcha-compiler/README.md`](./matcha-compiler/README.md) for compiler setup, commands, and development workflow
+- [`docs/compiler-releases.md`](./docs/compiler-releases.md) for compiler release setup and operation
 - [`matcha-compiler/examples/learning-matcha.mt`](./matcha-compiler/examples/learning-matcha.mt) for a guided tour of the currently implemented language
 - [`matcha-compiler/examples/aoc-2024-01.mt`](./matcha-compiler/examples/aoc-2024-01.mt) for Advent of Code-style parsing and array processing
 - [`matcha-compiler/examples/customer-import-audit.mt`](./matcha-compiler/examples/customer-import-audit.mt) for a more domain-shaped example using structures and `match`
