@@ -17,6 +17,7 @@ pub const TokenKind = union(enum) {
     Item,
     Return,
     Structure,
+    Union,
     // Punctuation
     LeftParenthesis,
     RightParenthesis,

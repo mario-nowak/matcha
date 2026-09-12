@@ -118,6 +118,7 @@ pub const RuntimeRequirementsLowerer = struct {
                     analyzeNode(function_definition_node, analyzed_program, plan);
                 }
             },
+            .Union => unreachable,
         }
     }
 

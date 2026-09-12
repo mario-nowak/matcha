@@ -45,6 +45,7 @@ pub const CallLowerer = struct {
                         self.lowerNode(function_definition_node, analyzed_program);
                     }
                 },
+                .Union => unreachable,
             },
             .Return => |return_statement| {
                 if (return_statement.value) |value| {

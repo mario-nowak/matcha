@@ -82,6 +82,18 @@ pub const ItemDefinition = struct {
 pub const Item = union(enum) {
     Function: Function,
     Structure: Structure,
+    Union: Union,
+};
+
+pub const Union = struct {
+    unit_token: lexing.Token,
+    cases: []UnionCase,
+    function_definitions: []Node,
+};
+
+pub const UnionCase = struct {
+    name: lexing.Token,
+    type_annotation: ?*type_expressions.TypeExpression,
 };
 
 pub const Structure = struct {

@@ -163,6 +163,7 @@ pub const NodeTypeAnalyzer = struct {
                     );
                 }
             },
+            .Union => unreachable,
         }
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }

@@ -286,6 +286,101 @@ pub const Parser = struct {
         return self.parseStructureDefinition(item_token, identifier_token);
     }
 
+    fn parseUnionDefinition(
+        self: *@This(),
+        item_token: lexing.Token,
+        identifier_token: lexing.Token,
+    ) ParserError!ast.Node {
+        const union_type_expression = try self.parseUnion();
+        const semicolon_token = try self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after union definition");
+            return error.DiagnosticsEmitted;
+        }
+        return self.createNode(.{
+            .ItemDefinition = .{
+                .item_token = item_token,
+                .identifier_token = identifier_token,
+                .item = .{ .Union = union_type_expression },
+            },
+        });
+    }
+
+    fn parseUnion(
+        self: *@This(),
+    ) ParserError!ast.Union {
+        const union_token = try self.lexer.next();
+        if (union_token.kind != .Union) {
+            unreachable;
+        }
+
+        const left_brace_token = try self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' after 'union'");
+            return error.DiagnosticsEmitted;
+        }
+
+        var function_definitions = std.ArrayList(ast.Node){};
+        var union_cases = std.ArrayList(ast.UnionCase){};
+        while (true) {
+            const next_token = try self.lexer.peek();
+            if (next_token.kind == .RightBrace) {
+                _ = try self.lexer.next();
+                break;
+            }
+
+            if (self.startsItemDefinition()) {
+                // TODO: extract this into a helper with the structure parsing
+                const item = try self.parseItem();
+                switch (item.kind) {
+                    .ItemDefinition => |item_definition| {
+                        switch (item_definition.item) {
+                            .Function => function_definitions.append(self.allocator, item) catch unreachable,
+                            else => {
+                                try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside union body");
+                                return error.DiagnosticsEmitted;
+                            },
+                        }
+                    },
+                    else => unreachable,
+                }
+                continue;
+            }
+
+            const case_name_token = try self.lexer.next();
+            if (case_name_token.kind != .Identifier) {
+                try self.diagnostic_store.emitErrorFromToken(case_name_token, "expected case name or item definition in union body");
+                return error.DiagnosticsEmitted;
+            }
+
+            var type_annotation: ?type_expressions.TypeExpression = null;
+            const post_case_name_token = try self.lexer.peek();
+            if (post_case_name_token.kind == .Colon) {
+                _ = try self.lexer.next();
+                type_annotation = try self.parseTypeAnnotation();
+            }
+
+            union_cases.append(self.allocator, .{
+                .name = case_name_token,
+                .type_annotation = type_annotation,
+            }) catch unreachable;
+
+            const post_case_token = try self.lexer.peek();
+            if (post_case_token.kind == .Comma) {
+                _ = try self.lexer.next(); // consume comma and continue to next field
+            } else if (post_case_token.kind != .RightBrace) {
+                try self.diagnostic_store.emitErrorFromToken(post_case_token, "expected ',' or '}' after union case");
+                return error.DiagnosticsEmitted;
+            }
+        }
+
+        return .{
+            .unit_token = union_token,
+            .cases = union_cases.toOwnedSlice(self.allocator) catch unreachable,
+            .function_definitions = function_definitions.toOwnedSlice(self.allocator) catch unreachable,
+        };
+    }
+
     fn parseStructureDefinition(
         self: *@This(),
         item_token: lexing.Token,
@@ -1131,7 +1226,7 @@ pub const Parser = struct {
     fn parseIfExpression(self: *Parser, token: lexing.Token) ParserError!ast.Node {
         const if_form = try self.parseIfForm(token);
         return switch (if_form) {
-            .statement => |_| {
+            .statement => {
                 try self.diagnostic_store.emitErrorFromToken(token, "expected 'else' branch in if expression");
                 return error.DiagnosticsEmitted;
             },
