@@ -2,21 +2,18 @@ const std = @import("std");
 const ast = @import("ast");
 const typing = @import("typing");
 
+/// The target representation of a node at runtime. Nodes without a runtime representation (e.g. nodes of the `unit`
+/// type) should not exist at runtime.
 pub const RuntimeRepresentation = union(enum) {
     None,
     Present,
-    Array: ArrayRuntimeRepresentation,
 
     pub fn hasRuntimeRepresentation(self: @This()) bool {
         return switch (self) {
             .None => false,
-            .Present, .Array => true,
+            .Present => true,
         };
     }
-};
-
-pub const ArrayRuntimeRepresentation = struct {
-    element_type_id: typing.TypeId,
 };
 
 pub const RuntimeRepresentationByNodeId = std.AutoHashMap(ast.NodeId, RuntimeRepresentation);

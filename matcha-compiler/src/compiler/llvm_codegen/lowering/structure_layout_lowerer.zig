@@ -40,25 +40,21 @@ pub const StructureLayoutLowerer = struct {
                 .get(structure_type_id) orelse unreachable;
 
             switch (structure_runtime_representation) {
-                .Array => unreachable,
-                .None => {
-                    self.structure_layout_kind_by_type_id.put(
-                        structure_type_id,
-                        lowering_types.StructureLayoutKind.Absent,
-                    ) catch unreachable;
-                },
+                .None => unreachable,
                 .Present => {
                     var field_index_kind_by_definition_index = std.ArrayList(lowering_types.StructureLayoutFieldIndexKind){};
                     defer field_index_kind_by_definition_index.deinit(self.allocator);
                     var runtime_field_index: u32 = 0;
 
+                    var has_field_with_runtime_representation = false;
                     for (structure_type.fields) |field| {
                         const field_runtime_representation = analyzed_program
                             .runtime_representation_result
                             .runtime_representation_by_type_id
                             .get(field.type_id) orelse unreachable;
                         const field_index_kind: lowering_types.StructureLayoutFieldIndexKind = switch (field_runtime_representation) {
-                            .Present, .Array => block: {
+                            .Present => block: {
+                                has_field_with_runtime_representation = true;
                                 const index = runtime_field_index;
                                 runtime_field_index += 1;
                                 break :block .{ .Index = index };
@@ -72,13 +68,16 @@ pub const StructureLayoutLowerer = struct {
                         ) catch unreachable;
                     }
 
+                    const structure_layout: lowering_types.StructureLayoutKind = if (has_field_with_runtime_representation) .{
+                        .Present = .{
+                            .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
+                        },
+                        // Structures without any runtime fields don't have a layout.
+                    } else .Absent;
+
                     self.structure_layout_kind_by_type_id.put(
                         structure_type_id,
-                        .{
-                            .Present = .{
-                                .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
-                            },
-                        },
+                        structure_layout,
                     ) catch unreachable;
                 },
             }

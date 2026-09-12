@@ -125,7 +125,13 @@ fn runPath(allocator: std.mem.Allocator, file_path: []const u8, options: RunOpti
 
     const exit_code = switch (term) {
         .Exited => |code| @as(u32, code),
-        else => return error.UnexpectedProcessTermination,
+        else => {
+            std.debug.print(
+                "Unexpected process termination: {any}\nstdout:\n{s}\nstderr:\n{s}\n",
+                .{ term, stdout.items, stderr.items },
+            );
+            return error.UnexpectedProcessTermination;
+        },
     };
 
     return .{

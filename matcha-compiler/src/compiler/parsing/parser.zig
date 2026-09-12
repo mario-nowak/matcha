@@ -374,11 +374,6 @@ pub const Parser = struct {
             }
         }
 
-        if (fields.items.len == 0) {
-            try self.diagnostic_store.emitErrorFromToken(structure_token, "structure must declare at least one field");
-            return error.DiagnosticsEmitted;
-        }
-
         return .{
             .structure_token = structure_token,
             .fields = fields.toOwnedSlice(self.allocator) catch unreachable,

@@ -19,7 +19,7 @@ fn expectFieldIndex(expected: ?u32, actual: StructureLayoutFieldIndexKind) !void
     }
 }
 
-test "structure layout lowering erases fields without runtime representation" {
+test "structure layout lowering erases unit fields but retains structure fields" {
     const source =
         \\item UnitOnly = structure {
         \\    first: unit;
@@ -56,6 +56,6 @@ test "structure layout lowering erases fields without runtime representation" {
     try std.testing.expectEqual(@as(usize, 4), mixed_layout.field_index_kind_by_definition_index.len);
     try expectFieldIndex(0, mixed_layout.field_index_kind_by_definition_index[0]);
     try expectFieldIndex(null, mixed_layout.field_index_kind_by_definition_index[1]);
-    try expectFieldIndex(null, mixed_layout.field_index_kind_by_definition_index[2]);
-    try expectFieldIndex(1, mixed_layout.field_index_kind_by_definition_index[3]);
+    try expectFieldIndex(1, mixed_layout.field_index_kind_by_definition_index[2]);
+    try expectFieldIndex(2, mixed_layout.field_index_kind_by_definition_index[3]);
 }

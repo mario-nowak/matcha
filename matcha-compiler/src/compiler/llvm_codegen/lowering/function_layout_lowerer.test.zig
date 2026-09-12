@@ -37,7 +37,7 @@ fn statementSymbolId(analyzed: *const helpers.AnalyzedProgram, statement_index: 
     return analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[statement_index].id).?;
 }
 
-test "function layout lowering erases parameters and returns without runtime representation" {
+test "function layout lowering erases unit parameters and returns but retains structure values" {
     const source =
         \\item UnitOnly = structure {
         \\    field: unit;
@@ -46,10 +46,11 @@ test "function layout lowering erases parameters and returns without runtime rep
         \\        field = erased,
         \\    };
         \\};
-        \\item select(first: unit, value: int, erased: UnitOnly, suffix: string): UnitOnly = .{
+        \\item select(first: unit, value: int, nested: UnitOnly, suffix: string): UnitOnly = .{
         \\    field = first,
         \\};
-        \\item onlyErased(first: unit, second: UnitOnly): int = 42;
+        \\item onlyErased(first: unit, second: unit): int = 42;
+        \\item unitReturn(value: UnitOnly): unit = unit;
     ;
 
     var analyzed = try helpers.analyzeProgram(source);
@@ -64,7 +65,8 @@ test "function layout lowering erases parameters and returns without runtime rep
     const select_symbol_id = statementSymbolId(&analyzed, 1);
     const only_erased_symbol_id = statementSymbolId(&analyzed, 2);
 
-    try expectFunctionLayout(layouts.get(method_symbol_id).?, &.{ null, null, 0 }, .Absent);
-    try expectFunctionLayout(layouts.get(select_symbol_id).?, &.{ null, 0, null, 1 }, .Absent);
+    try expectFunctionLayout(layouts.get(method_symbol_id).?, &.{ 0, null, 1 }, .Present);
+    try expectFunctionLayout(layouts.get(select_symbol_id).?, &.{ null, 0, 1, 2 }, .Present);
     try expectFunctionLayout(layouts.get(only_erased_symbol_id).?, &.{ null, null }, .Present);
+    try expectFunctionLayout(layouts.get(statementSymbolId(&analyzed, 3)).?, &.{0}, .Absent);
 }
