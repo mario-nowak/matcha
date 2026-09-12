@@ -101,6 +101,7 @@ pub fn emitStructureConstruction(
             "@matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
             .{structure_llvm_type_name},
         ) catch unreachable,
+        // Structures without a layout only allocate a single byte for identity comparison
         .Absent => "@matcha_allocate_atomic(i64 1)",
     };
     emitter.function_ir_builder.emitInstruction(

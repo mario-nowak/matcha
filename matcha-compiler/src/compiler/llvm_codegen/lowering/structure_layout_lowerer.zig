@@ -72,6 +72,7 @@ pub const StructureLayoutLowerer = struct {
                         .Present = .{
                             .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
                         },
+                        // Structures without any runtime fields don't have a layout.
                     } else .Absent;
 
                     self.structure_layout_kind_by_type_id.put(
