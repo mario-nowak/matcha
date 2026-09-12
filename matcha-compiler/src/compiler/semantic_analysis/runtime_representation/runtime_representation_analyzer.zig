@@ -110,6 +110,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .Structure => |structure_type_id| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type_id),
             .Array => |element_type_id| block: {
                 _ = try self.resolveRuntimeRepresentationOfType(type_store, element_type_id);
+                // Does this help me in any way actually?
                 break :block RuntimeRepresentation{ .Array = .{ .element_type_id = element_type_id } };
             },
             .TaggedUnion => unreachable,

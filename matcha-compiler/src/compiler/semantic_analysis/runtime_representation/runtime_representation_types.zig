@@ -15,6 +15,7 @@ pub const RuntimeRepresentation = union(enum) {
     }
 };
 
+// Is this even necessary? Can I not just read that from the array type itself?
 pub const ArrayRuntimeRepresentation = struct {
     element_type_id: typing.TypeId,
 };
