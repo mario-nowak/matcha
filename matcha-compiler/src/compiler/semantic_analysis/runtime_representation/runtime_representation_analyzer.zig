@@ -110,8 +110,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .Structure => |structure_type_id| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type_id),
             .Array => |element_type_id| block: {
                 _ = try self.resolveRuntimeRepresentationOfType(type_store, element_type_id);
-                // Does this help me in any way actually?
-                break :block RuntimeRepresentation{ .Array = .{ .element_type_id = element_type_id } };
+                break :block .Present;
             },
             .TaggedUnion => unreachable,
         };
@@ -130,13 +129,10 @@ pub const RuntimeRepresentationAnalyzer = struct {
         const structure_type = type_store.structure_types.items[structure_type_id];
 
         for (structure_type.fields) |field| {
-            const field_runtime_representation = try self.resolveRuntimeRepresentationOfType(type_store, field.type_id);
-            if (field_runtime_representation.hasRuntimeRepresentation()) {
-                return .Present;
-            }
+            _ = try self.resolveRuntimeRepresentationOfType(type_store, field.type_id);
         }
 
-        return .None;
+        return .Present;
     }
 
     fn analyzeNode(

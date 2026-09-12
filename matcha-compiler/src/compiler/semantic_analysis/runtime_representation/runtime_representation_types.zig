@@ -5,12 +5,11 @@ const typing = @import("typing");
 pub const RuntimeRepresentation = union(enum) {
     None,
     Present,
-    Array: ArrayRuntimeRepresentation,
 
     pub fn hasRuntimeRepresentation(self: @This()) bool {
         return switch (self) {
             .None => false,
-            .Present, .Array => true,
+            .Present => true,
         };
     }
 };

@@ -36,7 +36,7 @@ author: @mario-nowak
                                 - NOTE: Structures without fields need to produce a "real" array to support true equality comparison
                                 - NOTE: This points towards to fact that structures without layout should have a `Present` runtime representation
                                 - NOTE: This would mean that basically only `unit` can have no runtime representation
-                        - ANSWER: I think so, I cannot think of any reason to keep it
+                            - ANSWER: I think so, I cannot think of any reason to keep it
                     - `Present`
                     - `None`
                 - QUESTION: Do I need a dedicated case for structures type? Or does `None` and `Present` imply different meanings for structures specifically?
@@ -84,12 +84,6 @@ author: @mario-nowak
     - This structure does not exist at runtime in that layout, but instances of it do occupy memory and exist at runtime
 - `StructureLayoutKind.Present` should mean:
     - This structure type exist as an llvm ir type and has at least one "real" field
-
-## Concrete seams
-
-1. change runtime representation of structures without fields
-    - [ ] In `RuntimeRepresentation`
-        -  [ ] Remove the `Array` case
-    - [ ] In `aggregates.zig::emitArrayLiteral`
-        - [ ] Simplify computation of element runtime representation type
-    - [ ] In ``
+- `EmissionResult.zero_sized` should mean:
+    - This expression returns an expression that occupies no memory
+    - So structures should always have it

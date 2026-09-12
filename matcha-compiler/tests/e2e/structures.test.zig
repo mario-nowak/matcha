@@ -162,3 +162,82 @@ test "duplicate structure method names report a semantic diagnostic" {
 
     try e2e.expectCompileDiagnostic(&result, "structure member 'format' is already declared in 'User'");
 }
+
+test "structures can be compared" {
+    const source =
+        \\item User = structure {
+        \\    name: string;
+        \\};
+        \\val user1: User = .{ name = "Mario" };
+        \\val user2: User = .{ name = "Mario" };
+        \\printString(match {
+        \\    user1 == user1 => "same",
+        \\    else => "different",
+        \\});
+        \\printString(match {
+        \\    user1 != user1 => "different",
+        \\    else => "same",
+        \\});
+        \\printString(match {
+        \\    user1 == user2 => "same",
+        \\    else => "different",
+        \\});
+        \\printString(match {
+        \\    user1 != user2 => "different",
+        \\    else => "same",
+        \\});
+    ;
+
+    var result = try e2e.runSource("structure_comparison.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(
+        &result,
+        "same\nsame\ndifferent\ndifferent\n",
+    );
+}
+
+test "structures can have no fields" {
+    const source =
+        \\item StructureWithoutFields = structure {};
+        \\val instance = StructureWithoutFields {};
+        \\val otherInstance: StructureWithoutFields = .{};
+    ;
+
+    var result = try e2e.runSource("structure_without_fields.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "");
+}
+
+test "structures without fields can be compared" {
+    const source =
+        \\item StructureWithoutFields = structure {};
+        \\val instance = StructureWithoutFields {};
+        \\val otherInstance = StructureWithoutFields {};
+        \\printString(match {
+        \\    instance == instance => "same",
+        \\    else => "different",
+        \\});
+        \\printString(match {
+        \\    instance != instance => "different",
+        \\    else => "same",
+        \\});
+        \\printString(match {
+        \\    instance == otherInstance => "same",
+        \\    else => "different",
+        \\});
+        \\printString(match {
+        \\    instance != otherInstance => "different",
+        \\    else => "same",
+        \\});
+    ;
+
+    var result = try e2e.runSource("structure_without_fields.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(
+        &result,
+        "same\nsame\ndifferent\ndifferent\n",
+    );
+}
