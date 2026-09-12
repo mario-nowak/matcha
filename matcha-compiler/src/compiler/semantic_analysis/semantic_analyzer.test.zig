@@ -111,20 +111,24 @@ test "semantic analysis seeds runtime representation by type id" {
     const empty_structure_symbol_id = expectStatementSymbolId(&analyzed, 0);
     const empty_structure_type_id = analyzed.typed_program.type_by_symbol_id.get(empty_structure_symbol_id).?;
     switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_type_id.get(empty_structure_type_id).?) {
-        .None => {},
+        .Present => {},
         else => return TestError.UnexpectedNodeKind,
     }
 
     const empty_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
     switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_node_id.get(empty_declaration.value.id).?) {
-        .None => {},
+        .Present => {},
         else => return TestError.UnexpectedNodeKind,
     }
 
     const values_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
     const values_type_id = analyzed.typed_program.type_by_node_id.get(values_declaration.value.id).?;
     switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_type_id.get(values_type_id).?) {
-        .Array => |array_runtime_representation| try std.testing.expectEqual(analyzed.typed_program.type_store.unit_type_id, array_runtime_representation.element_type_id),
+        .Present => {},
+        else => return TestError.UnexpectedNodeKind,
+    }
+    switch (analyzed.typed_program.type_store.getType(values_type_id)) {
+        .Array => |element_type_id| try std.testing.expectEqual(analyzed.typed_program.type_store.unit_type_id, element_type_id),
         else => return TestError.UnexpectedNodeKind,
     }
 }

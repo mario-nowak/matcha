@@ -163,11 +163,16 @@ test "llvm codegen erases unit fields parameters returns and storage" {
         \\    last = "value",
         \\};
         \\val result: UnitOnly = use(unit, mixed.nested, mixed.first);
+        \\item consume(value: UnitOnly): unit = unit;
+        \\val nothing = consume(result);
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try expectIrContains(llvm_ir, "Mixed = type { i64, %String }");
-    try expectIrContains(llvm_ir, "_use(i64 %arg_0_value)");
+    try expectIrContains(llvm_ir, "Mixed = type { i64, ptr, %String }");
+    try expectIrContains(llvm_ir, "_use(ptr %arg_0_nested, i64 %arg_1_value)");
+    try expectIrContains(llvm_ir, "call ptr @matcha_function_");
+    try expectIrContains(llvm_ir, "call ptr @matcha_allocate_atomic(i64 1)");
+    try expectIrContains(llvm_ir, "ret ptr");
     try expectIrContains(llvm_ir, "call void @matcha_function_");
     try expectIrNotContains(llvm_ir, "UnitOnly");
     try expectIrNotContains(llvm_ir, "alloca void");
@@ -176,7 +181,7 @@ test "llvm codegen erases unit fields parameters returns and storage" {
     try expectIrNotContains(llvm_ir, "phi void");
 }
 
-test "llvm codegen skips phi for structure types without runtime representation" {
+test "llvm codegen emits pointer phi for structures with only unit fields" {
     const llvm_ir = try emit(
         \\item UnitOnly = structure {
         \\    field: unit;
@@ -195,7 +200,10 @@ test "llvm codegen skips phi for structure types without runtime representation"
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try expectIrNotContains(llvm_ir, "phi ");
+    try expectIrCount(llvm_ir, "phi ptr", 2);
+    try expectIrNotContains(llvm_ir, "phi void");
+    try expectIrContains(llvm_ir, "ret ptr");
+    try expectIrCount(llvm_ir, "call ptr @matcha_allocate_atomic(i64 1)", 4);
     try expectIrNotContains(llvm_ir, "UnitOnly");
 }
 
