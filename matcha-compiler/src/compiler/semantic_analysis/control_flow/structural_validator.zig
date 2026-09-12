@@ -97,6 +97,7 @@ pub const StructuralValidator = struct {
                     try self.validateNode(function_definition_node, context);
                 }
             },
+            .Union => unreachable,
         }
     }
 

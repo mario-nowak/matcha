@@ -48,6 +48,7 @@ pub const ExitBehaviorAnalyzer = struct {
                         try self.validateFunctionReturnPathsInNode(function_definition_node);
                     }
                 },
+                .Union => unreachable,
             },
             else => {},
         }

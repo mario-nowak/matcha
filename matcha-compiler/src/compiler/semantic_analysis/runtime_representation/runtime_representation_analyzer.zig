@@ -221,6 +221,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
                     try self.analyzeNode(function_definition_node, context);
                 }
             },
+            .Union => unreachable,
         }
     }
 

@@ -231,12 +231,13 @@ pub const NameResolver = struct {
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         switch (item_definition.item) {
-            .Function => |_| {
+            .Function => {
                 try self.registerModuleFunctionSymbol(node_id, item_definition, module_scope);
             },
-            .Structure => |_| {
+            .Structure => {
                 try self.registerModuleStructureSymbol(node_id, item_definition, module_scope);
             },
+            .Union => unreachable,
         }
     }
 
@@ -400,6 +401,7 @@ pub const NameResolver = struct {
             .Structure => |structure_definition| {
                 try self.resolveStructureDefinition(node_id, item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
             },
+            .Union => unreachable,
         }
     }
 
