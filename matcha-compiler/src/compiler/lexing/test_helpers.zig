@@ -2,15 +2,27 @@ const std = @import("std");
 const diagnostics = @import("diagnostics");
 const lexing = @import("lexing");
 
-// The caller owns the arena that stores the source and tokens.
-pub fn lex(allocator: std.mem.Allocator, source: []const u8) ![]lexing.Token {
-    const owned_source = try allocator.dupe(u8, source);
-    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
-    defer diagnostic_store.deinit();
+const LexerPipeline = struct {
+    diagnostic_store: *diagnostics.DiagnosticStore,
+    lexer: *lexing.Lexer,
+};
 
-    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
-    defer lexer.deinit();
+pub fn setupLexerPipeline(arena: *std.heap.ArenaAllocator, source: []const u8) !LexerPipeline {
+    const allocator = arena.allocator();
+    const diagnostic_store = try allocator.create(diagnostics.DiagnosticStore);
+    diagnostic_store.* = diagnostics.DiagnosticStore.init(allocator);
 
+    const lexer = try allocator.create(lexing.Lexer);
+    lexer.* = lexing.Lexer.init(source, allocator, diagnostic_store);
+
+    return .{
+        .diagnostic_store = diagnostic_store,
+        .lexer = lexer,
+    };
+}
+
+pub fn collectTokens(lexer: *lexing.Lexer) ![]lexing.Token {
+    const allocator = lexer.allocator;
     var tokens = std.ArrayList(lexing.Token){};
     defer tokens.deinit(allocator);
     while (true) {

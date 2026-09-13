@@ -1,9 +1,6 @@
 const std = @import("std");
 const expect = @import("testing").expect;
-const parse = @import("test_helpers.zig").parse;
-const diagnostics = @import("diagnostics");
-const lexing = @import("lexing");
-const parsing = @import("parsing");
+const setupParserPipeline = @import("test_helpers.zig").setupParserPipeline;
 
 test "parser builds the expected AST for arithmetic precedence" {
     const source =
@@ -11,8 +8,9 @@ test "parser builds the expected AST for arithmetic precedence" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -41,8 +39,9 @@ test "parser respects boolean and comparison precedence" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -76,8 +75,9 @@ test "parser binds unary not tighter than and" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -105,8 +105,9 @@ test "parser allows identifier-led trailing block expressions" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -141,8 +142,9 @@ test "parser keeps block ending with statement if as statement-only block" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -175,8 +177,9 @@ test "parser treats bare identifier while conditions as conditions, not structur
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -200,8 +203,9 @@ test "parser treats unit as a literal in expression context" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -226,8 +230,9 @@ test "parser treats item as a contextual definition keyword" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -293,8 +298,9 @@ test "parser parses structure member access expressions" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -338,8 +344,9 @@ test "parser parses anonymous structure literal expressions" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -363,8 +370,9 @@ test "parser parses structure member assignment statements" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -398,8 +406,9 @@ test "parser parses indexed and mixed place assignment statements" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -437,8 +446,9 @@ test "parser parses compound assignment statements as assignment nodes with comp
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -473,8 +483,9 @@ test "parser treats bare identifier match subjects as subjects, not structure co
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -506,8 +517,9 @@ test "parser allows parenthesized structure construction as a match subject" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{
         .statements = .{
@@ -539,8 +551,9 @@ test "parser parses union definitions with cases without type annotations" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -582,8 +595,9 @@ test "parser parses union definitions with cases with type annotations" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -630,8 +644,9 @@ test "parser parses union definitions with function definitions" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -660,8 +675,9 @@ test "parser parses qualified union construction with a value as call expression
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -694,8 +710,9 @@ test "parser parses qualified union construction without a value as a member exp
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -721,8 +738,9 @@ test "parser parses contextual union construction with a value as call expressio
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -754,8 +772,9 @@ test "parser parses contextual union construction without a value as an implicit
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const program = try parse(arena.allocator(), source);
+    const program = try parserPipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
@@ -776,16 +795,12 @@ test "parser emits a diagnostic error when parsing a union without cases" {
     ;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var diagnostic_store = diagnostics.DiagnosticStore.init(arena.allocator());
-    defer diagnostic_store.deinit();
-    var lexer = lexing.Lexer.init(source, arena.allocator(), &diagnostic_store);
-    defer lexer.deinit();
-    var parser = parsing.Parser.init(lexer, arena.allocator(), &diagnostic_store);
+    const parserPipeline = try setupParserPipeline(&arena, source);
 
-    const result = parser.parse();
+    const result = parserPipeline.parser.parse();
 
     try std.testing.expectError(error.DiagnosticsEmitted, result);
-    try expect(diagnostic_store.items()).toMatch(.{
+    try expect(parserPipeline.diagnostic_store.items()).toMatch(.{
         .{ .severity = .@"error", .message = "union definitions must have at least one case" },
     });
 }

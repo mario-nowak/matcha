@@ -1,17 +1,28 @@
 const std = @import("std");
-const ast = @import("ast");
 const lexing = @import("lexing");
 const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
 
-pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ast.Program {
-    const owned_source = try allocator.dupe(u8, source);
-    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
-    defer diagnostic_store.deinit();
+const ParserPipeline = struct {
+    diagnostic_store: *diagnostics.DiagnosticStore,
+    lexer: *lexing.Lexer,
+    parser: *parsing.Parser,
+};
 
-    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
-    defer lexer.deinit();
+pub fn setupParserPipeline(arena: *std.heap.ArenaAllocator, source: []const u8) !ParserPipeline {
+    const allocator = arena.allocator();
+    const diagnostic_store = try allocator.create(diagnostics.DiagnosticStore);
+    diagnostic_store.* = diagnostics.DiagnosticStore.init(allocator);
 
-    var parser = parsing.Parser.init(lexer, allocator, &diagnostic_store);
-    return parser.parse();
+    const lexer = try allocator.create(lexing.Lexer);
+    lexer.* = lexing.Lexer.init(source, allocator, diagnostic_store);
+
+    const parser = try allocator.create(parsing.Parser);
+    parser.* = parsing.Parser.init(lexer.*, allocator, diagnostic_store);
+
+    return .{
+        .diagnostic_store = diagnostic_store,
+        .lexer = lexer,
+        .parser = parser,
+    };
 }
