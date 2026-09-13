@@ -350,6 +350,7 @@ pub const Lexer = struct {
         if (std.mem.eql(u8, alphanumeric, "in")) return .In;
         if (std.mem.eql(u8, alphanumeric, "return")) return .Return;
         if (std.mem.eql(u8, alphanumeric, "structure")) return .Structure;
+        if (std.mem.eql(u8, alphanumeric, "union")) return .Union;
         return null;
     }
 

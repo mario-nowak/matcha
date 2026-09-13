@@ -524,3 +524,45 @@ test "parser allows parenthesized structure construction as a match subject" {
         },
     });
 }
+
+test "parser parses union definitions with cases without type annotations" {
+    const source =
+        \\item Direction = union {
+        \\    North,
+        \\    South,
+        \\    East,
+        \\    West,
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{
+                .Union = .{
+                    .cases = .{
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "North" } },
+                            .type_annotation = null,
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "South" } },
+                            .type_annotation = null,
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "East" } },
+                            .type_annotation = null,
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "West" } },
+                            .type_annotation = null,
+                        },
+                    },
+                },
+            },
+        } } },
+    } });
+}

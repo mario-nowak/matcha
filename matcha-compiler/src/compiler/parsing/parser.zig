@@ -278,12 +278,15 @@ pub const Parser = struct {
         _ = try self.lexer.next(); // consume equal sign
 
         const post_assign_token = try self.lexer.peek();
-        if (post_assign_token.kind != .Structure) {
-            try self.diagnostic_store.emitErrorFromToken(post_assign_token, "expected 'structure' after '=' in item definition");
-            return error.DiagnosticsEmitted;
+        if (post_assign_token.kind == .Structure) {
+            return self.parseStructureDefinition(item_token, identifier_token);
+        }
+        if (post_assign_token.kind == .Union) {
+            return self.parseUnionDefinition(item_token, identifier_token);
         }
 
-        return self.parseStructureDefinition(item_token, identifier_token);
+        try self.diagnostic_store.emitErrorFromToken(post_assign_token, "expected 'structure' or 'union' after '=' in item definition");
+        return error.DiagnosticsEmitted;
     }
 
     fn parseUnionDefinition(
@@ -329,9 +332,21 @@ pub const Parser = struct {
                 break;
             }
 
+            // TODO:
             if (self.startsItemDefinition()) {
-                const function_definition = try self.parseFunctionDefinition();
-                function_definitions.append(self.allocator, function_definition) catch unreachable;
+                const item = try self.parseItemDefinition();
+                switch (item.kind) {
+                    .ItemDefinition => |item_definition| {
+                        switch (item_definition.definition) {
+                            .Function => function_definitions.append(self.allocator, item) catch unreachable,
+                            else => {
+                                try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside union body");
+                                return error.DiagnosticsEmitted;
+                            },
+                        }
+                    },
+                    else => unreachable,
+                }
                 continue;
             }
 
@@ -341,7 +356,7 @@ pub const Parser = struct {
                 return error.DiagnosticsEmitted;
             }
 
-            var type_annotation: ?type_expressions.TypeExpression = null;
+            var type_annotation: ?*type_expressions.TypeExpression = null;
             const post_case_name_token = try self.lexer.peek();
             if (post_case_name_token.kind == .Colon) {
                 _ = try self.lexer.next();
@@ -412,6 +427,7 @@ pub const Parser = struct {
                 break;
             }
 
+            // NOTE:
             if (self.startsItemDefinition()) {
                 const item = try self.parseItemDefinition();
                 switch (item.kind) {
