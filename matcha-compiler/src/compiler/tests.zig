@@ -1,4 +1,5 @@
 test {
+    _ = @import("testing/expect.test.zig");
     _ = @import("lexing/lexer.test.zig");
     _ = @import("parsing/type_expression_parser.test.zig");
     _ = @import("parsing/parser.test.zig");
