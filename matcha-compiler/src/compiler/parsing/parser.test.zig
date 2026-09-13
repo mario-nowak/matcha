@@ -681,6 +681,33 @@ test "parser parses qualified union construction with a value as call expression
     } });
 }
 
+test "parser parses qualified union construction without a value as a member expression" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    KeyPress: string,
+        \\};
+        \\val event = WebEvent.PageLoad;
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{ .Union = .{} },
+        } } },
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
+            } } },
+        } } },
+    } });
+}
+
 test "parser parses contextual union construction with a value as call expression on an implicit member expression" {
     const source =
         \\item WebEvent = union {
@@ -709,6 +736,32 @@ test "parser parses contextual union construction with a value as call expressio
                 .arguments = .{
                     .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
                 },
+            } } },
+        } } },
+    } });
+}
+
+test "parser parses contextual union construction without a value as an implicit member expression" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    KeyPress: string,
+        \\};
+        \\val event: WebEvent = .PageLoad;
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{ .Union = .{} },
+        } } },
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .ImplicitMemberExpression = .{
+                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
             } } },
         } } },
     } });
