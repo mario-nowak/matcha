@@ -79,6 +79,7 @@ pub const RuntimeRequirementsLowerer = struct {
             },
             .CallExpression => |call_expression| analyzeCallExpression(node, &call_expression, analyzed_program, plan),
             .MemberExpression => |member_expression| analyzeNode(member_expression.base, analyzed_program, plan),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| analyzeBinaryExpression(&binary_expression, analyzed_program, plan),
             .UnaryExpression => |unary_expression| analyzeNode(unary_expression.operand, analyzed_program, plan),
             .Block => |block| {
@@ -144,6 +145,7 @@ pub const RuntimeRequirementsLowerer = struct {
         }
 
         switch (call_expression.callee.kind) {
+            .ImplicitMemberExpression => unreachable,
             .MemberExpression => {
                 const member_expression = analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable;
                 switch (member_expression) {

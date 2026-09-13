@@ -302,6 +302,7 @@ pub const NameResolver = struct {
             .BinaryExpression => |binary_expression| try self.resolveBinaryExpressionNode(binary_expression, environment),
             .UnaryExpression => |unary_expression| try self.resolveUnaryExpressionNode(unary_expression, environment),
             .MemberExpression => |member_expression| try self.resolveMemberExpressionNode(member_expression, environment),
+            .ImplicitMemberExpression => unreachable,
             .Identifier => |identifier| try self.resolveIdentifierNode(node.id, identifier, environment),
             .Block => |block| try self.resolveBlockNode(block, environment),
             .IfStatement => |if_statement| try self.resolveIfStatementNode(if_statement, environment),

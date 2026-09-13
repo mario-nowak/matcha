@@ -91,6 +91,7 @@ pub const NodeTypeAnalyzer = struct {
             .ContinueStatement => return self.checkContinueStatementNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, environment),
             .MemberExpression => |member_expression| return self.checkMemberExpressionNode(node.id, &member_expression, environment),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
             .QualifiedStructureLiteral => |qualified_structure_literal| return self.checkQualifiedStructureLiteralNode(node.id, &qualified_structure_literal, environment),
@@ -369,6 +370,7 @@ pub const NodeTypeAnalyzer = struct {
                 const type_id = try self.checkNode(node, environment.withContextAndType(.Expression, null));
                 return .{ .type_id = type_id };
             },
+            .ImplicitMemberExpression => unreachable,
             .MemberExpression => {
                 const type_id = try self.checkNode(node, environment.withContextAndType(.Expression, null));
                 const member_expression = self.member_access_by_node_id.get(node.id) orelse unreachable;
@@ -1137,6 +1139,7 @@ pub const NodeTypeAnalyzer = struct {
             .MemberExpression => |member_expression| {
                 try self.checkReturnStatementsMatchType(member_expression.base, function_return_type, resolved_program);
             },
+            .ImplicitMemberExpression => unreachable,
             .QualifiedStructureLiteral => |qualified_structure_literal| {
                 for (qualified_structure_literal.fields) |field| {
                     try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);

@@ -107,6 +107,7 @@ pub const BinaryOperationLowerer = struct {
                 }
             },
             .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);

@@ -22,6 +22,7 @@ pub const NodeKind = union(enum) {
     MatchExpression: MatchExpression,
     CallExpression: CallExpression,
     MemberExpression: MemberExpression,
+    ImplicitMemberExpression: ImplicitMemberExpression,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
     Identifier: lexing.Token,
@@ -57,6 +58,7 @@ pub const Node = struct {
             .MatchExpression => |match_expression| match_expression.match_token,
             .CallExpression => |call_expression| call_expression.left_parenthesis,
             .MemberExpression => |member_expression| member_expression.member_name_token,
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| binary_expression.operator_token,
             .UnaryExpression => |unary_expression| unary_expression.operator_token,
             .Identifier => |token| token,
@@ -217,6 +219,11 @@ pub const CallExpression = struct {
 
 pub const MemberExpression = struct {
     base: *Node,
+    dot_token: lexing.Token,
+    member_name_token: lexing.Token,
+};
+
+pub const ImplicitMemberExpression = struct {
     dot_token: lexing.Token,
     member_name_token: lexing.Token,
 };

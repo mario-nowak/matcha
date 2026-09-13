@@ -96,6 +96,7 @@ pub const PlaceLowerer = struct {
                 }
             },
             .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -137,6 +138,7 @@ pub const PlaceLowerer = struct {
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
         const decision: lowering_types.PlaceDecision = switch (target.kind) {
+            .ImplicitMemberExpression => unreachable,
             .Identifier => .{ .IdentifierBinding = .{
                 .symbol_id = analyzed_program.resolved_program.symbol_id_by_node_id.get(target.id) orelse unreachable,
             } },

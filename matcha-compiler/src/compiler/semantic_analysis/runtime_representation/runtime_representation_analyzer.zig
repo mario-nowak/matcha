@@ -156,6 +156,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .MatchExpression => |match_expression| try self.analyzeMatchExpressionNode(node.id, match_expression, context),
             .CallExpression => |call_expression| try self.analyzeCallExpressionNode(node.id, call_expression, context),
             .MemberExpression => |member_expression| try self.analyzeMemberExpressionNode(node.id, member_expression, context),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| try self.analyzeBinaryExpressionNode(node.id, binary_expression, context),
             .UnaryExpression => |unary_expression| try self.analyzeUnaryExpressionNode(node.id, unary_expression, context),
             .Identifier => |identifier| try self.analyzeIdentifierNode(node.id, identifier, context),

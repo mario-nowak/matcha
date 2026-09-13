@@ -99,6 +99,7 @@ pub const CallLowerer = struct {
                 self.lowerCallExpression(node, &call_expression, analyzed_program);
             },
             .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
+            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -141,6 +142,7 @@ pub const CallLowerer = struct {
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
         const decision: lowering_types.CallDispatchDecision = switch (call_expression.callee.kind) {
+            .ImplicitMemberExpression => unreachable,
             .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
                 .StructureInstanceMethodAccess => |structure_method| .{
                     .UserFunction = .{
