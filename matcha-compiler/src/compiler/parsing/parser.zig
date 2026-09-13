@@ -1218,6 +1218,9 @@ pub const Parser = struct {
 
     fn parseDotExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
         const post_dot_token = try self.lexer.peek();
+        if (post_dot_token.kind == .Identifier) {
+            return self.parseImplicitMemberExpression(token);
+        }
         if (state.allow_structure_literal and post_dot_token.kind == .LeftBrace) {
             return self.parseStructureLiteral(token);
         }
@@ -1225,6 +1228,21 @@ pub const Parser = struct {
         try self.diagnostic_store.emitErrorFromToken(token, "expected '{' after '.' in anonymous structure literal");
 
         return error.DiagnosticsEmitted;
+    }
+
+    fn parseImplicitMemberExpression(self: *@This(), dot_token: lexing.Token) ParserError!ast.Node {
+        const identifier = try self.lexer.next();
+        if (identifier.kind != .Identifier) {
+            try self.diagnostic_store.emitErrorFromToken(identifier, "expected identifier to start implicit member expression");
+            return error.DiagnosticsEmitted;
+        }
+
+        return self.createNode(.{
+            .ImplicitMemberExpression = .{
+                .dot_token = dot_token,
+                .member_name_token = identifier,
+            },
+        });
     }
 
     fn parseIfExpression(self: *Parser, token: lexing.Token) ParserError!ast.Node {
@@ -1300,7 +1318,7 @@ pub const Parser = struct {
     } {
         const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
-            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start structure construction");
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start structure literal");
             return error.DiagnosticsEmitted;
         }
 

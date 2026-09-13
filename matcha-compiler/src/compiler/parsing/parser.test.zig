@@ -638,10 +638,78 @@ test "parser parses union definitions with function definitions" {
                     .function_definitions = .{
                         .{ .kind = .{ .ItemDefinition = .{
                             .identifier_token = .{ .kind = .{ .Identifier = "asString" } },
+                            .definition = .{ .Function = .{} },
                         } } },
                     },
                 },
             },
+        } } },
+    } });
+}
+
+test "parser parses qualified union construction with a value as call expression on a member expression" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    KeyPress: string,
+        \\};
+        \\val event = WebEvent.KeyPress("A");
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{ .Union = .{} },
+        } } },
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .CallExpression = .{
+                .callee = .{ .kind = .{
+                    .MemberExpression = .{
+                        .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
+                        .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+                    },
+                } },
+                .arguments = .{
+                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                },
+            } } },
+        } } },
+    } });
+}
+
+test "parser parses contextual union construction with a value as call expression on an implicit member expression" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    KeyPress: string,
+        \\};
+        \\val event: WebEvent = .KeyPress("A");
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{ .Union = .{} },
+        } } },
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .CallExpression = .{
+                .callee = .{ .kind = .{
+                    .ImplicitMemberExpression = .{
+                        .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+                    },
+                } },
+                .arguments = .{
+                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                },
+            } } },
         } } },
     } });
 }
