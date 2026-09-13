@@ -5,13 +5,13 @@ const helpers = @import("../test_helpers.zig");
 const NodeTag = std.meta.Tag(ast.NodeKind);
 const TestError = helpers.TestError;
 
-const expectDeclarationNode = helpers.expectDeclarationNode;
+const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
 const expectBlockNode = helpers.expectBlockNode;
 const expectWhileNode = helpers.expectWhileNode;
 const expectForInNode = helpers.expectForInNode;
 const expectItemDefinitionNode = helpers.expectItemDefinitionNode;
 const expectMatchExpressionNode = helpers.expectMatchExpressionNode;
-const expectIndexAccessNode = helpers.expectIndexAccessNode;
+const expectIndexExpressionNode = helpers.expectIndexExpressionNode;
 
 fn parse(source: []const u8) !helpers.ParsedProgram {
     return helpers.parseProgram(source);
@@ -21,8 +21,8 @@ fn expectNodeTag(node: *const ast.Node, expected: NodeTag) !void {
     try std.testing.expectEqual(expected, std.meta.activeTag(node.kind));
 }
 
-fn expectStructureDefinition(item_definition: ast.ItemDefinition) !ast.Structure {
-    return switch (item_definition.item) {
+fn expectStructureDefinition(item_definition: ast.ItemDefinition) !ast.StructureDefinition {
+    return switch (item_definition.definition) {
         .Structure => |structure| structure,
         else => return TestError.UnexpectedNodeKind,
     };
@@ -46,18 +46,18 @@ fn expectUnaryExpression(node: *const ast.Node, expected_operator: ast.UnaryOper
     return unary_expression;
 }
 
-fn expectMemberAccess(node: *const ast.Node, expected_member_name: []const u8) !ast.MemberAccess {
-    const member_access = switch (node.kind) {
-        .MemberAccess => |expression| expression,
+fn expectMemberExpression(node: *const ast.Node, expected_member_name: []const u8) !ast.MemberExpression {
+    const member_expression = switch (node.kind) {
+        .MemberExpression => |expression| expression,
         else => return TestError.UnexpectedNodeKind,
     };
-    try std.testing.expectEqualStrings(expected_member_name, member_access.member_name_token.kind.Identifier);
-    return member_access;
+    try std.testing.expectEqualStrings(expected_member_name, member_expression.member_name_token.kind.Identifier);
+    return member_expression;
 }
 
-fn expectAssignment(node: *const ast.Node) !ast.Assignment {
+fn expectAssignmentStatement(node: *const ast.Node) !ast.AssignmentStatement {
     return switch (node.kind) {
-        .Assignment => |assignment| assignment,
+        .AssignmentStatement => |assignment_statement| assignment_statement,
         else => return TestError.UnexpectedNodeKind,
     };
 }
@@ -70,8 +70,8 @@ test "parser respects boolean and comparison precedence" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const or_expression = try expectBinaryExpression(declaration.value, .Or);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const or_expression = try expectBinaryExpression(binding_declaration.value, .Or);
     try expectNodeTag(or_expression.right, .BooleanLiteral);
     const and_expression = try expectBinaryExpression(or_expression.left, .And);
     try expectNodeTag(and_expression.right, .BooleanLiteral);
@@ -90,8 +90,8 @@ test "parser binds unary not tighter than and" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const and_expression = try expectBinaryExpression(declaration.value, .And);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const and_expression = try expectBinaryExpression(binding_declaration.value, .And);
     _ = try expectUnaryExpression(and_expression.left, .Not);
     try expectNodeTag(and_expression.right, .BooleanLiteral);
 }
@@ -108,8 +108,8 @@ test "parser allows identifier-led trailing block expressions" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const block = try expectBlockNode(declaration.value);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const block = try expectBlockNode(binding_declaration.value);
     try std.testing.expectEqual(@as(usize, 2), block.statements.len);
     try std.testing.expect(block.result != null);
     _ = try expectBinaryExpression(block.result.?, .Add);
@@ -153,8 +153,8 @@ test "parser treats unit as a literal in expression context" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    try expectNodeTag(declaration.value, .UnitLiteral);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    try expectNodeTag(binding_declaration.value, .UnitLiteral);
 }
 
 test "parser treats item as a contextual definition keyword" {
@@ -172,10 +172,10 @@ test "parser treats item as a contextual definition keyword" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
     const for_in = try expectForInNode(&parsed.program.statements[1]);
     const structure_definition = try expectStructureDefinition(try expectItemDefinitionNode(&parsed.program.statements[2]));
-    try std.testing.expectEqualStrings("item", declaration.name.kind.Identifier);
+    try std.testing.expectEqualStrings("item", binding_declaration.name.kind.Identifier);
     try std.testing.expectEqualStrings("item", for_in.item_name.kind.Identifier);
     try std.testing.expectEqualStrings("item", structure_definition.fields[0].name.kind.Identifier);
     try std.testing.expectEqual(@as(usize, 1), structure_definition.function_definitions.len);
@@ -191,16 +191,16 @@ test "parser parses structure member access expressions" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const x_declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const y_declaration = try expectDeclarationNode(&parsed.program.statements[1]);
-    const z_declaration = try expectDeclarationNode(&parsed.program.statements[2]);
-    const point_x = try expectMemberAccess(x_declaration.value, "x");
+    const x_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const y_declaration = try expectBindingDeclarationNode(&parsed.program.statements[1]);
+    const z_declaration = try expectBindingDeclarationNode(&parsed.program.statements[2]);
+    const point_x = try expectMemberExpression(x_declaration.value, "x");
     try expectNodeTag(point_x.base, .Identifier);
-    const user_location_x = try expectMemberAccess(y_declaration.value, "x");
-    const user_location = try expectMemberAccess(user_location_x.base, "location");
+    const user_location_x = try expectMemberExpression(y_declaration.value, "x");
+    const user_location = try expectMemberExpression(user_location_x.base, "location");
     try expectNodeTag(user_location.base, .Identifier);
-    const constructed_point_x = try expectMemberAccess(z_declaration.value, "x");
-    try expectNodeTag(constructed_point_x.base, .StructureConstruction);
+    const constructed_point_x = try expectMemberExpression(z_declaration.value, "x");
+    try expectNodeTag(constructed_point_x.base, .QualifiedStructureLiteral);
 }
 
 test "parser parses anonymous structure literal expressions" {
@@ -211,9 +211,9 @@ test "parser parses anonymous structure literal expressions" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const anonymous_literal = switch (declaration.value.kind) {
-        .AnonymousStructureLiteral => |literal| literal,
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const anonymous_literal = switch (binding_declaration.value.kind) {
+        .StructureLiteral => |literal| literal,
         else => return TestError.UnexpectedNodeKind,
     };
     try std.testing.expectEqual(@as(usize, 2), anonymous_literal.fields.len);
@@ -228,13 +228,13 @@ test "parser parses structure member assignment statements" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const point_x = try expectMemberAccess(first_assignment.target, "x");
+    const first_assignment = try expectAssignmentStatement(&parsed.program.statements[0]);
+    const second_assignment = try expectAssignmentStatement(&parsed.program.statements[1]);
+    const point_x = try expectMemberExpression(first_assignment.target, "x");
     try expectNodeTag(point_x.base, .Identifier);
     try expectNodeTag(first_assignment.value, .IntegerLiteral);
-    const user_location_x = try expectMemberAccess(second_assignment.target, "x");
-    const user_location = try expectMemberAccess(user_location_x.base, "location");
+    const user_location_x = try expectMemberExpression(second_assignment.target, "x");
+    const user_location = try expectMemberExpression(user_location_x.base, "location");
     try expectNodeTag(user_location.base, .Identifier);
     try expectNodeTag(second_assignment.value, .IntegerLiteral);
 }
@@ -248,15 +248,15 @@ test "parser parses indexed and mixed place assignment statements" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const indexed_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const mixed_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const indexed_target = try expectIndexAccessNode(indexed_assignment.target);
+    const indexed_assignment = try expectAssignmentStatement(&parsed.program.statements[0]);
+    const mixed_assignment = try expectAssignmentStatement(&parsed.program.statements[1]);
+    const indexed_target = try expectIndexExpressionNode(indexed_assignment.target);
     try expectNodeTag(indexed_target.base, .Identifier);
     try expectNodeTag(indexed_target.index, .IntegerLiteral);
     try expectNodeTag(indexed_assignment.value, .IntegerLiteral);
-    const points_i_x = try expectMemberAccess(mixed_assignment.target, "x");
-    const points_i = try expectIndexAccessNode(points_i_x.base);
-    const user_points = try expectMemberAccess(points_i.base, "points");
+    const points_i_x = try expectMemberExpression(mixed_assignment.target, "x");
+    const points_i = try expectIndexExpressionNode(points_i_x.base);
+    const user_points = try expectMemberExpression(points_i.base, "points");
     try expectNodeTag(user_points.base, .Identifier);
     try expectNodeTag(points_i.index, .Identifier);
     try expectNodeTag(mixed_assignment.value, .IntegerLiteral);
@@ -272,9 +272,9 @@ test "parser parses compound assignment statements as assignment nodes with comp
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const third_assignment = try expectAssignment(&parsed.program.statements[2]);
+    const first_assignment = try expectAssignmentStatement(&parsed.program.statements[0]);
+    const second_assignment = try expectAssignmentStatement(&parsed.program.statements[1]);
+    const third_assignment = try expectAssignmentStatement(&parsed.program.statements[2]);
     switch (first_assignment.operator) {
         .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Add, binary_operator),
         else => return TestError.UnexpectedNodeKind,
@@ -291,7 +291,7 @@ test "parser parses compound assignment statements as assignment nodes with comp
         .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Multiply, binary_operator),
         else => return TestError.UnexpectedNodeKind,
     }
-    const indexed_target = try expectIndexAccessNode(third_assignment.target);
+    const indexed_target = try expectIndexExpressionNode(third_assignment.target);
     try expectNodeTag(indexed_target.base, .Identifier);
     try expectNodeTag(indexed_target.index, .Identifier);
     try expectNodeTag(third_assignment.value, .IntegerLiteral);
@@ -308,8 +308,8 @@ test "parser treats bare identifier match subjects as subjects, not structure co
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const match_expression = try expectMatchExpressionNode(declaration.value);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const match_expression = try expectMatchExpressionNode(binding_declaration.value);
     try std.testing.expect(match_expression.subject != null);
     try expectNodeTag(match_expression.subject.?, .Identifier);
     try std.testing.expectEqual(@as(usize, 2), match_expression.arms.len);
@@ -325,9 +325,9 @@ test "parser allows parenthesized structure construction as a match subject" {
     var parsed = try parse(source);
     defer parsed.deinit();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const match_expression = try expectMatchExpressionNode(declaration.value);
+    const binding_declaration = try expectBindingDeclarationNode(&parsed.program.statements[0]);
+    const match_expression = try expectMatchExpressionNode(binding_declaration.value);
     try std.testing.expect(match_expression.subject != null);
-    try expectNodeTag(match_expression.subject.?, .StructureConstruction);
+    try expectNodeTag(match_expression.subject.?, .QualifiedStructureLiteral);
     try std.testing.expect(match_expression.else_arm != null);
 }

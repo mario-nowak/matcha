@@ -85,7 +85,7 @@ pub const LlvmModuleRenderer = struct {
         var user_defined_functions = std.ArrayList([]const u8){};
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Function => |function_definition| {
                         const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
                             statement.id,
@@ -194,7 +194,7 @@ pub const LlvmModuleRenderer = struct {
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             const structure_definition = switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Structure => |structure| structure,
                     else => continue,
                 },
@@ -217,13 +217,13 @@ pub const LlvmModuleRenderer = struct {
     fn appendStructureMethodDefinitions(
         self: *@This(),
         method_definitions: *std.ArrayList([]const u8),
-        structure_definition: ast.Structure,
+        structure_definition: ast.StructureDefinition,
         structure_symbol: symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,
     ) void {
         for (structure_definition.function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Function => |function| function,
                     else => unreachable,
                 },

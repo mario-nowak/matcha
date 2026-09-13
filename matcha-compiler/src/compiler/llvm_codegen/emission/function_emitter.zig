@@ -73,7 +73,7 @@ pub const FunctionEmitter = struct {
     pub fn emitFunctionDefinition(
         self: *@This(),
         function_node_id: ast.NodeId,
-        function_definition: *const ast.Function,
+        function_definition: *const ast.FunctionDefinition,
         resolved_function: *const symbols.ResolvedFunction,
         owning_structure_symbol: ?symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,

@@ -141,21 +141,21 @@ pub const RuntimeRepresentationAnalyzer = struct {
         context: AnalysisContext,
     ) anyerror!void {
         switch (node.kind) {
-            .Declaration => |declaration| try self.analyzeDeclarationNode(node.id, declaration, context),
+            .BindingDeclaration => |binding_declaration| try self.analyzeBindingDeclarationNode(node.id, binding_declaration, context),
             .ItemDefinition => |item_definition| try self.analyzeItemDefinitionNode(node.id, item_definition, context),
-            .Return => |return_statement| try self.analyzeReturnNode(node.id, return_statement, context),
+            .ReturnStatement => |return_statement| try self.analyzeReturnStatementNode(node.id, return_statement, context),
             .IfStatement => |if_statement| try self.analyzeIfStatementNode(node.id, if_statement, context),
             .ExpressionStatement => |expression_statement| try self.analyzeExpressionStatementNode(node.id, expression_statement, context),
-            .Assignment => |assignment| try self.analyzeAssignmentNode(node.id, assignment, context),
+            .AssignmentStatement => |assignment_statement| try self.analyzeAssignmentStatementNode(node.id, assignment_statement, context),
             .Loop => |loop| try self.analyzeLoopNode(node.id, loop, context),
-            .Leave => |leave_statement| try self.analyzeLeaveNode(node.id, leave_statement, context),
-            .Continue => |continue_statement| try self.analyzeContinueNode(node.id, continue_statement, context),
+            .LeaveStatement => |leave_statement| try self.analyzeLeaveStatementNode(node.id, leave_statement, context),
+            .ContinueStatement => |continue_statement| try self.analyzeContinueStatementNode(node.id, continue_statement, context),
             .While => |while_statement| try self.analyzeWhileNode(node.id, while_statement, context),
             .ForIn => |for_in| try self.analyzeForInNode(node.id, for_in, context),
             .IfExpression => |if_expression| try self.analyzeIfExpressionNode(node.id, if_expression, context),
             .MatchExpression => |match_expression| try self.analyzeMatchExpressionNode(node.id, match_expression, context),
             .CallExpression => |call_expression| try self.analyzeCallExpressionNode(node.id, call_expression, context),
-            .MemberAccess => |member_access| try self.analyzeMemberAccessNode(node.id, member_access, context),
+            .MemberExpression => |member_expression| try self.analyzeMemberExpressionNode(node.id, member_expression, context),
             .BinaryExpression => |binary_expression| try self.analyzeBinaryExpressionNode(node.id, binary_expression, context),
             .UnaryExpression => |unary_expression| try self.analyzeUnaryExpressionNode(node.id, unary_expression, context),
             .Identifier => |identifier| try self.analyzeIdentifierNode(node.id, identifier, context),
@@ -164,10 +164,10 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .StringLiteral => |string_literal| try self.analyzeStringLiteralNode(node.id, string_literal, context),
             .UnitLiteral => |unit_literal| try self.analyzeUnitLiteralNode(node.id, unit_literal, context),
             .Block => |block| try self.analyzeBlockNode(node.id, block, context),
-            .StructureConstruction => |structure_construction| try self.analyzeStructureConstructionNode(node.id, structure_construction, context),
-            .AnonymousStructureLiteral => |anonymous_structure_literal| try self.analyzeAnonymousStructureLiteralNode(node.id, anonymous_structure_literal, context),
+            .QualifiedStructureLiteral => |qualified_structure_literal| try self.analyzeQualifiedStructureLiteralNode(node.id, qualified_structure_literal, context),
+            .StructureLiteral => |structure_literal| try self.analyzeStructureLiteralNode(node.id, structure_literal, context),
             .ArrayLiteral => |array_literal| try self.analyzeArrayLiteralNode(node.id, array_literal, context),
-            .IndexAccess => |index_access| try self.analyzeIndexAccessNode(node.id, index_access, context),
+            .IndexExpression => |index_expression| try self.analyzeIndexExpressionNode(node.id, index_expression, context),
         }
     }
 
@@ -195,9 +195,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentation(node_id, self.runtimeRepresentationForType(type_id));
     }
 
-    fn analyzeStructureConstructionFields(
+    fn analyzeStructureFieldInitializers(
         self: *@This(),
-        fields: []const ast.StructureConstructionField,
+        fields: []const ast.StructureFieldInitializer,
         context: AnalysisContext,
     ) anyerror!void {
         for (fields) |field| {
@@ -205,14 +205,14 @@ pub const RuntimeRepresentationAnalyzer = struct {
         }
     }
 
-    fn analyzeDeclarationNode(self: *@This(), node_id: ast.NodeId, declaration: ast.Declaration, context: AnalysisContext) anyerror!void {
-        try self.analyzeNode(declaration.value, context);
+    fn analyzeBindingDeclarationNode(self: *@This(), node_id: ast.NodeId, binding_declaration: ast.BindingDeclaration, context: AnalysisContext) anyerror!void {
+        try self.analyzeNode(binding_declaration.value, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
     fn analyzeItemDefinitionNode(self: *@This(), node_id: ast.NodeId, item_definition: ast.ItemDefinition, context: AnalysisContext) anyerror!void {
         _ = node_id;
-        switch (item_definition.item) {
+        switch (item_definition.definition) {
             .Function => |function_definition| {
                 try self.analyzeNode(function_definition.body_expression, context);
             },
@@ -225,7 +225,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
         }
     }
 
-    fn analyzeReturnNode(self: *@This(), node_id: ast.NodeId, return_statement: ast.Return, context: AnalysisContext) anyerror!void {
+    fn analyzeReturnStatementNode(self: *@This(), node_id: ast.NodeId, return_statement: ast.ReturnStatement, context: AnalysisContext) anyerror!void {
         if (return_statement.value) |value| {
             try self.analyzeNode(value, context);
         }
@@ -243,9 +243,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeAssignmentNode(self: *@This(), node_id: ast.NodeId, assignment: ast.Assignment, context: AnalysisContext) anyerror!void {
-        try self.analyzeNode(assignment.target, context);
-        try self.analyzeNode(assignment.value, context);
+    fn analyzeAssignmentStatementNode(self: *@This(), node_id: ast.NodeId, assignment_statement: ast.AssignmentStatement, context: AnalysisContext) anyerror!void {
+        try self.analyzeNode(assignment_statement.target, context);
+        try self.analyzeNode(assignment_statement.value, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
@@ -254,12 +254,12 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeLeaveNode(self: *@This(), node_id: ast.NodeId, leave_statement: ast.Leave, context: AnalysisContext) anyerror!void {
+    fn analyzeLeaveStatementNode(self: *@This(), node_id: ast.NodeId, leave_statement: ast.LeaveStatement, context: AnalysisContext) anyerror!void {
         _ = leave_statement;
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeContinueNode(self: *@This(), node_id: ast.NodeId, continue_statement: ast.Continue, context: AnalysisContext) anyerror!void {
+    fn analyzeContinueStatementNode(self: *@This(), node_id: ast.NodeId, continue_statement: ast.ContinueStatement, context: AnalysisContext) anyerror!void {
         _ = continue_statement;
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
@@ -311,8 +311,8 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeMemberAccessNode(self: *@This(), node_id: ast.NodeId, member_access: ast.MemberAccess, context: AnalysisContext) anyerror!void {
-        try self.analyzeNode(member_access.base, context);
+    fn analyzeMemberExpressionNode(self: *@This(), node_id: ast.NodeId, member_expression: ast.MemberExpression, context: AnalysisContext) anyerror!void {
+        try self.analyzeNode(member_expression.base, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
@@ -364,13 +364,13 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeStructureConstructionNode(self: *@This(), node_id: ast.NodeId, structure_construction: ast.StructureConstruction, context: AnalysisContext) anyerror!void {
-        try self.analyzeStructureConstructionFields(structure_construction.fields, context);
+    fn analyzeQualifiedStructureLiteralNode(self: *@This(), node_id: ast.NodeId, qualified_structure_literal: ast.QualifiedStructureLiteral, context: AnalysisContext) anyerror!void {
+        try self.analyzeStructureFieldInitializers(qualified_structure_literal.fields, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeAnonymousStructureLiteralNode(self: *@This(), node_id: ast.NodeId, anonymous_structure_literal: ast.AnonymousStructureLiteral, context: AnalysisContext) anyerror!void {
-        try self.analyzeStructureConstructionFields(anonymous_structure_literal.fields, context);
+    fn analyzeStructureLiteralNode(self: *@This(), node_id: ast.NodeId, structure_literal: ast.StructureLiteral, context: AnalysisContext) anyerror!void {
+        try self.analyzeStructureFieldInitializers(structure_literal.fields, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
@@ -382,9 +382,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 
-    fn analyzeIndexAccessNode(self: *@This(), node_id: ast.NodeId, index_access: ast.IndexAccess, context: AnalysisContext) anyerror!void {
-        try self.analyzeNode(index_access.base, context);
-        try self.analyzeNode(index_access.index, context);
+    fn analyzeIndexExpressionNode(self: *@This(), node_id: ast.NodeId, index_expression: ast.IndexExpression, context: AnalysisContext) anyerror!void {
+        try self.analyzeNode(index_expression.base, context);
+        try self.analyzeNode(index_expression.index, context);
         self.recordNodeRuntimeRepresentationForTypeCheckedNode(node_id, context);
     }
 };

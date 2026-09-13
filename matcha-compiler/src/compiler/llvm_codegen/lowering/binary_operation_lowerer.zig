@@ -35,8 +35,8 @@ pub const BinaryOperationLowerer = struct {
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
         switch (node.kind) {
-            .Declaration => |declaration| self.lowerNode(declaration.value, analyzed_program),
-            .ItemDefinition => |item_definition| switch (item_definition.item) {
+            .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
+            .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Union => unreachable,
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
                 .Structure => |structure_definition| {
@@ -45,7 +45,7 @@ pub const BinaryOperationLowerer = struct {
                     }
                 },
             },
-            .Return => |return_statement| {
+            .ReturnStatement => |return_statement| {
                 if (return_statement.value) |value| {
                     self.lowerNode(value, analyzed_program);
                 }
@@ -55,20 +55,20 @@ pub const BinaryOperationLowerer = struct {
                 self.lowerNode(if_statement.then_branch, analyzed_program);
             },
             .ExpressionStatement => |expression_statement| self.lowerNode(expression_statement.expression, analyzed_program),
-            .Assignment => |assignment| {
-                self.lowerNode(assignment.target, analyzed_program);
-                self.lowerNode(assignment.value, analyzed_program);
-                switch (assignment.operator) {
+            .AssignmentStatement => |assignment_statement| {
+                self.lowerNode(assignment_statement.target, analyzed_program);
+                self.lowerNode(assignment_statement.value, analyzed_program);
+                switch (assignment_statement.operator) {
                     .Assign => {},
                     .Compound => |binary_operator| {
-                        const target_type_id = analyzed_program.type_by_node_id.get(assignment.target.id) orelse unreachable;
+                        const target_type_id = analyzed_program.type_by_node_id.get(assignment_statement.target.id) orelse unreachable;
                         const decision = decisionFor(binary_operator, target_type_id, analyzed_program);
                         self.decision_by_node_id.put(node.id, decision) catch unreachable;
                     },
                 }
             },
             .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
-            .Leave, .Continue, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
+            .LeaveStatement, .ContinueStatement, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
             .While => |while_statement| {
                 self.lowerNode(while_statement.condition, analyzed_program);
                 if (while_statement.update) |update| {
@@ -106,7 +106,7 @@ pub const BinaryOperationLowerer = struct {
                     self.lowerNode(argument, analyzed_program);
                 }
             },
-            .MemberAccess => |member_access| self.lowerNode(member_access.base, analyzed_program),
+            .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -121,13 +121,13 @@ pub const BinaryOperationLowerer = struct {
                     self.lowerNode(result, analyzed_program);
                 }
             },
-            .StructureConstruction => |structure_construction| {
-                for (structure_construction.fields) |field| {
+            .QualifiedStructureLiteral => |qualified_structure_literal| {
+                for (qualified_structure_literal.fields) |field| {
                     self.lowerNode(field.value, analyzed_program);
                 }
             },
-            .AnonymousStructureLiteral => |anonymous_structure_literal| {
-                for (anonymous_structure_literal.fields) |field| {
+            .StructureLiteral => |structure_literal| {
+                for (structure_literal.fields) |field| {
                     self.lowerNode(field.value, analyzed_program);
                 }
             },
@@ -136,9 +136,9 @@ pub const BinaryOperationLowerer = struct {
                     self.lowerNode(element, analyzed_program);
                 }
             },
-            .IndexAccess => |index_access| {
-                self.lowerNode(index_access.base, analyzed_program);
-                self.lowerNode(index_access.index, analyzed_program);
+            .IndexExpression => |index_expression| {
+                self.lowerNode(index_expression.base, analyzed_program);
+                self.lowerNode(index_expression.index, analyzed_program);
             },
         }
     }

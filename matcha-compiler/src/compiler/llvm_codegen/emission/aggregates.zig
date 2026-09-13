@@ -11,17 +11,17 @@ const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
-pub fn emitMemberAccess(
+pub fn emitMemberExpression(
     emitter: *NodeEmitter,
     node: *const ast.Node,
-    member_access: *const ast.MemberAccess,
+    member_expression: *const ast.MemberExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
         .ArrayLength => {
-            const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
+            const base_register = emitter.emitNode(member_expression.base, lowered_program, environment);
 
             const length_pointer_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
@@ -36,7 +36,7 @@ pub fn emitMemberAccess(
             return .{ .register = length_register };
         },
         .StringLength => {
-            const base_register = emitter.emitNode(member_access.base, lowered_program, environment);
+            const base_register = emitter.emitNode(member_expression.base, lowered_program, environment);
             const string_parts = emitter.emitStringParts(base_register.expectRegister());
 
             return .{ .register = string_parts.length_register };
@@ -44,7 +44,7 @@ pub fn emitMemberAccess(
         .StructureField => |structure_field| {
             const member_pointer_emission_result = places.emitStructureFieldPointer(
                 emitter,
-                member_access,
+                member_expression,
                 structure_field.field_index,
                 lowered_program,
                 environment,
@@ -72,10 +72,10 @@ pub fn emitMemberAccess(
     }
 }
 
-pub fn emitStructureConstruction(
+pub fn emitStructureLiteral(
     emitter: *NodeEmitter,
     node: *const ast.Node,
-    fields: []const ast.StructureConstructionField,
+    fields: []const ast.StructureFieldInitializer,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
@@ -226,17 +226,17 @@ pub fn emitArrayLiteral(
     return .{ .register = header_register };
 }
 
-pub fn emitIndexAccess(
+pub fn emitIndexExpression(
     emitter: *NodeEmitter,
     node: *const ast.Node,
-    index_access: *const ast.IndexAccess,
+    index_expression: *const ast.IndexExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     _ = node;
-    const pointer_register = places.emitIndexAccessPointer(emitter, index_access, lowered_program, environment);
+    const pointer_register = places.emitIndexExpressionPointer(emitter, index_expression, lowered_program, environment);
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,

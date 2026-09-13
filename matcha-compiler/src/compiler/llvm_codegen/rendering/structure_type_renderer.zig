@@ -29,7 +29,7 @@ pub const StructureTypeRenderer = struct {
         var has_structure_definition = false;
         for (resolved_program.program.statements) |*statement| {
             _ = switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Structure => |structure| structure,
                     else => continue,
                 },

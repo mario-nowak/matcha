@@ -63,9 +63,9 @@ pub fn emitBlock(
     return .zero_sized;
 }
 
-pub fn emitReturn(
+pub fn emitReturnStatement(
     emitter: *NodeEmitter,
-    return_statement: *const ast.Return,
+    return_statement: *const ast.ReturnStatement,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {

@@ -80,21 +80,21 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         switch (node.kind) {
-            .Declaration => |declaration| return self.checkDeclarationNode(node.id, &declaration, environment),
+            .BindingDeclaration => |binding_declaration| return self.checkBindingDeclarationNode(node.id, &binding_declaration, environment),
             .ItemDefinition => |item_definition| return self.checkItemDefinitionNode(node.id, &item_definition, environment),
-            .Return => |return_statement| return self.checkReturnNode(node.id, &return_statement, environment),
-            .Assignment => |assignment| return self.checkAssignmentNode(node.id, &assignment, environment),
+            .ReturnStatement => |return_statement| return self.checkReturnStatementNode(node.id, &return_statement, environment),
+            .AssignmentStatement => |assignment_statement| return self.checkAssignmentStatementNode(node.id, &assignment_statement, environment),
             .Loop => |loop| return self.checkLoopNode(node.id, &loop, environment),
             .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, environment),
             .ForIn => |for_in| return self.checkForInNode(node.id, &for_in, environment),
-            .Leave => return self.checkLeaveNode(node.id),
-            .Continue => return self.checkContinueNode(node.id),
+            .LeaveStatement => return self.checkLeaveStatementNode(node.id),
+            .ContinueStatement => return self.checkContinueStatementNode(node.id),
             .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, environment),
-            .MemberAccess => |member_access| return self.checkMemberAccessNode(node.id, &member_access, environment),
+            .MemberExpression => |member_expression| return self.checkMemberExpressionNode(node.id, &member_expression, environment),
             .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
             .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
-            .StructureConstruction => |structure_construction| return self.checkStructureConstructionNode(node.id, &structure_construction, environment),
-            .AnonymousStructureLiteral => |anonymous_structure_literal| return self.checkAnonymousStructureLiteralNode(node.id, &anonymous_structure_literal, environment),
+            .QualifiedStructureLiteral => |qualified_structure_literal| return self.checkQualifiedStructureLiteralNode(node.id, &qualified_structure_literal, environment),
+            .StructureLiteral => |structure_literal| return self.checkStructureLiteralNode(node.id, &structure_literal, environment),
             .Block => |block| return self.checkBlockNode(node.id, &block, environment),
             .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
             .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
@@ -106,7 +106,7 @@ pub const NodeTypeAnalyzer = struct {
             .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, environment),
             .ExpressionStatement => |expression_statement| return self.checkExpressionStatementNode(node.id, &expression_statement, environment),
             .ArrayLiteral => |array_literal| return self.checkArrayLiteralNode(node.id, &array_literal, environment),
-            .IndexAccess => |index_access| return self.checkIndexAccessNode(node.id, &index_access, environment),
+            .IndexExpression => |index_expression| return self.checkIndexExpressionNode(node.id, &index_expression, environment),
         }
     }
 
@@ -141,7 +141,7 @@ pub const NodeTypeAnalyzer = struct {
         item_definition: *const ast.ItemDefinition,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        switch (item_definition.item) {
+        switch (item_definition.definition) {
             .Function => |function_definition| try self.checkFunctionDefinition(
                 node_id,
                 &function_definition,
@@ -150,7 +150,7 @@ pub const NodeTypeAnalyzer = struct {
             .Structure => |structure_definition| {
                 for (structure_definition.function_definitions) |*function_definition_node| {
                     const method_definition = switch (function_definition_node.kind) {
-                        .ItemDefinition => |method_item_definition| switch (method_item_definition.item) {
+                        .ItemDefinition => |method_item_definition| switch (method_item_definition.definition) {
                             .Function => |function| function,
                             else => unreachable,
                         },
@@ -168,38 +168,38 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
-    fn checkStructureConstructionNode(
+    fn checkQualifiedStructureLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-        structure_construction: *const ast.StructureConstruction,
+        qualified_structure_literal: *const ast.QualifiedStructureLiteral,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const structure_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const type_id = self.type_by_symbol_id.get(structure_symbol_id).?;
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
-            structure_construction.fields,
+            qualified_structure_literal.fields,
             type_id,
             environment,
         );
     }
 
-    fn checkAnonymousStructureLiteralNode(
+    fn checkStructureLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-        anonymous_structure_literal: *const ast.AnonymousStructureLiteral,
+        structure_literal: *const ast.StructureLiteral,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const type_id = environment.contextual_type_id orelse {
             try self.diagnostic_store.emitErrorFromToken(
-                anonymous_structure_literal.dot_token,
+                structure_literal.dot_token,
                 "cannot infer the type of an anonymous structure literal without a contextual type",
             );
             return error.DiagnosticsEmitted;
         };
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
-            anonymous_structure_literal.fields,
+            structure_literal.fields,
             type_id,
             environment,
         );
@@ -208,7 +208,7 @@ pub const NodeTypeAnalyzer = struct {
     fn checkStructureLiteralFieldsAgainstType(
         self: *@This(),
         node_id: ast.NodeId,
-        fields: []const ast.StructureConstructionField,
+        fields: []const ast.StructureFieldInitializer,
         type_id: typing.TypeId,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
@@ -272,10 +272,10 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, type_id);
     }
 
-    fn checkDeclarationNode(
+    fn checkBindingDeclarationNode(
         self: *@This(),
         node_id: ast.NodeId,
-        declaration: *const ast.Declaration,
+        binding_declaration: *const ast.BindingDeclaration,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
@@ -284,10 +284,10 @@ pub const NodeTypeAnalyzer = struct {
         else
             null;
         const value_environment = environment.withContextAndType(.Expression, annotated_type);
-        const value_type = try self.checkNode(declaration.value, value_environment);
+        const value_type = try self.checkNode(binding_declaration.value, value_environment);
         if (annotated_type) |annotated| {
             if (annotated != value_type) {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration.name, "declaration '{s}' expects {s}, found {s}", .{ declaration.name.kind.Identifier, try self.typeName(annotated), try self.typeName(value_type) });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, binding_declaration.name, "declaration '{s}' expects {s}, found {s}", .{ binding_declaration.name.kind.Identifier, try self.typeName(annotated), try self.typeName(value_type) });
                 return error.DiagnosticsEmitted;
             }
         }
@@ -296,10 +296,10 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
-    fn checkReturnNode(
+    fn checkReturnStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
-        return_statement: *const ast.Return,
+        return_statement: *const ast.ReturnStatement,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         if (return_statement.value) |return_value| {
@@ -310,32 +310,32 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
-    fn checkAssignmentNode(
+    fn checkAssignmentStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
-        assignment: *const ast.Assignment,
+        assignment_statement: *const ast.AssignmentStatement,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const place = try self.checkPlaceNode(assignment.target, environment);
+        const place = try self.checkPlaceNode(assignment_statement.target, environment);
         const value_environment = environment.withContextAndType(.Expression, place.type_id);
-        const value_type = try self.checkNode(assignment.value, value_environment);
+        const value_type = try self.checkNode(assignment_statement.value, value_environment);
 
-        switch (assignment.operator) {
+        switch (assignment_statement.operator) {
             .Assign => {
                 if (place.type_id != value_type) {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment.assignment_token, "cannot assign value of type {s} to target of type {s}", .{ try self.typeName(value_type), try self.typeName(place.type_id) });
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment_statement.assignment_token, "cannot assign value of type {s} to target of type {s}", .{ try self.typeName(value_type), try self.typeName(place.type_id) });
                     return error.DiagnosticsEmitted;
                 }
             },
             .Compound => |binary_operator| {
                 const compound_result_type = try self.checkBinaryOperatorApplication(
-                    assignment.assignment_token,
+                    assignment_statement.assignment_token,
                     binary_operator,
                     place.type_id,
                     value_type,
                 );
                 if (compound_result_type != place.type_id) {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment.assignment_token, "compound assignment produces {s}, which cannot be assigned to target of type {s}", .{ try self.typeName(compound_result_type), try self.typeName(place.type_id) });
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, assignment_statement.assignment_token, "compound assignment produces {s}, which cannot be assigned to target of type {s}", .{ try self.typeName(compound_result_type), try self.typeName(place.type_id) });
                     return error.DiagnosticsEmitted;
                 }
             },
@@ -369,10 +369,10 @@ pub const NodeTypeAnalyzer = struct {
                 const type_id = try self.checkNode(node, environment.withContextAndType(.Expression, null));
                 return .{ .type_id = type_id };
             },
-            .MemberAccess => {
+            .MemberExpression => {
                 const type_id = try self.checkNode(node, environment.withContextAndType(.Expression, null));
-                const member_access = self.member_access_by_node_id.get(node.id) orelse unreachable;
-                return switch (member_access) {
+                const member_expression = self.member_access_by_node_id.get(node.id) orelse unreachable;
+                return switch (member_expression) {
                     .StructureInstanceFieldAccess => .{ .type_id = type_id },
                     .StructureInstanceMethodAccess => {
                         try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure instance method");
@@ -408,7 +408,7 @@ pub const NodeTypeAnalyzer = struct {
                     },
                 };
             },
-            .IndexAccess => {
+            .IndexExpression => {
                 const type_id = try self.checkNode(node, environment.withContextAndType(.Expression, null));
                 return .{ .type_id = type_id };
             },
@@ -472,14 +472,14 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
-    fn checkLeaveNode(
+    fn checkLeaveStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
     ) TypeError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
-    fn checkContinueNode(
+    fn checkContinueStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
     ) TypeError!typing.TypeId {
@@ -519,15 +519,15 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, function_type.return_type);
     }
 
-    fn checkMemberAccessNode(
+    fn checkMemberExpressionNode(
         self: *@This(),
         node_id: ast.NodeId,
-        member_access: *const ast.MemberAccess,
+        member_expression: *const ast.MemberExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const member_name = member_access.member_name_token.kind.Identifier;
-        if (member_access.base.kind == .Identifier) {
-            const base_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(member_access.base.id) orelse unreachable;
+        const member_name = member_expression.member_name_token.kind.Identifier;
+        if (member_expression.base.kind == .Identifier) {
+            const base_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(member_expression.base.id) orelse unreachable;
             const base_symbol = environment.resolved_program.symbol_table.getSymbol(base_symbol_id);
             switch (base_symbol.kind) {
                 .Structure => {
@@ -538,7 +538,7 @@ pub const NodeTypeAnalyzer = struct {
                     };
                     const structure_type = self.type_store.structure_types.items[structure_type_id];
                     const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name) orelse {
-                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, structure_type.name });
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, structure_type.name });
                         return error.DiagnosticsEmitted;
                     };
 
@@ -549,34 +549,34 @@ pub const NodeTypeAnalyzer = struct {
                     const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
                     return self.recordNodeType(node_id, function_type_id);
                 },
-                .Binding => return self.checkInstanceMemberAccessNode(
+                .Binding => return self.checkInstanceMemberExpressionNode(
                     node_id,
-                    member_access,
+                    member_expression,
                     environment,
                 ),
                 .Function => {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "cannot access member '{s}' on a function", .{member_name});
+                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "cannot access member '{s}' on a function", .{member_name});
                     return error.DiagnosticsEmitted;
                 },
             }
         }
 
-        return self.checkInstanceMemberAccessNode(
+        return self.checkInstanceMemberExpressionNode(
             node_id,
-            member_access,
+            member_expression,
             environment,
         );
     }
 
-    fn checkInstanceMemberAccessNode(
+    fn checkInstanceMemberExpressionNode(
         self: *@This(),
         node_id: ast.NodeId,
-        member_access: *const ast.MemberAccess,
+        member_expression: *const ast.MemberExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const member_name = member_access.member_name_token.kind.Identifier;
+        const member_name = member_expression.member_name_token.kind.Identifier;
         const base_type_id = try self.checkNode(
-            member_access.base,
+            member_expression.base,
             environment.withContextAndType(.Expression, null),
         );
         switch (self.type_store.getType(base_type_id)) {
@@ -592,7 +592,7 @@ pub const NodeTypeAnalyzer = struct {
                 if (function_symbol_id) |structure_function_symbol_id| {
                     // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                     const bound_function_type_id = try self.bindInstanceMethodFunctionType(
-                        member_access.member_name_token,
+                        member_expression.member_name_token,
                         structure_function_symbol_id,
                         base_type_id,
                     );
@@ -603,7 +603,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, bound_function_type_id);
                 }
 
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "type '{s}' has no member named '{s}'", .{ structure_type.name, member_name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "type '{s}' has no member named '{s}'", .{ structure_type.name, member_name });
                 return error.DiagnosticsEmitted;
             },
             .Array => {
@@ -618,7 +618,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
 
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "array has no member named '{s}'", .{member_name});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "array has no member named '{s}'", .{member_name});
                 return error.DiagnosticsEmitted;
             },
             .String => {
@@ -645,7 +645,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, to_int_function_type_id);
                 }
 
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "string has no member named '{s}'", .{member_name});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "string has no member named '{s}'", .{member_name});
                 return error.DiagnosticsEmitted;
             },
             .Integer => {
@@ -655,11 +655,11 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, to_string_function_type_id);
                 }
 
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "int has no member named '{s}'", .{member_name});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "int has no member named '{s}'", .{member_name});
                 return error.DiagnosticsEmitted;
             },
             else => {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_access.member_name_token, "cannot access member '{s}' on type {s}", .{ member_name, try self.typeName(base_type_id) });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "cannot access member '{s}' on type {s}", .{ member_name, try self.typeName(base_type_id) });
                 return error.DiagnosticsEmitted;
             },
         }
@@ -950,24 +950,24 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, array_type_id);
     }
 
-    fn checkIndexAccessNode(
+    fn checkIndexExpressionNode(
         self: *@This(),
         node_id: ast.NodeId,
-        index_access: *const ast.IndexAccess,
+        index_expression: *const ast.IndexExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const base_type_id = try self.checkExpression(index_access.base, environment);
+        const base_type_id = try self.checkExpression(index_expression.base, environment);
         const element_type_id = switch (self.type_store.getType(base_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_access.left_bracket, "cannot index into non-array type {s}", .{try self.typeName(base_type_id)});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_expression.left_bracket, "cannot index into non-array type {s}", .{try self.typeName(base_type_id)});
                 return error.DiagnosticsEmitted;
             },
         };
 
-        const index_type_id = try self.checkExpression(index_access.index, environment);
+        const index_type_id = try self.checkExpression(index_expression.index, environment);
         if (index_type_id != self.type_store.integer_type_id) {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_access.index.primaryToken(), "array index must be int, found {s}", .{try self.typeName(index_type_id)});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_expression.index.primaryToken(), "array index must be int, found {s}", .{try self.typeName(index_type_id)});
             return error.DiagnosticsEmitted;
         }
 
@@ -995,7 +995,7 @@ pub const NodeTypeAnalyzer = struct {
     fn checkFunctionDefinition(
         self: *@This(),
         function_node_id: ast.NodeId,
-        function_definition: *const ast.Function,
+        function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
     ) TypeError!void {
         const function_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
@@ -1015,7 +1015,7 @@ pub const NodeTypeAnalyzer = struct {
     fn checkFunctionDefinitionReturnValue(
         self: *@This(),
         function_node_id: ast.NodeId,
-        function_definition: *const ast.Function,
+        function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
     ) TypeError!void {
         const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
@@ -1060,7 +1060,7 @@ pub const NodeTypeAnalyzer = struct {
         resolved_program: *const symbols.ResolvedProgram,
     ) TypeError!void {
         switch (node.kind) {
-            .Return => |return_statement| {
+            .ReturnStatement => |return_statement| {
                 if (return_statement.value) |return_value| {
                     const return_value_type = self.type_by_node_id.get(return_value.id).?;
                     if (return_value_type != function_return_type) {
@@ -1117,12 +1117,12 @@ pub const NodeTypeAnalyzer = struct {
                     try self.checkReturnStatementsMatchType(argument, function_return_type, resolved_program);
                 }
             },
-            .Assignment => |assignment| {
-                try self.checkReturnStatementsMatchType(assignment.target, function_return_type, resolved_program);
-                try self.checkReturnStatementsMatchType(assignment.value, function_return_type, resolved_program);
+            .AssignmentStatement => |assignment_statement| {
+                try self.checkReturnStatementsMatchType(assignment_statement.target, function_return_type, resolved_program);
+                try self.checkReturnStatementsMatchType(assignment_statement.value, function_return_type, resolved_program);
             },
-            .Declaration => |declaration| {
-                try self.checkReturnStatementsMatchType(declaration.value, function_return_type, resolved_program);
+            .BindingDeclaration => |binding_declaration| {
+                try self.checkReturnStatementsMatchType(binding_declaration.value, function_return_type, resolved_program);
             },
             .ExpressionStatement => |expression_statement| {
                 try self.checkReturnStatementsMatchType(expression_statement.expression, function_return_type, resolved_program);
@@ -1134,16 +1134,16 @@ pub const NodeTypeAnalyzer = struct {
             .UnaryExpression => |unary_expression| {
                 try self.checkReturnStatementsMatchType(unary_expression.operand, function_return_type, resolved_program);
             },
-            .MemberAccess => |member_access| {
-                try self.checkReturnStatementsMatchType(member_access.base, function_return_type, resolved_program);
+            .MemberExpression => |member_expression| {
+                try self.checkReturnStatementsMatchType(member_expression.base, function_return_type, resolved_program);
             },
-            .StructureConstruction => |structure_construction| {
-                for (structure_construction.fields) |field| {
+            .QualifiedStructureLiteral => |qualified_structure_literal| {
+                for (qualified_structure_literal.fields) |field| {
                     try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
                 }
             },
-            .AnonymousStructureLiteral => |anonymous_structure_literal| {
-                for (anonymous_structure_literal.fields) |field| {
+            .StructureLiteral => |structure_literal| {
+                for (structure_literal.fields) |field| {
                     try self.checkReturnStatementsMatchType(field.value, function_return_type, resolved_program);
                 }
             },
@@ -1152,9 +1152,9 @@ pub const NodeTypeAnalyzer = struct {
                     try self.checkReturnStatementsMatchType(element, function_return_type, resolved_program);
                 }
             },
-            .IndexAccess => |index_access| {
-                try self.checkReturnStatementsMatchType(index_access.base, function_return_type, resolved_program);
-                try self.checkReturnStatementsMatchType(index_access.index, function_return_type, resolved_program);
+            .IndexExpression => |index_expression| {
+                try self.checkReturnStatementsMatchType(index_expression.base, function_return_type, resolved_program);
+                try self.checkReturnStatementsMatchType(index_expression.index, function_return_type, resolved_program);
             },
             .ItemDefinition => {},
             .Identifier,
@@ -1162,8 +1162,8 @@ pub const NodeTypeAnalyzer = struct {
             .BooleanLiteral,
             .StringLiteral,
             .UnitLiteral,
-            .Leave,
-            .Continue,
+            .LeaveStatement,
+            .ContinueStatement,
             => {},
         }
     }

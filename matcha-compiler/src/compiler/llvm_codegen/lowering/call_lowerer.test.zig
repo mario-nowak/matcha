@@ -5,7 +5,7 @@ const llvm_codegen = @import("llvm_codegen");
 const CallLowerer = llvm_codegen.lowering.CallLowerer;
 
 const TestError = helpers.TestError;
-const expectDeclarationNode = helpers.expectDeclarationNode;
+const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
 const expectCallExpressionNode = helpers.expectCallExpressionNode;
 
 fn expectExpressionStatement(node: *const ast.Node) TestError!ast.ExpressionStatement {
@@ -36,14 +36,14 @@ test "call lowering records direct builtin and structure call strategies" {
 
     const decisions = lowerer.lower(&analyzed.typed_program);
     const point_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
-    const point_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const point_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
     _ = try expectCallExpressionNode(point_declaration.value);
-    const copied_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[3]);
+    const copied_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
     _ = try expectCallExpressionNode(copied_declaration.value);
-    const moved_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[4]);
+    const moved_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
     const moved_call = try expectCallExpressionNode(moved_declaration.value);
     const moved_callee = switch (moved_call.callee.kind) {
-        .MemberAccess => |member_access| member_access,
+        .MemberExpression => |member_expression| member_expression,
         else => return TestError.UnexpectedNodeKind,
     };
     const print_statement = try expectExpressionStatement(&analyzed.parsed.program.statements[5]);
@@ -98,13 +98,13 @@ test "call lowering records array string integer and io helper strategies" {
     defer lowerer.deinit();
 
     const decisions = lowerer.lower(&analyzed.typed_program);
-    const input_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[0]);
-    const trimmed_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const parts_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const first_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[3]);
-    const text_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[4]);
-    const line_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[5]);
-    const args_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[6]);
+    const input_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[0]);
+    const trimmed_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const parts_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const first_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
+    const text_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
+    const line_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[5]);
+    const args_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[6]);
     const append_statement = try expectExpressionStatement(&analyzed.parsed.program.statements[8]);
 
     switch (decisions.get(input_declaration.value.id).?) {

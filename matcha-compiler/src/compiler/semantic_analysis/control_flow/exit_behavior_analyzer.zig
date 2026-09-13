@@ -39,7 +39,7 @@ pub const ExitBehaviorAnalyzer = struct {
         node: *const ast.Node,
     ) ControlFlowValidationError!void {
         switch (node.kind) {
-            .ItemDefinition => |item_definition| switch (item_definition.item) {
+            .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Function => |function_definition| {
                     try self.validateFunctionReturnsValue(item_definition.identifier_token, &function_definition);
                 },
@@ -54,7 +54,7 @@ pub const ExitBehaviorAnalyzer = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: anytype, function_definition: *const ast.Function) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: anytype, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {
@@ -68,31 +68,31 @@ pub const ExitBehaviorAnalyzer = struct {
         node: *const ast.Node,
     ) ControlFlowValidationError!ExitBehavior {
         return switch (node.kind) {
-            .Return => try self.validateReturnNode(node),
+            .ReturnStatement => try self.validateReturnStatementNode(node),
             .Block => |block| try self.validateBlockNode(node, block),
-            .Declaration => |declaration| try self.validateDeclarationNode(declaration),
+            .BindingDeclaration => |binding_declaration| try self.validateBindingDeclarationNode(binding_declaration),
             .ItemDefinition => {
                 try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "item definitions are only allowed at the top level");
                 return error.DiagnosticsEmitted;
             },
             .IfStatement => |if_statement| try self.validateIfStatementNode(node, if_statement),
-            .StructureConstruction => |structure_construction| try self.validateStructureConstructionNode(node, structure_construction),
-            .AnonymousStructureLiteral => |anonymous_structure_literal| try self.validateAnonymousStructureLiteralNode(node, anonymous_structure_literal),
+            .QualifiedStructureLiteral => |qualified_structure_literal| try self.validateQualifiedStructureLiteralNode(node, qualified_structure_literal),
+            .StructureLiteral => |structure_literal| try self.validateStructureLiteralNode(node, structure_literal),
             .ExpressionStatement => |expression_statement| try self.validateExpressionStatementNode(node, expression_statement),
-            .Assignment => |assignment| try self.validateAssignmentNode(node, assignment),
+            .AssignmentStatement => |assignment_statement| try self.validateAssignmentStatementNode(node, assignment_statement),
             .Loop => |loop| try self.validateLoopNode(node, loop),
             .While => |while_statement| try self.validateWhileNode(node, while_statement),
             .ForIn => |for_in| try self.validateForInNode(node, for_in),
-            .Leave => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
-            .Continue => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
+            .LeaveStatement => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
+            .ContinueStatement => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
             .IfExpression => |if_expression| try self.validateIfExpressionNode(node, if_expression),
             .MatchExpression => |match_expression| try self.validateMatchExpressionNode(node, match_expression),
             .CallExpression => |call_expression| try self.validateCallExpressionNode(node, call_expression),
             .BinaryExpression => |binary_expression| try self.validateBinaryExpressionNode(node, binary_expression),
             .UnaryExpression => |unary_expression| try self.validateUnaryExpressionNode(node, unary_expression),
-            .MemberAccess => |member_access| try self.validateMemberAccessNode(node, member_access),
+            .MemberExpression => |member_expression| try self.validateMemberExpressionNode(node, member_expression),
             .ArrayLiteral => |array_literal| try self.validateArrayLiteralNode(node, array_literal),
-            .IndexAccess => |index_access| try self.validateIndexAccessNode(node, index_access),
+            .IndexExpression => |index_expression| try self.validateIndexExpressionNode(node, index_expression),
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
@@ -107,7 +107,7 @@ pub const ExitBehaviorAnalyzer = struct {
         return behavior;
     }
 
-    fn validateReturnNode(self: *@This(), node: *const ast.Node) ControlFlowValidationError!ExitBehavior {
+    fn validateReturnStatementNode(self: *@This(), node: *const ast.Node) ControlFlowValidationError!ExitBehavior {
         return self.markNodeExitBehavior(node, .Terminates);
     }
 
@@ -127,9 +127,9 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
     }
 
-    fn validateDeclarationNode(self: *@This(), declaration: ast.Declaration) ControlFlowValidationError!ExitBehavior {
-        const result = try self.validateTerminatesWithValue(declaration.value);
-        self.exit_behavior_by_node_id.put(declaration.value.id, result) catch unreachable;
+    fn validateBindingDeclarationNode(self: *@This(), binding_declaration: ast.BindingDeclaration) ControlFlowValidationError!ExitBehavior {
+        const result = try self.validateTerminatesWithValue(binding_declaration.value);
+        self.exit_behavior_by_node_id.put(binding_declaration.value.id, result) catch unreachable;
         return result;
     }
 
@@ -147,12 +147,12 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
     }
 
-    fn validateStructureConstructionNode(
+    fn validateQualifiedStructureLiteralNode(
         self: *@This(),
         node: *const ast.Node,
-        structure_construction: ast.StructureConstruction,
+        qualified_structure_literal: ast.QualifiedStructureLiteral,
     ) ControlFlowValidationError!ExitBehavior {
-        for (structure_construction.fields) |field| {
+        for (qualified_structure_literal.fields) |field| {
             const result = try self.validateTerminatesWithValue(field.value);
             if (result == .Terminates) {
                 return self.markNodeExitBehavior(node, .Terminates);
@@ -161,12 +161,12 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithValue);
     }
 
-    fn validateAnonymousStructureLiteralNode(
+    fn validateStructureLiteralNode(
         self: *@This(),
         node: *const ast.Node,
-        anonymous_structure_literal: ast.AnonymousStructureLiteral,
+        structure_literal: ast.StructureLiteral,
     ) ControlFlowValidationError!ExitBehavior {
-        for (anonymous_structure_literal.fields) |field| {
+        for (structure_literal.fields) |field| {
             const result = try self.validateTerminatesWithValue(field.value);
             if (result == .Terminates) {
                 return self.markNodeExitBehavior(node, .Terminates);
@@ -187,18 +187,18 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
     }
 
-    fn validateAssignmentNode(
+    fn validateAssignmentStatementNode(
         self: *@This(),
         node: *const ast.Node,
-        assignment: ast.Assignment,
+        assignment_statement: ast.AssignmentStatement,
     ) ControlFlowValidationError!ExitBehavior {
-        const target_result = try self.validateTerminatesWithValue(assignment.target);
+        const target_result = try self.validateTerminatesWithValue(assignment_statement.target);
         if (target_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
         }
 
-        const result = try self.validateTerminatesWithValue(assignment.value);
-        self.exit_behavior_by_node_id.put(assignment.value.id, result) catch unreachable;
+        const result = try self.validateTerminatesWithValue(assignment_statement.value);
+        self.exit_behavior_by_node_id.put(assignment_statement.value.id, result) catch unreachable;
         return result;
     }
 
@@ -374,12 +374,12 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithValue);
     }
 
-    fn validateMemberAccessNode(
+    fn validateMemberExpressionNode(
         self: *@This(),
         node: *const ast.Node,
-        member_access: ast.MemberAccess,
+        member_expression: ast.MemberExpression,
     ) ControlFlowValidationError!ExitBehavior {
-        const base_result = try self.validateTerminatesWithValue(member_access.base);
+        const base_result = try self.validateTerminatesWithValue(member_expression.base);
         if (base_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
         }
@@ -402,17 +402,17 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithValue);
     }
 
-    fn validateIndexAccessNode(
+    fn validateIndexExpressionNode(
         self: *@This(),
         node: *const ast.Node,
-        index_access: ast.IndexAccess,
+        index_expression: ast.IndexExpression,
     ) ControlFlowValidationError!ExitBehavior {
-        const base_result = try self.validateTerminatesWithValue(index_access.base);
+        const base_result = try self.validateTerminatesWithValue(index_expression.base);
         if (base_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
         }
 
-        const index_result = try self.validateTerminatesWithValue(index_access.index);
+        const index_result = try self.validateTerminatesWithValue(index_expression.index);
         if (index_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
         }

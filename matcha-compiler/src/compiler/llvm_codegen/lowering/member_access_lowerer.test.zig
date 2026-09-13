@@ -4,7 +4,7 @@ const llvm_codegen = @import("llvm_codegen");
 const MemberAccessLowerer = llvm_codegen.lowering.MemberAccessLowerer;
 
 const TestError = helpers.TestError;
-const expectDeclarationNode = helpers.expectDeclarationNode;
+const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
 
 test "member access lowering records field and synthetic field targets" {
     const source =
@@ -22,9 +22,9 @@ test "member access lowering records field and synthetic field targets" {
     defer lowerer.deinit();
 
     const decisions = lowerer.lower(&analyzed.typed_program);
-    const field_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const text_length_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[4]);
-    const array_length_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[6]);
+    const field_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const text_length_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
+    const array_length_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[6]);
 
     switch (decisions.get(field_declaration.value.id).?) {
         .StructureField => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),

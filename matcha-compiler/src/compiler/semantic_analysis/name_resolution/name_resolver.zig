@@ -230,7 +230,7 @@ pub const NameResolver = struct {
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
-        switch (item_definition.item) {
+        switch (item_definition.definition) {
             .Function => {
                 try self.registerModuleFunctionSymbol(node_id, item_definition, module_scope);
             },
@@ -291,58 +291,58 @@ pub const NameResolver = struct {
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         switch (node.kind) {
-            .Declaration => |declaration| try self.resolveDeclarationNode(node.id, declaration, environment),
+            .BindingDeclaration => |binding_declaration| try self.resolveBindingDeclarationNode(node.id, binding_declaration, environment),
             .ItemDefinition => |item_definition| try self.resolveItemDefinitionNode(node.id, item_definition, environment.module_scope),
-            .Return => |return_statement| try self.resolveReturnNode(return_statement, environment),
-            .Assignment => |assignment| try self.resolveAssignmentNode(assignment, environment),
+            .ReturnStatement => |return_statement| try self.resolveReturnStatementNode(return_statement, environment),
+            .AssignmentStatement => |assignment_statement| try self.resolveAssignmentStatementNode(assignment_statement, environment),
             .Loop => |loop| try self.resolveLoopNode(loop, environment),
             .While => |while_statement| try self.resolveWhileNode(while_statement, environment),
             .ForIn => |for_in| try self.resolveForInNode(node.id, for_in, environment),
             .CallExpression => |call_expression| try self.resolveCallExpressionNode(call_expression, environment),
             .BinaryExpression => |binary_expression| try self.resolveBinaryExpressionNode(binary_expression, environment),
             .UnaryExpression => |unary_expression| try self.resolveUnaryExpressionNode(unary_expression, environment),
-            .MemberAccess => |member_access| try self.resolveMemberAccessNode(member_access, environment),
+            .MemberExpression => |member_expression| try self.resolveMemberExpressionNode(member_expression, environment),
             .Identifier => |identifier| try self.resolveIdentifierNode(node.id, identifier, environment),
             .Block => |block| try self.resolveBlockNode(block, environment),
             .IfStatement => |if_statement| try self.resolveIfStatementNode(if_statement, environment),
             .IfExpression => |if_expression| try self.resolveIfExpressionNode(if_expression, environment),
             .MatchExpression => |match_expression| try self.resolveMatchExpressionNode(match_expression, environment),
             .ExpressionStatement => |expression_statement| try self.resolveExpressionStatementNode(expression_statement, environment),
-            .StructureConstruction => |*structure_construction| try self.resolveStructureConstruction(node.id, structure_construction, environment),
-            .AnonymousStructureLiteral => |anonymous_structure_literal| try self.resolveAnonymousStructureLiteralNode(anonymous_structure_literal, environment),
+            .QualifiedStructureLiteral => |*qualified_structure_literal| try self.resolveQualifiedStructureLiteral(node.id, qualified_structure_literal, environment),
+            .StructureLiteral => |structure_literal| try self.resolveStructureLiteralNode(structure_literal, environment),
             .ArrayLiteral => |array_literal| try self.resolveArrayLiteralNode(array_literal, environment),
-            .IndexAccess => |index_access| try self.resolveIndexAccessNode(index_access, environment),
+            .IndexExpression => |index_expression| try self.resolveIndexExpressionNode(index_expression, environment),
             .IntegerLiteral,
             .BooleanLiteral,
             .StringLiteral,
             .UnitLiteral,
-            .Leave,
-            .Continue,
+            .LeaveStatement,
+            .ContinueStatement,
             => {},
         }
     }
 
-    fn resolveDeclarationNode(
+    fn resolveBindingDeclarationNode(
         self: *@This(),
         node_id: ast.NodeId,
-        declaration: ast.Declaration,
+        binding_declaration: ast.BindingDeclaration,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        const declaration_name = declaration.name.kind.Identifier;
-        try self.validateDeclarationName(declaration.name, declaration_name, environment);
+        const declaration_name = binding_declaration.name.kind.Identifier;
+        try self.validateBindingDeclarationName(binding_declaration.name, declaration_name, environment);
 
-        try self.resolveNode(declaration.value, environment);
-        const annotated_type_reference = if (declaration.type_annotation) |type_annotation|
+        try self.resolveNode(binding_declaration.value, environment);
+        const annotated_type_reference = if (binding_declaration.type_annotation) |type_annotation|
             try self.resolveTypeExpression(type_annotation, environment.module_scope)
         else
             null;
 
         const declaration_symbol = self.symbol_table.insertSymbol(.{
             .name = declaration_name,
-            .declared_at = declaration.val_token,
+            .declared_at = binding_declaration.val_token,
             .kind = .{
                 .Binding = .{
-                    .binding_mutability = switch (declaration.binding_mutability) {
+                    .binding_mutability = switch (binding_declaration.binding_mutability) {
                         .Mutable => symbols.BindingMutability.Mutable,
                         .Immutable => symbols.BindingMutability.Immutable,
                     },
@@ -359,7 +359,7 @@ pub const NameResolver = struct {
         }
     }
 
-    fn validateDeclarationName(
+    fn validateBindingDeclarationName(
         self: *@This(),
         declaration_token: lexing.Token,
         declaration_name: []const u8,
@@ -384,7 +384,7 @@ pub const NameResolver = struct {
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
-        switch (item_definition.item) {
+        switch (item_definition.definition) {
             .Function => |function_definition| {
                 const function_symbol_id = module_scope.lookupSymbol(item_definition.identifier_token.kind.Identifier) orelse unreachable;
                 const function_symbol = self.symbol_table.getSymbol(function_symbol_id);
@@ -405,9 +405,9 @@ pub const NameResolver = struct {
         }
     }
 
-    fn resolveReturnNode(
+    fn resolveReturnStatementNode(
         self: *@This(),
-        return_statement: ast.Return,
+        return_statement: ast.ReturnStatement,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         if (return_statement.value) |value| {
@@ -415,13 +415,13 @@ pub const NameResolver = struct {
         }
     }
 
-    fn resolveAssignmentNode(
+    fn resolveAssignmentStatementNode(
         self: *@This(),
-        assignment: ast.Assignment,
+        assignment_statement: ast.AssignmentStatement,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        try self.resolveNode(assignment.target, environment);
-        try self.resolveNode(assignment.value, environment);
+        try self.resolveNode(assignment_statement.target, environment);
+        try self.resolveNode(assignment_statement.value, environment);
     }
 
     fn resolveLoopNode(
@@ -504,12 +504,12 @@ pub const NameResolver = struct {
         try self.resolveNode(unary_expression.operand, environment);
     }
 
-    fn resolveMemberAccessNode(
+    fn resolveMemberExpressionNode(
         self: *@This(),
-        member_access: ast.MemberAccess,
+        member_expression: ast.MemberExpression,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        try self.resolveNode(member_access.base, environment);
+        try self.resolveNode(member_expression.base, environment);
     }
 
     fn resolveIdentifierNode(
@@ -583,12 +583,12 @@ pub const NameResolver = struct {
         try self.resolveNode(expression_statement.expression, environment);
     }
 
-    fn resolveAnonymousStructureLiteralNode(
+    fn resolveStructureLiteralNode(
         self: *@This(),
-        anonymous_structure_literal: ast.AnonymousStructureLiteral,
+        structure_literal: ast.StructureLiteral,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        for (anonymous_structure_literal.fields) |field| {
+        for (structure_literal.fields) |field| {
             try self.resolveNode(field.value, environment);
         }
     }
@@ -603,13 +603,13 @@ pub const NameResolver = struct {
         }
     }
 
-    fn resolveIndexAccessNode(
+    fn resolveIndexExpressionNode(
         self: *@This(),
-        index_access: ast.IndexAccess,
+        index_expression: ast.IndexExpression,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        try self.resolveNode(index_access.base, environment);
-        try self.resolveNode(index_access.index, environment);
+        try self.resolveNode(index_expression.base, environment);
+        try self.resolveNode(index_expression.index, environment);
     }
 
     fn getSymbolIdForName(
@@ -626,19 +626,19 @@ pub const NameResolver = struct {
         return symbol_id;
     }
 
-    fn resolveStructureConstruction(
+    fn resolveQualifiedStructureLiteral(
         self: *@This(),
         node_id: ast.NodeId,
-        structure_construction: *const ast.StructureConstruction,
+        qualified_structure_literal: *const ast.QualifiedStructureLiteral,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        const structure_name = structure_construction.structure_name.kind.Identifier;
+        const structure_name = qualified_structure_literal.structure_name.kind.Identifier;
         const symbol_id = environment.module_scope.lookupSymbol(structure_name) orelse {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, structure_construction.structure_name, "undefined structure '{s}'", .{structure_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, qualified_structure_literal.structure_name, "undefined structure '{s}'", .{structure_name});
             return error.DiagnosticsEmitted;
         };
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
-        for (structure_construction.fields) |field| {
+        for (qualified_structure_literal.fields) |field| {
             try self.resolveNode(field.value, environment);
         }
     }
@@ -646,7 +646,7 @@ pub const NameResolver = struct {
     fn resolveFunction(
         self: *@This(),
         target: FunctionResolutionTarget,
-        function_definition: *const ast.Function,
+        function_definition: *const ast.FunctionDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!symbols.ResolvedFunction {
         var function_scope = scope.Scope.init(self.allocator, null);
@@ -701,7 +701,7 @@ pub const NameResolver = struct {
         self: *@This(),
         node_id: ast.NodeId,
         structure_name: []const u8,
-        structure_definition: *const ast.Structure,
+        structure_definition: *const ast.StructureDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         const StructureMemberKind = enum {
@@ -731,7 +731,7 @@ pub const NameResolver = struct {
         var function_symbol_ids = std.ArrayList(symbols.SymbolId){};
         for (structure_definition.function_definitions) |*node| {
             switch (node.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.item) {
+                .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Function => |function_definition| {
                         const function_name = item_definition.identifier_token.kind.Identifier;
                         try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "structure member");

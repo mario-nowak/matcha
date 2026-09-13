@@ -6,22 +6,22 @@ pub const NodeId = u32;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
-    Declaration: Declaration,
+    BindingDeclaration: BindingDeclaration,
     ItemDefinition: ItemDefinition,
-    Return: Return,
+    ReturnStatement: ReturnStatement,
     IfStatement: IfStatement,
     ExpressionStatement: ExpressionStatement,
-    Assignment: Assignment,
+    AssignmentStatement: AssignmentStatement,
     Loop: Loop,
-    Leave: Leave,
-    Continue: Continue,
+    LeaveStatement: LeaveStatement,
+    ContinueStatement: ContinueStatement,
     While: While,
     ForIn: ForIn,
     // Expressions-ish nodes
     IfExpression: IfExpression,
     MatchExpression: MatchExpression,
     CallExpression: CallExpression,
-    MemberAccess: MemberAccess,
+    MemberExpression: MemberExpression,
     BinaryExpression: BinaryExpression,
     UnaryExpression: UnaryExpression,
     Identifier: lexing.Token,
@@ -30,10 +30,10 @@ pub const NodeKind = union(enum) {
     StringLiteral: lexing.Token,
     UnitLiteral: lexing.Token,
     Block: Block,
-    StructureConstruction: StructureConstruction,
-    AnonymousStructureLiteral: AnonymousStructureLiteral,
+    QualifiedStructureLiteral: QualifiedStructureLiteral,
+    StructureLiteral: StructureLiteral,
     ArrayLiteral: ArrayLiteral,
-    IndexAccess: IndexAccess,
+    IndexExpression: IndexExpression,
 };
 
 pub const Node = struct {
@@ -42,21 +42,21 @@ pub const Node = struct {
 
     pub fn primaryToken(self: *const @This()) lexing.Token {
         return switch (self.kind) {
-            .Declaration => |declaration| declaration.name,
+            .BindingDeclaration => |binding_declaration| binding_declaration.name,
             .ItemDefinition => |item_definition| item_definition.identifier_token,
-            .Return => |return_statement| return_statement.return_token,
+            .ReturnStatement => |return_statement| return_statement.return_token,
             .IfStatement => |if_statement| if_statement.if_token,
             .ExpressionStatement => |expression_statement| expression_statement.expression.primaryToken(),
-            .Assignment => |assignment| assignment.assignment_token,
+            .AssignmentStatement => |assignment_statement| assignment_statement.assignment_token,
             .Loop => |loop| loop.loop_token,
-            .Leave => |leave_statement| leave_statement.leave_token,
-            .Continue => |continue_statement| continue_statement.continue_token,
+            .LeaveStatement => |leave_statement| leave_statement.leave_token,
+            .ContinueStatement => |continue_statement| continue_statement.continue_token,
             .While => |while_statement| while_statement.while_token,
             .ForIn => |for_in| for_in.for_token,
             .IfExpression => |if_expression| if_expression.if_token,
             .MatchExpression => |match_expression| match_expression.match_token,
             .CallExpression => |call_expression| call_expression.left_parenthesis,
-            .MemberAccess => |member_access| member_access.member_name_token,
+            .MemberExpression => |member_expression| member_expression.member_name_token,
             .BinaryExpression => |binary_expression| binary_expression.operator_token,
             .UnaryExpression => |unary_expression| unary_expression.operator_token,
             .Identifier => |token| token,
@@ -65,10 +65,10 @@ pub const Node = struct {
             .StringLiteral => |token| token,
             .UnitLiteral => |token| token,
             .Block => |block| block.left_brace,
-            .StructureConstruction => |structure_construction| structure_construction.structure_name,
-            .AnonymousStructureLiteral => |anonymous_structure_literal| anonymous_structure_literal.dot_token,
+            .QualifiedStructureLiteral => |qualified_structure_literal| qualified_structure_literal.structure_name,
+            .StructureLiteral => |structure_literal| structure_literal.dot_token,
             .ArrayLiteral => |array_literal| array_literal.left_bracket,
-            .IndexAccess => |index_access| index_access.left_bracket,
+            .IndexExpression => |index_expression| index_expression.left_bracket,
         };
     }
 };
@@ -76,38 +76,38 @@ pub const Node = struct {
 pub const ItemDefinition = struct {
     item_token: lexing.Token,
     identifier_token: lexing.Token,
-    item: Item,
+    definition: ItemDefinitionKind,
 };
 
-pub const Item = union(enum) {
-    Function: Function,
-    Structure: Structure,
-    Union: Union,
+pub const ItemDefinitionKind = union(enum) {
+    Function: FunctionDefinition,
+    Structure: StructureDefinition,
+    Union: UnionDefinition,
 };
 
-pub const Union = struct {
-    unit_token: lexing.Token,
-    cases: []UnionCase,
+pub const UnionDefinition = struct {
+    union_token: lexing.Token,
+    cases: []UnionCaseDeclaration,
     function_definitions: []Node,
 };
 
-pub const UnionCase = struct {
+pub const UnionCaseDeclaration = struct {
     name: lexing.Token,
     type_annotation: ?*type_expressions.TypeExpression,
 };
 
-pub const Structure = struct {
+pub const StructureDefinition = struct {
     structure_token: lexing.Token,
-    fields: []Field,
+    fields: []StructureFieldDeclaration,
     function_definitions: []Node,
 };
 
-pub const Field = struct {
+pub const StructureFieldDeclaration = struct {
     name: lexing.Token,
     type_annotation: *type_expressions.TypeExpression,
 };
 
-pub const Declaration = struct {
+pub const BindingDeclaration = struct {
     val_token: lexing.Token,
     name: lexing.Token,
     type_annotation: ?*type_expressions.TypeExpression,
@@ -115,23 +115,23 @@ pub const Declaration = struct {
     binding_mutability: BindingMutability,
 };
 
-pub const Function = struct {
-    parameters: []Parameter,
+pub const FunctionDefinition = struct {
+    parameters: []ParameterDeclaration,
     return_type_annotation: *type_expressions.TypeExpression,
     body_expression: *Node,
 };
 
-pub const Parameter = struct {
+pub const ParameterDeclaration = struct {
     name: lexing.Token,
     type_annotation: *type_expressions.TypeExpression,
 };
 
-pub const Return = struct {
+pub const ReturnStatement = struct {
     return_token: lexing.Token,
     value: ?*Node,
 };
 
-pub const Assignment = struct {
+pub const AssignmentStatement = struct {
     target: *Node,
     operator: AssignmentOperator,
     assignment_token: lexing.Token,
@@ -153,11 +153,11 @@ pub const Loop = struct {
     body_block: *Node,
 };
 
-pub const Leave = struct {
+pub const LeaveStatement = struct {
     leave_token: lexing.Token,
 };
 
-pub const Continue = struct {
+pub const ContinueStatement = struct {
     continue_token: lexing.Token,
 };
 
@@ -215,7 +215,7 @@ pub const CallExpression = struct {
     right_parenthesis: lexing.Token,
 };
 
-pub const MemberAccess = struct {
+pub const MemberExpression = struct {
     base: *Node,
     dot_token: lexing.Token,
     member_name_token: lexing.Token,
@@ -285,18 +285,23 @@ pub const Block = struct {
     right_brace: lexing.Token,
 };
 
-pub const StructureConstruction = struct {
-    structure_name: lexing.Token,
-    fields: []StructureConstructionField,
+pub const UnionConstruction = struct {
+    union_name: lexing.Token,
+    value: ?*Node,
 };
 
-pub const AnonymousStructureLiteral = struct {
+pub const QualifiedStructureLiteral = struct {
+    structure_name: lexing.Token,
+    fields: []StructureFieldInitializer,
+};
+
+pub const StructureLiteral = struct {
     dot_token: lexing.Token,
     left_brace: lexing.Token,
-    fields: []StructureConstructionField,
+    fields: []StructureFieldInitializer,
 };
 
-pub const StructureConstructionField = struct {
+pub const StructureFieldInitializer = struct {
     name: lexing.Token,
     assign_token: lexing.Token,
     value: *Node,
@@ -308,7 +313,7 @@ pub const ArrayLiteral = struct {
     right_bracket: lexing.Token,
 };
 
-pub const IndexAccess = struct {
+pub const IndexExpression = struct {
     base: *Node,
     left_bracket: lexing.Token,
     index: *Node,

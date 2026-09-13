@@ -141,7 +141,7 @@ pub const NodeEmitter = struct {
         environment: *Environment,
     ) EmissionResult {
         switch (node.kind) {
-            .Return => |return_statement| return control_flow.emitReturn(
+            .ReturnStatement => |return_statement| return control_flow.emitReturnStatement(
                 self,
                 &return_statement,
                 lowered_program,
@@ -176,11 +176,11 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .Leave => {
+            .LeaveStatement => {
                 self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
                 return .statement;
             },
-            .Continue => {
+            .ContinueStatement => {
                 self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
                 return .statement;
             },
@@ -191,10 +191,10 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .MemberAccess => |member_access| return aggregates.emitMemberAccess(
+            .MemberExpression => |member_expression| return aggregates.emitMemberExpression(
                 self,
                 node,
-                &member_access,
+                &member_expression,
                 lowered_program,
                 environment,
             ),
@@ -212,17 +212,17 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .Declaration => |value_declaration| return places.emitDeclaration(
+            .BindingDeclaration => |value_declaration| return places.emitBindingDeclaration(
                 self,
                 node,
                 &value_declaration,
                 lowered_program,
                 environment,
             ),
-            .Assignment => |assignment| return places.emitAssignment(
+            .AssignmentStatement => |assignment_statement| return places.emitAssignmentStatement(
                 self,
                 node,
-                &assignment,
+                &assignment_statement,
                 lowered_program,
                 environment,
             ),
@@ -253,17 +253,17 @@ pub const NodeEmitter = struct {
                 return .statement;
             },
             .ItemDefinition => return .statement,
-            .StructureConstruction => |structure_construction| return aggregates.emitStructureConstruction(
+            .QualifiedStructureLiteral => |qualified_structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
-                structure_construction.fields,
+                qualified_structure_literal.fields,
                 lowered_program,
                 environment,
             ),
-            .AnonymousStructureLiteral => |anonymous_structure_literal| return aggregates.emitStructureConstruction(
+            .StructureLiteral => |structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
-                anonymous_structure_literal.fields,
+                structure_literal.fields,
                 lowered_program,
                 environment,
             ),
@@ -274,10 +274,10 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .IndexAccess => |index_access| return aggregates.emitIndexAccess(
+            .IndexExpression => |index_expression| return aggregates.emitIndexExpression(
                 self,
                 node,
-                &index_access,
+                &index_expression,
                 lowered_program,
                 environment,
             ),

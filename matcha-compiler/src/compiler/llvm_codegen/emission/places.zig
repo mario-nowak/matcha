@@ -11,10 +11,10 @@ const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
 
-pub fn emitDeclaration(
+pub fn emitBindingDeclaration(
     emitter: *NodeEmitter,
     node: *const ast.Node,
-    value_declaration: *const ast.Declaration,
+    value_declaration: *const ast.BindingDeclaration,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
@@ -45,20 +45,20 @@ pub fn emitDeclaration(
     return .statement;
 }
 
-pub fn emitAssignment(
+pub fn emitAssignmentStatement(
     emitter: *NodeEmitter,
     node: *const ast.Node,
-    assignment: *const ast.Assignment,
+    assignment_statement: *const ast.AssignmentStatement,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
-    const place_emission_result = emitPlace(emitter, assignment.target, lowered_program, environment);
+    const place_emission_result = emitPlace(emitter, assignment_statement.target, lowered_program, environment);
 
-    const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment.target.id).?;
+    const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment_statement.target.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
-    switch (assignment.operator) {
+    switch (assignment_statement.operator) {
         .Assign => {
-            const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
+            const value_register = emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_register = switch (place_emission_result) {
                 .zero_sized => return .statement,
                 .register => |place_register| place_register,
@@ -67,7 +67,7 @@ pub fn emitAssignment(
             emitter.function_ir_builder.emitStore(value_register.expectRegister(), place_register, llvm_ir_type);
         },
         .Compound => {
-            const value_register = emitter.emitNode(assignment.value, lowered_program, environment);
+            const value_register = emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_register = switch (place_emission_result) {
                 .zero_sized => return .statement,
                 .register => |place_register| place_register,
@@ -112,44 +112,44 @@ pub fn emitPlace(
             return .{ .register = environment.storage_by_symbol_id.get(identifier_binding.symbol_id).? };
         },
         .StructureField => |structure_field| {
-            const member_access = switch (target.kind) {
-                .MemberAccess => |resolved_member_access| resolved_member_access,
+            const member_expression = switch (target.kind) {
+                .MemberExpression => |resolved_member_expression| resolved_member_expression,
                 else => unreachable,
             };
             return emitStructureFieldPointer(
                 emitter,
-                &member_access,
+                &member_expression,
                 structure_field.field_index,
                 lowered_program,
                 environment,
             );
         },
         .ArrayElement => {
-            const index_access = switch (target.kind) {
-                .IndexAccess => |resolved_index_access| resolved_index_access,
+            const index_expression = switch (target.kind) {
+                .IndexExpression => |resolved_index_expression| resolved_index_expression,
                 else => unreachable,
             };
-            return emitIndexAccessPointer(emitter, &index_access, lowered_program, environment);
+            return emitIndexExpressionPointer(emitter, &index_expression, lowered_program, environment);
         },
     }
 }
 
 pub fn emitStructureFieldPointer(
     emitter: *NodeEmitter,
-    member_access: *const ast.MemberAccess,
+    member_expression: *const ast.MemberExpression,
     field_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     // First check if the base expression of the member access has a runtime representation and exit early if not
-    const base_emission_result = emitter.emitNode(member_access.base, lowered_program, environment);
+    const base_emission_result = emitter.emitNode(member_expression.base, lowered_program, environment);
     const base_register = switch (base_emission_result) {
         .register => |register| register,
         .zero_sized => return .zero_sized,
         .statement => unreachable,
     };
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_access.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_expression.base.id) orelse unreachable;
     switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Structure => {},
         else => unreachable,
@@ -176,17 +176,17 @@ pub fn emitStructureFieldPointer(
     return .{ .register = field_pointer_register };
 }
 
-pub fn emitIndexAccessPointer(
+pub fn emitIndexExpressionPointer(
     emitter: *NodeEmitter,
-    index_access: *const ast.IndexAccess,
+    index_expression: *const ast.IndexExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const base_register = emitter.emitNode(index_access.base, lowered_program, environment).expectRegister();
-    const index_register = emitter.emitNode(index_access.index, lowered_program, environment).expectRegister();
+    const base_register = emitter.emitNode(index_expression.base, lowered_program, environment).expectRegister();
+    const index_register = emitter.emitNode(index_expression.index, lowered_program, environment).expectRegister();
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_access.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,
@@ -236,8 +236,8 @@ pub fn emitIndexAccessPointer(
     builder.emitBranchInstruction(out_of_bounds_register, &.{ panic_label, ok_label });
 
     builder.emitLabel(panic_label);
-    const line = index_access.left_bracket.line;
-    const column = index_access.left_bracket.column;
+    const line = index_expression.left_bracket.line;
+    const column = index_expression.left_bracket.column;
     emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
         builder,
         line,

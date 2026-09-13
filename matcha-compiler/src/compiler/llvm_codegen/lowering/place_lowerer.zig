@@ -34,8 +34,8 @@ pub const PlaceLowerer = struct {
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
         switch (node.kind) {
-            .Declaration => |declaration| self.lowerNode(declaration.value, analyzed_program),
-            .ItemDefinition => |item_definition| switch (item_definition.item) {
+            .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
+            .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
                 .Structure => |structure_definition| {
                     for (structure_definition.function_definitions) |*function_definition_node| {
@@ -44,7 +44,7 @@ pub const PlaceLowerer = struct {
                 },
                 .Union => unreachable,
             },
-            .Return => |return_statement| {
+            .ReturnStatement => |return_statement| {
                 if (return_statement.value) |value| {
                     self.lowerNode(value, analyzed_program);
                 }
@@ -54,13 +54,13 @@ pub const PlaceLowerer = struct {
                 self.lowerNode(if_statement.then_branch, analyzed_program);
             },
             .ExpressionStatement => |expression_statement| self.lowerNode(expression_statement.expression, analyzed_program),
-            .Assignment => |assignment| {
-                self.lowerPlace(assignment.target, analyzed_program);
-                self.lowerNode(assignment.target, analyzed_program);
-                self.lowerNode(assignment.value, analyzed_program);
+            .AssignmentStatement => |assignment_statement| {
+                self.lowerPlace(assignment_statement.target, analyzed_program);
+                self.lowerNode(assignment_statement.target, analyzed_program);
+                self.lowerNode(assignment_statement.value, analyzed_program);
             },
             .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
-            .Leave, .Continue, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
+            .LeaveStatement, .ContinueStatement, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
             .While => |while_statement| {
                 self.lowerNode(while_statement.condition, analyzed_program);
                 if (while_statement.update) |update| {
@@ -95,7 +95,7 @@ pub const PlaceLowerer = struct {
                     self.lowerNode(argument, analyzed_program);
                 }
             },
-            .MemberAccess => |member_access| self.lowerNode(member_access.base, analyzed_program),
+            .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -109,13 +109,13 @@ pub const PlaceLowerer = struct {
                     self.lowerNode(result, analyzed_program);
                 }
             },
-            .StructureConstruction => |structure_construction| {
-                for (structure_construction.fields) |field| {
+            .QualifiedStructureLiteral => |qualified_structure_literal| {
+                for (qualified_structure_literal.fields) |field| {
                     self.lowerNode(field.value, analyzed_program);
                 }
             },
-            .AnonymousStructureLiteral => |anonymous_structure_literal| {
-                for (anonymous_structure_literal.fields) |field| {
+            .StructureLiteral => |structure_literal| {
+                for (structure_literal.fields) |field| {
                     self.lowerNode(field.value, analyzed_program);
                 }
             },
@@ -124,9 +124,9 @@ pub const PlaceLowerer = struct {
                     self.lowerNode(element, analyzed_program);
                 }
             },
-            .IndexAccess => |index_access| {
-                self.lowerNode(index_access.base, analyzed_program);
-                self.lowerNode(index_access.index, analyzed_program);
+            .IndexExpression => |index_expression| {
+                self.lowerNode(index_expression.base, analyzed_program);
+                self.lowerNode(index_expression.index, analyzed_program);
             },
         }
     }
@@ -140,13 +140,13 @@ pub const PlaceLowerer = struct {
             .Identifier => .{ .IdentifierBinding = .{
                 .symbol_id = analyzed_program.resolved_program.symbol_id_by_node_id.get(target.id) orelse unreachable,
             } },
-            .MemberAccess => .{ .StructureField = .{
+            .MemberExpression => .{ .StructureField = .{
                 .field_index = switch (analyzed_program.member_access_by_node_id.get(target.id) orelse unreachable) {
                     .StructureInstanceFieldAccess => |structure_field| structure_field.field_index,
                     else => unreachable,
                 },
             } },
-            .IndexAccess => .ArrayElement,
+            .IndexExpression => .ArrayElement,
             else => unreachable,
         };
 
