@@ -332,7 +332,6 @@ pub const Parser = struct {
                 break;
             }
 
-            // TODO:
             if (self.startsItemDefinition()) {
                 const item = try self.parseItemDefinition();
                 switch (item.kind) {
@@ -375,6 +374,11 @@ pub const Parser = struct {
                 try self.diagnostic_store.emitErrorFromToken(post_case_token, "expected ',' or '}' after union case");
                 return error.DiagnosticsEmitted;
             }
+        }
+
+        if (union_cases.items.len <= 0) {
+            try self.diagnostic_store.emitErrorFromToken(union_token, "union definitions must have at least one case");
+            return error.DiagnosticsEmitted;
         }
 
         return .{
@@ -427,7 +431,6 @@ pub const Parser = struct {
                 break;
             }
 
-            // NOTE:
             if (self.startsItemDefinition()) {
                 const item = try self.parseItemDefinition();
                 switch (item.kind) {
@@ -1288,16 +1291,6 @@ pub const Parser = struct {
                 .fields = parsed_fields.fields,
             },
         });
-    }
-
-    fn parseUnionConstruction(
-        self: *@This(),
-        union_name: lexing.Token,
-    ) ParserError!ast.Node {
-        return self.createNode(.{ .UnionConstruction = .{
-            .union_name = union_name,
-            .value = unreachable,
-        } });
     }
 
     fn parseStructureLiteral(self: *@This(), dot_token: lexing.Token) ParserError!ast.Node {

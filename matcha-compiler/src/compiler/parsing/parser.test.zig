@@ -1,6 +1,9 @@
 const std = @import("std");
 const expect = @import("testing").expect;
 const parse = @import("test_helpers.zig").parse;
+const diagnostics = @import("diagnostics");
+const lexing = @import("lexing");
+const parsing = @import("parsing");
 
 test "parser builds the expected AST for arithmetic precedence" {
     const source =
@@ -765,4 +768,24 @@ test "parser parses contextual union construction without a value as an implicit
             } } },
         } } },
     } });
+}
+
+test "parser emits a diagnostic error when parsing a union without cases" {
+    const source =
+        \\item UnionWithoutCases = union {};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var diagnostic_store = diagnostics.DiagnosticStore.init(arena.allocator());
+    defer diagnostic_store.deinit();
+    var lexer = lexing.Lexer.init(source, arena.allocator(), &diagnostic_store);
+    defer lexer.deinit();
+    var parser = parsing.Parser.init(lexer, arena.allocator(), &diagnostic_store);
+
+    const result = parser.parse();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "union definitions must have at least one case" },
+    });
 }
