@@ -541,6 +541,7 @@ test "parser parses union definitions with cases without type annotations" {
 
     try expect(program).toMatch(.{ .statements = .{
         .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "Direction" } },
             .definition = .{
                 .Union = .{
                     .cases = .{
@@ -560,6 +561,84 @@ test "parser parses union definitions with cases without type annotations" {
                             .name = .{ .kind = .{ .Identifier = "West" } },
                             .type_annotation = null,
                         },
+                    },
+                },
+            },
+        } } },
+    } });
+}
+
+test "parser parses union definitions with cases with type annotations" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    PageUnload: unit,
+        \\    KeyPress: string,
+        \\    Click: Vector2D,
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{
+                .Union = .{
+                    .cases = .{
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "PageLoad" } },
+                            .type_annotation = null,
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "PageUnload" } },
+                            .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "unit" } } } },
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "KeyPress" } },
+                            .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "string" } } } },
+                        },
+                        .{
+                            .name = .{ .kind = .{ .Identifier = "Click" } },
+                            .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "Vector2D" } } } },
+                        },
+                    },
+                },
+            },
+        } } },
+    } });
+}
+
+test "parser parses union definitions with function definitions" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    KeyPress: string,
+        \\    Click: Vector2D,
+        \\
+        \\    item asString(self: WebEvent): string = match (self) {
+        \\        .PageLoad => "Page Load",
+        \\        .KeyPress(key) => "Key Press: " + key,
+        \\        .Click(vector2D) => vector2D.asString(),
+        \\    };
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const program = try parse(arena.allocator(), source);
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "WebEvent" } },
+            .definition = .{
+                .Union = .{
+                    .function_definitions = .{
+                        .{ .kind = .{ .ItemDefinition = .{
+                            .identifier_token = .{ .kind = .{ .Identifier = "asString" } },
+                        } } },
                     },
                 },
             },
