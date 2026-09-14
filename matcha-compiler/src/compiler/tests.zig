@@ -4,6 +4,8 @@ test {
     _ = @import("parsing/type_expression_parser.test.zig");
     _ = @import("parsing/parser.test.zig");
     _ = @import("pipeline.test.zig");
+    _ = @import("semantic_analysis/control_flow/structural_validator.test.zig");
+    _ = @import("semantic_analysis/control_flow/exit_behavior_analyzer.test.zig");
     _ = @import("semantic_analysis/name_resolution/name_resolver.test.zig");
     _ = @import("semantic_analysis/semantic_analyzer.test.zig");
     _ = @import("llvm_codegen/lowering/call_lowerer.test.zig");

@@ -53,10 +53,10 @@ pub const StructuralValidator = struct {
             .BinaryExpression => |binary_expression| try self.validateBinaryExpression(binary_expression, context),
             .UnaryExpression => |unary_expression| try self.validateUnaryExpression(unary_expression, context),
             .MemberExpression => |member_expression| try self.validateMemberExpression(member_expression, context),
-            .ImplicitMemberExpression => unreachable,
             .ArrayLiteral => |array_literal| try self.validateArrayLiteral(array_literal, context),
             .IndexExpression => |index_expression| try self.validateIndexExpression(index_expression, context),
             .Block => |block| try self.validateBlock(block, context),
+            .ImplicitMemberExpression,
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,
@@ -93,12 +93,16 @@ pub const StructuralValidator = struct {
                 };
                 try self.validateNode(function_definition.body_expression, &function_context);
             },
-            .Structure => |structure| {
-                for (structure.function_definitions) |*function_definition_node| {
+            .Structure => |structure_definition| {
+                for (structure_definition.function_definitions) |*function_definition_node| {
                     try self.validateNode(function_definition_node, context);
                 }
             },
-            .Union => unreachable,
+            .Union => |union_definition| {
+                for (union_definition.function_definitions) |*function_definition_node| {
+                    try self.validateNode(function_definition_node, context);
+                }
+            },
         }
     }
 

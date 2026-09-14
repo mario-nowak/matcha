@@ -14,6 +14,30 @@ fn Expectation(comptime T: type) type {
         pub fn toMatch(self: @This(), expected: anytype) error{TestExpectedEqual}!void {
             try expectValue(self.actual, expected);
         }
+
+        pub fn toMatchMap(self: @This(), expected: anytype) error{TestExpectedEqual}!void {
+            try std.testing.expectEqual(expected.len, self.actual.count());
+            inline for (expected, 0..) |entry, index| {
+                const actual_value = self.actual.getPtr(entry.key) orelse {
+                    std.debug.print("Missing map key: {any}\n", .{entry.key});
+                    return error.TestExpectedEqual;
+                };
+                inline for (expected, 0..) |previous, previous_index| {
+                    if (previous_index < index and self.actual.getPtr(previous.key) == actual_value) {
+                        std.debug.print("Duplicate expected map key: {any}\n", .{entry.key});
+                        return error.TestExpectedEqual;
+                    }
+                }
+                expectValue(actual_value.*, entry.value) catch |err| {
+                    std.debug.print("Mismatch at map key: {any}\n", .{entry.key});
+                    return err;
+                };
+            }
+        }
+
+        pub fn toBeError(self: @This(), expected: anyerror) !void {
+            try std.testing.expectError(expected, self.actual);
+        }
     };
 }
 
