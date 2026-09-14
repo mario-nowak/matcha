@@ -217,6 +217,8 @@ zig test tests/e2e/tests.zig
 
 The test suite covers both internal compiler behavior and real compile-and-run workflows.
 
+For test-writing conventions and assertion style, see [`docs/testing-conventions.md`](../docs/testing-conventions.md).
+
 - `zig build test --summary all` runs unit and integration tests through `build.zig`
 - `zig test tests/e2e/tests.zig` runs end-to-end tests against real Matcha source programs
 - `mise run test` runs the full local test workflow
