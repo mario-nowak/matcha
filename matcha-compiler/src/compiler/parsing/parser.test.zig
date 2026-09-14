@@ -1,6 +1,6 @@
 const std = @import("std");
 const expect = @import("testing").expect;
-const setupParserPipeline = @import("test_helpers.zig").setupParserPipeline;
+const setupParserPipeline = @import("testing").setupParserPipeline;
 
 test "Parser > parse: binds multiplication tighter than addition" {
     const source = "val result = 1 + 2 * 3;";

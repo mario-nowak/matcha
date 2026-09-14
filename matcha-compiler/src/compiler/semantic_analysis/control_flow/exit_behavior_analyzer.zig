@@ -48,7 +48,11 @@ pub const ExitBehaviorAnalyzer = struct {
                         try self.validateFunctionReturnPathsInNode(function_definition_node);
                     }
                 },
-                .Union => unreachable,
+                .Union => |union_definition| {
+                    for (union_definition.function_definitions) |*function_definition_node| {
+                        try self.validateFunctionReturnPathsInNode(function_definition_node);
+                    }
+                },
             },
             else => {},
         }
@@ -91,9 +95,9 @@ pub const ExitBehaviorAnalyzer = struct {
             .BinaryExpression => |binary_expression| try self.validateBinaryExpressionNode(node, binary_expression),
             .UnaryExpression => |unary_expression| try self.validateUnaryExpressionNode(node, unary_expression),
             .MemberExpression => |member_expression| try self.validateMemberExpressionNode(node, member_expression),
-            .ImplicitMemberExpression => unreachable,
             .ArrayLiteral => |array_literal| try self.validateArrayLiteralNode(node, array_literal),
             .IndexExpression => |index_expression| try self.validateIndexExpressionNode(node, index_expression),
+            .ImplicitMemberExpression,
             .Identifier,
             .IntegerLiteral,
             .BooleanLiteral,

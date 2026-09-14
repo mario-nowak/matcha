@@ -187,6 +187,13 @@ pub fn build(b: *std.Build) void {
     const testing_module = b.createModule(.{
         .root_source_file = b.path("src/compiler/testing/module.zig"),
         .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
+            .{ .name = "semantic_analysis", .module = semantic_analysis_module },
+        },
     });
 
     const matcha_tests_module = b.createModule(.{

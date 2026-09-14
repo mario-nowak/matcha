@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = @import("testing").expect;
-const setupLexerPipeline = @import("test_helpers.zig").setupLexerPipeline;
-const collectTokens = @import("test_helpers.zig").collectTokens;
+const setupLexerPipeline = @import("testing").setupLexerPipeline;
+const collectTokens = @import("testing").collectTokens;
 
 test "Lexer > next: tokenizes boolean keywords" {
     const source = "not true and false or";
