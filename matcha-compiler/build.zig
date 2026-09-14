@@ -184,10 +184,16 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const testing_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/testing/module.zig"),
+        .target = target,
+    });
+
     const matcha_tests_module = b.createModule(.{
         .root_source_file = b.path("src/compiler/tests.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "testing", .module = testing_module },
             .{ .name = "compiler", .module = compiler_module },
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },

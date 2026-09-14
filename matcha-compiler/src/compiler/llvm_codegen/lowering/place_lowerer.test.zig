@@ -6,9 +6,9 @@ const PlaceLowerer = llvm_codegen.lowering.PlaceLowerer;
 
 const TestError = helpers.TestError;
 
-fn expectAssignment(node: *const ast.Node) TestError!ast.Assignment {
+fn expectAssignmentStatement(node: *const ast.Node) TestError!ast.AssignmentStatement {
     return switch (node.kind) {
-        .Assignment => |assignment| assignment,
+        .AssignmentStatement => |assignment_statement| assignment_statement,
         else => return TestError.UnexpectedNodeKind,
     };
 }
@@ -29,11 +29,11 @@ test "place lowering records field element and binding targets" {
     defer lowerer.deinit();
 
     const decisions = lowerer.lower(&analyzed.typed_program);
-    const field_assignment = try expectAssignment(&analyzed.parsed.program.statements[2]);
+    const field_assignment = try expectAssignmentStatement(&analyzed.parsed.program.statements[2]);
     const field_assignment_target = field_assignment.target;
-    const index_assignment = try expectAssignment(&analyzed.parsed.program.statements[4]);
+    const index_assignment = try expectAssignmentStatement(&analyzed.parsed.program.statements[4]);
     const index_assignment_target = index_assignment.target;
-    const counter_assignment = try expectAssignment(&analyzed.parsed.program.statements[6]);
+    const counter_assignment = try expectAssignmentStatement(&analyzed.parsed.program.statements[6]);
     const counter_assignment_target = counter_assignment.target;
     const counter_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[5].id).?;
 

@@ -4,7 +4,7 @@ const llvm_codegen = @import("llvm_codegen");
 const BinaryOperationLowerer = llvm_codegen.lowering.BinaryOperationLowerer;
 
 const TestError = helpers.TestError;
-const expectDeclarationNode = helpers.expectDeclarationNode;
+const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
 
 test "binary operation lowering records primitive and runtime-backed strategies" {
     const source =
@@ -19,10 +19,10 @@ test "binary operation lowering records primitive and runtime-backed strategies"
     defer lowerer.deinit();
 
     const decisions = lowerer.lower(&analyzed.typed_program);
-    const sum_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[0]);
-    const text_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const same_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const different_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[3]);
+    const sum_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[0]);
+    const text_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const same_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const different_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
 
     switch (decisions.get(sum_declaration.value.id).?) {
         .PrimitiveOperation => |primitive_operation| try std.testing.expectEqual(.Add, primitive_operation),

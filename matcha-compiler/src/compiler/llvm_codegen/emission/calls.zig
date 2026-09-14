@@ -37,14 +37,14 @@ pub fn emitCallExpression(
             environment,
         ),
         .ArrayMethod => |array_method| {
-            const callee_member_access = switch (call_expression.callee.kind) {
-                .MemberAccess => |member_access| member_access,
+            const callee_member_expression = switch (call_expression.callee.kind) {
+                .MemberExpression => |member_expression| member_expression,
                 else => unreachable,
             };
             return switch (array_method) {
                 .Append => emitArrayAppendCall(
                     emitter,
-                    &callee_member_access,
+                    &callee_member_expression,
                     call_expression,
                     lowered_program,
                     environment,
@@ -52,28 +52,28 @@ pub fn emitCallExpression(
             };
         },
         .StringMethod => |string_method| {
-            const callee_member_access = switch (call_expression.callee.kind) {
-                .MemberAccess => |member_access| member_access,
+            const callee_member_expression = switch (call_expression.callee.kind) {
+                .MemberExpression => |member_expression| member_expression,
                 else => unreachable,
             };
             return emitStringMethodCall(
                 emitter,
                 string_method,
-                &callee_member_access,
+                &callee_member_expression,
                 call_expression,
                 lowered_program,
                 environment,
             );
         },
         .IntegerMethod => |integer_method| {
-            const callee_member_access = switch (call_expression.callee.kind) {
-                .MemberAccess => |member_access| member_access,
+            const callee_member_expression = switch (call_expression.callee.kind) {
+                .MemberExpression => |member_expression| member_expression,
                 else => unreachable,
             };
             return emitIntegerMethodCall(
                 emitter,
                 integer_method,
-                &callee_member_access,
+                &callee_member_expression,
                 call_expression,
                 lowered_program,
                 environment,
@@ -93,13 +93,13 @@ fn emitUserFunctionCall(
     defer argument_registers.deinit(emitter.allocator);
 
     if (user_function.receiver_node_id) |receiver_node_id| {
-        const callee_member_access = switch (call_expression.callee.kind) {
-            .MemberAccess => |member_access| member_access,
+        const callee_member_expression = switch (call_expression.callee.kind) {
+            .MemberExpression => |member_expression| member_expression,
             else => unreachable,
         };
-        if (callee_member_access.base.id != receiver_node_id) unreachable;
+        if (callee_member_expression.base.id != receiver_node_id) unreachable;
 
-        const receiver_emission_result = emitter.emitNode(callee_member_access.base, lowered_program, environment);
+        const receiver_emission_result = emitter.emitNode(callee_member_expression.base, lowered_program, environment);
         switch (receiver_emission_result) {
             .register => |receiver_register| argument_registers.append(
                 emitter.allocator,
@@ -256,17 +256,17 @@ fn emitDirectFunctionCall(
 
 fn emitArrayAppendCall(
     emitter: *NodeEmitter,
-    callee_member_access: *const ast.MemberAccess,
+    callee_member_expression: *const ast.MemberExpression,
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     if (call_expression.arguments.len != 1) unreachable;
 
-    const base_register = emitter.emitNode(callee_member_access.base, lowered_program, environment).expectRegister();
+    const base_register = emitter.emitNode(callee_member_expression.base, lowered_program, environment).expectRegister();
     const argument_register = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
 
-    const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(callee_member_access.base.id) orelse unreachable;
+    const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(callee_member_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
         .Array => |id| id,
         else => unreachable,
@@ -323,12 +323,12 @@ fn emitArrayAppendCall(
 fn emitStringMethodCall(
     emitter: *NodeEmitter,
     string_method: typing.StringInstanceMethod,
-    callee_member_access: *const ast.MemberAccess,
+    callee_member_expression: *const ast.MemberExpression,
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
-    const base_register = emitter.emitNode(callee_member_access.base, lowered_program, environment).expectRegister();
+    const base_register = emitter.emitNode(callee_member_expression.base, lowered_program, environment).expectRegister();
 
     switch (string_method) {
         .Trim => {
@@ -365,12 +365,12 @@ fn emitStringMethodCall(
 fn emitIntegerMethodCall(
     emitter: *NodeEmitter,
     integer_method: typing.IntegerInstanceMethod,
-    callee_member_access: *const ast.MemberAccess,
+    callee_member_expression: *const ast.MemberExpression,
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
-    const base_register = emitter.emitNode(callee_member_access.base, lowered_program, environment);
+    const base_register = emitter.emitNode(callee_member_expression.base, lowered_program, environment);
 
     switch (integer_method) {
         .ToString => {

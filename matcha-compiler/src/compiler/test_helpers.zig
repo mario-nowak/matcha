@@ -92,9 +92,9 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
     };
 }
 
-pub fn expectDeclarationNode(node: *const ast.Node) TestError!ast.Declaration {
+pub fn expectBindingDeclarationNode(node: *const ast.Node) TestError!ast.BindingDeclaration {
     return switch (node.kind) {
-        .Declaration => |declaration| declaration,
+        .BindingDeclaration => |binding_declaration| binding_declaration,
         else => return TestError.UnexpectedNodeKind,
     };
 }
@@ -127,9 +127,9 @@ pub fn expectItemDefinitionNode(node: *const ast.Node) TestError!ast.ItemDefinit
     };
 }
 
-pub fn expectFunctionItem(node: *const ast.Node) TestError!ast.Function {
+pub fn expectFunctionDefinition(node: *const ast.Node) TestError!ast.FunctionDefinition {
     const item_definition = try expectItemDefinitionNode(node);
-    return switch (item_definition.item) {
+    return switch (item_definition.definition) {
         .Function => |definition| definition,
         else => return TestError.UnexpectedNodeKind,
     };
@@ -149,9 +149,9 @@ pub fn expectMatchExpressionNode(node: *const ast.Node) TestError!ast.MatchExpre
     };
 }
 
-pub fn expectIndexAccessNode(node: *const ast.Node) TestError!ast.IndexAccess {
+pub fn expectIndexExpressionNode(node: *const ast.Node) TestError!ast.IndexExpression {
     return switch (node.kind) {
-        .IndexAccess => |index_access| index_access,
+        .IndexExpression => |index_expression| index_expression,
         else => return TestError.UnexpectedNodeKind,
     };
 }

@@ -1,282 +1,384 @@
 const std = @import("std");
-const diagnostics = @import("diagnostics");
-const lexing = @import("lexing");
+const expect = @import("testing").expect;
+const setupLexerPipeline = @import("test_helpers.zig").setupLexerPipeline;
+const collectTokens = @import("test_helpers.zig").collectTokens;
 
-const TokenTag = std.meta.Tag(lexing.TokenKind);
+test "Lexer > next: tokenizes boolean keywords" {
+    const source = "not true and false or";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-const LexedSource = struct {
-    diagnostic_store: *diagnostics.DiagnosticStore,
-    lexer: lexing.Lexer,
+    const tokens = try collectTokens(lexer_pipeline.lexer);
 
-    fn init(source: []const u8) LexedSource {
-        const diagnostic_store = std.heap.page_allocator.create(diagnostics.DiagnosticStore) catch unreachable;
-        diagnostic_store.* = diagnostics.DiagnosticStore.init(std.heap.page_allocator);
-        return .{
-            .diagnostic_store = diagnostic_store,
-            .lexer = lexing.Lexer.init(source, std.heap.page_allocator, diagnostic_store),
-        };
-    }
-
-    fn deinit(self: *LexedSource) void {
-        self.lexer.deinit();
-        self.diagnostic_store.deinit();
-        std.heap.page_allocator.destroy(self.diagnostic_store);
-    }
-};
-
-fn expectTokenTag(token: lexing.Token, expected: TokenTag) !void {
-    try std.testing.expectEqual(expected, std.meta.activeTag(token.kind));
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Not },
+        .{ .kind = .{ .BooleanLiteral = true } },
+        .{ .kind = .And },
+        .{ .kind = .{ .BooleanLiteral = false } },
+        .{ .kind = .Or },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-fn expectTokenSequence(source: []const u8, expected_tags: []const TokenTag) !void {
-    var lexed = LexedSource.init(source);
-    defer lexed.deinit();
+test "Lexer > next: keeps keyword prefixes inside identifiers" {
+    const source = "notable android orbit iffy elsewise";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    for (expected_tags) |expected_tag| {
-        try expectTokenTag(try lexed.lexer.next(), expected_tag);
-    }
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .Identifier = "notable" } },
+        .{ .kind = .{ .Identifier = "android" } },
+        .{ .kind = .{ .Identifier = "orbit" } },
+        .{ .kind = .{ .Identifier = "iffy" } },
+        .{ .kind = .{ .Identifier = "elsewise" } },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-fn expectLexDiagnostic(source: []const u8, expected_message: []const u8) !void {
-    var lexed = LexedSource.init(source);
-    defer lexed.deinit();
+test "Lexer > next: distinguishes assignment from equality" {
+    const source = "= ==";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    try std.testing.expectError(error.DiagnosticsEmitted, lexed.lexer.next());
+    const tokens = try collectTokens(lexer_pipeline.lexer);
 
-    const diagnostic_items = lexed.diagnostic_store.items();
-    try std.testing.expectEqual(@as(usize, 1), diagnostic_items.len);
-    try std.testing.expectEqualStrings(expected_message, diagnostic_items[0].message);
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Assign },
+        .{ .kind = .EqualEqual },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer tokenizes boolean keywords and comparison operators" {
-    const source = "not true and false or value == other != third <= fourth >= fifth < sixth > seventh =";
+test "Lexer > next: tokenizes compound assignment operators" {
+    const source = "+= -= *=";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Not,
-        .BooleanLiteral,
-        .And,
-        .BooleanLiteral,
-        .Or,
-        .Identifier,
-        .EqualEqual,
-        .Identifier,
-        .NotEqual,
-        .Identifier,
-        .LessThanOrEqual,
-        .Identifier,
-        .GreaterThanOrEqual,
-        .Identifier,
-        .LessThan,
-        .Identifier,
-        .GreaterThan,
-        .Identifier,
-        .Assign,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .PlusAssign },
+        .{ .kind = .MinusAssign },
+        .{ .kind = .AsteriskAssign },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer keeps keyword prefixes inside identifiers" {
-    const source = "notable android orbit iffy elsewise value";
+test "Lexer > next: tokenizes comparison operators" {
+    const source = "== != < <= > >=";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Identifier,
-        .Identifier,
-        .Identifier,
-        .Identifier,
-        .Identifier,
-        .Identifier,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .EqualEqual },
+        .{ .kind = .NotEqual },
+        .{ .kind = .LessThan },
+        .{ .kind = .LessThanOrEqual },
+        .{ .kind = .GreaterThan },
+        .{ .kind = .GreaterThanOrEqual },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer distinguishes assign from equality operators" {
-    const source = "= += -= *= => == != < <= > >= [ ]";
+test "Lexer > next: distinguishes a fat arrow from assignment and equality" {
+    const source = "=> = ==";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Assign,
-        .PlusAssign,
-        .MinusAssign,
-        .AsteriskAssign,
-        .FatArrow,
-        .EqualEqual,
-        .NotEqual,
-        .LessThan,
-        .LessThanOrEqual,
-        .GreaterThan,
-        .GreaterThanOrEqual,
-        .LeftBracket,
-        .RightBracket,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .FatArrow },
+        .{ .kind = .Assign },
+        .{ .kind = .EqualEqual },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer tokenizes match keyword and arrows" {
-    const source =
-        \\match value { true => 1, else => 0 }
-    ;
+test "Lexer > next: tokenizes brackets" {
+    const source = "[]";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Match,
-        .Identifier,
-        .LeftBrace,
-        .BooleanLiteral,
-        .FatArrow,
-        .IntLiteral,
-        .Comma,
-        .Else,
-        .FatArrow,
-        .IntLiteral,
-        .RightBrace,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .LeftBracket },
+        .{ .kind = .RightBracket },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer tokenizes for-in keywords" {
-    const source =
-        \\for value in items { continue; }
-    ;
+test "Lexer > next: tokenizes match keywords" {
+    const source = "match else";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .For,
-        .Identifier,
-        .In,
-        .Identifier,
-        .LeftBrace,
-        .Continue,
-        .Semicolon,
-        .RightBrace,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Match },
+        .{ .kind = .Else },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer keeps item as an identifier" {
-    const source =
-        \\item structure
-    ;
+test "Lexer > next: tokenizes for-in keywords" {
+    const source = "for in";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Identifier,
-        .Structure,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .For },
+        .{ .kind = .In },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer tokenizes plain string literals" {
-    const source =
-        \\val greeting = "hello world";
-    ;
+test "Lexer > next: tokenizes the continue keyword" {
+    const source = "continue";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Val,
-        .Identifier,
-        .Assign,
-        .StringLiteral,
-        .Semicolon,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Continue },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer captures string literal content" {
-    const source =
-        \\"hello"
-    ;
+test "Lexer > next: keeps item as an identifier" {
+    const source = "item";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    var lexed = LexedSource.init(source);
-    defer lexed.deinit();
+    const tokens = try collectTokens(lexer_pipeline.lexer);
 
-    const token = try lexed.lexer.next();
-    try std.testing.expectEqualStrings("hello", token.kind.StringLiteral);
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .Identifier = "item" } },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer decodes string literal escapes" {
+test "Lexer > next: tokenizes the structure keyword" {
+    const source = "structure";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Structure },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: tokenizes binding keywords" {
+    const source = "val var";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .Val },
+        .{ .kind = .Var },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: tokenizes braces and separators" {
+    const source = "{},;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .LeftBrace },
+        .{ .kind = .RightBrace },
+        .{ .kind = .Comma },
+        .{ .kind = .Semicolon },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: captures integer literal values" {
+    const source = "0 1 2 42";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .IntLiteral = 0 } },
+        .{ .kind = .{ .IntLiteral = 1 } },
+        .{ .kind = .{ .IntLiteral = 2 } },
+        .{ .kind = .{ .IntLiteral = 42 } },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: preserves spaces inside string literals" {
+    const source = "\"hello world\"";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .StringLiteral = "hello world" } },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: captures string literal content" {
+    const source = "\"hello\"";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .StringLiteral = "hello" } },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: decodes string literal escapes" {
     const source = "\"line\\nquote: \\\" slash: \\\\ tab: \\t\"";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    var lexed = LexedSource.init(source);
-    defer lexed.deinit();
+    const tokens = try collectTokens(lexer_pipeline.lexer);
 
-    const token = try lexed.lexer.next();
-    try expectTokenTag(token, .StringLiteral);
-    try std.testing.expectEqualStrings("line\nquote: \" slash: \\ tab: \t", token.kind.StringLiteral);
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .StringLiteral = "line\nquote: \" slash: \\ tab: \t" } },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer tokenizes multiple strings in sequence" {
+test "Lexer > next: tokenizes multiple strings in sequence" {
     const source =
         \\"first" "second"
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    var lexed = LexedSource.init(source);
-    defer lexed.deinit();
+    const tokens = try collectTokens(lexer_pipeline.lexer);
 
-    const first = try lexed.lexer.next();
-    const second = try lexed.lexer.next();
-    try expectTokenTag(first, .StringLiteral);
-    try std.testing.expectEqualStrings("first", first.kind.StringLiteral);
-    try expectTokenTag(second, .StringLiteral);
-    try std.testing.expectEqualStrings("second", second.kind.StringLiteral);
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .StringLiteral = "first" } },
+        .{ .kind = .{ .StringLiteral = "second" } },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer emits a diagnostic for unterminated string literals" {
+test "Lexer > next: emits a diagnostic when a string is unterminated" {
     const source = "\"hello";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    try expectLexDiagnostic(source, "unterminated string literal");
+    const result = lexer_pipeline.lexer.next();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(lexer_pipeline.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "unterminated string literal" },
+    });
 }
 
-test "lexer emits a diagnostic for unrecognized characters" {
+test "Lexer > next: emits a diagnostic when a character is unrecognized" {
     const source = "@";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    try expectLexDiagnostic(source, "unrecognized character");
+    const result = lexer_pipeline.lexer.next();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(lexer_pipeline.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "unrecognized character" },
+    });
 }
 
-test "lexer skips line comments" {
+test "Lexer > next: skips a comment before a token" {
     const source =
         \\// comment before code
-        \\val answer = 42; // trailing comment
-        \\var next = answer;
+        \\answer
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Val,
-        .Identifier,
-        .Assign,
-        .IntLiteral,
-        .Semicolon,
-        .Var,
-        .Identifier,
-        .Assign,
-        .Identifier,
-        .Semicolon,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .Identifier = "answer" } },
+        .{ .kind = .EndOfFile },
+    });
 }
 
-test "lexer skips consecutive line comments" {
+test "Lexer > next: resumes tokenization after a trailing comment" {
     const source =
-        \\val first = 1;
+        \\answer // trailing comment
+        \\next
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .Identifier = "answer" } },
+        .{ .kind = .{ .Identifier = "next" } },
+        .{ .kind = .EndOfFile },
+    });
+}
+
+test "Lexer > next: skips consecutive line comments" {
+    const source =
+        \\first
         \\// first comment
         \\// second comment
-        \\val second = 2;
+        \\second
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lexer_pipeline = try setupLexerPipeline(&arena, source);
 
-    const expected_tags = [_]TokenTag{
-        .Val,
-        .Identifier,
-        .Assign,
-        .IntLiteral,
-        .Semicolon,
-        .Val,
-        .Identifier,
-        .Assign,
-        .IntLiteral,
-        .Semicolon,
-        .EndOfFile,
-    };
-    try expectTokenSequence(source, &expected_tags);
+    const tokens = try collectTokens(lexer_pipeline.lexer);
+
+    try expect(tokens).toMatch(.{
+        .{ .kind = .{ .Identifier = "first" } },
+        .{ .kind = .{ .Identifier = "second" } },
+        .{ .kind = .EndOfFile },
+    });
 }

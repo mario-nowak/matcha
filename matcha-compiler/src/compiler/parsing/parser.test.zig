@@ -1,333 +1,725 @@
 const std = @import("std");
-const ast = @import("ast");
-const helpers = @import("../test_helpers.zig");
+const expect = @import("testing").expect;
+const setupParserPipeline = @import("test_helpers.zig").setupParserPipeline;
 
-const NodeTag = std.meta.Tag(ast.NodeKind);
-const TestError = helpers.TestError;
+test "Parser > parse: binds multiplication tighter than addition" {
+    const source = "val result = 1 + 2 * 3;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-const expectDeclarationNode = helpers.expectDeclarationNode;
-const expectBlockNode = helpers.expectBlockNode;
-const expectWhileNode = helpers.expectWhileNode;
-const expectForInNode = helpers.expectForInNode;
-const expectItemDefinitionNode = helpers.expectItemDefinitionNode;
-const expectMatchExpressionNode = helpers.expectMatchExpressionNode;
-const expectIndexAccessNode = helpers.expectIndexAccessNode;
+    const program = try parser_pipeline.parser.parse();
 
-fn parse(source: []const u8) !helpers.ParsedProgram {
-    return helpers.parseProgram(source);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .BinaryExpression = .{
+                .operator = .Add,
+                .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+                .right = .{ .kind = .{ .BinaryExpression = .{
+                    .operator = .Multiply,
+                    .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+                    .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+                } } },
+            } } },
+        } } },
+    } });
 }
 
-fn expectNodeTag(node: *const ast.Node, expected: NodeTag) !void {
-    try std.testing.expectEqual(expected, std.meta.activeTag(node.kind));
+test "Parser > parse: orders arithmetic, comparison, and boolean operators by precedence" {
+    const source = "val result = 1 + 2 >= 3 and false or true;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .BinaryExpression = .{
+                .operator = .Or,
+                .left = .{ .kind = .{ .BinaryExpression = .{
+                    .operator = .And,
+                    .left = .{ .kind = .{ .BinaryExpression = .{
+                        .operator = .GreaterThanOrEqual,
+                        .left = .{ .kind = .{ .BinaryExpression = .{
+                            .operator = .Add,
+                            .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+                            .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+                        } } },
+                        .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+                    } } },
+                    .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = false } } } },
+                } } },
+                .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = true } } } },
+            } } },
+        } } },
+    } });
 }
 
-fn expectStructureDefinition(item_definition: ast.ItemDefinition) !ast.Structure {
-    return switch (item_definition.item) {
-        .Structure => |structure| structure,
-        else => return TestError.UnexpectedNodeKind,
-    };
+test "Parser > parse: binds unary not tighter than and" {
+    const source = "val result = not false and true;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .BinaryExpression = .{
+                .operator = .And,
+                .left = .{ .kind = .{ .UnaryExpression = .{
+                    .operator = .Not,
+                    .operand = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = false } } } },
+                } } },
+                .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = true } } } },
+            } } },
+        } } },
+    } });
 }
 
-fn expectBinaryExpression(node: *const ast.Node, expected_operator: ast.BinaryOperator) !ast.BinaryExpression {
-    const binary_expression = switch (node.kind) {
-        .BinaryExpression => |expression| expression,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    try std.testing.expectEqual(expected_operator, binary_expression.operator);
-    return binary_expression;
-}
-
-fn expectUnaryExpression(node: *const ast.Node, expected_operator: ast.UnaryOperator) !ast.UnaryExpression {
-    const unary_expression = switch (node.kind) {
-        .UnaryExpression => |expression| expression,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    try std.testing.expectEqual(expected_operator, unary_expression.operator);
-    return unary_expression;
-}
-
-fn expectMemberAccess(node: *const ast.Node, expected_member_name: []const u8) !ast.MemberAccess {
-    const member_access = switch (node.kind) {
-        .MemberAccess => |expression| expression,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    try std.testing.expectEqualStrings(expected_member_name, member_access.member_name_token.kind.Identifier);
-    return member_access;
-}
-
-fn expectAssignment(node: *const ast.Node) !ast.Assignment {
-    return switch (node.kind) {
-        .Assignment => |assignment| assignment,
-        else => return TestError.UnexpectedNodeKind,
-    };
-}
-
-test "parser respects boolean and comparison precedence" {
-    const source =
-        \\val result = 1 + 2 >= 3 and false or true;
-    ;
-
-    var parsed = try parse(source);
-    defer parsed.deinit();
-
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const or_expression = try expectBinaryExpression(declaration.value, .Or);
-    try expectNodeTag(or_expression.right, .BooleanLiteral);
-    const and_expression = try expectBinaryExpression(or_expression.left, .And);
-    try expectNodeTag(and_expression.right, .BooleanLiteral);
-    const comparison_expression = try expectBinaryExpression(and_expression.left, .GreaterThanOrEqual);
-    try expectNodeTag(comparison_expression.right, .IntegerLiteral);
-    const add_expression = try expectBinaryExpression(comparison_expression.left, .Add);
-    try expectNodeTag(add_expression.left, .IntegerLiteral);
-    try expectNodeTag(add_expression.right, .IntegerLiteral);
-}
-
-test "parser binds unary not tighter than and" {
-    const source =
-        \\val result = not false and true;
-    ;
-
-    var parsed = try parse(source);
-    defer parsed.deinit();
-
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const and_expression = try expectBinaryExpression(declaration.value, .And);
-    _ = try expectUnaryExpression(and_expression.left, .Not);
-    try expectNodeTag(and_expression.right, .BooleanLiteral);
-}
-
-test "parser allows identifier-led trailing block expressions" {
+test "Parser > parse: allows an identifier-led block result after statements" {
     const source =
         \\val result = {
         \\    val left = 1;
-        \\    val right = 2;
         \\    left + right
         \\};
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const block = try expectBlockNode(declaration.value);
-    try std.testing.expectEqual(@as(usize, 2), block.statements.len);
-    try std.testing.expect(block.result != null);
-    _ = try expectBinaryExpression(block.result.?, .Add);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .Block = .{
+                .statements = .{
+                    .{ .kind = .{ .BindingDeclaration = .{} } },
+                },
+                .result = .{ .kind = .{ .BinaryExpression = .{
+                    .operator = .Add,
+                    .left = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "left" } } } },
+                    .right = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "right" } } } },
+                } } },
+            } } },
+        } } },
+    } });
 }
 
-test "parser keeps block ending with statement if as statement-only block" {
+test "Parser > parse: keeps a block statement-only when it ends with an if statement" {
     const source =
         \\{
         \\    if true { val scoped = 1; }
         \\}
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const block = try expectBlockNode(&parsed.program.statements[0]);
-    try std.testing.expectEqual(@as(usize, 1), block.statements.len);
-    try std.testing.expect(block.result == null);
-    try expectNodeTag(&block.statements[0], .IfStatement);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .Block = .{
+            .statements = .{
+                .{ .kind = .{ .IfStatement = .{} } },
+            },
+            .result = null,
+        } } },
+    } });
 }
 
-test "parser treats bare identifier while conditions as conditions, not structure construction" {
-    const source =
-        \\while is_ready {
-        \\    continue;
-        \\}
-    ;
+test "Parser > parse: treats a bare identifier before a while body as the condition" {
+    const source = "while is_ready { continue; }";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const while_statement = try expectWhileNode(&parsed.program.statements[0]);
-    try expectNodeTag(while_statement.condition, .Identifier);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .While = .{
+            .condition = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "is_ready" } } } },
+        } } },
+    } });
 }
 
-test "parser treats unit as a literal in expression context" {
-    const source =
-        \\val value = unit;
-    ;
+test "Parser > parse: treats unit as a literal when used as an expression" {
+    const source = "val value = unit;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    try expectNodeTag(declaration.value, .UnitLiteral);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .UnitLiteral = .{} } },
+        } } },
+    } });
 }
 
-test "parser treats item as a contextual definition keyword" {
+test "Parser > parse: allows item as a binding name" {
+    const source = "val item = 1;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .name = .{ .kind = .{ .Identifier = "item" } },
+        } } },
+    } });
+}
+
+test "Parser > parse: allows item as a for-in binding name" {
+    const source = "for item in items { continue; }";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ForIn = .{
+            .item_name = .{ .kind = .{ .Identifier = "item" } },
+        } } },
+    } });
+}
+
+test "Parser > parse: allows item as an identifier expression" {
+    const source = "val value = item;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "item" } } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: allows item as a structure field name" {
+    const source = "item Point = structure { item: int; };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{ .Structure = .{
+                .fields = .{
+                    .{ .name = .{ .kind = .{ .Identifier = "item" } } },
+                },
+            } },
+        } } },
+    } });
+}
+
+test "Parser > parse: allows item as a member name" {
+    const source = "val value = point.item;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .member_name_token = .{ .kind = .{ .Identifier = "item" } },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: recognizes item as a structure definition keyword" {
+    const source = "item Point = structure { x: int; };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .identifier_token = .{ .kind = .{ .Identifier = "Point" } },
+            .definition = .{ .Structure = .{} },
+        } } },
+    } });
+}
+
+test "Parser > parse: recognizes item as a function definition keyword inside a structure" {
     const source =
-        \\val item = 1;
-        \\for item in items {
-        \\    printInt(item);
-        \\}
         \\item Point = structure {
-        \\    item: int;
-        \\    item get(self: Point): int = self.item;
+        \\    item get(self: Point): int = 1;
         \\};
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const for_in = try expectForInNode(&parsed.program.statements[1]);
-    const structure_definition = try expectStructureDefinition(try expectItemDefinitionNode(&parsed.program.statements[2]));
-    try std.testing.expectEqualStrings("item", declaration.name.kind.Identifier);
-    try std.testing.expectEqualStrings("item", for_in.item_name.kind.Identifier);
-    try std.testing.expectEqualStrings("item", structure_definition.fields[0].name.kind.Identifier);
-    try std.testing.expectEqual(@as(usize, 1), structure_definition.function_definitions.len);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{ .Structure = .{
+                .function_definitions = .{
+                    .{ .kind = .{ .ItemDefinition = .{
+                        .identifier_token = .{ .kind = .{ .Identifier = "get" } },
+                        .definition = .{ .Function = .{} },
+                    } } },
+                },
+            } },
+        } } },
+    } });
 }
 
-test "parser parses structure member access expressions" {
-    const source =
-        \\val x = point.x;
-        \\val y = user.location.x;
-        \\val z = (Point { x = 1, y = 2 }).x;
-    ;
+test "Parser > parse: parses member access on an identifier" {
+    const source = "val value = point.x;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const x_declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const y_declaration = try expectDeclarationNode(&parsed.program.statements[1]);
-    const z_declaration = try expectDeclarationNode(&parsed.program.statements[2]);
-    const point_x = try expectMemberAccess(x_declaration.value, "x");
-    try expectNodeTag(point_x.base, .Identifier);
-    const user_location_x = try expectMemberAccess(y_declaration.value, "x");
-    const user_location = try expectMemberAccess(user_location_x.base, "location");
-    try expectNodeTag(user_location.base, .Identifier);
-    const constructed_point_x = try expectMemberAccess(z_declaration.value, "x");
-    try expectNodeTag(constructed_point_x.base, .StructureConstruction);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "point" } } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+        } } },
+    } });
 }
 
-test "parser parses anonymous structure literal expressions" {
-    const source =
-        \\val point = .{ x = 1, y = 2 };
-    ;
+test "Parser > parse: parses nested member access" {
+    const source = "val value = user.location.x;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const anonymous_literal = switch (declaration.value.kind) {
-        .AnonymousStructureLiteral => |literal| literal,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    try std.testing.expectEqual(@as(usize, 2), anonymous_literal.fields.len);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .MemberExpression = .{
+                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
+                    .member_name_token = .{ .kind = .{ .Identifier = "location" } },
+                } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+        } } },
+    } });
 }
 
-test "parser parses structure member assignment statements" {
-    const source =
-        \\point.x = 3;
-        \\user.location.x = 4;
-    ;
+test "Parser > parse: parses member access on a parenthesized structure literal" {
+    const source = "val value = (Point { x = 1 }).x;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const point_x = try expectMemberAccess(first_assignment.target, "x");
-    try expectNodeTag(point_x.base, .Identifier);
-    try expectNodeTag(first_assignment.value, .IntegerLiteral);
-    const user_location_x = try expectMemberAccess(second_assignment.target, "x");
-    const user_location = try expectMemberAccess(user_location_x.base, "location");
-    try expectNodeTag(user_location.base, .Identifier);
-    try expectNodeTag(second_assignment.value, .IntegerLiteral);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .QualifiedStructureLiteral = .{
+                    .structure_name = .{ .kind = .{ .Identifier = "Point" } },
+                } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+        } } },
+    } });
 }
 
-test "parser parses indexed and mixed place assignment statements" {
-    const source =
-        \\numbers[0] = 4;
-        \\user.points[i].x = 1;
-    ;
+test "Parser > parse: parses fields of an anonymous structure literal" {
+    const source = "val point = .{ x = 1, y = 2 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const indexed_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const mixed_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const indexed_target = try expectIndexAccessNode(indexed_assignment.target);
-    try expectNodeTag(indexed_target.base, .Identifier);
-    try expectNodeTag(indexed_target.index, .IntegerLiteral);
-    try expectNodeTag(indexed_assignment.value, .IntegerLiteral);
-    const points_i_x = try expectMemberAccess(mixed_assignment.target, "x");
-    const points_i = try expectIndexAccessNode(points_i_x.base);
-    const user_points = try expectMemberAccess(points_i.base, "points");
-    try expectNodeTag(user_points.base, .Identifier);
-    try expectNodeTag(points_i.index, .Identifier);
-    try expectNodeTag(mixed_assignment.value, .IntegerLiteral);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .StructureLiteral = .{
+                .fields = .{
+                    .{ .name = .{ .kind = .{ .Identifier = "x" } }, .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } } },
+                    .{ .name = .{ .kind = .{ .Identifier = "y" } }, .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } } },
+                },
+            } } },
+        } } },
+    } });
 }
 
-test "parser parses compound assignment statements as assignment nodes with compound operators" {
+test "Parser > parse: parses assignment to a member" {
+    const source = "point.x = 3;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .Assign,
+            .target = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "point" } } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses assignment to a nested member" {
+    const source = "user.location.x = 4;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .Assign,
+            .target = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .MemberExpression = .{
+                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
+                    .member_name_token = .{ .kind = .{ .Identifier = "location" } },
+                } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 4 } } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses assignment to an indexed element" {
+    const source = "numbers[0] = 4;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .Assign,
+            .target = .{ .kind = .{ .IndexExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "numbers" } } } },
+                .index = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 0 } } } },
+            } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 4 } } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses assignment through mixed member and index access" {
+    const source = "user.points[i].x = 1;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .Assign,
+            .target = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .IndexExpression = .{
+                    .base = .{ .kind = .{ .MemberExpression = .{
+                        .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
+                        .member_name_token = .{ .kind = .{ .Identifier = "points" } },
+                    } } },
+                    .index = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "i" } } } },
+                } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+            } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses compound assignment to identifiers" {
     const source =
         \\counter += 1;
         \\balance -= 3;
-        \\numbers[i] *= 2;
+        \\total *= 2;
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const first_assignment = try expectAssignment(&parsed.program.statements[0]);
-    const second_assignment = try expectAssignment(&parsed.program.statements[1]);
-    const third_assignment = try expectAssignment(&parsed.program.statements[2]);
-    switch (first_assignment.operator) {
-        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Add, binary_operator),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    try expectNodeTag(first_assignment.target, .Identifier);
-    try expectNodeTag(first_assignment.value, .IntegerLiteral);
-    switch (second_assignment.operator) {
-        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Subtract, binary_operator),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    try expectNodeTag(second_assignment.target, .Identifier);
-    try expectNodeTag(second_assignment.value, .IntegerLiteral);
-    switch (third_assignment.operator) {
-        .Compound => |binary_operator| try std.testing.expectEqual(ast.BinaryOperator.Multiply, binary_operator),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    const indexed_target = try expectIndexAccessNode(third_assignment.target);
-    try expectNodeTag(indexed_target.base, .Identifier);
-    try expectNodeTag(indexed_target.index, .Identifier);
-    try expectNodeTag(third_assignment.value, .IntegerLiteral);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .{ .Compound = .Add },
+            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "counter" } } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+        } } },
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .{ .Compound = .Subtract },
+            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "balance" } } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+        } } },
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .{ .Compound = .Multiply },
+            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "total" } } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+        } } },
+    } });
 }
 
-test "parser treats bare identifier match subjects as subjects, not structure construction" {
-    const source =
-        \\val message = match is_happy {
-        \\    true => "yes",
-        \\    false => "no",
-        \\};
-    ;
+test "Parser > parse: parses compound assignment to an indexed element" {
+    const source = "numbers[i] *= 2;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const match_expression = try expectMatchExpressionNode(declaration.value);
-    try std.testing.expect(match_expression.subject != null);
-    try expectNodeTag(match_expression.subject.?, .Identifier);
-    try std.testing.expectEqual(@as(usize, 2), match_expression.arms.len);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .AssignmentStatement = .{
+            .operator = .{ .Compound = .Multiply },
+            .target = .{ .kind = .{ .IndexExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "numbers" } } } },
+                .index = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "i" } } } },
+            } } },
+            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+        } } },
+    } });
 }
 
-test "parser allows parenthesized structure construction as a match subject" {
+test "Parser > parse: treats a bare identifier before match arms as the subject" {
+    const source = "val result = match is_happy { true => 0 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MatchExpression = .{
+                .subject = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "is_happy" } } } },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: allows a structure literal as a match subject when parenthesized" {
+    const source = "val result = match (Point { x = 1 }) { else => 0 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MatchExpression = .{
+                .subject = .{ .kind = .{ .QualifiedStructureLiteral = .{
+                    .structure_name = .{ .kind = .{ .Identifier = "Point" } },
+                } } },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses union cases without payload types" {
     const source =
-        \\val result = match (Point { x = 1, y = 2 }) {
-        \\    else => 0,
+        \\item Direction = union {
+        \\    North,
+        \\    South,
         \\};
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const program = try parser_pipeline.parser.parse();
 
-    const declaration = try expectDeclarationNode(&parsed.program.statements[0]);
-    const match_expression = try expectMatchExpressionNode(declaration.value);
-    try std.testing.expect(match_expression.subject != null);
-    try expectNodeTag(match_expression.subject.?, .StructureConstruction);
-    try std.testing.expect(match_expression.else_arm != null);
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{ .Union = .{
+                .cases = .{
+                    .{ .name = .{ .kind = .{ .Identifier = "North" } }, .type_annotation = null },
+                    .{ .name = .{ .kind = .{ .Identifier = "South" } }, .type_annotation = null },
+                },
+            } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses union cases with and without named payload types" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    PageUnload: unit,
+        \\    KeyPress: string,
+        \\    Click: Vector2D,
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{ .Union = .{
+                .cases = .{
+                    .{
+                        .name = .{ .kind = .{ .Identifier = "PageLoad" } },
+                        .type_annotation = null,
+                    },
+                    .{
+                        .name = .{ .kind = .{ .Identifier = "PageUnload" } },
+                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "unit" } } } },
+                    },
+                    .{
+                        .name = .{ .kind = .{ .Identifier = "KeyPress" } },
+                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "string" } } } },
+                    },
+                    .{
+                        .name = .{ .kind = .{ .Identifier = "Click" } },
+                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "Vector2D" } } } },
+                    },
+                },
+            } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses function definitions inside a union" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    item asString(): string = "event";
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .ItemDefinition = .{
+            .definition = .{ .Union = .{
+                .function_definitions = .{
+                    .{ .kind = .{ .ItemDefinition = .{
+                        .identifier_token = .{ .kind = .{ .Identifier = "asString" } },
+                        .definition = .{ .Function = .{} },
+                    } } },
+                },
+            } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses qualified union construction as a call when given a payload" {
+    const source = "val event = WebEvent.KeyPress(\"A\");";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .CallExpression = .{
+                .callee = .{ .kind = .{ .MemberExpression = .{
+                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
+                    .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+                } } },
+                .arguments = .{
+                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses qualified union construction as member access when given no payload" {
+    const source = "val event = WebEvent.PageLoad;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MemberExpression = .{
+                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
+                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses an implicit member call when given a payload" {
+    const source = "val event = .KeyPress(\"A\");";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .CallExpression = .{
+                .callee = .{ .kind = .{ .ImplicitMemberExpression = .{
+                    .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+                } } },
+                .arguments = .{
+                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses an implicit member expression when given no payload" {
+    const source = "val event = .PageLoad;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .ImplicitMemberExpression = .{
+                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: rejects a union when it has no cases" {
+    const source = "item Empty = union {};";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const result = parser_pipeline.parser.parse();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "union definitions must have at least one case" },
+    });
 }

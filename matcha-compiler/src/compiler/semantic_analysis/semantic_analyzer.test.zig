@@ -7,8 +7,8 @@ const typing = @import("typing");
 
 const TestError = helpers.TestError;
 
-const expectDeclarationNode = helpers.expectDeclarationNode;
-const expectFunctionItem = helpers.expectFunctionItem;
+const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
+const expectFunctionDefinition = helpers.expectFunctionDefinition;
 const expectCallExpressionNode = helpers.expectCallExpressionNode;
 
 fn analyze(source: []const u8) !helpers.AnalyzedProgram {
@@ -33,7 +33,7 @@ test "semantic analysis maps declaration and identifier use to the same symbol" 
     defer analyzed.deinit();
 
     const declaration_symbol = expectStatementSymbolId(&analyzed, 0);
-    const answer_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const answer_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
     const if_expression = switch (answer_declaration.value.kind) {
         .IfExpression => |expression| expression,
         else => return TestError.UnexpectedNodeKind,
@@ -50,7 +50,7 @@ test "semantic analysis resolves parameter references inside function bodies" {
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const function_definition = try expectFunctionItem(&analyzed.parsed.program.statements[0]);
+    const function_definition = try expectFunctionDefinition(&analyzed.parsed.program.statements[0]);
     try expectType(
         .Integer,
         &analyzed.typed_program,
@@ -66,11 +66,11 @@ test "semantic analysis assigns the unit type to the unit literal" {
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[0]);
+    const binding_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[0]);
     try expectType(
         .Unit,
         &analyzed.typed_program,
-        analyzed.typed_program.type_by_node_id.get(declaration.value.id).?,
+        analyzed.typed_program.type_by_node_id.get(binding_declaration.value.id).?,
     );
 }
 
@@ -115,13 +115,13 @@ test "semantic analysis seeds runtime representation by type id" {
         else => return TestError.UnexpectedNodeKind,
     }
 
-    const empty_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const empty_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
     switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_node_id.get(empty_declaration.value.id).?) {
         .Present => {},
         else => return TestError.UnexpectedNodeKind,
     }
 
-    const values_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const values_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
     const values_type_id = analyzed.typed_program.type_by_node_id.get(values_declaration.value.id).?;
     switch (analyzed.typed_program.runtime_representation_result.runtime_representation_by_type_id.get(values_type_id).?) {
         .Present => {},
@@ -142,8 +142,8 @@ test "semantic analysis records structure construction layout in source order" {
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(declaration.value.id).?;
+    const binding_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(binding_declaration.value.id).?;
     try std.testing.expectEqual(@as(usize, 2), construction_layout.field_indices.len);
     try std.testing.expectEqual(@as(u32, 1), construction_layout.field_indices[0]);
     try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
@@ -158,8 +158,8 @@ test "semantic analysis records anonymous structure literal layout from contextu
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(declaration.value.id).?;
+    const binding_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const construction_layout = analyzed.typed_program.structure_construction_layout_by_node_id.get(binding_declaration.value.id).?;
     try std.testing.expectEqual(@as(usize, 2), construction_layout.field_indices.len);
     try std.testing.expectEqual(@as(u32, 1), construction_layout.field_indices[0]);
     try std.testing.expectEqual(@as(u32, 0), construction_layout.field_indices[1]);
@@ -175,12 +175,12 @@ test "semantic analysis records structure member access metadata" {
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[2]);
+    const binding_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
     const symbol_id = expectStatementSymbolId(&analyzed, 2);
-    const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
+    const member_expression = analyzed.typed_program.member_access_by_node_id.get(binding_declaration.value.id).?;
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
-    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
-    switch (member_access) {
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(binding_declaration.value.id).?);
+    switch (member_expression) {
         .StructureInstanceFieldAccess => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),
         else => return TestError.UnexpectedNodeKind,
     }
@@ -207,14 +207,14 @@ test "semantic analysis records structure type function access metadata" {
 
     const point_symbol_id = expectStatementSymbolId(&analyzed, 0);
     const moved_symbol_id = expectStatementSymbolId(&analyzed, 3);
-    const moved_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[3]);
+    const moved_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
     const call_expression = try expectCallExpressionNode(moved_declaration.value);
-    const member_access = analyzed.typed_program.member_access_by_node_id.get(call_expression.callee.id).?;
+    const member_expression = analyzed.typed_program.member_access_by_node_id.get(call_expression.callee.id).?;
     try std.testing.expectEqual(
         analyzed.typed_program.type_by_symbol_id.get(point_symbol_id).?,
         analyzed.typed_program.type_by_symbol_id.get(moved_symbol_id).?,
     );
-    switch (member_access) {
+    switch (member_expression) {
         .StructureTypeFunctionAccess => |structure_function| {
             try std.testing.expectEqual(point_symbol_id, structure_function.structure_symbol_id);
         },
@@ -243,7 +243,7 @@ test "semantic analysis records structure instance method access metadata" {
 
     const point_symbol_id = expectStatementSymbolId(&analyzed, 0);
     const moved_symbol_id = expectStatementSymbolId(&analyzed, 3);
-    const moved_declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[3]);
+    const moved_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
     const call_expression = try expectCallExpressionNode(moved_declaration.value);
     const method_access = analyzed.typed_program.member_access_by_node_id.get(call_expression.callee.id).?;
     try std.testing.expectEqual(
@@ -273,12 +273,12 @@ test "semantic analysis records array length member access metadata" {
     var analyzed = try analyze(source);
     defer analyzed.deinit();
 
-    const declaration = try expectDeclarationNode(&analyzed.parsed.program.statements[1]);
+    const binding_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
     const symbol_id = expectStatementSymbolId(&analyzed, 1);
-    const member_access = analyzed.typed_program.member_access_by_node_id.get(declaration.value.id).?;
+    const member_expression = analyzed.typed_program.member_access_by_node_id.get(binding_declaration.value.id).?;
     try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_symbol_id.get(symbol_id).?);
-    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(declaration.value.id).?);
-    switch (member_access) {
+    try expectType(.Integer, &analyzed.typed_program, analyzed.typed_program.type_by_node_id.get(binding_declaration.value.id).?);
+    switch (member_expression) {
         .ArrayInstanceFieldAccess => |array_field| try std.testing.expectEqual(@as(typing.ArrayInstanceField, .Length), array_field),
         else => return TestError.UnexpectedNodeKind,
     }
@@ -299,9 +299,9 @@ test "semantic analysis records array append instance method access metadata" {
         else => return TestError.UnexpectedNodeKind,
     };
     const append_call = try expectCallExpressionNode(append_statement.expression);
-    const member_access = analyzed.typed_program.member_access_by_node_id.get(append_call.callee.id).?;
+    const member_expression = analyzed.typed_program.member_access_by_node_id.get(append_call.callee.id).?;
     const length_symbol_id = expectStatementSymbolId(&analyzed, 2);
-    switch (member_access) {
+    switch (member_expression) {
         .ArrayInstanceMethodAccess => |array_method| try std.testing.expectEqual(@as(@TypeOf(array_method), .Append), array_method),
         else => return TestError.UnexpectedNodeKind,
     }
