@@ -46,7 +46,7 @@ pub const TypeSeeder = struct {
         var function_iterator = resolved_program.symbol_table.iterator();
         while (function_iterator.next()) |symbol| {
             switch (symbol.kind) {
-                .Function => |function_information| self.seedFunctionTypes(analyzer, symbol.id, function_information, resolved_program),
+                .Function => self.seedFunctionTypes(analyzer, symbol, resolved_program),
                 else => {},
             }
         }
@@ -91,11 +91,15 @@ pub const TypeSeeder = struct {
     fn seedFunctionTypes(
         self: *@This(),
         analyzer: *node_type_analyzer.NodeTypeAnalyzer,
-        function_symbol_id: symbols.SymbolId,
-        function_information: symbols.FunctionSymbolInformation,
+        function_symbol: symbols.Symbol,
         resolved_program: *const symbols.ResolvedProgram,
     ) void {
         _ = self;
+        const function_information = switch (function_symbol.kind) {
+            .Function => |function_information| function_information,
+            else => unreachable,
+        };
+
         var parameter_types = std.ArrayList(typing.TypeId){};
         for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
             const parameter_type_reference = parameterTypeReference(resolved_program, parameter_symbol_id);
@@ -108,7 +112,7 @@ pub const TypeSeeder = struct {
             .parameter_types = owned_parameter_types,
             .return_type = function_return_type,
         });
-        analyzer.type_by_symbol_id.put(function_symbol_id, function_type_id) catch unreachable;
+        analyzer.type_by_symbol_id.put(function_symbol.id, function_type_id) catch unreachable;
         for (function_information.parameter_symbol_ids, owned_parameter_types) |parameter_symbol_id, parameter_type| {
             analyzer.type_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
         }
