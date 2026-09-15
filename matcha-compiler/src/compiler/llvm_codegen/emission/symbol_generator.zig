@@ -35,7 +35,7 @@ pub const SymbolGenerator = struct {
         function_symbol: symbols.Symbol,
     ) []const u8 {
         switch (function_symbol.kind) {
-            .Function => |function_info| switch (function_info.implementation) {
+            .Function => |function_symbol_information| switch (function_symbol_information.implementation_kind) {
                 .BuiltinPrintInt => return runtime_symbols.runtime_print_int_function_name,
                 .BuiltinPrintString => return runtime_symbols.runtime_print_string_function_name,
                 .BuiltinReadFile => return runtime_symbols.runtime_read_file_function_name,

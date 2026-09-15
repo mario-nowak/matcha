@@ -551,6 +551,7 @@ pub const NodeTypeAnalyzer = struct {
                     const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
                     return self.recordNodeType(node_id, function_type_id);
                 },
+                .Union => unreachable,
                 .Binding => return self.checkInstanceMemberExpressionNode(
                     node_id,
                     member_expression,

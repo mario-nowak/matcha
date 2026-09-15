@@ -4,6 +4,340 @@ const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const symbols = @import("symbols");
+const expect = @import("testing").expect;
+const setupNameResolverFixture = @import("testing").setupNameResolverFixture;
+
+test "NameResolver > resolveProgram: records union cases with resolved payload types" {
+    const source = "item WebEvent = union { PageLoad, PageUnload: unit, KeyPress: string, Click: int, };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+    const union_node = fixture.program.statements[0];
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const union_symbol_id = result.symbol_id_by_node_id.get(union_node.id).?;
+    try expect(result.symbol_table.getSymbol(union_symbol_id)).toMatch(.{ .name = "WebEvent", .kind = .Union });
+    try expect(result.resolved_union_by_symbol_id).toMatchMap(.{
+        .{ .key = union_symbol_id, .value = .{
+            .symbol_id = union_symbol_id,
+            .name = "WebEvent",
+            .node_id = union_node.id,
+            .cases = .{
+                .{ .name = "PageLoad", .type_reference = .{ .Builtin = .Unit } },
+                .{ .name = "PageUnload", .type_reference = .{ .Builtin = .Unit } },
+                .{ .name = "KeyPress", .type_reference = .{ .Builtin = .String } },
+                .{ .name = "Click", .type_reference = .{ .Builtin = .Integer } },
+            },
+            .function_symbol_ids = .{},
+        } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: resolves forward union and structure references in payload types" {
+    const source =
+        \\item Event = union { Status: State, Owner: User, };
+        \\item State = union { Ready };
+        \\item User = structure { name: string; };
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const event_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const state_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[2].id).?;
+    try expect(result.resolved_union_by_symbol_id.get(event_id)).toMatch(.{
+        .cases = .{
+            .{ .name = "Status", .type_reference = .{ .Symbol = state_id } },
+            .{ .name = "Owner", .type_reference = .{ .Symbol = user_id } },
+        },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: resolves self references and array payload types" {
+    const source = "item Tree = union { Leaf: int, Parent: Tree, Children: Tree[], };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const tree_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    try expect(result.resolved_union_by_symbol_id.get(tree_id)).toMatch(.{
+        .cases = .{
+            .{ .name = "Leaf", .type_reference = .{ .Builtin = .Integer } },
+            .{ .name = "Parent", .type_reference = .{ .Symbol = tree_id } },
+            .{ .name = "Children", .type_reference = .{ .Array = .{ .Symbol = tree_id } } },
+        },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: resolves union function signatures and parameter references" {
+    const source =
+        \\item WebEvent = union {
+        \\    PageLoad,
+        \\    item echo(event: WebEvent): WebEvent = event;
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+    const union_node = fixture.program.statements[0];
+    const function_node = union_node.kind.ItemDefinition.definition.Union.function_definitions[0];
+    const body = function_node.kind.ItemDefinition.definition.Function.body_expression;
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const union_id = result.symbol_id_by_node_id.get(union_node.id).?;
+    const function_id = result.symbol_id_by_node_id.get(function_node.id).?;
+    const parameter_id = result.symbol_id_by_node_id.get(body.id).?;
+    try expect(result.resolved_union_by_symbol_id.get(union_id)).toMatch(.{ .function_symbol_ids = .{function_id} });
+    try expect(result.resolved_function_by_symbol_id.get(function_id)).toMatch(.{
+        .symbol_id = function_id,
+        .name = "echo",
+        .parameters = .{.{ .symbol_id = parameter_id, .name = "event", .type_reference = .{ .Symbol = union_id } }},
+        .return_type_reference = .{ .Symbol = union_id },
+        .implementation = .{ .user_defined = .{ .node_id = function_node.id, .body_node_id = body.id } },
+    });
+    try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{ .name = "event", .kind = .{ .Binding = .{} } });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: accepts unions in function and declaration type annotations" {
+    const source =
+        \\item echo(event: WebEvent): WebEvent = event;
+        \\val event: WebEvent = .PageLoad;
+        \\item WebEvent = union { PageLoad };
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const function_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const binding_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    const union_id = result.symbol_id_by_node_id.get(fixture.program.statements[2].id).?;
+    try expect(result.resolved_function_by_symbol_id.get(function_id)).toMatch(.{
+        .parameters = .{.{ .name = "event", .type_reference = .{ .Symbol = union_id } }},
+        .return_type_reference = .{ .Symbol = union_id },
+    });
+    try expect(result.annotated_type_reference_by_symbol_id).toMatchMap(.{
+        .{ .key = binding_id, .value = .{ .Symbol = union_id } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: accepts unions in structure field annotations" {
+    const source =
+        \\item User = structure { state: State; };
+        \\item State = union { Ready };
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const state_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    try expect(result.resolved_structure_by_symbol_id.get(user_id)).toMatch(.{
+        .fields = .{.{ .name = "state", .type_reference = .{ .Symbol = state_id } }},
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: resolves qualified union bases without binding case members" {
+    const source =
+        \\item WebEvent = union { PageLoad };
+        \\val event = WebEvent.PageLoad;
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+    const union_node = fixture.program.statements[0];
+    const binding_node = fixture.program.statements[1];
+    const member = binding_node.kind.BindingDeclaration.value.kind.MemberExpression;
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const union_id = result.symbol_id_by_node_id.get(union_node.id).?;
+    const binding_id = result.symbol_id_by_node_id.get(binding_node.id).?;
+    try expect(result.symbol_id_by_node_id).toMatchMap(.{
+        .{ .key = union_node.id, .value = union_id },
+        .{ .key = member.base.id, .value = union_id },
+        .{ .key = binding_node.id, .value = binding_id },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: resolves implicit member call arguments without binding the callee" {
+    const source =
+        \\item WebEvent = union { KeyPress: string };
+        \\val key = "A";
+        \\val event: WebEvent = .KeyPress(key);
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+    const union_node = fixture.program.statements[0];
+    const key_node = fixture.program.statements[1];
+    const event_node = fixture.program.statements[2];
+    const call = event_node.kind.BindingDeclaration.value.kind.CallExpression;
+
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+    const union_id = result.symbol_id_by_node_id.get(union_node.id).?;
+    const key_id = result.symbol_id_by_node_id.get(key_node.id).?;
+    const event_id = result.symbol_id_by_node_id.get(event_node.id).?;
+    try expect(result.symbol_id_by_node_id).toMatchMap(.{
+        .{ .key = union_node.id, .value = union_id },
+        .{ .key = key_node.id, .value = key_id },
+        .{ .key = event_node.id, .value = event_id },
+        .{ .key = call.arguments[0].id, .value = key_id },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
+}
+
+test "NameResolver > resolveProgram: rejects duplicate union names in module scope" {
+    const source = "item Event = union { First }; item Event = union { Second };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = fixture.resolver.resolveProgram(&fixture.program);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "union 'Event' is already defined" },
+    });
+}
+
+test "NameResolver > resolveProgram: rejects union names that collide with other module items" {
+    for ([_][]const u8{
+        "item Event = structure { id: int; }; item Event = union { Ready };",
+        "item Event(): int = 1; item Event = union { Ready };",
+    }) |source| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const fixture = try setupNameResolverFixture(&arena, source);
+
+        const result = fixture.resolver.resolveProgram(&fixture.program);
+
+        try expect(result).toBeError(error.DiagnosticsEmitted);
+        try expect(fixture.diagnostic_store.items()).toMatch(.{
+            .{ .message = "union 'Event' is already defined" },
+        });
+    }
+}
+
+test "NameResolver > resolveProgram: rejects duplicate union member names" {
+    for ([_][]const u8{
+        "item Event = union { Ready, Ready };",
+        "item Event = union { Ready, item Ready(): int = 1; };",
+        "item Event = union { Ready, item value(): int = 1; item value(): int = 2; };",
+    }, [_][]const u8{
+        "union member 'Ready' is already declared in 'Event'",
+        "union member 'Ready' is already declared in 'Event'",
+        "union member 'value' is already declared in 'Event'",
+    }) |source, message| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const fixture = try setupNameResolverFixture(&arena, source);
+
+        const result = fixture.resolver.resolveProgram(&fixture.program);
+
+        try expect(result).toBeError(error.DiagnosticsEmitted);
+        try expect(fixture.diagnostic_store.items()).toMatch(.{
+            .{ .message = message },
+        });
+    }
+}
+
+test "NameResolver > resolveProgram: rejects unknown union payload types" {
+    const source = "item Event = union { Value: Missing };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = fixture.resolver.resolveProgram(&fixture.program);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "unknown type annotation 'Missing'" },
+    });
+}
+
+test "NameResolver > resolveProgram: rejects function symbols used as union payload types" {
+    const source = "item value(): int = 1; item Event = union { Value: value };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = fixture.resolver.resolveProgram(&fixture.program);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "type annotation 'value' must refer to a structure or union" },
+    });
+}
+
+test "NameResolver > resolveProgram: keeps union cases out of module scope" {
+    const source = "item Event = union { Ready }; val event = Ready;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = fixture.resolver.resolveProgram(&fixture.program);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "undefined identifier 'Ready'" },
+    });
+}
+
+test "NameResolver > resolveProgram: rejects undefined identifiers inside union functions" {
+    const source = "item Event = union { Ready, item value(): int = missing; };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+
+    const result = fixture.resolver.resolveProgram(&fixture.program);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "undefined identifier 'missing'" },
+    });
+}
+
+test "NameResolver > resolveProgram: rejects reserved names for unions and their members" {
+    for ([_][]const u8{
+        "item unit = union { Ready };",
+        "item Event = union { unit };",
+        "item Event = union { Ready, item unit(): int = 1; };",
+    }, [_][]const u8{
+        "union name 'unit' is reserved",
+        "union member name 'unit' is reserved",
+        "union member name 'unit' is reserved",
+    }) |source, message| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const fixture = try setupNameResolverFixture(&arena, source);
+
+        const result = fixture.resolver.resolveProgram(&fixture.program);
+
+        try expect(result).toBeError(error.DiagnosticsEmitted);
+        try expect(fixture.diagnostic_store.items()).toMatch(.{
+            .{ .message = message },
+        });
+    }
+}
 
 const ParsedProgram = struct {
     arena: std.heap.ArenaAllocator,
