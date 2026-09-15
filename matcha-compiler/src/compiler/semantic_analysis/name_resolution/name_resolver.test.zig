@@ -1,9 +1,4 @@
 const std = @import("std");
-const lexing = @import("lexing");
-const parsing = @import("parsing");
-const diagnostics = @import("diagnostics");
-const semantic_analysis = @import("semantic_analysis");
-const symbols = @import("symbols");
 const expect = @import("testing").expect;
 const setupNameResolverFixture = @import("testing").setupNameResolverFixture;
 
@@ -351,277 +346,169 @@ test "NameResolver > resolveProgram: rejects reserved names for unions and their
     }
 }
 
-const ParsedProgram = struct {
-    arena: std.heap.ArenaAllocator,
-    program: @import("ast").Program,
+test "NameResolver > resolveProgram: records structure fields with resolved types" {
+    const source = "item User = structure { name: string; friend: User; };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    fn allocator(self: *ParsedProgram) std.mem.Allocator {
-        return self.arena.allocator();
-    }
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    fn deinit(self: *ParsedProgram) void {
-        self.arena.deinit();
-    }
-};
-
-const ResolvedTestProgram = struct {
-    parsed: ParsedProgram,
-    resolved_program: symbols.ResolvedProgram,
-
-    fn deinit(self: *ResolvedTestProgram) void {
-        self.parsed.deinit();
-    }
-};
-
-fn parse(source: []const u8) !ParsedProgram {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    errdefer arena.deinit();
-
-    const allocator = arena.allocator();
-    const owned_source = try allocator.dupe(u8, source);
-
-    var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
-    defer diagnostic_store.deinit();
-
-    var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
-    defer lexer.deinit();
-
-    var parser = parsing.Parser.init(lexer, allocator, &diagnostic_store);
-    const program = try parser.parse();
-
-    return .{
-        .arena = arena,
-        .program = program,
-    };
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
+        .name = "User",
+        .kind = .{ .Structure = .{
+            .fields = .{
+                .{ .name = "name", .type_reference = .{ .Builtin = .String } },
+                .{ .name = "friend", .type_reference = .{ .Symbol = user_id } },
+            },
+        } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-fn resolve(source: []const u8) !ResolvedTestProgram {
-    var parsed = try parse(source);
-    errdefer parsed.deinit();
-
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    const resolved_program = try name_resolver.resolveProgram(&parsed.program);
-
-    return .{
-        .parsed = parsed,
-        .resolved_program = resolved_program,
-    };
-}
-
-test "name resolution emits resolved structures and functions" {
+test "NameResolver > resolveProgram: records function signatures with typed parameter bindings" {
     const source =
-        \\item User = structure { name: string; friend: User; };
+        \\item User = structure { name: string; };
         \\item greet(user: User): string = "hi";
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    var resolved = try resolve(source);
-    defer resolved.deinit();
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
-    const greet_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
-    const user_symbol = resolved.resolved_program.symbol_table.getSymbol(user_symbol_id);
-    try std.testing.expectEqualStrings("User", user_symbol.name);
-    const user_structure = switch (user_symbol.kind) {
-        .Structure => |structure_information| structure_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    try std.testing.expectEqual(@as(usize, 2), user_structure.fields.len);
-    try std.testing.expectEqualStrings("name", user_structure.fields[0].name);
-    switch (user_structure.fields[0].type_reference) {
-        .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    try std.testing.expectEqualStrings("friend", user_structure.fields[1].name);
-    switch (user_structure.fields[1].type_reference) {
-        .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    const greet_symbol = resolved.resolved_program.symbol_table.getSymbol(greet_symbol_id);
-    try std.testing.expectEqualStrings("greet", greet_symbol.name);
-    const greet_function = switch (greet_symbol.kind) {
-        .Function => |function_information| function_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    try std.testing.expectEqual(@as(usize, 1), greet_function.parameter_symbol_ids.len);
-    const greet_parameter_symbol = resolved.resolved_program.symbol_table.getSymbol(greet_function.parameter_symbol_ids[0]);
-    try std.testing.expectEqualStrings("user", greet_parameter_symbol.name);
-    const greet_parameter_type_reference = switch (greet_parameter_symbol.kind) {
-        .Binding => |binding_information| binding_information.declared_type_reference.?,
-        else => return error.UnexpectedSymbolKind,
-    };
-    switch (greet_parameter_type_reference) {
-        .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    switch (greet_function.return_type_reference) {
-        .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const greet_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    const greet_symbol = result.symbol_table.getSymbol(greet_id);
+    try expect(greet_symbol).toMatch(.{
+        .name = "greet",
+        .kind = .{ .Function = .{
+            .return_type_reference = .{ .Builtin = .String },
+            .implementation_kind = .UserDefined,
+        } },
+    });
+    const parameter_id = greet_symbol.kind.Function.parameter_symbol_ids[0];
+    try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
+        .name = "user",
+        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Symbol = user_id } } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-test "name resolution resolves declaration type annotations into side table" {
+test "NameResolver > resolveProgram: records declared type annotations on binding symbols" {
     const source =
         \\item User = structure { name: string; };
         \\val users: User[] = 1;
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    var resolved = try resolve(source);
-    defer resolved.deinit();
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
-    const declaration_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
-    const declaration_type_reference = switch (resolved.resolved_program.symbol_table.getSymbol(declaration_symbol_id).kind) {
-        .Binding => |binding_information| binding_information.declared_type_reference.?,
-        else => return error.UnexpectedSymbolKind,
-    };
-    switch (declaration_type_reference) {
-        .Array => |element_type_reference| switch (element_type_reference.*) {
-            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-            else => return error.UnexpectedTypeReferenceKind,
-        },
-        else => return error.UnexpectedTypeReferenceKind,
-    }
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const declaration_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    try expect(result.symbol_table.getSymbol(declaration_id)).toMatch(.{
+        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Array = .{ .Symbol = user_id } } } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-test "name resolution resolves array type expressions recursively" {
+test "NameResolver > resolveProgram: resolves array type expressions recursively" {
     const source =
         \\item User = structure { friends: User[]; labels: string[][]; };
         \\item echo(users: User[]): string[] = "hi";
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    var resolved = try resolve(source);
-    defer resolved.deinit();
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
-    const echo_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
-    const user_structure = switch (resolved.resolved_program.symbol_table.getSymbol(user_symbol_id).kind) {
-        .Structure => |structure_information| structure_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    const echo_function = switch (resolved.resolved_program.symbol_table.getSymbol(echo_symbol_id).kind) {
-        .Function => |function_information| function_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    switch (user_structure.fields[0].type_reference) {
-        .Array => |element_type_reference| switch (element_type_reference.*) {
-            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-            else => return error.UnexpectedTypeReferenceKind,
-        },
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    switch (user_structure.fields[1].type_reference) {
-        .Array => |outer_element_type_reference| switch (outer_element_type_reference.*) {
-            .Array => |inner_element_type_reference| switch (inner_element_type_reference.*) {
-                .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
-                else => return error.UnexpectedTypeReferenceKind,
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const echo_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
+        .kind = .{ .Structure = .{
+            .fields = .{
+                .{ .name = "friends", .type_reference = .{ .Array = .{ .Symbol = user_id } } },
+                .{ .name = "labels", .type_reference = .{ .Array = .{ .Array = .{ .Builtin = .String } } } },
             },
-            else => return error.UnexpectedTypeReferenceKind,
-        },
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    const echo_parameter_type_reference = switch (resolved.resolved_program.symbol_table.getSymbol(echo_function.parameter_symbol_ids[0]).kind) {
-        .Binding => |binding_information| binding_information.declared_type_reference.?,
-        else => return error.UnexpectedSymbolKind,
-    };
-    switch (echo_parameter_type_reference) {
-        .Array => |element_type_reference| switch (element_type_reference.*) {
-            .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-            else => return error.UnexpectedTypeReferenceKind,
-        },
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    switch (echo_function.return_type_reference) {
-        .Array => |element_type_reference| switch (element_type_reference.*) {
-            .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
-            else => return error.UnexpectedTypeReferenceKind,
-        },
-        else => return error.UnexpectedTypeReferenceKind,
-    }
+        } },
+    });
+    const echo_symbol = result.symbol_table.getSymbol(echo_id);
+    try expect(echo_symbol).toMatch(.{
+        .kind = .{ .Function = .{ .return_type_reference = .{ .Array = .{ .Builtin = .String } } } },
+    });
+    const parameter_id = echo_symbol.kind.Function.parameter_symbol_ids[0];
+    try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
+        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Array = .{ .Symbol = user_id } } } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-test "name resolution resolves forward structure references in field type annotations" {
+test "NameResolver > resolveProgram: resolves forward structure references in field type annotations" {
     const source =
         \\item User = structure { organization: Organization; name: string; };
         \\item Organization = structure { owner: User; };
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    var resolved = try resolve(source);
-    defer resolved.deinit();
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    const user_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[0].id).?;
-    const organization_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
-    const user_structure = switch (resolved.resolved_program.symbol_table.getSymbol(user_symbol_id).kind) {
-        .Structure => |structure_information| structure_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    const organization_structure = switch (resolved.resolved_program.symbol_table.getSymbol(organization_symbol_id).kind) {
-        .Structure => |structure_information| structure_information,
-        else => return error.UnexpectedSymbolKind,
-    };
-    switch (user_structure.fields[0].type_reference) {
-        .Symbol => |symbol_id| try std.testing.expectEqual(organization_symbol_id, symbol_id),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    switch (user_structure.fields[1].type_reference) {
-        .Builtin => |builtin| try std.testing.expectEqual(.String, builtin),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
-    switch (organization_structure.fields[0].type_reference) {
-        .Symbol => |symbol_id| try std.testing.expectEqual(user_symbol_id, symbol_id),
-        else => return error.UnexpectedTypeReferenceKind,
-    }
+    const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
+    const organization_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
+    try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
+        .kind = .{ .Structure = .{
+            .fields = .{
+                .{ .name = "organization", .type_reference = .{ .Symbol = organization_id } },
+                .{ .name = "name", .type_reference = .{ .Builtin = .String } },
+            },
+        } },
+    });
+    try expect(result.symbol_table.getSymbol(organization_id)).toMatch(.{
+        .kind = .{ .Structure = .{
+            .fields = .{
+                .{ .name = "owner", .type_reference = .{ .Symbol = user_id } },
+            },
+        } },
+    });
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-test "name resolution resolves for-in item bindings inside loop bodies" {
+test "NameResolver > resolveProgram: resolves for-in item bindings inside loop bodies" {
     const source =
         \\val numbers = [1, 2, 3];
         \\for number in numbers {
         \\    printInt(number);
         \\}
     ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
+    const for_in_node = fixture.program.statements[1];
+    const print_call = for_in_node.kind.ForIn.body_block.kind.Block.statements[0].kind.ExpressionStatement.expression.kind.CallExpression;
 
-    var resolved = try resolve(source);
-    defer resolved.deinit();
+    const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-    const for_in = switch (resolved.parsed.program.statements[1].kind) {
-        .ForIn => |for_in_statement| for_in_statement,
-        else => return error.UnexpectedNodeKind,
-    };
-    const body_block = switch (for_in.body_block.kind) {
-        .Block => |block| block,
-        else => return error.UnexpectedNodeKind,
-    };
-    const print_statement = switch (body_block.statements[0].kind) {
-        .ExpressionStatement => |statement| statement,
-        else => return error.UnexpectedNodeKind,
-    };
-    const print_call = switch (print_statement.expression.kind) {
-        .CallExpression => |call| call,
-        else => return error.UnexpectedNodeKind,
-    };
-    const for_item_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(resolved.parsed.program.statements[1].id).?;
-    const body_identifier_symbol_id = resolved.resolved_program.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
-    try std.testing.expectEqual(for_item_symbol_id, body_identifier_symbol_id);
+    const item_id = result.symbol_id_by_node_id.get(for_in_node.id).?;
+    const body_identifier_id = result.symbol_id_by_node_id.get(print_call.arguments[0].id).?;
+    try std.testing.expectEqual(item_id, body_identifier_id);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
 
-test "name resolution reserves builtin type names for declarations" {
-    const source =
-        \\val unit = 1;
-    ;
+test "NameResolver > resolveProgram: rejects declarations that use reserved builtin type names" {
+    const source = "val unit = 1;";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNameResolverFixture(&arena, source);
 
-    var parsed = try parse(source);
-    defer parsed.deinit();
+    const result = fixture.resolver.resolveProgram(&fixture.program);
 
-    var diagnostic_store = diagnostics.DiagnosticStore.init(parsed.allocator());
-    defer diagnostic_store.deinit();
-
-    var name_resolver = semantic_analysis.name_resolution.NameResolver.init(parsed.allocator(), &diagnostic_store);
-    try std.testing.expectError(error.DiagnosticsEmitted, name_resolver.resolveProgram(&parsed.program));
-
-    const diagnostic_items = diagnostic_store.items();
-    try std.testing.expectEqual(@as(usize, 1), diagnostic_items.len);
-    try std.testing.expectEqualStrings("value name 'unit' is reserved", diagnostic_items[0].message);
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .message = "value name 'unit' is reserved" },
+    });
 }
