@@ -175,7 +175,7 @@ pub const RuntimeRequirementsLowerer = struct {
         };
 
         _ = node;
-        switch (function_info.implementation) {
+        switch (function_info.implementation_kind) {
             .BuiltinPrintInt => plan.print_int = true,
             .BuiltinPrintString => plan.print_string = true,
             .BuiltinReadFile => plan.read_file = true,

@@ -31,20 +31,23 @@ pub const FunctionLayoutLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.FunctionLayoutBySymbolId {
         self.clearLayouts();
 
-        var resolved_functions = analyzed_program.resolved_program.resolved_function_by_symbol_id.iterator();
-        while (resolved_functions.next()) |entry| {
-            const resolved_function = entry.value_ptr;
-            switch (resolved_function.implementation) {
-                .builtin => continue,
-                .user_defined => {},
+        var symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
+        while (symbols_iterator.next()) |symbol| {
+            const function_information = switch (symbol.kind) {
+                .Function => |function_information| function_information,
+                else => continue,
+            };
+            switch (function_information.implementation_kind) {
+                .UserDefined => {},
+                else => continue,
             }
 
-            const function_symbol_id = entry.key_ptr.*;
+            const function_symbol_id = symbol.id;
             var parameter_layout_index: u32 = 0;
             var parameter_index_kind_by_definition_index = std.ArrayList(lowering_types.FunctionLayoutParameterIndexKind){};
 
-            for (resolved_function.parameters) |parameter| {
-                const parameter_type_id = analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+            for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
+                const parameter_type_id = analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
                 const runtime_representation = analyzed_program
                     .runtime_representation_result
                     .runtime_representation_by_type_id

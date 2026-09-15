@@ -190,7 +190,10 @@ fn emitDirectFunctionCall(
     lowered_program: *const lowering.LoweredProgram,
 ) EmissionResult {
     const callee_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
-    const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+    const function_symbol_information = switch (callee_symbol.kind) {
+        .Function => |function_symbol_information| function_symbol_information,
+        else => unreachable,
+    };
     const function_layout = lowered_program.function_layout_by_symbol_id.get(callee_symbol_id) orelse unreachable;
 
     var argument_list_buffer = std.ArrayList(u8){};
@@ -204,8 +207,8 @@ fn emitDirectFunctionCall(
         if (parameter_layout_index > 0) {
             argument_list_buffer.writer(emitter.allocator).print(", ", .{}) catch unreachable;
         }
-        const parameter = resolved_function.parameters[parameter_definition_index];
-        const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+        const parameter_symbol_id = function_symbol_information.parameter_symbol_ids[parameter_definition_index];
+        const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
         const parameter_llvm_type = lowered_program.getLlvmIrType(parameter_type_id);
         const argument_register = argument_registers[parameter_layout_index];
 

@@ -26,20 +26,11 @@ const ResolutionEnvironment = struct {
     options: ResolutionOptions,
 };
 
-const FunctionResolutionTarget = struct {
-    node_id: ast.NodeId,
-    symbol: symbols.Symbol,
-};
-
 pub const NameResolver = struct {
     allocator: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
-    resolved_function_by_symbol_id: symbols.ResolvedFunctionBySymbolId,
-    resolved_structure_by_symbol_id: symbols.ResolvedStructureBySymbolId,
-    resolved_union_by_symbol_id: symbols.ResolvedUnionBySymbolId,
-    annotated_type_reference_by_symbol_id: symbols.AnnotatedTypeReferenceBySymbolId,
 
     pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
@@ -47,10 +38,6 @@ pub const NameResolver = struct {
             .diagnostic_store = diagnostic_store,
             .symbol_table = symbols.SymbolTable.init(allocator),
             .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
-            .resolved_function_by_symbol_id = symbols.ResolvedFunctionBySymbolId.init(allocator),
-            .resolved_structure_by_symbol_id = symbols.ResolvedStructureBySymbolId.init(allocator),
-            .resolved_union_by_symbol_id = symbols.ResolvedUnionBySymbolId.init(allocator),
-            .annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(allocator),
         };
     }
 
@@ -62,10 +49,6 @@ pub const NameResolver = struct {
         var root_scope = scope.Scope.init(self.allocator, null);
         self.symbol_table = symbols.SymbolTable.init(self.allocator);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.allocator);
-        self.resolved_function_by_symbol_id = symbols.ResolvedFunctionBySymbolId.init(self.allocator);
-        self.resolved_structure_by_symbol_id = symbols.ResolvedStructureBySymbolId.init(self.allocator);
-        self.resolved_union_by_symbol_id = symbols.ResolvedUnionBySymbolId.init(self.allocator);
-        self.annotated_type_reference_by_symbol_id = symbols.AnnotatedTypeReferenceBySymbolId.init(self.allocator);
 
         var module_scope = try self.buildModuleScope(program);
 
@@ -82,14 +65,11 @@ pub const NameResolver = struct {
             try self.resolveNode(statement, root_environment);
         }
 
+        self.symbol_table.assertAllFinalized();
         return .{
             .program = program.*,
             .symbol_id_by_node_id = self.symbol_id_by_node_id,
             .symbol_table = self.symbol_table,
-            .resolved_function_by_symbol_id = self.resolved_function_by_symbol_id,
-            .resolved_structure_by_symbol_id = self.resolved_structure_by_symbol_id,
-            .resolved_union_by_symbol_id = self.resolved_union_by_symbol_id,
-            .annotated_type_reference_by_symbol_id = self.annotated_type_reference_by_symbol_id,
         };
     }
 
@@ -102,115 +82,94 @@ pub const NameResolver = struct {
     }
 
     fn addPrintIntBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const print_int_symbol = self.symbol_table.insertSymbol(.{
-            .name = "printInt",
-            .declared_at = null,
-            .kind = .{ .Function = .{ .implementation_kind = .BuiltinPrintInt } },
-        });
-        module_scope.insertSymbol(print_int_symbol.name, print_int_symbol.id);
-        const parameter_symbol = self.symbol_table.insertSymbol(.{
+        const parameter_id = self.symbol_table.insertSymbol(.{
             .name = "value",
             .declared_at = null,
-            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+            .kind = .{ .Binding = .{
+                .binding_mutability = .Immutable,
+                .declared_type_reference = .{ .Builtin = .Integer },
+            } },
         });
-        self.appendResolvedFunction(.{
-            .symbol_id = print_int_symbol.id,
-            .name = print_int_symbol.name,
-            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
-                .symbol_id = parameter_symbol.id,
-                .name = parameter_symbol.name,
-                .type_reference = .{ .Builtin = .Integer },
-            }}) catch unreachable,
-            .return_type_reference = .{ .Builtin = .Unit },
-            .implementation = .builtin,
+        const function_id = self.symbol_table.insertSymbol(.{
+            .name = "printInt",
+            .declared_at = null,
+            .kind = .{ .Function = .{
+                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .return_type_reference = .{ .Builtin = .Unit },
+                .implementation_kind = .BuiltinPrintInt,
+            } },
         });
+        module_scope.insertSymbol("printInt", function_id);
     }
 
     fn addPrintStringBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const print_string_symbol = self.symbol_table.insertSymbol(.{
-            .name = "printString",
-            .declared_at = null,
-            .kind = .{ .Function = .{ .implementation_kind = .BuiltinPrintString } },
-        });
-        module_scope.insertSymbol(print_string_symbol.name, print_string_symbol.id);
-        const parameter_symbol = self.symbol_table.insertSymbol(.{
+        const parameter_id = self.symbol_table.insertSymbol(.{
             .name = "value",
             .declared_at = null,
-            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+            .kind = .{ .Binding = .{
+                .binding_mutability = .Immutable,
+                .declared_type_reference = .{ .Builtin = .String },
+            } },
         });
-        self.appendResolvedFunction(.{
-            .symbol_id = print_string_symbol.id,
-            .name = print_string_symbol.name,
-            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
-                .symbol_id = parameter_symbol.id,
-                .name = parameter_symbol.name,
-                .type_reference = .{ .Builtin = .String },
-            }}) catch unreachable,
-            .return_type_reference = .{ .Builtin = .Unit },
-            .implementation = .builtin,
+        const function_id = self.symbol_table.insertSymbol(.{
+            .name = "printString",
+            .declared_at = null,
+            .kind = .{ .Function = .{
+                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .return_type_reference = .{ .Builtin = .Unit },
+                .implementation_kind = .BuiltinPrintString,
+            } },
         });
+        module_scope.insertSymbol("printString", function_id);
     }
 
     fn addReadFileBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const read_file_symbol = self.symbol_table.insertSymbol(.{
-            .name = "readFile",
-            .declared_at = null,
-            .kind = .{ .Function = .{ .implementation_kind = .BuiltinReadFile } },
-        });
-        module_scope.insertSymbol(read_file_symbol.name, read_file_symbol.id);
-        const parameter_symbol = self.symbol_table.insertSymbol(.{
+        const parameter_id = self.symbol_table.insertSymbol(.{
             .name = "path",
             .declared_at = null,
-            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+            .kind = .{ .Binding = .{
+                .binding_mutability = .Immutable,
+                .declared_type_reference = .{ .Builtin = .String },
+            } },
         });
-        self.appendResolvedFunction(.{
-            .symbol_id = read_file_symbol.id,
-            .name = read_file_symbol.name,
-            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{.{
-                .symbol_id = parameter_symbol.id,
-                .name = parameter_symbol.name,
-                .type_reference = .{ .Builtin = .String },
-            }}) catch unreachable,
-            .return_type_reference = .{ .Builtin = .String },
-            .implementation = .builtin,
+        const function_id = self.symbol_table.insertSymbol(.{
+            .name = "readFile",
+            .declared_at = null,
+            .kind = .{ .Function = .{
+                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .return_type_reference = .{ .Builtin = .String },
+                .implementation_kind = .BuiltinReadFile,
+            } },
         });
+        module_scope.insertSymbol("readFile", function_id);
     }
 
     fn addReadLineBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const read_line_symbol = self.symbol_table.insertSymbol(.{
+        const function_id = self.symbol_table.insertSymbol(.{
             .name = "readLine",
             .declared_at = null,
-            .kind = .{ .Function = .{ .implementation_kind = .BuiltinReadLine } },
+            .kind = .{ .Function = .{
+                .parameter_symbol_ids = &.{},
+                .return_type_reference = .{ .Builtin = .String },
+                .implementation_kind = .BuiltinReadLine,
+            } },
         });
-        module_scope.insertSymbol(read_line_symbol.name, read_line_symbol.id);
-
-        self.appendResolvedFunction(.{
-            .symbol_id = read_line_symbol.id,
-            .name = read_line_symbol.name,
-            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{}) catch unreachable,
-            .return_type_reference = .{ .Builtin = .String },
-            .implementation = .builtin,
-        });
+        module_scope.insertSymbol("readLine", function_id);
     }
 
     fn addGetArgumentsBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const get_arguments_symbol = self.symbol_table.insertSymbol(.{
-            .name = "getArguments",
-            .declared_at = null,
-            .kind = .{ .Function = .{ .implementation_kind = .BuiltinGetArguments } },
-        });
-        module_scope.insertSymbol(get_arguments_symbol.name, get_arguments_symbol.id);
-
         const string_type_reference = self.allocator.create(symbols.ResolvedTypeReference) catch unreachable;
         string_type_reference.* = .{ .Builtin = .String };
-
-        self.appendResolvedFunction(.{
-            .symbol_id = get_arguments_symbol.id,
-            .name = get_arguments_symbol.name,
-            .parameters = self.allocator.dupe(symbols.ResolvedParameter, &.{}) catch unreachable,
-            .return_type_reference = .{ .Array = string_type_reference },
-            .implementation = .builtin,
+        const function_id = self.symbol_table.insertSymbol(.{
+            .name = "getArguments",
+            .declared_at = null,
+            .kind = .{ .Function = .{
+                .parameter_symbol_ids = &.{},
+                .return_type_reference = .{ .Array = string_type_reference },
+                .implementation_kind = .BuiltinGetArguments,
+            } },
         });
+        module_scope.insertSymbol("getArguments", function_id);
     }
 
     fn buildModuleScope(self: *@This(), program: *const ast.Program) NameResolutionError!scope.ModuleScope {
@@ -260,13 +219,13 @@ pub const NameResolver = struct {
             return error.DiagnosticsEmitted;
         };
 
-        const function_symbol = self.symbol_table.insertSymbol(.{
+        const function_id = self.symbol_table.insertPreliminarySymbol(.{
             .name = function_name,
             .declared_at = item_definition.item_token,
-            .kind = .{ .Function = .{ .implementation_kind = .UserDefined } },
+            .kind = .Function,
         });
-        self.symbol_id_by_node_id.put(node_id, function_symbol.id) catch unreachable;
-        module_scope.insertSymbol(function_name, function_symbol.id);
+        self.symbol_id_by_node_id.put(node_id, function_id) catch unreachable;
+        module_scope.insertSymbol(function_name, function_id);
     }
 
     fn registerModuleStructureSymbol(
@@ -282,13 +241,13 @@ pub const NameResolver = struct {
             return error.DiagnosticsEmitted;
         };
 
-        const structure_symbol = self.symbol_table.insertSymbol(.{
+        const structure_id = self.symbol_table.insertPreliminarySymbol(.{
             .name = structure_name,
             .declared_at = item_definition.item_token,
-            .kind = .{ .Structure = {} },
+            .kind = .Structure,
         });
-        self.symbol_id_by_node_id.put(node_id, structure_symbol.id) catch unreachable;
-        module_scope.insertSymbol(structure_name, structure_symbol.id);
+        self.symbol_id_by_node_id.put(node_id, structure_id) catch unreachable;
+        module_scope.insertSymbol(structure_name, structure_id);
     }
 
     fn registerModuleUnionSymbol(
@@ -304,13 +263,13 @@ pub const NameResolver = struct {
             return error.DiagnosticsEmitted;
         };
 
-        const union_symbol = self.symbol_table.insertSymbol(.{
+        const union_id = self.symbol_table.insertPreliminarySymbol(.{
             .name = union_name,
             .declared_at = item_definition.item_token,
             .kind = .Union,
         });
-        self.symbol_id_by_node_id.put(node_id, union_symbol.id) catch unreachable;
-        module_scope.insertSymbol(union_name, union_symbol.id);
+        self.symbol_id_by_node_id.put(node_id, union_id) catch unreachable;
+        module_scope.insertSymbol(union_name, union_id);
     }
 
     fn resolveNode(
@@ -320,7 +279,7 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         switch (node.kind) {
             .BindingDeclaration => |binding_declaration| try self.resolveBindingDeclarationNode(node.id, binding_declaration, environment),
-            .ItemDefinition => |item_definition| try self.resolveItemDefinitionNode(node.id, item_definition, environment.module_scope),
+            .ItemDefinition => |item_definition| try self.resolveItemDefinitionNode(item_definition, environment.module_scope),
             .ReturnStatement => |return_statement| try self.resolveReturnStatementNode(return_statement, environment),
             .AssignmentStatement => |assignment_statement| try self.resolveAssignmentStatementNode(assignment_statement, environment),
             .Loop => |loop| try self.resolveLoopNode(loop, environment),
@@ -366,7 +325,7 @@ pub const NameResolver = struct {
         else
             null;
 
-        const declaration_symbol = self.symbol_table.insertSymbol(.{
+        const declaration_id = self.symbol_table.insertSymbol(.{
             .name = declaration_name,
             .declared_at = binding_declaration.val_token,
             .kind = .{
@@ -375,17 +334,12 @@ pub const NameResolver = struct {
                         .Mutable => symbols.BindingMutability.Mutable,
                         .Immutable => symbols.BindingMutability.Immutable,
                     },
+                    .declared_type_reference = annotated_type_reference,
                 },
             },
         });
-        self.symbol_id_by_node_id.put(node_id, declaration_symbol.id) catch unreachable;
-        environment.node_scope.insertSymbol(declaration_name, declaration_symbol.id);
-        if (annotated_type_reference) |type_reference| {
-            self.annotated_type_reference_by_symbol_id.put(
-                declaration_symbol.id,
-                type_reference,
-            ) catch unreachable;
-        }
+        self.symbol_id_by_node_id.put(node_id, declaration_id) catch unreachable;
+        environment.node_scope.insertSymbol(declaration_name, declaration_id);
     }
 
     fn validateBindingDeclarationName(
@@ -409,23 +363,13 @@ pub const NameResolver = struct {
 
     fn resolveItemDefinitionNode(
         self: *@This(),
-        node_id: ast.NodeId,
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) NameResolutionError!void {
         switch (item_definition.definition) {
             .Function => |function_definition| {
                 const function_symbol_id = module_scope.lookupSymbol(item_definition.identifier_token.kind.Identifier) orelse unreachable;
-                const function_symbol = self.symbol_table.getSymbol(function_symbol_id);
-                const resolved_function = try self.resolveFunction(
-                    .{
-                        .node_id = node_id,
-                        .symbol = function_symbol,
-                    },
-                    &function_definition,
-                    module_scope,
-                );
-                self.appendResolvedFunction(resolved_function);
+                try self.resolveFunction(function_symbol_id, &function_definition, module_scope);
             },
             .Structure => |structure_definition| {
                 try self.resolveStructureDefinition(item_definition.identifier_token.kind.Identifier, &structure_definition, module_scope);
@@ -493,13 +437,13 @@ pub const NameResolver = struct {
         var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
         const item_name = for_in.item_name.kind.Identifier;
         try self.validateIdentifierIsAvailable(for_in.item_name, item_name, "loop item");
-        const item_symbol = self.symbol_table.insertSymbol(.{
+        const item_symbol_id = self.symbol_table.insertSymbol(.{
             .name = item_name,
             .declared_at = for_in.item_name,
             .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
         });
-        self.symbol_id_by_node_id.put(node_id, item_symbol.id) catch unreachable;
-        loop_scope.insertSymbol(item_name, item_symbol.id);
+        self.symbol_id_by_node_id.put(node_id, item_symbol_id) catch unreachable;
+        loop_scope.insertSymbol(item_name, item_symbol_id);
 
         var loop_environment = environment;
         loop_environment.node_scope = &loop_scope;
@@ -676,12 +620,12 @@ pub const NameResolver = struct {
 
     fn resolveFunction(
         self: *@This(),
-        target: FunctionResolutionTarget,
+        function_symbol_id: symbols.SymbolId,
         function_definition: *const ast.FunctionDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!symbols.ResolvedFunction {
+    ) NameResolutionError!void {
         var function_scope = scope.Scope.init(self.allocator, null);
-        var resolved_parameters = std.ArrayList(symbols.ResolvedParameter){};
+        var parameter_symbol_ids = std.ArrayList(symbols.SymbolId){};
 
         for (function_definition.parameters) |*parameter| {
             const parameter_name = parameter.name.kind.Identifier;
@@ -691,32 +635,20 @@ pub const NameResolver = struct {
                 return error.DiagnosticsEmitted;
             };
 
-            const parameter_symbol = self.symbol_table.insertSymbol(.{
-                .name = parameter.name.kind.Identifier,
-                .declared_at = parameter.name,
-                .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Mutable } },
-            });
-            function_scope.insertSymbol(parameter.name.kind.Identifier, parameter_symbol.id);
-            resolved_parameters.append(self.allocator, .{
-                .symbol_id = parameter_symbol.id,
+            const parameter_type = try self.resolveTypeExpression(parameter.type_annotation, module_scope);
+            const parameter_id = self.symbol_table.insertSymbol(.{
                 .name = parameter_name,
-                .type_reference = try self.resolveTypeExpression(parameter.type_annotation, module_scope),
-            }) catch unreachable;
+                .declared_at = parameter.name,
+                .kind = .{ .Binding = .{
+                    .binding_mutability = .Mutable,
+                    .declared_type_reference = parameter_type,
+                } },
+            });
+            function_scope.insertSymbol(parameter_name, parameter_id);
+            parameter_symbol_ids.append(self.allocator, parameter_id) catch unreachable;
         }
 
-        const resolved_function = symbols.ResolvedFunction{
-            .symbol_id = target.symbol.id,
-            .name = target.symbol.name,
-            .parameters = resolved_parameters.toOwnedSlice(self.allocator) catch unreachable,
-            .return_type_reference = try self.resolveTypeExpression(function_definition.return_type_annotation, module_scope),
-            .implementation = .{
-                .user_defined = .{
-                    .node_id = target.node_id,
-                    .body_node_id = function_definition.body_expression.id,
-                },
-            },
-        };
-
+        const return_type_reference = try self.resolveTypeExpression(function_definition.return_type_annotation, module_scope);
         try self.resolveNode(function_definition.body_expression, .{
             .node_scope = &function_scope,
             .module_scope = module_scope,
@@ -725,7 +657,11 @@ pub const NameResolver = struct {
             },
         });
 
-        return resolved_function;
+        self.symbol_table.finalizePreliminarySymbol(function_symbol_id, .{ .Function = .{
+            .parameter_symbol_ids = parameter_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
+            .return_type_reference = return_type_reference,
+            .implementation_kind = .UserDefined,
+        } });
     }
 
     fn resolveStructureDefinition(
@@ -771,22 +707,14 @@ pub const NameResolver = struct {
                         }
                         member_kind_by_name.put(function_name, .Function) catch unreachable;
 
-                        const method_symbol = self.symbol_table.insertSymbol(.{
+                        const method_id = self.symbol_table.insertPreliminarySymbol(.{
                             .name = function_name,
                             .declared_at = item_definition.item_token,
-                            .kind = .{ .Function = .{ .implementation_kind = .UserDefined } },
+                            .kind = .Function,
                         });
-                        self.symbol_id_by_node_id.put(node.id, method_symbol.id) catch unreachable;
-                        const resolved_function = try self.resolveFunction(
-                            .{
-                                .node_id = node.id,
-                                .symbol = method_symbol,
-                            },
-                            &function_definition,
-                            module_scope,
-                        );
-                        self.appendResolvedFunction(resolved_function);
-                        function_symbol_ids.append(self.allocator, method_symbol.id) catch unreachable;
+                        self.symbol_id_by_node_id.put(node.id, method_id) catch unreachable;
+                        try self.resolveFunction(method_id, &function_definition, module_scope);
+                        function_symbol_ids.append(self.allocator, method_id) catch unreachable;
                     },
                     else => unreachable,
                 },
@@ -794,12 +722,10 @@ pub const NameResolver = struct {
             }
         }
 
-        self.appendResolvedStructure(.{
-            .symbol_id = structure_symbol_id,
-            .name = structure_name,
+        self.symbol_table.finalizePreliminarySymbol(structure_symbol_id, .{ .Structure = .{
             .fields = resolved_fields.toOwnedSlice(self.allocator) catch unreachable,
             .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
-        });
+        } });
     }
 
     fn resolveUnionDefinition(
@@ -848,22 +774,14 @@ pub const NameResolver = struct {
                         }
                         member_kind_by_name.put(function_name, .Function) catch unreachable;
 
-                        const method_symbol = self.symbol_table.insertSymbol(.{
+                        const method_id = self.symbol_table.insertPreliminarySymbol(.{
                             .name = function_name,
                             .declared_at = item_definition.item_token,
-                            .kind = .{ .Function = .{ .implementation_kind = .UserDefined } },
+                            .kind = .Function,
                         });
-                        self.symbol_id_by_node_id.put(node.id, method_symbol.id) catch unreachable;
-                        const resolved_function = try self.resolveFunction(
-                            .{
-                                .node_id = node.id,
-                                .symbol = method_symbol,
-                            },
-                            &function_definition,
-                            module_scope,
-                        );
-                        self.appendResolvedFunction(resolved_function);
-                        function_symbol_ids.append(self.allocator, method_symbol.id) catch unreachable;
+                        self.symbol_id_by_node_id.put(node.id, method_id) catch unreachable;
+                        try self.resolveFunction(method_id, &function_definition, module_scope);
+                        function_symbol_ids.append(self.allocator, method_id) catch unreachable;
                     },
                     else => unreachable,
                 },
@@ -871,12 +789,10 @@ pub const NameResolver = struct {
             }
         }
 
-        self.appendResolvedUnion(.{
-            .symbol_id = union_symbol_id,
-            .name = union_name,
+        self.symbol_table.finalizePreliminarySymbol(union_symbol_id, .{ .Union = .{
             .cases = resolved_cases.toOwnedSlice(self.allocator) catch unreachable,
             .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
-        });
+        } });
     }
 
     fn resolveTypeExpression(
@@ -894,8 +810,7 @@ pub const NameResolver = struct {
                         try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "unknown type annotation '{s}'", .{type_name});
                         return error.DiagnosticsEmitted;
                     };
-                    const symbol = self.symbol_table.getSymbol(symbol_id);
-                    switch (symbol.kind) {
+                    switch (self.symbol_table.getSymbolKind(symbol_id)) {
                         .Structure, .Union => break :named_type_reference symbols.ResolvedTypeReference{ .Symbol = symbol_id },
                         else => {
                             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "type annotation '{s}' must refer to a structure or union", .{type_name});
@@ -911,18 +826,6 @@ pub const NameResolver = struct {
                 break :block .{ .Array = array_type_reference };
             },
         };
-    }
-
-    fn appendResolvedFunction(self: *@This(), function: symbols.ResolvedFunction) void {
-        self.resolved_function_by_symbol_id.put(function.symbol_id, function) catch unreachable;
-    }
-
-    fn appendResolvedStructure(self: *@This(), structure: symbols.ResolvedStructure) void {
-        self.resolved_structure_by_symbol_id.put(structure.symbol_id, structure) catch unreachable;
-    }
-
-    fn appendResolvedUnion(self: *@This(), resolved_union: symbols.ResolvedUnion) void {
-        self.resolved_union_by_symbol_id.put(resolved_union.symbol_id, resolved_union) catch unreachable;
     }
 
     fn validateIdentifierIsAvailable(

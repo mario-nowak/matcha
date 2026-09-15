@@ -83,7 +83,10 @@ test "semantic analysis resolves array types in function signatures" {
     defer analyzed.deinit();
 
     const function_symbol_id = expectStatementSymbolId(&analyzed, 0);
-    const resolved_function = analyzed.typed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id).?;
+    const function_information = switch (analyzed.typed_program.resolved_program.symbol_table.getSymbol(function_symbol_id).kind) {
+        .Function => |function_information| function_information,
+        else => return TestError.UnexpectedNodeKind,
+    };
     const expected_array_type = typing.Type{ .Array = analyzed.typed_program.type_store.integer_type_id };
     const function_type_id = analyzed.typed_program.type_by_symbol_id.get(function_symbol_id).?;
     const function_type = switch (analyzed.typed_program.type_store.getType(function_type_id)) {
@@ -94,7 +97,7 @@ test "semantic analysis resolves array types in function signatures" {
     try expectType(
         expected_array_type,
         &analyzed.typed_program,
-        analyzed.typed_program.type_by_symbol_id.get(resolved_function.parameters[0].symbol_id).?,
+        analyzed.typed_program.type_by_symbol_id.get(function_information.parameter_symbol_ids[0]).?,
     );
 }
 

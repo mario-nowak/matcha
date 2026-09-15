@@ -74,7 +74,6 @@ pub const FunctionEmitter = struct {
         self: *@This(),
         function_node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
-        resolved_function: *const symbols.ResolvedFunction,
         owning_structure_symbol: ?symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
@@ -82,6 +81,10 @@ pub const FunctionEmitter = struct {
 
         const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
         const function_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
+        const function_symbol_information = switch (function_symbol.kind) {
+            .Function => |function_symbol_information| function_symbol_information,
+            else => unreachable,
+        };
         const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
             .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
@@ -94,18 +97,19 @@ pub const FunctionEmitter = struct {
         var environment = Environment.init(self.allocator, null, function_return_type_id);
         defer environment.deinit();
 
-        for (resolved_function.parameters, 0..) |parameter, index| {
+        for (function_symbol_information.parameter_symbol_ids, 0..) |parameter_symbol_id, index| {
             const parameter_index = switch (function_layout.parameter_index_kind_by_definition_index[index]) {
                 .Absent => continue,
                 .Index => |parameter_index| parameter_index,
             };
 
-            const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter.symbol_id) orelse unreachable;
+            const parameter_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
+            const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,
                 "%arg_{d}_{s}",
-                .{ parameter_index, parameter.name },
+                .{ parameter_index, parameter_symbol.name },
             ) catch unreachable;
 
             if (parameter_index > 0) {
@@ -119,7 +123,7 @@ pub const FunctionEmitter = struct {
             const storage = self.function_symbol_generator.generateStorage();
             self.function_ir_builder.emitAlloca(storage, parameter_llvm_ir_type);
             self.function_ir_builder.emitStore(parameter_register, storage, parameter_llvm_ir_type);
-            environment.storage_by_symbol_id.put(parameter.symbol_id, storage) catch unreachable;
+            environment.storage_by_symbol_id.put(parameter_symbol_id, storage) catch unreachable;
         }
 
         const body_register = self.node_emitter.emitNode(
