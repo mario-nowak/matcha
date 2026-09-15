@@ -60,8 +60,11 @@ test "function layout lowering erases unit parameters and returns but retains st
 
     const layouts = lowerer.lower(&analyzed.typed_program);
     const unit_only_symbol_id = statementSymbolId(&analyzed, 0);
-    const resolved_structure = analyzed.typed_program.resolved_program.resolved_structure_by_symbol_id.get(unit_only_symbol_id).?;
-    const method_symbol_id = resolved_structure.function_symbol_ids[0];
+    const structure_information = switch (analyzed.typed_program.resolved_program.symbol_table.getSymbol(unit_only_symbol_id).kind) {
+        .Structure => |structure_information| structure_information,
+        else => unreachable,
+    };
+    const method_symbol_id = structure_information.function_symbol_ids[0];
     const select_symbol_id = statementSymbolId(&analyzed, 1);
     const only_erased_symbol_id = statementSymbolId(&analyzed, 2);
 

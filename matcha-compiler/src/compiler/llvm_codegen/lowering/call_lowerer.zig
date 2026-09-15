@@ -182,15 +182,15 @@ pub const CallLowerer = struct {
             else => unreachable,
         };
 
-        if (builtinCallKind(function_info.implementation)) |builtin_call_kind| {
+        if (builtinCallKind(function_info.implementation_kind)) |builtin_call_kind| {
             return .{ .Builtin = builtin_call_kind };
         }
 
         return .{ .UserFunction = .{ .function_symbol_id = callee_symbol_id } };
     }
 
-    fn builtinCallKind(implementation: symbols.Implementation) ?lowering_types.BuiltinCallKind {
-        return switch (implementation) {
+    fn builtinCallKind(implementation_kind: symbols.FunctionImplementationKind) ?lowering_types.BuiltinCallKind {
+        return switch (implementation_kind) {
             .BuiltinPrintInt => .PrintInt,
             .BuiltinPrintString => .PrintString,
             .BuiltinReadFile => .ReadFile,

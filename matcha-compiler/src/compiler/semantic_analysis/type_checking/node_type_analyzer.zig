@@ -280,7 +280,11 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const annotated_type = if (environment.resolved_program.annotated_type_reference_by_symbol_id.get(symbol_id)) |type_reference|
+        const binding_information = switch (environment.resolved_program.symbol_table.getSymbol(symbol_id).kind) {
+            .Binding => |binding_information| binding_information,
+            else => unreachable,
+        };
+        const annotated_type = if (binding_information.declared_type_reference) |type_reference|
             self.resolveTypeReference(type_reference)
         else
             null;
@@ -551,6 +555,7 @@ pub const NodeTypeAnalyzer = struct {
                     const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
                     return self.recordNodeType(node_id, function_type_id);
                 },
+                .Union => unreachable,
                 .Binding => return self.checkInstanceMemberExpressionNode(
                     node_id,
                     member_expression,
@@ -1001,10 +1006,14 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!void {
         const function_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const resolved_function = self.getResolvedFunction(function_symbol_id, environment.resolved_program);
-        for (resolved_function.parameters) |parameter| {
-            const parameter_type = self.resolveTypeReference(parameter.type_reference);
-            self.type_by_symbol_id.put(parameter.symbol_id, parameter_type) catch unreachable;
+        const function_information = self.getFunctionSymbolInformation(function_symbol_id, environment.resolved_program);
+        for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
+            const declared_type_reference = switch (environment.resolved_program.symbol_table.getSymbol(parameter_symbol_id).kind) {
+                .Binding => |binding_information| binding_information.declared_type_reference orelse unreachable,
+                else => unreachable,
+            };
+            const parameter_type = self.resolveTypeReference(declared_type_reference);
+            self.type_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
         }
 
         try self.checkFunctionDefinitionReturnValue(
@@ -1021,8 +1030,8 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!void {
         const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const resolved_function = self.getResolvedFunction(symbol_id, environment.resolved_program);
-        const function_return_type = self.resolveTypeReference(resolved_function.return_type_reference);
+        const function_information = self.getFunctionSymbolInformation(symbol_id, environment.resolved_program);
+        const function_return_type = self.resolveTypeReference(function_information.return_type_reference);
 
         const body_expression_type = try self.checkNode(
             function_definition.body_expression,
@@ -1189,13 +1198,16 @@ pub const NodeTypeAnalyzer = struct {
         };
     }
 
-    fn getResolvedFunction(
+    fn getFunctionSymbolInformation(
         self: *const @This(),
         function_symbol_id: symbols.SymbolId,
         resolved_program: *const symbols.ResolvedProgram,
-    ) symbols.ResolvedFunction {
+    ) symbols.FunctionSymbolInformation {
         _ = self;
-        return resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        return switch (resolved_program.symbol_table.getSymbol(function_symbol_id).kind) {
+            .Function => |function_information| function_information,
+            else => unreachable,
+        };
     }
 
     fn checkMatchExpression(

@@ -87,16 +87,9 @@ pub const LlvmModuleRenderer = struct {
             switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Function => |function_definition| {
-                        const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
-                            statement.id,
-                        ) orelse unreachable;
-                        const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(
-                            function_symbol_id,
-                        ) orelse unreachable;
                         const function_ir = self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
-                            &resolved_function,
                             null,
                             lowered_program,
                         );
@@ -229,14 +222,9 @@ pub const LlvmModuleRenderer = struct {
                 },
                 else => unreachable,
             };
-            const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
-                function_definition_node.id,
-            ) orelse unreachable;
-            const resolved_function = lowered_program.analyzed_program.resolved_program.resolved_function_by_symbol_id.get(function_symbol_id) orelse unreachable;
             const function_definition_emission = self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
-                &resolved_function,
                 structure_symbol,
                 lowered_program,
             );

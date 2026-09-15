@@ -44,7 +44,7 @@ pub const StructureTypeRenderer = struct {
                 .Present => |structure_layout| structure_layout,
             };
 
-            const resolved_structure = resolved_program.resolved_structure_by_symbol_id.get(structure_symbol_id) orelse unreachable;
+            const structure_symbol = resolved_program.symbol_table.getSymbol(structure_symbol_id);
 
             if (has_structure_definition) {
                 structure_definitions_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
@@ -53,7 +53,7 @@ pub const StructureTypeRenderer = struct {
                 "{s}",
                 .{
                     self.renderStructureTypeDefinition(
-                        resolved_structure,
+                        structure_symbol,
                         structure_layout,
                         lowered_program,
                     ),
@@ -67,11 +67,14 @@ pub const StructureTypeRenderer = struct {
 
     fn renderStructureTypeDefinition(
         self: *@This(),
-        resolved_structure: symbols.ResolvedStructure,
+        structure_symbol: symbols.Symbol,
         structure_layout: lowering_types.StructureLayout,
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
-        const structure_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(resolved_structure.symbol_id);
+        const structure_information = switch (structure_symbol.kind) {
+            .Structure => |structure_information| structure_information,
+            else => unreachable,
+        };
         const structure_llvm_type_name = self.generateStructureName(structure_symbol);
 
         var structure_definition_buffer = std.ArrayList(u8){};
@@ -81,7 +84,7 @@ pub const StructureTypeRenderer = struct {
             "%{s} = type {{",
             .{structure_llvm_type_name},
         ) catch unreachable;
-        for (resolved_structure.fields, 0..) |field, field_index_in_structure_definition| {
+        for (structure_information.fields, 0..) |field, field_index_in_structure_definition| {
             const field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index_in_structure_definition]) {
                 .Absent => continue,
                 .Index => |field_index| field_index,
@@ -99,7 +102,7 @@ pub const StructureTypeRenderer = struct {
                 .{lowered_program.getLlvmIrType(field_type_id)},
             ) catch unreachable;
         }
-        if (resolved_structure.fields.len > 0) {
+        if (structure_information.fields.len > 0) {
             structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
         }
         structure_definition_buffer.writer(self.allocator).print("}}", .{}) catch unreachable;
