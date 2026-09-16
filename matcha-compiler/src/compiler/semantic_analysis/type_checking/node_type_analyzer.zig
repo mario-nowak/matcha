@@ -213,15 +213,13 @@ pub const NodeTypeAnalyzer = struct {
         type_id: typing.TypeId,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const structure_literal_type = self.type_store.getType(type_id);
-        const structure_type_id = switch (structure_literal_type) {
-            .Structure => |id| id,
+        const structure_type = switch (self.type_store.getType(type_id)) {
+            .Structure => |structure_type| structure_type,
             else => {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, fields[0].name, "expected a structure type for this literal, found {s}", .{try self.typeName(type_id)});
                 return error.DiagnosticsEmitted;
             },
         };
-        const structure_type = self.type_store.structure_types.items[structure_type_id];
 
         var unique_field_names = std.StringHashMap(bool).init(self.allocator);
         defer unique_field_names.deinit();
@@ -237,7 +235,7 @@ pub const NodeTypeAnalyzer = struct {
             }
             unique_field_names.put(field_name, true) catch unreachable;
 
-            const field_index = structure_type.field_index_by_name.get(field_name) orelse {
+            const field_index = structure_type.getFieldIndex(field_name) orelse {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "field '{s}' does not exist on structure '{s}'", .{ field_name, structure_type.name });
                 return error.DiagnosticsEmitted;
             };
@@ -500,14 +498,13 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const callee_type_id = try self.checkExpression(call_expression.callee, environment);
 
-        const function_type_id = switch (self.type_store.getType(callee_type_id)) {
-            .Function => |function_type_id| function_type_id,
+        const function_type = switch (self.type_store.getType(callee_type_id)) {
+            .Function => |function_type| function_type,
             else => {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, call_expression.left_parenthesis, "cannot call value of non-function type {s}", .{try self.typeName(callee_type_id)});
                 return error.DiagnosticsEmitted;
             },
         };
-        const function_type = self.type_store.function_types.items[function_type_id];
 
         if (call_expression.arguments.len != function_type.parameter_types.len) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, call_expression.left_parenthesis, "function expects {d} arguments, found {d}", .{ function_type.parameter_types.len, call_expression.arguments.len });
@@ -538,12 +535,11 @@ pub const NodeTypeAnalyzer = struct {
             switch (base_symbol.kind) {
                 .Structure => {
                     const base_type_id = self.type_by_symbol_id.get(base_symbol_id) orelse unreachable;
-                    const structure_type_id = switch (self.type_store.getType(base_type_id)) {
-                        .Structure => |structure_type_id| structure_type_id,
+                    const structure_type = switch (self.type_store.getType(base_type_id)) {
+                        .Structure => |structure_type| structure_type,
                         else => unreachable,
                     };
-                    const structure_type = self.type_store.structure_types.items[structure_type_id];
-                    const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name) orelse {
+                    const function_symbol_id = structure_type.getFunctionSymbolId(&environment.resolved_program.symbol_table, member_name) orelse {
                         try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, structure_type.name });
                         return error.DiagnosticsEmitted;
                     };
@@ -587,15 +583,14 @@ pub const NodeTypeAnalyzer = struct {
             environment.withContextAndType(.Expression, null),
         );
         switch (self.type_store.getType(base_type_id)) {
-            .Structure => |structure_type_id| {
-                const structure_type = self.type_store.structure_types.items[structure_type_id];
-                const field_index = structure_type.field_index_by_name.get(member_name);
+            .Structure => |structure_type| {
+                const field_index = structure_type.getFieldIndex(member_name);
                 if (field_index) |structure_field_index| {
                     self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = structure_field_index } });
                     return self.recordNodeType(node_id, structure_type.fields[@intCast(structure_field_index)].type_id);
                 }
 
-                const function_symbol_id = structure_type.function_symbol_id_by_name.get(member_name);
+                const function_symbol_id = structure_type.getFunctionSymbolId(&environment.resolved_program.symbol_table, member_name);
                 if (function_symbol_id) |structure_function_symbol_id| {
                     // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                     const bound_function_type_id = try self.bindInstanceMethodFunctionType(
@@ -683,10 +678,10 @@ pub const NodeTypeAnalyzer = struct {
 
         const parameter_types = self.allocator.alloc(typing.TypeId, 1) catch unreachable;
         parameter_types[0] = element_type_id;
-        return self.type_store.addFunctionType(.{
+        return self.type_store.addType(.{ .Function = .{
             .parameter_types = parameter_types,
             .return_type = self.type_store.unit_type_id,
-        });
+        } });
     }
 
     fn getStringMethodFunctionTypeId(
@@ -697,10 +692,10 @@ pub const NodeTypeAnalyzer = struct {
         const parameter_types = self.allocator.alloc(typing.TypeId, parameter_type_ids.len) catch unreachable;
         @memcpy(parameter_types, parameter_type_ids);
 
-        return self.type_store.addFunctionType(.{
+        return self.type_store.addType(.{ .Function = .{
             .parameter_types = parameter_types,
             .return_type = return_type_id,
-        });
+        } });
     }
 
     fn bindInstanceMethodFunctionType(
@@ -711,7 +706,7 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_type = switch (self.type_store.getType(function_type_id)) {
-            .Function => |id| self.type_store.function_types.items[id],
+            .Function => |function_type| function_type,
             else => unreachable,
         };
 
@@ -731,10 +726,10 @@ pub const NodeTypeAnalyzer = struct {
             remaining_parameter_types.append(self.allocator, parameter_type_id) catch unreachable;
         }
 
-        return self.type_store.addFunctionType(.{
+        return self.type_store.addType(.{ .Function = .{
             .parameter_types = remaining_parameter_types.toOwnedSlice(self.allocator) catch unreachable,
             .return_type = function_type.return_type,
-        });
+        } });
     }
 
     fn checkBinaryExpressionNode(

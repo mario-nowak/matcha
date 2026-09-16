@@ -227,7 +227,7 @@ fn emitDirectFunctionCall(
         emitter.symbol_generator.generateFunctionName(callee_symbol);
     const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
     const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
-        .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
+        .Function => |function_type| function_type.return_type,
         else => unreachable,
     };
     const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);

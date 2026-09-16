@@ -73,7 +73,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self: *@This(),
         type_store: *const typing.TypeStore,
     ) anyerror!void {
-        for (0..type_store.types.items.len) |index| {
+        for (0..type_store.count()) |index| {
             const type_id: typing.TypeId = @intCast(index);
             _ = try self.resolveRuntimeRepresentationOfType(type_store, type_id);
         }
@@ -107,7 +107,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .String,
             .Function,
             => .Present,
-            .Structure => |structure_type_id| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type_id),
+            .Structure => |structure_type| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type),
             .Array => |element_type_id| block: {
                 _ = try self.resolveRuntimeRepresentationOfType(type_store, element_type_id);
                 break :block .Present;
@@ -124,10 +124,8 @@ pub const RuntimeRepresentationAnalyzer = struct {
     fn resolveRuntimeRepresentationOfStructureType(
         self: *@This(),
         type_store: *const typing.TypeStore,
-        structure_type_id: typing.StructureTypeId,
+        structure_type: typing.StructureType,
     ) anyerror!RuntimeRepresentation {
-        const structure_type = type_store.structure_types.items[structure_type_id];
-
         for (structure_type.fields) |field| {
             _ = try self.resolveRuntimeRepresentationOfType(type_store, field.type_id);
         }

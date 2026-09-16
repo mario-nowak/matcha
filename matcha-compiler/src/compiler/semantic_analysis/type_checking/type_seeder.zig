@@ -31,15 +31,7 @@ pub const TypeSeeder = struct {
                 .Structure => {},
                 else => continue,
             }
-            const structure_type_id: typing.StructureTypeId = @intCast(analyzer.type_store.structure_types.items.len);
-            analyzer.type_store.structure_types.append(analyzer.allocator, .{
-                .symbol_id = symbol.id,
-                .name = symbol.name,
-                .fields = &.{},
-                .field_index_by_name = std.StringHashMap(u32).init(analyzer.allocator),
-                .function_symbol_id_by_name = std.StringHashMap(symbols.SymbolId).init(analyzer.allocator),
-            }) catch unreachable;
-            const type_id = analyzer.type_store.addType(.{ .Structure = structure_type_id });
+            const type_id = analyzer.type_store.addPreliminaryType(.Structure);
             analyzer.type_by_symbol_id.put(symbol.id, type_id) catch unreachable;
         }
 
@@ -58,33 +50,21 @@ pub const TypeSeeder = struct {
                 else => continue,
             };
             const type_id = analyzer.type_by_symbol_id.get(symbol.id).?;
-            const structure_type_id = switch (analyzer.type_store.getType(type_id)) {
-                .Structure => |id| id,
-                else => unreachable,
-            };
 
-            var fields = std.ArrayList(typing.Field){};
-            var field_index_by_name = std.StringHashMap(u32).init(analyzer.allocator);
-            var function_symbol_id_by_name = std.StringHashMap(symbols.SymbolId).init(analyzer.allocator);
-            for (structure_information.fields, 0..) |field, index| {
+            var fields = std.ArrayList(typing.StructureTypeField){};
+            for (structure_information.fields) |field| {
                 fields.append(analyzer.allocator, .{
                     .name = field.name,
                     .type_id = analyzer.resolveTypeReference(field.type_reference),
                 }) catch unreachable;
-                field_index_by_name.put(field.name, @intCast(index)) catch unreachable;
-            }
-            for (structure_information.function_symbol_ids) |function_symbol_id| {
-                const function_symbol = resolved_program.symbol_table.getSymbol(function_symbol_id);
-                function_symbol_id_by_name.put(function_symbol.name, function_symbol_id) catch unreachable;
             }
 
-            analyzer.type_store.structure_types.items[structure_type_id] = .{
+            analyzer.type_store.finalizeType(type_id, .{ .Structure = .{
                 .symbol_id = symbol.id,
                 .name = symbol.name,
                 .fields = fields.toOwnedSlice(analyzer.allocator) catch unreachable,
-                .field_index_by_name = field_index_by_name,
-                .function_symbol_id_by_name = function_symbol_id_by_name,
-            };
+                .function_symbol_ids = structure_information.function_symbol_ids,
+            } });
         }
     }
 
@@ -108,10 +88,10 @@ pub const TypeSeeder = struct {
 
         const owned_parameter_types = parameter_types.toOwnedSlice(analyzer.allocator) catch unreachable;
         const function_return_type = analyzer.resolveTypeReference(function_information.return_type_reference);
-        const function_type_id = analyzer.type_store.addFunctionType(.{
+        const function_type_id = analyzer.type_store.addType(.{ .Function = .{
             .parameter_types = owned_parameter_types,
             .return_type = function_return_type,
-        });
+        } });
         analyzer.type_by_symbol_id.put(function_symbol.id, function_type_id) catch unreachable;
         for (function_information.parameter_symbol_ids, owned_parameter_types) |parameter_symbol_id, parameter_type| {
             analyzer.type_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;

@@ -21,7 +21,7 @@ pub const StructureSymbolLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) []const ?symbols.SymbolId {
         self.structure_symbol_id_by_type_id.clearRetainingCapacity();
 
-        for (0..analyzed_program.type_store.types.items.len) |_| {
+        for (0..analyzed_program.type_store.count()) |_| {
             self.structure_symbol_id_by_type_id.append(self.allocator, null) catch unreachable;
         }
 

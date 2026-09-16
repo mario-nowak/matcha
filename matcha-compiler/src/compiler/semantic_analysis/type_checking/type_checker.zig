@@ -30,6 +30,7 @@ pub const TypeChecker = struct {
     ) TypeError!TypeCheckResult {
         self.node_type_analyzer.resetState();
         try self.type_seeder.seedProgram(&self.node_type_analyzer, &resolved_program);
+        self.node_type_analyzer.type_store.assertAllFinalized();
         try self.node_type_analyzer.analyzeProgram(&resolved_program, exit_behavior_by_node_id);
 
         return self.node_type_analyzer.typeCheckResult();

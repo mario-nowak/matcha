@@ -90,7 +90,7 @@ test "semantic analysis resolves array types in function signatures" {
     const expected_array_type = typing.Type{ .Array = analyzed.typed_program.type_store.integer_type_id };
     const function_type_id = analyzed.typed_program.type_by_symbol_id.get(function_symbol_id).?;
     const function_type = switch (analyzed.typed_program.type_store.getType(function_type_id)) {
-        .Function => |id| analyzed.typed_program.type_store.function_types.items[id],
+        .Function => |function_type| function_type,
         else => return TestError.UnexpectedNodeKind,
     };
     try expectType(expected_array_type, &analyzed.typed_program, function_type.return_type);
@@ -257,7 +257,7 @@ test "semantic analysis records structure instance method access metadata" {
         .StructureInstanceMethodAccess => |structure_method| {
             const method_function_type_id = analyzed.typed_program.type_by_node_id.get(call_expression.callee.id).?;
             const method_function_type = switch (analyzed.typed_program.type_store.getType(method_function_type_id)) {
-                .Function => |id| analyzed.typed_program.type_store.function_types.items[id],
+                .Function => |function_type| function_type,
                 else => return TestError.UnexpectedNodeKind,
             };
             try std.testing.expectEqual(@as(usize, 1), method_function_type.parameter_types.len);

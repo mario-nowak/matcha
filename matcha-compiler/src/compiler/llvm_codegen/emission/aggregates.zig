@@ -82,14 +82,12 @@ pub fn emitStructureLiteral(
     const node_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
     const structure_symbol = lowered_program.getStructureSymbolForTypeId(node_type_id);
     const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
-    const structure_type_id = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
-        .Structure => |id| id,
+    const structure_type = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
+        .Structure => |structure_type| structure_type,
         else => unreachable,
     };
     const structure_layout_kind = lowered_program
         .structure_layout_kind_by_type_id.get(node_type_id) orelse unreachable;
-
-    const structure_type = lowered_program.analyzed_program.type_store.structure_types.items[structure_type_id];
     const structure_construction_layout = lowered_program.analyzed_program.structure_construction_layout_by_node_id.get(
         node.id,
     ) orelse unreachable;
