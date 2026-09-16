@@ -85,7 +85,7 @@ pub const FunctionEmitter = struct {
             .Function => |function_symbol_information| function_symbol_information,
             else => unreachable,
         };
-        const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
             .Function => |function_type| function_type.return_type,
             else => unreachable,
@@ -104,7 +104,7 @@ pub const FunctionEmitter = struct {
             };
 
             const parameter_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
-            const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+            const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
             const parameter_register = std.fmt.allocPrint(
                 self.allocator,

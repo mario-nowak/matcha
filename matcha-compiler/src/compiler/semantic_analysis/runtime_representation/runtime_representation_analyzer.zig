@@ -190,7 +190,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
         node_id: ast.NodeId,
         context: AnalysisContext,
     ) void {
-        const type_id = context.type_check_result.type_by_node_id.get(node_id) orelse return;
+        const type_id = context.type_check_result.type_id_by_node_id.get(node_id) orelse return;
         self.recordNodeRuntimeRepresentation(node_id, self.runtimeRepresentationForType(type_id));
     }
 

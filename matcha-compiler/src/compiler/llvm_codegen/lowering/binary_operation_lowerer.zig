@@ -61,7 +61,7 @@ pub const BinaryOperationLowerer = struct {
                 switch (assignment_statement.operator) {
                     .Assign => {},
                     .Compound => |binary_operator| {
-                        const target_type_id = analyzed_program.type_by_node_id.get(assignment_statement.target.id) orelse unreachable;
+                        const target_type_id = analyzed_program.type_id_by_node_id.get(assignment_statement.target.id) orelse unreachable;
                         const decision = decisionFor(binary_operator, target_type_id, analyzed_program);
                         self.decision_by_node_id.put(node.id, decision) catch unreachable;
                     },
@@ -88,7 +88,7 @@ pub const BinaryOperationLowerer = struct {
             .MatchExpression => |match_expression| {
                 if (match_expression.subject) |subject| {
                     self.lowerNode(subject, analyzed_program);
-                    const subject_type_id = analyzed_program.type_by_node_id.get(subject.id) orelse unreachable;
+                    const subject_type_id = analyzed_program.type_id_by_node_id.get(subject.id) orelse unreachable;
                     const subject_comparison_decision = decisionFor(.Equal, subject_type_id, analyzed_program);
                     self.decision_by_node_id.put(node.id, subject_comparison_decision) catch unreachable;
                 }
@@ -150,7 +150,7 @@ pub const BinaryOperationLowerer = struct {
         binary_expression: *const ast.BinaryExpression,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
-        const left_operand_type_id = analyzed_program.type_by_node_id.get(binary_expression.left.id) orelse unreachable;
+        const left_operand_type_id = analyzed_program.type_id_by_node_id.get(binary_expression.left.id) orelse unreachable;
         const decision = decisionFor(binary_expression.operator, left_operand_type_id, analyzed_program);
         self.decision_by_node_id.put(node_id, decision) catch unreachable;
     }

@@ -18,9 +18,8 @@ pub const NodeTypeAnalyzer = struct {
     allocator: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     type_store: typing.TypeStore,
-    type_by_symbol_id: typing.TypeBySymbolId,
-    type_by_node_id: typing.TypeByNodeId,
-    structure_construction_layout_by_node_id: typing.StructureConstructionLayoutByNodeId,
+    type_id_by_symbol_id: typing.TypeIdBySymbolId,
+    type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
 
     pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
@@ -28,18 +27,16 @@ pub const NodeTypeAnalyzer = struct {
             .allocator = allocator,
             .diagnostic_store = diagnostic_store,
             .type_store = typing.TypeStore.init(allocator),
-            .type_by_symbol_id = typing.TypeBySymbolId.init(allocator),
-            .type_by_node_id = typing.TypeByNodeId.init(allocator),
-            .structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(allocator),
+            .type_id_by_symbol_id = typing.TypeIdBySymbolId.init(allocator),
+            .type_id_by_node_id = typing.TypeIdByNodeId.init(allocator),
             .member_access_by_node_id = typing.MemberAccessByNodeId.init(allocator),
         };
     }
 
     pub fn resetState(self: *@This()) void {
         self.type_store = typing.TypeStore.init(self.allocator);
-        self.type_by_symbol_id = typing.TypeBySymbolId.init(self.allocator);
-        self.type_by_node_id = typing.TypeByNodeId.init(self.allocator);
-        self.structure_construction_layout_by_node_id = typing.StructureConstructionLayoutByNodeId.init(self.allocator);
+        self.type_id_by_symbol_id = typing.TypeIdBySymbolId.init(self.allocator);
+        self.type_id_by_node_id = typing.TypeIdByNodeId.init(self.allocator);
         self.member_access_by_node_id = typing.MemberAccessByNodeId.init(self.allocator);
     }
 
@@ -63,9 +60,8 @@ pub const NodeTypeAnalyzer = struct {
     pub fn typeCheckResult(self: *const @This()) TypeCheckResult {
         return .{
             .type_store = self.type_store,
-            .type_by_symbol_id = self.type_by_symbol_id,
-            .type_by_node_id = self.type_by_node_id,
-            .structure_construction_layout_by_node_id = self.structure_construction_layout_by_node_id,
+            .type_id_by_symbol_id = self.type_id_by_symbol_id,
+            .type_id_by_node_id = self.type_id_by_node_id,
             .member_access_by_node_id = self.member_access_by_node_id,
         };
     }
@@ -176,7 +172,7 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const structure_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const type_id = self.type_by_symbol_id.get(structure_symbol_id).?;
+        const type_id = self.type_id_by_symbol_id.get(structure_symbol_id).?;
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
             qualified_structure_literal.fields,
@@ -223,8 +219,6 @@ pub const NodeTypeAnalyzer = struct {
 
         var unique_field_names = std.StringHashMap(bool).init(self.allocator);
         defer unique_field_names.deinit();
-        var field_indices = std.ArrayList(u32){};
-        defer field_indices.deinit(self.allocator);
 
         for (fields) |field| {
             const field_name = field.name.kind.Identifier;
@@ -252,8 +246,6 @@ pub const NodeTypeAnalyzer = struct {
                 );
                 return error.DiagnosticsEmitted;
             }
-
-            field_indices.append(self.allocator, field_index) catch unreachable;
         }
 
         for (structure_type.fields) |field| {
@@ -263,10 +255,6 @@ pub const NodeTypeAnalyzer = struct {
                 return error.DiagnosticsEmitted;
             }
         }
-
-        self.structure_construction_layout_by_node_id.put(node_id, .{
-            .field_indices = field_indices.toOwnedSlice(self.allocator) catch unreachable,
-        }) catch unreachable;
 
         return self.recordNodeType(node_id, type_id);
     }
@@ -295,7 +283,7 @@ pub const NodeTypeAnalyzer = struct {
             }
         }
 
-        self.type_by_symbol_id.put(symbol_id, value_type) catch unreachable;
+        self.type_id_by_symbol_id.put(symbol_id, value_type) catch unreachable;
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -470,7 +458,7 @@ pub const NodeTypeAnalyzer = struct {
         };
 
         const item_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        self.type_by_symbol_id.put(item_symbol_id, item_type_id) catch unreachable;
+        self.type_id_by_symbol_id.put(item_symbol_id, item_type_id) catch unreachable;
 
         _ = try self.checkStatement(for_in.body_block, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
@@ -534,7 +522,7 @@ pub const NodeTypeAnalyzer = struct {
             const base_symbol = environment.resolved_program.symbol_table.getSymbol(base_symbol_id);
             switch (base_symbol.kind) {
                 .Structure => {
-                    const base_type_id = self.type_by_symbol_id.get(base_symbol_id) orelse unreachable;
+                    const base_type_id = self.type_id_by_symbol_id.get(base_symbol_id) orelse unreachable;
                     const structure_type = switch (self.type_store.getType(base_type_id)) {
                         .Structure => |structure_type| structure_type,
                         else => unreachable,
@@ -548,7 +536,7 @@ pub const NodeTypeAnalyzer = struct {
                         .structure_symbol_id = base_symbol_id,
                         .function_symbol_id = function_symbol_id,
                     } });
-                    const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+                    const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
                     return self.recordNodeType(node_id, function_type_id);
                 },
                 .Union => unreachable,
@@ -704,7 +692,7 @@ pub const NodeTypeAnalyzer = struct {
         function_symbol_id: symbols.SymbolId,
         receiver_type_id: typing.TypeId,
     ) TypeError!typing.TypeId {
-        const function_type_id = self.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+        const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_type = switch (self.type_store.getType(function_type_id)) {
             .Function => |function_type| function_type,
             else => unreachable,
@@ -871,7 +859,7 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const symbol_type = self.type_by_symbol_id.get(symbol_id).?;
+        const symbol_type = self.type_id_by_symbol_id.get(symbol_id).?;
         return self.recordNodeType(node_id, symbol_type);
     }
 
@@ -1008,7 +996,7 @@ pub const NodeTypeAnalyzer = struct {
                 else => unreachable,
             };
             const parameter_type = self.resolveTypeReference(declared_type_reference);
-            self.type_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
+            self.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
         }
 
         try self.checkFunctionDefinitionReturnValue(
@@ -1068,7 +1056,7 @@ pub const NodeTypeAnalyzer = struct {
         switch (node.kind) {
             .ReturnStatement => |return_statement| {
                 if (return_statement.value) |return_value| {
-                    const return_value_type = self.type_by_node_id.get(return_value.id).?;
+                    const return_value_type = self.type_id_by_node_id.get(return_value.id).?;
                     if (return_value_type != function_return_type) {
                         try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, return_statement.return_token, "return statement expects value of type {s}, found {s}", .{ try self.typeName(function_return_type), try self.typeName(return_value_type) });
                         return error.DiagnosticsEmitted;
@@ -1186,7 +1174,7 @@ pub const NodeTypeAnalyzer = struct {
                 .Integer => self.type_store.integer_type_id,
                 .String => self.type_store.string_type_id,
             },
-            .Symbol => |symbol_id| self.type_by_symbol_id.get(symbol_id) orelse unreachable,
+            .Symbol => |symbol_id| self.type_id_by_symbol_id.get(symbol_id) orelse unreachable,
             .Array => |element_type_reference| self.type_store.getOrCreateArrayType(
                 self.resolveTypeReference(element_type_reference.*),
             ),
@@ -1260,7 +1248,7 @@ pub const NodeTypeAnalyzer = struct {
                             }
                             saw_false = true;
                         }
-                        self.type_by_node_id.put(arm.pattern_or_condition.id, self.type_store.boolean_type_id) catch unreachable;
+                        self.type_id_by_node_id.put(arm.pattern_or_condition.id, self.type_store.boolean_type_id) catch unreachable;
                     },
                     else => {
                         try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "boolean match arms must use boolean literals");
@@ -1357,7 +1345,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         node_type: typing.TypeId,
     ) typing.TypeId {
-        self.type_by_node_id.put(node_id, node_type) catch unreachable;
+        self.type_id_by_node_id.put(node_id, node_type) catch unreachable;
         return node_type;
     }
 

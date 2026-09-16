@@ -319,3 +319,23 @@ test "structures without fields can be compared" {
         "same\nsame\ndifferent\ndifferent\n",
     );
 }
+
+test "structure literals assign fields by name regardless of initializer order" {
+    const source =
+        \\item Point = structure {
+        \\    x: int;
+        \\    y: int;
+        \\};
+        \\val named = Point { y = 2, x = 1 };
+        \\val anonymous: Point = .{ y = 4, x = 3 };
+        \\printInt(named.x);
+        \\printInt(named.y);
+        \\printInt(anonymous.x);
+        \\printInt(anonymous.y);
+    ;
+
+    var result = try e2e.runSource("structures_field_order.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "1\n2\n3\n4\n");
+}

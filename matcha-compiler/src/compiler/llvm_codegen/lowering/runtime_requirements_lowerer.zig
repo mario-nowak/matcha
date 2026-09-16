@@ -64,7 +64,7 @@ pub const RuntimeRequirementsLowerer = struct {
             .MatchExpression => |match_expression| {
                 if (match_expression.subject) |subject| {
                     analyzeNode(subject, analyzed_program, plan);
-                    const subject_type_id = analyzed_program.type_by_node_id.get(subject.id) orelse unreachable;
+                    const subject_type_id = analyzed_program.type_id_by_node_id.get(subject.id) orelse unreachable;
                     if (subject_type_id == analyzed_program.type_store.string_type_id and match_expression.arms.len > 0) {
                         plan.string_compare = true;
                     }
@@ -193,7 +193,7 @@ pub const RuntimeRequirementsLowerer = struct {
         analyzeNode(binary_expression.left, analyzed_program, plan);
         analyzeNode(binary_expression.right, analyzed_program, plan);
 
-        const left_operand_type_id = analyzed_program.type_by_node_id.get(binary_expression.left.id) orelse return;
+        const left_operand_type_id = analyzed_program.type_id_by_node_id.get(binary_expression.left.id) orelse return;
         if (left_operand_type_id != analyzed_program.type_store.string_type_id) {
             return;
         }

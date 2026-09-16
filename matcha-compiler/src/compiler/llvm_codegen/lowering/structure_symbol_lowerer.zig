@@ -25,7 +25,7 @@ pub const StructureSymbolLowerer = struct {
             self.structure_symbol_id_by_type_id.append(self.allocator, null) catch unreachable;
         }
 
-        var type_by_symbol_iterator = analyzed_program.type_by_symbol_id.iterator();
+        var type_by_symbol_iterator = analyzed_program.type_id_by_symbol_id.iterator();
         while (type_by_symbol_iterator.next()) |entry| {
             const symbol_id = entry.key_ptr.*;
             const type_id: typing.TypeId = entry.value_ptr.*;

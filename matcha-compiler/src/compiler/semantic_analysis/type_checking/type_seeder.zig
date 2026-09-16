@@ -32,7 +32,7 @@ pub const TypeSeeder = struct {
                 else => continue,
             }
             const type_id = analyzer.type_store.addPreliminaryType(.Structure);
-            analyzer.type_by_symbol_id.put(symbol.id, type_id) catch unreachable;
+            analyzer.type_id_by_symbol_id.put(symbol.id, type_id) catch unreachable;
         }
 
         var function_iterator = resolved_program.symbol_table.iterator();
@@ -49,7 +49,7 @@ pub const TypeSeeder = struct {
                 .Structure => |structure_information| structure_information,
                 else => continue,
             };
-            const type_id = analyzer.type_by_symbol_id.get(symbol.id).?;
+            const type_id = analyzer.type_id_by_symbol_id.get(symbol.id).?;
 
             var fields = std.ArrayList(typing.StructureTypeField){};
             for (structure_information.fields) |field| {
@@ -92,9 +92,9 @@ pub const TypeSeeder = struct {
             .parameter_types = owned_parameter_types,
             .return_type = function_return_type,
         } });
-        analyzer.type_by_symbol_id.put(function_symbol.id, function_type_id) catch unreachable;
+        analyzer.type_id_by_symbol_id.put(function_symbol.id, function_type_id) catch unreachable;
         for (function_information.parameter_symbol_ids, owned_parameter_types) |parameter_symbol_id, parameter_type| {
-            analyzer.type_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
+            analyzer.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
         }
     }
 
