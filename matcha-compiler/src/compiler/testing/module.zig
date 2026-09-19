@@ -5,3 +5,4 @@ pub const setupParserPipeline = @import("parser_helpers.zig").setupParserPipelin
 pub const setupStructuralValidatorFixture = @import("structural_validator_helpers.zig").setupStructuralValidatorFixture;
 pub const setupExitBehaviorAnalyzerFixture = @import("exit_behavior_analyzer_helpers.zig").setupExitBehaviorAnalyzerFixture;
 pub const setupNameResolverFixture = @import("name_resolver_helpers.zig").setupNameResolverFixture;
+pub const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixture;

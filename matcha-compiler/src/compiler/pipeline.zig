@@ -25,10 +25,8 @@ pub fn generateLlvmIrFromFile(
     const program = try parser.parse();
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator, diagnostic_store);
-    const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
     const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator, diagnostic_store);
     const type_checker = semantic_analysis.type_checking.TypeChecker.init(
-        type_seeder,
         node_type_analyzer,
     );
     const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(diagnostic_store);
@@ -151,6 +149,7 @@ pub fn emitFile(
     const llvm_ir = try generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(allocator, input_path);
     try writeFile(resolved_output_path, llvm_ir);
+    // TODO: refactor that
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
 }
 

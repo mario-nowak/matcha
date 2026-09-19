@@ -87,7 +87,7 @@ pub const FunctionEmitter = struct {
         };
         const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
-            .Function => |function_type| function_type.return_type,
+            .Function => |function_type| function_type.return_type_id,
             else => unreachable,
         };
         const function_layout = lowered_program.function_layout_by_symbol_id.get(function_symbol_id) orelse unreachable;

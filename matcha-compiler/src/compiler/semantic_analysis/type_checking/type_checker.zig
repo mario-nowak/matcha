@@ -3,22 +3,19 @@ const typing = @import("typing");
 const control_flow_validation = @import("../control_flow/module.zig");
 
 const type_checking_types = @import("type_checking_types.zig");
-const type_seeder = @import("type_seeder.zig");
 const node_type_analyzer = @import("node_type_analyzer.zig");
 
 pub const TypeError = type_checking_types.TypeError;
 pub const TypeCheckResult = type_checking_types.TypeCheckResult;
 
+// TODO: remove this wrapper
 pub const TypeChecker = struct {
-    type_seeder: type_seeder.TypeSeeder,
     node_type_analyzer: node_type_analyzer.NodeTypeAnalyzer,
 
     pub fn init(
-        seeder: type_seeder.TypeSeeder,
         analyzer: node_type_analyzer.NodeTypeAnalyzer,
     ) @This() {
         return .{
-            .type_seeder = seeder,
             .node_type_analyzer = analyzer,
         };
     }
@@ -28,11 +25,11 @@ pub const TypeChecker = struct {
         resolved_program: symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!TypeCheckResult {
-        self.node_type_analyzer.resetState();
-        try self.type_seeder.seedProgram(&self.node_type_analyzer, &resolved_program);
-        self.node_type_analyzer.type_store.assertAllFinalized();
-        try self.node_type_analyzer.analyzeProgram(&resolved_program, exit_behavior_by_node_id);
+        const type_check_result = try self.node_type_analyzer.analyzeProgram(
+            &resolved_program,
+            exit_behavior_by_node_id,
+        );
 
-        return self.node_type_analyzer.typeCheckResult();
+        return type_check_result;
     }
 };

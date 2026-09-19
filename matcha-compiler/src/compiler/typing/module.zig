@@ -12,7 +12,7 @@ pub const TypeKind = enum {
     Structure,
     Function,
     Array,
-    TaggedUnion,
+    Union,
 };
 
 pub const Type = union(TypeKind) {
@@ -24,7 +24,7 @@ pub const Type = union(TypeKind) {
     Structure: StructureType,
     Function: FunctionType,
     Array: TypeId,
-    TaggedUnion,
+    Union: UnionType,
 
     pub fn name(self: @This(), store: *const TypeStore, allocator: std.mem.Allocator) ![]const u8 {
         return switch (self) {
@@ -37,7 +37,7 @@ pub const Type = union(TypeKind) {
             .Function => |function_type| {
                 var parameter_text = std.ArrayList(u8){};
                 defer parameter_text.deinit(allocator);
-                for (function_type.parameter_types, 0..) |parameter_type_id, index| {
+                for (function_type.parameter_type_ids, 0..) |parameter_type_id, index| {
                     if (index > 0) {
                         try parameter_text.appendSlice(allocator, ", ");
                     }
@@ -46,10 +46,10 @@ pub const Type = union(TypeKind) {
                 return std.fmt.allocPrint(
                     allocator,
                     "function taking ({s}) and returning {s}",
-                    .{ parameter_text.items, try store.getType(function_type.return_type).name(store, allocator) },
+                    .{ parameter_text.items, try store.getType(function_type.return_type_id).name(store, allocator) },
                 );
             },
-            .TaggedUnion => allocator.dupe(u8, "tagged union"),
+            .Union => allocator.dupe(u8, "tagged union"),
         };
     }
 };
@@ -182,8 +182,10 @@ pub const TypeStore = struct {
 
 pub const StructureType = struct {
     symbol_id: symbols.SymbolId,
+    // This seems to be unnecessary except for diagnostics but this could be inferred from the symbol table
     name: []const u8,
     fields: []const StructureTypeField,
+    // This also exists on the symbol, seems unnecessary
     function_symbol_ids: []const symbols.SymbolId,
 
     pub fn getFieldIndex(self: @This(), field_name: []const u8) ?u32 {
@@ -210,13 +212,27 @@ pub const StructureType = struct {
 };
 
 pub const StructureTypeField = struct {
+    // Also exists on a resolved structure field. Not sure if it makes sense keeping this here
+    // But on the other hand I do need some kind of identification between the two.
+    // Could be a map or just an index
     name: []const u8,
     type_id: TypeId,
 };
 
+// TODO: this currently seems superfluous, sus
+pub const UnionType = struct {
+    symbol_id: symbols.SymbolId,
+    cases: []UnionTypeCase,
+};
+
+// TODO: this currently seems superfluous, sus
+pub const UnionTypeCase = struct {
+    type_id: TypeId,
+};
+
 pub const FunctionType = struct {
-    parameter_types: []const TypeId,
-    return_type: TypeId,
+    parameter_type_ids: []const TypeId,
+    return_type_id: TypeId,
 };
 
 pub const ArrayInstanceMethod = enum {
@@ -245,19 +261,26 @@ pub const MemberAccess = union(enum) {
     StructureInstanceFieldAccess: struct {
         field_index: u32,
     },
+    UnionTypeCaseAccess: struct {
+        case_index: usize,
+    },
+    UnionTypeFunctionAccess,
+    // TODO: payload seems superfluous
     StructureInstanceMethodAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
+    // TODO: this payload is superfluous
     StructureTypeFunctionAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
-    ArrayInstanceMethodAccess: ArrayInstanceMethod,
+    StringInstanceFieldAccess: StringInstanceField,
     ArrayInstanceFieldAccess: ArrayInstanceField,
+    // TODO: all of these payloads seems superfluous
+    ArrayInstanceMethodAccess: ArrayInstanceMethod,
     IntegerInstanceMethodAccess: IntegerInstanceMethod,
     StringInstanceMethodAccess: StringInstanceMethod,
-    StringInstanceFieldAccess: StringInstanceField,
 };
 
 pub const BinaryOperatorSignature = struct {
@@ -327,7 +350,7 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
         .Unit,
         .Function,
         .Array,
-        .TaggedUnion,
+        .Union,
         => null,
     };
 }
@@ -352,7 +375,7 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
         .Structure,
         .Function,
         .Array,
-        .TaggedUnion,
+        .Union,
         => null,
     };
 }

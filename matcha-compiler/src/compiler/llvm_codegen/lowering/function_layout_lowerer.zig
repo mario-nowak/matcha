@@ -64,7 +64,7 @@ pub const FunctionLayoutLowerer = struct {
 
             const function_type_id = analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
             const return_type_id = switch (analyzed_program.type_store.getType(function_type_id)) {
-                .Function => |function_type| function_type.return_type,
+                .Function => |function_type| function_type.return_type_id,
                 else => unreachable,
             };
             const return_runtime_representation = analyzed_program

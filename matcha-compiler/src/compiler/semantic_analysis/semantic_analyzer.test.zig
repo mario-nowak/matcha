@@ -93,7 +93,7 @@ test "semantic analysis resolves array types in function signatures" {
         .Function => |function_type| function_type,
         else => return TestError.UnexpectedNodeKind,
     };
-    try expectType(expected_array_type, &analyzed.typed_program, function_type.return_type);
+    try expectType(expected_array_type, &analyzed.typed_program, function_type.return_type_id);
     try expectType(
         expected_array_type,
         &analyzed.typed_program,
@@ -228,7 +228,7 @@ test "semantic analysis records structure instance method access metadata" {
                 .Function => |function_type| function_type,
                 else => return TestError.UnexpectedNodeKind,
             };
-            try std.testing.expectEqual(@as(usize, 1), method_function_type.parameter_types.len);
+            try std.testing.expectEqual(@as(usize, 1), method_function_type.parameter_type_ids.len);
             try std.testing.expectEqualStrings("movedBy", analyzed.typed_program.resolved_program.symbol_table.getSymbol(structure_method.function_symbol_id).name);
         },
         else => return TestError.UnexpectedNodeKind,

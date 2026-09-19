@@ -26,19 +26,19 @@ pub const TypeCheckEnvironment = struct {
     context: ValidationContext,
     contextual_type_id: ?typing.TypeId,
 
-    pub fn withContext(self: @This(), context: ValidationContext) @This() {
+    pub fn copyWithContext(self: @This(), context: ValidationContext) @This() {
         var updated = self;
         updated.context = context;
         return updated;
     }
 
-    pub fn withContextAndType(
+    pub fn copyWithValidationContextAndContextualType(
         self: @This(),
-        context: ValidationContext,
+        validation_context: ValidationContext,
         contextual_type_id: ?typing.TypeId,
     ) @This() {
         var updated = self;
-        updated.context = context;
+        updated.context = validation_context;
         updated.contextual_type_id = contextual_type_id;
         return updated;
     }
