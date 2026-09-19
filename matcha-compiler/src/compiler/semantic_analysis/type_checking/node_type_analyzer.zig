@@ -215,7 +215,7 @@ pub const NodeTypeAnalyzer = struct {
         }
     }
 
-    fn checkExpression(
+    fn inferExpressionType(
         self: *@This(),
         node: *const ast.Node,
         environment: TypeCheckEnvironment,
@@ -550,7 +550,7 @@ pub const NodeTypeAnalyzer = struct {
         while_statement: *const ast.While,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const while_condition_type = try self.checkExpression(while_statement.condition, environment);
+        const while_condition_type = try self.inferExpressionType(while_statement.condition, environment);
         if (while_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, while_statement.while_token, "while condition must be boolean, found {s}", .{try self.getTypeName(while_condition_type)});
             return error.DiagnosticsEmitted;
@@ -570,7 +570,7 @@ pub const NodeTypeAnalyzer = struct {
         for_in: *const ast.ForIn,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const iterable_type_id = try self.checkExpression(for_in.iterable, environment);
+        const iterable_type_id = try self.inferExpressionType(for_in.iterable, environment);
         const item_type_id = switch (self.type_store.getType(iterable_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
@@ -606,7 +606,15 @@ pub const NodeTypeAnalyzer = struct {
         call_expression: *const ast.CallExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const callee_type_id = try self.checkExpression(call_expression.callee, environment);
+        // In case the callee is an implicit member expression, we need to check its type against the current contextual
+        // type present in the current type checking environment as we need that contextual type to check the implicit
+        // member expression.
+        // Otherwise, we need to infer it without the current
+        // contextual type.
+        const callee_type_id = switch (call_expression.callee.kind) {
+            .ImplicitMemberExpression => try self.checkNode(call_expression.callee, environment),
+            else => try self.inferExpressionType(call_expression.callee, environment),
+        };
 
         switch (self.type_store.getType(callee_type_id)) {
             .Function => |function_type| {
@@ -1097,7 +1105,7 @@ pub const NodeTypeAnalyzer = struct {
         if_statement: *const ast.IfStatement,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const if_condition_type = try self.checkExpression(if_statement.condition, environment);
+        const if_condition_type = try self.inferExpressionType(if_statement.condition, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_statement.if_token, "if condition must be boolean, found {s}", .{try self.getTypeName(if_condition_type)});
             return error.DiagnosticsEmitted;
@@ -1113,7 +1121,7 @@ pub const NodeTypeAnalyzer = struct {
         if_expression: *const ast.IfExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const if_condition_type = try self.checkExpression(if_expression.condition, environment);
+        const if_condition_type = try self.inferExpressionType(if_expression.condition, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_expression.if_token, "if condition must be boolean, found {s}", .{try self.getTypeName(if_condition_type)});
             return error.DiagnosticsEmitted;
@@ -1154,10 +1162,10 @@ pub const NodeTypeAnalyzer = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const first_element_type = try self.checkExpression(&array_literal.elements[0], environment);
+        const first_element_type = try self.inferExpressionType(&array_literal.elements[0], environment);
 
         for (array_literal.elements[1..]) |*element| {
-            const element_type = try self.checkExpression(element, environment);
+            const element_type = try self.inferExpressionType(element, environment);
             if (element_type != first_element_type) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, element.primaryToken(), "array literal elements must all have the same type, expected {s}, found {s}", .{ try self.getTypeName(first_element_type), try self.getTypeName(element_type) });
                 return error.DiagnosticsEmitted;
@@ -1174,7 +1182,7 @@ pub const NodeTypeAnalyzer = struct {
         index_expression: *const ast.IndexExpression,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const base_type_id = try self.checkExpression(index_expression.base, environment);
+        const base_type_id = try self.inferExpressionType(index_expression.base, environment);
         const element_type_id = switch (self.type_store.getType(base_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
@@ -1183,7 +1191,7 @@ pub const NodeTypeAnalyzer = struct {
             },
         };
 
-        const index_type_id = try self.checkExpression(index_expression.index, environment);
+        const index_type_id = try self.inferExpressionType(index_expression.index, environment);
         if (index_type_id != self.type_store.integer_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, index_expression.index.primaryToken(), "array index must be int, found {s}", .{try self.getTypeName(index_type_id)});
             return error.DiagnosticsEmitted;
