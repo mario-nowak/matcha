@@ -48,14 +48,14 @@ pub const ParentNodeExpectation = struct {
     node_role: NodeRole,
     type_id: ?typing.TypeId,
 
-    pub const forStatement: @This() = .{ .node_role = .Statement, .type_id = null };
-    pub const forExpression: @This() = .{ .node_role = .{ .Expression = .Value }, .type_id = null };
+    pub const asStatement: @This() = .{ .node_role = .Statement, .type_id = null };
+    pub const asExpression: @This() = .{ .node_role = .{ .Expression = .Value }, .type_id = null };
 
-    pub fn forExpressionWithType(type_id: ?typing.TypeId) @This() {
+    pub fn asExpressionWithType(type_id: ?typing.TypeId) @This() {
         return .{ .node_role = .{ .Expression = .Value }, .type_id = type_id };
     }
 
-    pub fn forCallee(type_id: ?typing.TypeId) @This() {
+    pub fn asCallee(type_id: ?typing.TypeId) @This() {
         return .{ .node_role = .{ .Expression = .Callee }, .type_id = type_id };
     }
 

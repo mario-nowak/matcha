@@ -125,8 +125,14 @@ pub const ExitBehaviorAnalyzer = struct {
         }
 
         if (block.result) |result_node| {
+            // A result expression that terminates on every path, e.g. an if-expression whose branches all return,
+            // terminates the block as well.
+            const result_behavior = try self.validateTerminatesWithValue(result_node);
+            if (result_behavior == .Terminates) {
+                return self.markNodeExitBehavior(node, .Terminates);
+            }
             _ = self.markNodeExitBehavior(node, .FallsThroughWithValue);
-            return self.validateTerminatesWithValue(result_node);
+            return result_behavior;
         }
 
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
