@@ -195,60 +195,63 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const type_id = try self.dispatchCheckNode(node, parent_node_expectation, environment);
+        const type_id = switch (node.kind) {
+            .BindingDeclaration => |binding_declaration| try self.checkBindingDeclarationNode(node.id, &binding_declaration, environment),
+            .ItemDefinition => |item_definition| try self.checkItemDefinitionNode(node.id, &item_definition, environment),
+            .ReturnStatement => |return_statement| try self.checkReturnStatementNode(node.id, &return_statement, environment),
+            .AssignmentStatement => |assignment_statement| try self.checkAssignmentStatementNode(node.id, &assignment_statement, environment),
+            .Loop => |loop| try self.checkLoopNode(node.id, &loop, environment),
+            .While => |while_statement| try self.checkWhileNode(node.id, &while_statement, environment),
+            .ForIn => |for_in| try self.checkForInNode(node.id, &for_in, environment),
+            .LeaveStatement => try self.checkLeaveStatementNode(node.id),
+            .ContinueStatement => try self.checkContinueStatementNode(node.id),
+            .CallExpression => |call_expression| try self.checkCallExpressionNode(node.id, &call_expression, parent_node_expectation, environment),
+            .MemberExpression => |member_expression| try self.checkMemberExpressionNode(node.id, &member_expression, environment),
+            .ImplicitMemberExpression => |implicit_member_expression| try self.checkImplicitMemberExpressionNode(node.id, &implicit_member_expression, parent_node_expectation, environment),
+            .BinaryExpression => |binary_expression| try self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
+            .UnaryExpression => |unary_expression| try self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
+            .QualifiedStructureLiteral => |qualified_structure_literal| try self.checkQualifiedStructureLiteralNode(node.id, &qualified_structure_literal, environment),
+            .StructureLiteral => |structure_literal| try self.checkStructureLiteralNode(node.id, &structure_literal, parent_node_expectation, environment),
+            .Block => |block| try self.checkBlockNode(node.id, &block, parent_node_expectation, environment),
+            .IntegerLiteral => try self.checkIntegerLiteralNode(node.id),
+            .BooleanLiteral => try self.checkBooleanLiteralNode(node.id),
+            .StringLiteral => try self.checkStringLiteralNode(node.id),
+            .UnitLiteral => try self.checkUnitLiteralNode(node.id),
+            .Identifier => |identifier_token| try self.checkIdentifierNode(node.id, identifier_token, environment),
+            .IfStatement => |if_statement| try self.checkIfStatementNode(node.id, &if_statement, environment),
+            .IfExpression => |if_expression| try self.checkIfExpressionNode(node.id, &if_expression, parent_node_expectation, environment),
+            .MatchExpression => |match_expression| try self.checkMatchExpressionNode(node.id, &match_expression, parent_node_expectation, environment),
+            .ExpressionStatement => |expression_statement| try self.checkExpressionStatementNode(node.id, &expression_statement, environment),
+            .ArrayLiteral => |array_literal| try self.checkArrayLiteralNode(node.id, &array_literal, parent_node_expectation, environment),
+            .IndexExpression => |index_expression| try self.checkIndexExpressionNode(node.id, &index_expression, environment),
+        };
 
-        // Functions are not first-class values yet. A function-typed node is only valid as the direct callee of a call.
+        try self.rejectFunctionValueOutsideCalleePosition(node, type_id, parent_node_expectation);
+        return type_id;
+    }
+
+    /// Functions are not first-class values yet: the backend can only emit direct calls, so a function-typed node has no
+    /// runtime representation. Until that changes, a function may only appear as the direct callee of a call. This runs
+    /// after every node check so it covers identifiers, member accesses, and values flowing out of blocks and branches.
+    fn rejectFunctionValueOutsideCalleePosition(
+        self: *@This(),
+        node: *const ast.Node,
+        type_id: typing.TypeId,
+        parent_node_expectation: ParentNodeExpectation,
+    ) TypeError!void {
         const is_callee = switch (parent_node_expectation.node_role) {
             .Expression => |kind| kind == .Callee,
             .Statement => false,
         };
-        if (!is_callee and self.type_store.getType(type_id) == .Function) {
-            try self.diagnostic_store.emitErrorFromToken(
-                node.primaryToken(),
-                "functions can only be called; function values are not supported yet",
-            );
-            return error.DiagnosticsEmitted;
+        if (is_callee or self.type_store.getType(type_id) != .Function) {
+            return;
         }
 
-        return type_id;
-    }
-
-    fn dispatchCheckNode(
-        self: *@This(),
-        node: *const ast.Node,
-        parent_node_expectation: ParentNodeExpectation,
-        environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
-        switch (node.kind) {
-            .BindingDeclaration => |binding_declaration| return self.checkBindingDeclarationNode(node.id, &binding_declaration, environment),
-            .ItemDefinition => |item_definition| return self.checkItemDefinitionNode(node.id, &item_definition, environment),
-            .ReturnStatement => |return_statement| return self.checkReturnStatementNode(node.id, &return_statement, environment),
-            .AssignmentStatement => |assignment_statement| return self.checkAssignmentStatementNode(node.id, &assignment_statement, environment),
-            .Loop => |loop| return self.checkLoopNode(node.id, &loop, environment),
-            .While => |while_statement| return self.checkWhileNode(node.id, &while_statement, environment),
-            .ForIn => |for_in| return self.checkForInNode(node.id, &for_in, environment),
-            .LeaveStatement => return self.checkLeaveStatementNode(node.id),
-            .ContinueStatement => return self.checkContinueStatementNode(node.id),
-            .CallExpression => |call_expression| return self.checkCallExpressionNode(node.id, &call_expression, parent_node_expectation, environment),
-            .MemberExpression => |member_expression| return self.checkMemberExpressionNode(node.id, &member_expression, environment),
-            .ImplicitMemberExpression => |implicit_member_expression| return self.checkImplicitMemberExpressionNode(node.id, &implicit_member_expression, parent_node_expectation, environment),
-            .BinaryExpression => |binary_expression| return self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
-            .UnaryExpression => |unary_expression| return self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
-            .QualifiedStructureLiteral => |qualified_structure_literal| return self.checkQualifiedStructureLiteralNode(node.id, &qualified_structure_literal, environment),
-            .StructureLiteral => |structure_literal| return self.checkStructureLiteralNode(node.id, &structure_literal, parent_node_expectation, environment),
-            .Block => |block| return self.checkBlockNode(node.id, &block, parent_node_expectation, environment),
-            .IntegerLiteral => return self.checkIntegerLiteralNode(node.id),
-            .BooleanLiteral => return self.checkBooleanLiteralNode(node.id),
-            .StringLiteral => return self.checkStringLiteralNode(node.id),
-            .UnitLiteral => return self.checkUnitLiteralNode(node.id),
-            .Identifier => |identifier_token| return self.checkIdentifierNode(node.id, identifier_token, environment),
-            .IfStatement => |if_statement| return self.checkIfStatementNode(node.id, &if_statement, environment),
-            .IfExpression => |if_expression| return self.checkIfExpressionNode(node.id, &if_expression, parent_node_expectation, environment),
-            .MatchExpression => |match_expression| return self.checkMatchExpressionNode(node.id, &match_expression, parent_node_expectation, environment),
-            .ExpressionStatement => |expression_statement| return self.checkExpressionStatementNode(node.id, &expression_statement, environment),
-            .ArrayLiteral => |array_literal| return self.checkArrayLiteralNode(node.id, &array_literal, parent_node_expectation, environment),
-            .IndexExpression => |index_expression| return self.checkIndexExpressionNode(node.id, &index_expression, environment),
-        }
+        try self.diagnostic_store.emitErrorFromToken(
+            node.primaryToken(),
+            "functions can only be called; function values are not supported yet",
+        );
+        return error.DiagnosticsEmitted;
     }
 
     fn checkNodeAgainstExpectedType(
