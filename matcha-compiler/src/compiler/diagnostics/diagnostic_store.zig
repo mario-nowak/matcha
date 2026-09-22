@@ -17,6 +17,7 @@ pub const DiagnosticStore = struct {
         self.diagnostics.deinit(self.allocator);
     }
 
+    // TODO: make private
     pub fn emit(self: *@This(), diagnostic: Diagnostic) !void {
         try self.diagnostics.append(self.allocator, diagnostic);
     }
