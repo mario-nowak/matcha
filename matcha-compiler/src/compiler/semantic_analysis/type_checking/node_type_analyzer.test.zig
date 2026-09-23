@@ -113,7 +113,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case
     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
     const union_case_node = result_binding_node.kind.BindingDeclaration.value;
 
-    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
     const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
