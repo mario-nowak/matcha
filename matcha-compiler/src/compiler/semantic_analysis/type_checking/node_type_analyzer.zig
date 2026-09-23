@@ -301,7 +301,7 @@ pub const NodeTypeAnalyzer = struct {
                 .UnionCasePayload => try self.diagnostic_store.emitFormattedErrorFromToken(
                     self.allocator,
                     node.primaryToken(),
-                    "union initialization expects {s}, found {s}",
+                    "union construction expects {s}, found {s}",
                     .{ expected_type_name, actual_type_name },
                 ),
                 .StructureFieldValue => |field| try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -861,7 +861,7 @@ pub const NodeTypeAnalyzer = struct {
         for (union_symbol_information.cases, 0..) |union_case, case_index| {
             if (std.mem.eql(u8, union_case.name, member_name)) {
                 const union_type_case = union_type.cases[case_index];
-                if (union_type_case.type_id == self.type_store.unit_type_id) {
+                if (union_type_case.type_id == self.type_store.unit_type_id and !parent_node_expectation.node_role.isInCalleePosition()) {
                     return self.recordNodeType(node_id, union_type_id);
                 } else {
                     return self.recordNodeType(node_id, union_type_case.constructor_type_id);
