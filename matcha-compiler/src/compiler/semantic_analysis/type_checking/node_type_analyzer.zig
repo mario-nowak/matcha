@@ -213,7 +213,7 @@ pub const NodeTypeAnalyzer = struct {
             .LeaveStatement => try self.checkLeaveStatementNode(node.id),
             .ContinueStatement => try self.checkContinueStatementNode(node.id),
             .CallExpression => |call_expression| try self.checkCallExpressionNode(node.id, &call_expression, parent_node_expectation, environment),
-            .MemberExpression => |member_expression| try self.checkMemberExpressionNode(node.id, &member_expression, environment),
+            .MemberExpression => |member_expression| try self.checkMemberExpressionNode(node.id, &member_expression, parent_node_expectation, environment),
             .ImplicitMemberExpression => |implicit_member_expression| try self.checkImplicitMemberExpressionNode(node.id, &implicit_member_expression, parent_node_expectation, environment),
             .BinaryExpression => |binary_expression| try self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
             .UnaryExpression => |unary_expression| try self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
@@ -724,7 +724,7 @@ pub const NodeTypeAnalyzer = struct {
                     try self.diagnostic_store.emitFormattedErrorFromToken(
                         self.allocator,
                         call_expression.left_parenthesis,
-                        "union construction expects 1 arguments, found {d}",
+                        "union construction expects 1 argument, found {d}",
                         .{call_expression.arguments.len},
                     );
                     return error.DiagnosticsEmitted;
@@ -748,6 +748,7 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node_id: ast.NodeId,
         member_expression: *const ast.MemberExpression,
+        parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const member_name = member_expression.member_name_token.kind.Identifier;
@@ -780,7 +781,7 @@ pub const NodeTypeAnalyzer = struct {
                         if (std.mem.eql(u8, union_case.name, member_name)) {
                             const union_type_case = union_type.cases[case_index];
                             // TODO: comment
-                            if (union_type_case.type_id == self.type_store.unit_type_id) {
+                            if (union_type_case.type_id == self.type_store.unit_type_id and !parent_node_expectation.node_role.isInCalleePosition()) {
                                 return self.recordNodeType(node_id, union_type_id);
                             } else {
                                 return self.recordNodeType(node_id, union_type_case.constructor_type_id);
