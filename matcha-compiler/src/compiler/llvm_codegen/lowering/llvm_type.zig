@@ -13,6 +13,8 @@ pub fn getLlvmIrTypeByMatchaType(type_store: *const typing.TypeStore, type_id: t
         .Array => "ptr",
         .Function => "ptr",
         .Union => "ptr",
+        // Internal type
+        .UnionConstructor => unreachable,
     };
 }
 

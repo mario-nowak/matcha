@@ -134,10 +134,17 @@ pub const NodeTypeAnalyzer = struct {
                 },
                 .Union => |union_information| block: {
                     var cases = std.ArrayList(typing.UnionTypeCase){};
-                    for (union_information.cases) |case| {
+                    for (union_information.cases, 0..) |case, case_index| {
+                        const union_constructor_type_id = self.type_store.addType(.{ .UnionConstructor = .{
+                            .case_index = case_index,
+                            .union_type_id = type_id,
+                        } });
                         cases.append(
                             self.allocator,
-                            .{ .type_id = self.resolveTypeReference(case.type_reference) },
+                            .{
+                                .type_id = self.resolveTypeReference(case.type_reference),
+                                .constructor_type_id = union_constructor_type_id,
+                            },
                         ) catch unreachable;
                     }
                     break :block .{
@@ -226,32 +233,32 @@ pub const NodeTypeAnalyzer = struct {
             .IndexExpression => |index_expression| try self.checkIndexExpressionNode(node.id, &index_expression, environment),
         };
 
-        try self.rejectFunctionValueOutsideCalleePosition(node, type_id, parent_node_expectation);
+        try self.rejectNodeTypeOutsideCalleePosition(node, .Function, "functions can only be called; function values are not supported yet", parent_node_expectation);
+        try self.rejectNodeTypeOutsideCalleePosition(node, .UnionConstructor, "union constructors can only be called", parent_node_expectation);
+
         return type_id;
     }
 
-    /// Functions are not first-class values yet: the backend can only emit direct calls, so a function-typed node has no
-    /// runtime representation. Until that changes, a function may only appear as the direct callee of a call. This runs
-    /// after every node check so it covers identifiers, member accesses, and values flowing out of blocks and branches.
-    fn rejectFunctionValueOutsideCalleePosition(
+    fn rejectNodeTypeOutsideCalleePosition(
         self: *@This(),
         node: *const ast.Node,
-        type_id: typing.TypeId,
+        type_kind_to_reject: typing.TypeKind,
+        message: []const u8,
         parent_node_expectation: ParentNodeExpectation,
     ) TypeError!void {
-        const is_callee = switch (parent_node_expectation.node_role) {
+        const is_in_callee_position = switch (parent_node_expectation.node_role) {
             .Expression => |kind| kind == .Callee,
             .Statement => false,
         };
-        if (is_callee or self.type_store.getType(type_id) != .Function) {
-            return;
-        }
+        const node_type = self.type_store.getType(self.type_id_by_node_id.get(node.id) orelse unreachable);
 
-        try self.diagnostic_store.emitErrorFromToken(
-            node.primaryToken(),
-            "functions can only be called; function values are not supported yet",
-        );
-        return error.DiagnosticsEmitted;
+        if (node_type == type_kind_to_reject and !is_in_callee_position) {
+            try self.diagnostic_store.emitErrorFromToken(
+                node.primaryToken(),
+                message,
+            );
+            return error.DiagnosticsEmitted;
+        }
     }
 
     fn checkNodeAgainstExpectedType(
@@ -712,27 +719,23 @@ pub const NodeTypeAnalyzer = struct {
 
                 return self.recordNodeType(node_id, function_type.return_type_id);
             },
-            .Union => |union_type| {
+            .UnionConstructor => |union_constructor_type| {
                 if (call_expression.arguments.len != 1) {
                     try self.diagnostic_store.emitFormattedErrorFromToken(
                         self.allocator,
                         call_expression.left_parenthesis,
-                        "union initialization expects 1 arguments, found {d}",
+                        "union construction expects 1 arguments, found {d}",
                         .{call_expression.arguments.len},
                     );
                     return error.DiagnosticsEmitted;
                 }
                 const argument = call_expression.arguments[0];
-
-                const member_access = self.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable;
-                const union_type_case_index = switch (member_access) {
-                    .UnionTypeCaseAccess => |union_type_case_access| union_type_case_access.case_index,
-                    else => unreachable,
-                };
-                const union_type_case = union_type.cases[union_type_case_index];
+                const union_type = self.type_store.getType(union_constructor_type.union_type_id).Union;
+                const union_type_case = union_type.cases[union_constructor_type.case_index];
                 _ = try self.checkNodeAgainstExpectedType(&argument, union_type_case.type_id, .UnionCasePayload, environment);
 
-                return self.recordNodeType(node_id, callee_type_id);
+                // TODO: add comment
+                return self.recordNodeType(node_id, union_constructor_type.union_type_id);
             },
             else => {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, call_expression.left_parenthesis, "cannot call value of non-function type {s}", .{try self.getTypeName(callee_type_id)});
@@ -771,17 +774,20 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, function_type_id);
                 },
                 .Union => |union_symbol_information| {
-                    const base_type_id = self.type_id_by_symbol_id.get(base_symbol_id) orelse unreachable;
+                    const union_type_id = self.type_id_by_symbol_id.get(base_symbol_id) orelse unreachable;
+                    const union_type = self.type_store.getType(union_type_id).Union;
                     for (union_symbol_information.cases, 0..) |union_case, case_index| {
                         if (std.mem.eql(u8, union_case.name, member_name)) {
-                            // TODO: add comment
-                            self.recordMemberAccess(node_id, .{ .UnionTypeCaseAccess = .{ .case_index = case_index } });
-
-                            // If the member name matches any case of the union type, the member expression has the type
-                            // of that union.
-                            return self.recordNodeType(node_id, base_type_id);
+                            const union_type_case = union_type.cases[case_index];
+                            // TODO: comment
+                            if (union_type_case.type_id == self.type_store.unit_type_id) {
+                                return self.recordNodeType(node_id, union_type_id);
+                            } else {
+                                return self.recordNodeType(node_id, union_type_case.constructor_type_id);
+                            }
                         }
                     }
+
                     for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
                         const function_symbol = environment.resolved_program.symbol_table.getSymbol(function_symbol_id);
                         if (std.mem.eql(u8, function_symbol.name, member_name)) {
@@ -847,11 +853,28 @@ pub const NodeTypeAnalyzer = struct {
 
         const union_symbol = environment.resolved_program.symbol_table.getSymbol(expected_type.Union.symbol_id);
         const member_name = implicit_member_expression.member_name_token.kind.Identifier;
-        for (union_symbol.kind.Union.cases, 0..) |union_case, case_index| {
+        const union_type_id = self.type_id_by_symbol_id.get(union_symbol.id) orelse unreachable;
+        const union_type = self.type_store.getType(union_type_id).Union;
+        const union_symbol_information = union_symbol.kind.Union;
+        // TODO: this is duplicated from the explicit case
+        for (union_symbol_information.cases, 0..) |union_case, case_index| {
             if (std.mem.eql(u8, union_case.name, member_name)) {
-                self.recordMemberAccess(node_id, .{ .UnionTypeCaseAccess = .{ .case_index = case_index } });
+                const union_type_case = union_type.cases[case_index];
+                if (union_type_case.type_id == self.type_store.unit_type_id) {
+                    return self.recordNodeType(node_id, union_type_id);
+                } else {
+                    return self.recordNodeType(node_id, union_type_case.constructor_type_id);
+                }
+            }
+        }
 
-                return self.recordNodeType(node_id, expected_type_id);
+        for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
+            const function_symbol = environment.resolved_program.symbol_table.getSymbol(function_symbol_id);
+            if (std.mem.eql(u8, function_symbol.name, member_name)) {
+                const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
+                self.recordMemberAccess(node_id, .UnionTypeFunctionAccess);
+
+                return self.recordNodeType(node_id, function_type_id);
             }
         }
 

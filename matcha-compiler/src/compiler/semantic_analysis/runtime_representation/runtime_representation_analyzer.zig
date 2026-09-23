@@ -106,6 +106,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .Integer,
             .String,
             .Function,
+            .UnionConstructor,
             => .Present,
             .Structure => |structure_type| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type),
             .Array => |element_type_id| block: {

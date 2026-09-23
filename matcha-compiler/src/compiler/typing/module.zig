@@ -13,6 +13,8 @@ pub const TypeKind = enum {
     Function,
     Array,
     Union,
+    // Internal type
+    UnionConstructor,
 };
 
 pub const Type = union(TypeKind) {
@@ -25,6 +27,8 @@ pub const Type = union(TypeKind) {
     Function: FunctionType,
     Array: TypeId,
     Union: UnionType,
+
+    UnionConstructor: UnionConstructor,
 
     pub fn name(self: @This(), store: *const TypeStore, allocator: std.mem.Allocator) ![]const u8 {
         return switch (self) {
@@ -50,6 +54,7 @@ pub const Type = union(TypeKind) {
                 );
             },
             .Union => allocator.dupe(u8, "tagged union"),
+            .UnionConstructor => allocator.dupe(u8, "union constructor"),
         };
     }
 };
@@ -228,6 +233,12 @@ pub const UnionType = struct {
 // TODO: this currently seems superfluous, sus
 pub const UnionTypeCase = struct {
     type_id: TypeId,
+    constructor_type_id: TypeId,
+};
+
+pub const UnionConstructor = struct {
+    union_type_id: TypeId,
+    case_index: usize,
 };
 
 pub const FunctionType = struct {
@@ -351,6 +362,7 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
         .Function,
         .Array,
         .Union,
+        .UnionConstructor,
         => null,
     };
 }
@@ -376,6 +388,7 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
         .Function,
         .Array,
         .Union,
+        .UnionConstructor,
         => null,
     };
 }

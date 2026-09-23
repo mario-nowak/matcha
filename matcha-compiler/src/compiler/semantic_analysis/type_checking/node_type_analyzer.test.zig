@@ -22,7 +22,7 @@ test "NodeTypeAnalyzer > analyzeProgram: creates union types for encountered uni
     } } });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: 1" {
+test "NodeTypeAnalyzer > analyzeProgram: types a bare union case without a payload as the underlying union type" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.None;
@@ -47,7 +47,7 @@ test "NodeTypeAnalyzer > analyzeProgram: 1" {
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: 2" {
+test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case with a payload as the underlying union type " {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.Some(3);
@@ -72,7 +72,7 @@ test "NodeTypeAnalyzer > analyzeProgram: 2" {
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: 3" {
+test "NodeTypeAnalyzer > analyzeProgram: types a bare implicit union case without a payload as the underlying union type" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .None;
@@ -97,8 +97,7 @@ test "NodeTypeAnalyzer > analyzeProgram: 3" {
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-// TODO: failing
-test "NodeTypeAnalyzer > analyzeProgram: 4" {
+test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case with a payload as the underlying union type" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .Some(3);
@@ -114,18 +113,7 @@ test "NodeTypeAnalyzer > analyzeProgram: 4" {
     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
     const union_case_node = result_binding_node.kind.BindingDeclaration.value;
 
-    const result = fixture.node_type_analyzer.analyzeProgram(
-        &fixture.resolved_program,
-        fixture.exit_behavior_by_node_id,
-    ) catch |analysis_error| switch (analysis_error) {
-        error.DiagnosticsEmitted => {
-            for (fixture.diagnostic_store.items()) |item| {
-                std.debug.print("Encountered unexpected diagnostic during test: {s}\n", .{item.message});
-            }
-            return error.TestError;
-        },
-        else => unreachable,
-    };
+    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
     const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
