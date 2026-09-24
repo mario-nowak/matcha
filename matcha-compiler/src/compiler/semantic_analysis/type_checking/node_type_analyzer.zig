@@ -246,13 +246,9 @@ pub const NodeTypeAnalyzer = struct {
         message: []const u8,
         parent_node_expectation: ParentNodeExpectation,
     ) TypeError!void {
-        const is_in_callee_position = switch (parent_node_expectation.node_role) {
-            .Expression => |kind| kind == .Callee,
-            .Statement => false,
-        };
         const node_type = self.type_store.getType(self.type_id_by_node_id.get(node.id) orelse unreachable);
 
-        if (node_type == type_kind_to_reject and !is_in_callee_position) {
+        if (node_type == type_kind_to_reject and !parent_node_expectation.node_role.isInCalleePosition()) {
             try self.diagnostic_store.emitErrorFromToken(
                 node.primaryToken(),
                 message,

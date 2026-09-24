@@ -11,7 +11,6 @@ pub const NodeRole = union(enum) {
     Statement,
     Expression: NodeRoleExpressionKind,
 
-    // TODO: This is not really an expectation and more of a general information
     pub fn isInCalleePosition(self: @This()) bool {
         return switch (self) {
             .Statement => false,

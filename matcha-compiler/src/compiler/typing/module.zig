@@ -271,19 +271,16 @@ pub const MemberAccess = union(enum) {
         field_index: u32,
     },
     UnionTypeFunctionAccess,
-    // TODO: payload seems superfluous
     StructureInstanceMethodAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
-    // TODO: this payload is superfluous
     StructureTypeFunctionAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
     StringInstanceFieldAccess: StringInstanceField,
     ArrayInstanceFieldAccess: ArrayInstanceField,
-    // TODO: all of these payloads seems superfluous
     ArrayInstanceMethodAccess: ArrayInstanceMethod,
     IntegerInstanceMethodAccess: IntegerInstanceMethod,
     StringInstanceMethodAccess: StringInstanceMethod,
