@@ -2,7 +2,7 @@ const std = @import("std");
 const expect = @import("testing").expect;
 const setupNodeTypeAnalyzerFixture = @import("testing").setupNodeTypeAnalyzerFixture;
 
-test "NodeTypeAnalyzer > analyzeProgram: creates union types for encountered unions" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: creates a union type with one payload type per case" {
     const source =
         \\item Result = union { None, Some: int };
     ;
@@ -22,7 +22,7 @@ test "NodeTypeAnalyzer > analyzeProgram: creates union types for encountered uni
     } } });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a bare union case without a value as the underlying union type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types a qualified unit case as the union when it is not called" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.None;
@@ -47,7 +47,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a bare union case without a value
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a call on a union case with a unit value as the underlying union type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types a qualified unit case construction as the union" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.None(unit);
@@ -78,7 +78,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a call on a union case with a uni
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a call on an implicit union case with a unit value as the underlying union type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types an implicit unit case construction as the union" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .None(unit);
@@ -109,7 +109,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a call on an implicit union case 
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case with a value as the underlying union type " {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types a qualified payload case construction as the union" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.Some(3);
@@ -134,7 +134,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a bare implicit union case without a value as the underlying union type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types an implicit unit case as the union when it is not called" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .None;
@@ -159,7 +159,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a bare implicit union case withou
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case with a value as the underlying union type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types an implicit payload case construction as the union" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .Some(3);
@@ -184,7 +184,7 @@ test "NodeTypeAnalyzer > analyzeProgram: types a call expression on a union case
     try expect(union_case_node_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when using a union type as a value" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a union type when it is used as a value" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result;
@@ -201,7 +201,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when using 
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when using a union case with a non-unit value outside of a call expression" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a qualified payload case when it is not called" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.Some;
@@ -218,7 +218,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when using 
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when implicitly using a union case with a non-unit value outside of a call expression" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit payload case when it is not called" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .Some;
@@ -235,7 +235,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error diagnostic when implic
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a non-unit value is called without a value " {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a qualified payload case construction when it has no argument" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.Some();
@@ -252,7 +252,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a non-unit value is implicitly called without a value " {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit payload case construction when it has no argument" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .Some();
@@ -269,7 +269,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a unit value is called without a value " {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a qualified unit case construction when it has no argument" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.None();
@@ -286,7 +286,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a unit value is implicitly called without a value " {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit unit case construction when it has no argument" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .None();
@@ -303,7 +303,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a non-unit value is called with the wrong value type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a qualified payload case construction when the argument does not match the payload type" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.Some("wrong");
@@ -320,7 +320,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with a unit value is called with the wrong value type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a qualified unit case construction when the argument is not unit" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result = Result.None("wrong");
@@ -337,7 +337,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when a union case with
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when an implicit union case with a non-unit value is called with the wrong value type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit payload case construction when the argument does not match the payload type" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .Some("wrong");
@@ -354,7 +354,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when an implicit union
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: reports an error when an implicit union case with a unit value is called with the wrong value type" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit unit case construction when the argument is not unit" {
     const source =
         \\item Result = union { None, Some: int };
         \\val result: Result = .None("wrong");
@@ -371,7 +371,7 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when an implicit union
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 1" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types a qualified static function call as the return type when the function returns the union" {
     const source =
         \\item Result = union {
         \\    None,
@@ -393,7 +393,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 1" {
     try expect(result_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 2" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: resolves an implicit member to a static function of the expected union" {
     const source =
         \\item Result = union {
         \\    None,
@@ -415,7 +415,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 2" {
     try expect(result_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 3" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types a qualified static function call as the return type when the function returns another type" {
     const source =
         \\item Result = union {
         \\    None,
@@ -435,7 +435,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 3" {
     try expect(result_type_id).toMatch(result.type_store.integer_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 4" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: reports a mismatch at the declaration when an implicit static function does not return the expected union" {
     const source =
         \\item Result = union {
         \\    None,
@@ -456,7 +456,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 4" {
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 5" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: types an instance method call on a constructed union as the method return type" {
     const source =
         \\item Result = union {
         \\    None,
@@ -479,7 +479,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 5" {
     try expect(result_type_id).toMatch(union_type_id);
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 6" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an implicit case when it is the receiver of a method call" {
     const source =
         \\item Result = union {
         \\    None,
@@ -501,7 +501,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 6" {
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 7" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an instance method call on a union when the receiver parameter has another type" {
     const source =
         \\item Result = union {
         \\    None,
@@ -523,7 +523,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 7" {
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 8" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: rejects a member access on a union value when no member has that name" {
     const source =
         \\item Result = union {
         \\    None,
@@ -543,7 +543,7 @@ test "NodeTypeAnalyzer > analyzeProgram: xxx 8" {
     });
 }
 
-test "NodeTypeAnalyzer > analyzeProgram: xxx 9" {
+test "NodeTypeAnalyzer > analyzeProgram > unions: resolves an implicit case against the parameter type when it is an argument" {
     const source =
         \\item Result = union {
         \\    Some: int,
