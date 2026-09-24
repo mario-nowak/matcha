@@ -40,9 +40,9 @@ test "structure layout lowering erases unit fields but retains structure fields"
 
     const layouts = lowerer.lower(&analyzed.typed_program);
     const unit_only_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
-    const unit_only_type_id = analyzed.typed_program.type_by_symbol_id.get(unit_only_symbol_id).?;
+    const unit_only_type_id = analyzed.typed_program.type_id_by_symbol_id.get(unit_only_symbol_id).?;
     const mixed_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
-    const mixed_type_id = analyzed.typed_program.type_by_symbol_id.get(mixed_symbol_id).?;
+    const mixed_type_id = analyzed.typed_program.type_id_by_symbol_id.get(mixed_symbol_id).?;
 
     switch (layouts.get(unit_only_type_id).?) {
         .Absent => {},

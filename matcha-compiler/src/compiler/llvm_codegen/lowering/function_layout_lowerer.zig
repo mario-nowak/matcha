@@ -47,7 +47,7 @@ pub const FunctionLayoutLowerer = struct {
             var parameter_index_kind_by_definition_index = std.ArrayList(lowering_types.FunctionLayoutParameterIndexKind){};
 
             for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
-                const parameter_type_id = analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+                const parameter_type_id = analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
                 const runtime_representation = analyzed_program
                     .runtime_representation_result
                     .runtime_representation_by_type_id
@@ -62,9 +62,9 @@ pub const FunctionLayoutLowerer = struct {
                 parameter_index_kind_by_definition_index.append(self.allocator, parameter_index_kind) catch unreachable;
             }
 
-            const function_type_id = analyzed_program.type_by_symbol_id.get(function_symbol_id) orelse unreachable;
+            const function_type_id = analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
             const return_type_id = switch (analyzed_program.type_store.getType(function_type_id)) {
-                .Function => |function_type_index| analyzed_program.type_store.function_types.items[function_type_index].return_type,
+                .Function => |function_type| function_type.return_type,
                 else => unreachable,
             };
             const return_runtime_representation = analyzed_program

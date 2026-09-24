@@ -37,7 +37,7 @@ pub const StructureTypeRenderer = struct {
             };
 
             const structure_symbol_id = resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
-            const structure_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(structure_symbol_id) orelse unreachable;
+            const structure_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id) orelse unreachable;
             const structure_layout_kind = lowered_program.structure_layout_kind_by_type_id.get(structure_type_id) orelse unreachable;
             const structure_layout = switch (structure_layout_kind) {
                 .Absent => continue,

@@ -50,8 +50,7 @@ pub const PlaceInfo = struct {
 
 pub const TypeCheckResult = struct {
     type_store: typing.TypeStore,
-    type_by_symbol_id: typing.TypeBySymbolId,
-    type_by_node_id: typing.TypeByNodeId,
-    structure_construction_layout_by_node_id: typing.StructureConstructionLayoutByNodeId,
+    type_id_by_symbol_id: typing.TypeIdBySymbolId,
+    type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
 };

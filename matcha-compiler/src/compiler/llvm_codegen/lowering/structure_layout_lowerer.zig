@@ -32,8 +32,13 @@ pub const StructureLayoutLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.StructureLayoutKindByTypeId {
         self.clearLayouts();
 
-        for (analyzed_program.type_store.structure_types.items) |structure_type| {
-            const structure_type_id = analyzed_program.type_by_symbol_id.get(structure_type.symbol_id) orelse unreachable;
+        var types_iterator = analyzed_program.type_store.iterator();
+        while (types_iterator.next()) |entry| {
+            const structure_type = switch (entry.matcha_type) {
+                .Structure => |structure_type| structure_type,
+                else => continue,
+            };
+            const structure_type_id = entry.type_id;
             const structure_runtime_representation = analyzed_program
                 .runtime_representation_result
                 .runtime_representation_by_type_id

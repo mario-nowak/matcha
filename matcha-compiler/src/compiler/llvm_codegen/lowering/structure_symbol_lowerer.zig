@@ -21,11 +21,11 @@ pub const StructureSymbolLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) []const ?symbols.SymbolId {
         self.structure_symbol_id_by_type_id.clearRetainingCapacity();
 
-        for (0..analyzed_program.type_store.types.items.len) |_| {
+        for (0..analyzed_program.type_store.count()) |_| {
             self.structure_symbol_id_by_type_id.append(self.allocator, null) catch unreachable;
         }
 
-        var type_by_symbol_iterator = analyzed_program.type_by_symbol_id.iterator();
+        var type_by_symbol_iterator = analyzed_program.type_id_by_symbol_id.iterator();
         while (type_by_symbol_iterator.next()) |entry| {
             const symbol_id = entry.key_ptr.*;
             const type_id: typing.TypeId = entry.value_ptr.*;

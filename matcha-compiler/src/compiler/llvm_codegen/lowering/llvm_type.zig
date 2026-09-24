@@ -27,7 +27,7 @@ pub fn getTypeIdFromResolvedTypeReference(
             .Integer => typed_program.type_store.integer_type_id,
             .String => typed_program.type_store.string_type_id,
         },
-        .Symbol => |symbol_id| typed_program.type_by_symbol_id.get(symbol_id) orelse unreachable,
+        .Symbol => |symbol_id| typed_program.type_id_by_symbol_id.get(symbol_id) orelse unreachable,
         .Array => |element_type_reference| typed_program.type_store.getArrayType(
             getTypeIdFromResolvedTypeReference(typed_program, element_type_reference.*),
         ) orelse unreachable,

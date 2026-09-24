@@ -21,7 +21,7 @@ pub const LlvmTypeTableLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) []const []const u8 {
         self.llvm_ir_type_by_type_id.clearRetainingCapacity();
 
-        for (0..analyzed_program.type_store.types.items.len) |index| {
+        for (0..analyzed_program.type_store.count()) |index| {
             const type_id: typing.TypeId = @intCast(index);
             self.llvm_ir_type_by_type_id.append(
                 self.allocator,

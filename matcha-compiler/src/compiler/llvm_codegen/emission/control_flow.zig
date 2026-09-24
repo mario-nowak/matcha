@@ -176,7 +176,7 @@ pub fn emitMatchExpression(
 
     const exhaustive_without_else = if (match_expression.subject) |subject|
         match_expression.else_arm == null and
-            lowered_program.analyzed_program.type_by_node_id.get(subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id
+            lowered_program.analyzed_program.type_id_by_node_id.get(subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id
     else
         false;
 
@@ -256,7 +256,7 @@ pub fn emitForInArrayLoop(
     const builder = emitter.function_ir_builder;
     const iterable_register = emitter.emitNode(for_in.iterable, lowered_program, environment).expectRegister();
 
-    const iterable_type_id = lowered_program.analyzed_program.type_by_node_id.get(for_in.iterable.id) orelse unreachable;
+    const iterable_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(for_in.iterable.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(iterable_type_id)) {
         .Array => |id| id,
         else => unreachable,
@@ -423,10 +423,10 @@ fn emitDecisionConstruct(
 
     if (decision_construct.subject) |subject| {
         subject_register = emitter.emitNode(subject, lowered_program, environment).expectRegister();
-        subject_type_id = lowered_program.analyzed_program.type_by_node_id.get(subject.id).?;
+        subject_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(subject.id).?;
     }
 
-    const result_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id).?;
+    const result_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
     const result_type_runtime_representation = lowered_program
         .analyzed_program
         .runtime_representation_result

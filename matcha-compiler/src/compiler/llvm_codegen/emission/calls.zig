@@ -208,7 +208,7 @@ fn emitDirectFunctionCall(
             argument_list_buffer.writer(emitter.allocator).print(", ", .{}) catch unreachable;
         }
         const parameter_symbol_id = function_symbol_information.parameter_symbol_ids[parameter_definition_index];
-        const parameter_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
+        const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
         const parameter_llvm_type = lowered_program.getLlvmIrType(parameter_type_id);
         const argument_register = argument_registers[parameter_layout_index];
 
@@ -225,9 +225,9 @@ fn emitDirectFunctionCall(
         )
     else
         emitter.symbol_generator.generateFunctionName(callee_symbol);
-    const function_type_id = lowered_program.analyzed_program.type_by_symbol_id.get(callee_symbol_id) orelse unreachable;
+    const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(callee_symbol_id) orelse unreachable;
     const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
-        .Function => |id| lowered_program.analyzed_program.type_store.function_types.items[id].return_type,
+        .Function => |function_type| function_type.return_type,
         else => unreachable,
     };
     const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
@@ -269,7 +269,7 @@ fn emitArrayAppendCall(
     const base_register = emitter.emitNode(callee_member_expression.base, lowered_program, environment).expectRegister();
     const argument_register = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
 
-    const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(callee_member_expression.base.id) orelse unreachable;
+    const array_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(callee_member_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
         .Array => |id| id,
         else => unreachable,

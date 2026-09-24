@@ -59,7 +59,7 @@ pub fn emitMemberExpression(
             emitter.function_ir_builder.emitLoad(
                 member_register,
                 member_pointer_register,
-                lowered_program.getLlvmIrType(lowered_program.analyzed_program.type_by_node_id.get(node.id).?),
+                lowered_program.getLlvmIrType(lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?),
             );
 
             return .{ .register = member_register };
@@ -79,20 +79,15 @@ pub fn emitStructureLiteral(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
-    const node_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
+    const node_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const structure_symbol = lowered_program.getStructureSymbolForTypeId(node_type_id);
     const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
-    const structure_type_id = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
-        .Structure => |id| id,
+    const structure_type = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
+        .Structure => |structure_type| structure_type,
         else => unreachable,
     };
     const structure_layout_kind = lowered_program
         .structure_layout_kind_by_type_id.get(node_type_id) orelse unreachable;
-
-    const structure_type = lowered_program.analyzed_program.type_store.structure_types.items[structure_type_id];
-    const structure_construction_layout = lowered_program.analyzed_program.structure_construction_layout_by_node_id.get(
-        node.id,
-    ) orelse unreachable;
 
     const structure_header_register = emitter.function_symbol_generator.generateRegister();
     const allocate_call = switch (structure_layout_kind) {
@@ -112,8 +107,9 @@ pub fn emitStructureLiteral(
         ) catch unreachable,
     );
 
-    for (fields, structure_construction_layout.field_indices) |field, field_index| {
+    for (fields) |field| {
         const field_value_emission_result = emitter.emitNode(field.value, lowered_program, environment);
+        const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
         const structure_field = structure_type.fields[@intCast(field_index)];
         const layout_field_index = switch (structure_layout_kind) {
             .Absent => continue,
@@ -149,7 +145,7 @@ pub fn emitArrayLiteral(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const array_type_id = lowered_program.analyzed_program.type_by_node_id.get(node.id) orelse unreachable;
+    const array_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
         .Array => |id| id,
         else => unreachable,
@@ -236,7 +232,7 @@ pub fn emitIndexExpression(
     _ = node;
     const pointer_register = places.emitIndexExpressionPointer(emitter, index_expression, lowered_program, environment);
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_expression.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,

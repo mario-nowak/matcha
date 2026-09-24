@@ -33,7 +33,7 @@ pub fn emitBindingDeclaration(
     }
 
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-    const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(value_declaration.value.id).?;
+    const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(value_declaration.value.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
     const storage = emitter.function_symbol_generator.generateStorage();
@@ -54,7 +54,7 @@ pub fn emitAssignmentStatement(
 ) EmissionResult {
     const place_emission_result = emitPlace(emitter, assignment_statement.target, lowered_program, environment);
 
-    const value_type_id = lowered_program.analyzed_program.type_by_node_id.get(assignment_statement.target.id).?;
+    const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(assignment_statement.target.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
     switch (assignment_statement.operator) {
         .Assign => {
@@ -149,7 +149,7 @@ pub fn emitStructureFieldPointer(
         .statement => unreachable,
     };
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(member_expression.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(member_expression.base.id) orelse unreachable;
     switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Structure => {},
         else => unreachable,
@@ -186,7 +186,7 @@ pub fn emitIndexExpressionPointer(
     const base_register = emitter.emitNode(index_expression.base, lowered_program, environment).expectRegister();
     const index_register = emitter.emitNode(index_expression.index, lowered_program, environment).expectRegister();
 
-    const base_type_id = lowered_program.analyzed_program.type_by_node_id.get(index_expression.base.id) orelse unreachable;
+    const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
         .Array => |id| id,
         else => unreachable,
