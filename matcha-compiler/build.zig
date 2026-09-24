@@ -378,9 +378,18 @@ pub fn build(b: *std.Build) void {
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
+    // The CLI tests live in the cli module, which the executable only imports.
+    // They need their own test executable with that module as root.
+    const cli_tests = b.addTest(.{
+        .root_module = cli_module,
+        .filters = test_filters,
+    });
+    const run_cli_tests = b.addRunArtifact(cli_tests);
+
     const unit_test_step = b.step("unit-test", "Run compiler unit tests");
     unit_test_step.dependOn(&run_mod_tests.step);
     unit_test_step.dependOn(&run_exe_tests.step);
+    unit_test_step.dependOn(&run_cli_tests.step);
 
     // The e2e tests exercise the installed matcha binary, so their run step
     // depends on the install step and receives the binary location through the
