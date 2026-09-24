@@ -57,6 +57,7 @@ test "parse run command with forwarded program arguments" {
     const command = try parser.parse(std.testing.allocator, &iter);
     switch (command) {
         .run => |run| {
+            defer std.testing.allocator.free(run.program_arguments);
             try std.testing.expectEqualStrings("examples/aoc-2024-01.mt", run.input_path);
             try std.testing.expectEqual(@as(usize, 2), run.program_arguments.len);
             try std.testing.expectEqualStrings("examples/data/aoc-2024-01-input.txt", run.program_arguments[0]);
