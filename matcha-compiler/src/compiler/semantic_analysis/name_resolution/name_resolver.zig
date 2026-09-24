@@ -542,9 +542,6 @@ pub const NameResolver = struct {
             try self.resolveNode(subject, environment);
         }
         for (match_expression.arms) |arm| {
-            // TODO: Check if pattern or condition is call expression with either member expression or implicit member
-            // expression an if so, make sure it has only a single identifier and create a symbol for it and place
-            // into the scope of the body
             try self.resolveNode(arm.pattern_or_condition, environment);
             try self.resolveNode(arm.body, environment);
         }

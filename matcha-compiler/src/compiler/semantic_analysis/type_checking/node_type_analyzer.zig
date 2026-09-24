@@ -127,7 +127,6 @@ pub const NodeTypeAnalyzer = struct {
                             .symbol_id = symbol.id,
                             .name = symbol.name,
                             .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
-                            // TODO: refactor / remove that
                             .function_symbol_ids = structure_information.function_symbol_ids,
                         },
                     };
@@ -966,7 +965,6 @@ pub const NodeTypeAnalyzer = struct {
                 return error.DiagnosticsEmitted;
             },
             .Union => |union_type| {
-                // TODO: this is VERY similar to the structure case
                 const union_symbol = environment.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
                 const union_symbol_information = union_symbol.kind.Union;
                 for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
@@ -982,7 +980,6 @@ pub const NodeTypeAnalyzer = struct {
                     }
                 }
 
-                // TODO: this error message is the same one as the structure one
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "type '{s}' has no member named '{s}'", .{ union_symbol.name, member_name });
                 return error.DiagnosticsEmitted;
             },

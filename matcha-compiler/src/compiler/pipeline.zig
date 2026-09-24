@@ -146,7 +146,6 @@ pub fn emitFile(
     const llvm_ir = try generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(allocator, input_path);
     try writeFile(resolved_output_path, llvm_ir);
-    // TODO: refactor that
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
 }
 
