@@ -882,7 +882,7 @@ pub const NodeTypeAnalyzer = struct {
         try self.diagnostic_store.emitFormattedErrorFromToken(
             self.allocator,
             implicit_member_expression.member_name_token,
-            "no case named '{s}' exists on union type '{s}'",
+            "no function or case named '{s}' exists on union type '{s}'",
             .{ member_name, union_symbol.name },
         );
         return error.DiagnosticsEmitted;
@@ -974,7 +974,27 @@ pub const NodeTypeAnalyzer = struct {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "int has no member named '{s}'", .{member_name});
                 return error.DiagnosticsEmitted;
             },
-            // TODO: todo: this is missing unions
+            .Union => |union_type| {
+                // TODO: this is VERY similar to the structure case
+                const union_symbol = environment.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
+                const union_symbol_information = union_symbol.kind.Union;
+                for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
+                    const function_symbol = environment.resolved_program.symbol_table.getSymbol(function_symbol_id);
+                    if (std.mem.eql(u8, function_symbol.name, member_name)) {
+                        // Instance method access binds the receiver and drops the `self` parameter from the callable type.
+                        const bound_function_type_id = try self.bindInstanceMethodFunctionType(
+                            member_expression.member_name_token,
+                            function_symbol_id,
+                            base_type_id,
+                        );
+                        return self.recordNodeType(node_id, bound_function_type_id);
+                    }
+                }
+
+                // TODO: this error message is the same one as the structure one
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "type '{s}' has no member named '{s}'", .{ union_symbol.name, member_name });
+                return error.DiagnosticsEmitted;
+            },
             else => {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "cannot access member '{s}' on type {s}", .{ member_name, try self.getTypeName(base_type_id) });
                 return error.DiagnosticsEmitted;
@@ -1026,12 +1046,12 @@ pub const NodeTypeAnalyzer = struct {
         };
 
         if (function_type.parameter_type_ids.len == 0) {
-            try self.diagnostic_store.emitErrorFromToken(member_name_token, "structure instance method is missing a receiver parameter");
+            try self.diagnostic_store.emitErrorFromToken(member_name_token, "instance method is missing a receiver parameter");
             return error.DiagnosticsEmitted;
         }
 
         if (function_type.parameter_type_ids[0] != receiver_type_id) {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_name_token, "structure instance method receiver expects {s}, found {s}", .{ try self.getTypeName(function_type.parameter_type_ids[0]), try self.getTypeName(receiver_type_id) });
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_name_token, "instance method receiver expects {s}, found {s}", .{ try self.getTypeName(function_type.parameter_type_ids[0]), try self.getTypeName(receiver_type_id) });
             return error.DiagnosticsEmitted;
         }
 

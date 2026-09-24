@@ -370,3 +370,194 @@ test "NodeTypeAnalyzer > analyzeProgram: reports an error when an implicit union
         .{ .message = "union construction expects unit, found string" },
     });
 }
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 1" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\    item fromString(value: string): Result = .Some(value.toInt());
+        \\};
+        \\val result = Result.fromString("3");
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+    const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
+    try expect(result_type_id).toMatch(union_type_id);
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 2" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\    item fromString(value: string): Result = .Some(value.toInt());
+        \\};
+        \\val result: Result = .fromString("3");
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+    const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
+    try expect(result_type_id).toMatch(union_type_id);
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 3" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\    item getValue(): int = 1;
+        \\};
+        \\val result = Result.getValue();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
+    try expect(result_type_id).toMatch(result.type_store.integer_type_id);
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 4" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\    item getValue(): int = 1;
+        \\};
+        \\val result: Result = .getValue();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "declaration 'result' expects tagged union, found int" },
+    });
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 5" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\
+        \\    item getSelf(self: Result): Result = self;
+        \\};
+        \\val result = Result.Some(3).getSelf();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+    const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
+    try expect(result_type_id).toMatch(union_type_id);
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 6" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\
+        \\    item getSelf(self: Result): Result = self;
+        \\};
+        \\val result: Result = .Some(3).getSelf();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "cannot infer the type of an implicit member expression without an expected type" },
+    });
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 7" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\
+        \\    item getSelf(self: int): int = self;
+        \\};
+        \\val result = Result.Some(3).getSelf();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "instance method receiver expects int, found tagged union" },
+    });
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 8" {
+    const source =
+        \\item Result = union {
+        \\    None,
+        \\    Some: int,
+        \\};
+        \\val result = Result.Some(3).nonExistentFunction();
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    try expect(result).toBeError(error.DiagnosticsEmitted);
+    try expect(fixture.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "type 'Result' has no member named 'nonExistentFunction'" },
+    });
+}
+
+test "NodeTypeAnalyzer > analyzeProgram: xxx 9" {
+    const source =
+        \\item Result = union {
+        \\    Some: int,
+        \\};
+        \\item asValue(result: Result): int = 1;
+        \\var result = asValue(.Some(1));
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[2].id) orelse unreachable;
+
+    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+    const result_type_id = result.type_id_by_symbol_id.get(result_symbol_id) orelse unreachable;
+    try expect(result_type_id).toMatch(result.type_store.integer_type_id);
+}
