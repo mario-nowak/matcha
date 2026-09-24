@@ -37,8 +37,6 @@ pub const TypeError = error{
 /// Facts about the surrounding program that every node inherits from its parent unless a node explicitly overrides
 /// them. Compare `ParentNodeExpectation`, which holds facts that only apply to a single parent-child edge.
 pub const TypeCheckEnvironment = struct {
-    resolved_program: *const symbols.ResolvedProgram,
-    exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     // The declared return type of the innermost enclosing function. Return statements check their value against it.
     // Null at module level.
     function_return_type_id: ?typing.TypeId,

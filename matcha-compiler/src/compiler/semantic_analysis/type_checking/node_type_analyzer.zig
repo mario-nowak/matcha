@@ -34,6 +34,9 @@ pub const NodeTypeAnalyzer = struct {
     type_id_by_symbol_id: typing.TypeIdBySymbolId,
     type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
+    // Per-run inputs, valid from the start of `analyzeProgram` until it returns.
+    resolved_program: *const symbols.ResolvedProgram,
+    exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
 
     pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
@@ -43,6 +46,8 @@ pub const NodeTypeAnalyzer = struct {
             .type_id_by_symbol_id = typing.TypeIdBySymbolId.init(allocator),
             .type_id_by_node_id = typing.TypeIdByNodeId.init(allocator),
             .member_access_by_node_id = typing.MemberAccessByNodeId.init(allocator),
+            .resolved_program = undefined,
+            .exit_behavior_by_node_id = undefined,
         };
     }
 
@@ -59,13 +64,11 @@ pub const NodeTypeAnalyzer = struct {
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) TypeError!TypeCheckResult {
         self.resetState();
-        try self.seedModuleLevelItemTypes(resolved_program);
+        self.resolved_program = resolved_program;
+        self.exit_behavior_by_node_id = exit_behavior_by_node_id;
+        try self.seedModuleLevelItemTypes();
 
-        const root_environment = TypeCheckEnvironment{
-            .resolved_program = resolved_program,
-            .exit_behavior_by_node_id = exit_behavior_by_node_id,
-            .function_return_type_id = null,
-        };
+        const root_environment = TypeCheckEnvironment{ .function_return_type_id = null };
         for (resolved_program.program.statements) |*statement| {
             _ = try self.checkNode(statement, .asStatement, root_environment);
         }
@@ -80,10 +83,8 @@ pub const NodeTypeAnalyzer = struct {
         };
     }
 
-    fn seedModuleLevelItemTypes(
-        self: *@This(),
-        resolved_program: *const symbols.ResolvedProgram,
-    ) TypeError!void {
+    fn seedModuleLevelItemTypes(self: *@This()) TypeError!void {
+        const resolved_program = self.resolved_program;
         // First seed all user defined structures and unions as preliminary types to support forward references of these
         // types.
         var symbol_iterator = resolved_program.symbol_table.iterator();
@@ -101,7 +102,7 @@ pub const NodeTypeAnalyzer = struct {
         symbol_iterator = resolved_program.symbol_table.iterator();
         while (symbol_iterator.next()) |symbol| {
             switch (symbol.kind) {
-                .Function => self.seedFunctionTypes(symbol, resolved_program),
+                .Function => self.seedFunctionTypes(symbol),
                 else => {},
             }
         }
@@ -125,7 +126,6 @@ pub const NodeTypeAnalyzer = struct {
                     break :block .{
                         .Structure = .{
                             .symbol_id = symbol.id,
-                            .name = symbol.name,
                             .fields = fields.toOwnedSlice(self.allocator) catch unreachable,
                             .function_symbol_ids = structure_information.function_symbol_ids,
                         },
@@ -160,11 +160,8 @@ pub const NodeTypeAnalyzer = struct {
         }
     }
 
-    fn seedFunctionTypes(
-        self: *@This(),
-        function_symbol: symbols.Symbol,
-        resolved_program: *const symbols.ResolvedProgram,
-    ) void {
+    fn seedFunctionTypes(self: *@This(), function_symbol: symbols.Symbol) void {
+        const resolved_program = self.resolved_program;
         const function_information = switch (function_symbol.kind) {
             .Function => |function_information| function_information,
             else => unreachable,
@@ -192,7 +189,7 @@ pub const NodeTypeAnalyzer = struct {
     }
 
     fn getTypeName(self: *@This(), type_id: typing.TypeId) ![]const u8 {
-        return self.type_store.getType(type_id).name(&self.type_store, self.allocator);
+        return self.type_store.getType(type_id).name(&self.type_store, &self.resolved_program.symbol_table, self.allocator);
     }
 
     fn checkNode(
@@ -213,7 +210,7 @@ pub const NodeTypeAnalyzer = struct {
             .ContinueStatement => try self.checkContinueStatementNode(node.id),
             .CallExpression => |call_expression| try self.checkCallExpressionNode(node.id, &call_expression, parent_node_expectation, environment),
             .MemberExpression => |member_expression| try self.checkMemberExpressionNode(node.id, &member_expression, parent_node_expectation, environment),
-            .ImplicitMemberExpression => |implicit_member_expression| try self.checkImplicitMemberExpressionNode(node.id, &implicit_member_expression, parent_node_expectation, environment),
+            .ImplicitMemberExpression => |implicit_member_expression| try self.checkImplicitMemberExpressionNode(node.id, &implicit_member_expression, parent_node_expectation),
             .BinaryExpression => |binary_expression| try self.checkBinaryExpressionNode(node.id, &binary_expression, environment),
             .UnaryExpression => |unary_expression| try self.checkUnaryExpressionNode(node.id, &unary_expression, environment),
             .QualifiedStructureLiteral => |qualified_structure_literal| try self.checkQualifiedStructureLiteralNode(node.id, &qualified_structure_literal, environment),
@@ -223,7 +220,7 @@ pub const NodeTypeAnalyzer = struct {
             .BooleanLiteral => try self.checkBooleanLiteralNode(node.id),
             .StringLiteral => try self.checkStringLiteralNode(node.id),
             .UnitLiteral => try self.checkUnitLiteralNode(node.id),
-            .Identifier => |identifier_token| try self.checkIdentifierNode(node.id, identifier_token, environment),
+            .Identifier => |identifier_token| try self.checkIdentifierNode(node.id, identifier_token),
             .IfStatement => |if_statement| try self.checkIfStatementNode(node.id, &if_statement, environment),
             .IfExpression => |if_expression| try self.checkIfExpressionNode(node.id, &if_expression, parent_node_expectation, environment),
             .MatchExpression => |match_expression| try self.checkMatchExpressionNode(node.id, &match_expression, parent_node_expectation, environment),
@@ -355,7 +352,7 @@ pub const NodeTypeAnalyzer = struct {
         qualified_structure_literal: *const ast.QualifiedStructureLiteral,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const structure_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const structure_symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const type_id = self.type_id_by_symbol_id.get(structure_symbol_id).?;
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
@@ -402,6 +399,7 @@ pub const NodeTypeAnalyzer = struct {
             },
         };
 
+        const structure_name = self.resolved_program.symbol_table.getSymbol(structure_type.symbol_id).name;
         var unique_field_names = std.StringHashMap(bool).init(self.allocator);
         defer unique_field_names.deinit();
 
@@ -415,14 +413,14 @@ pub const NodeTypeAnalyzer = struct {
             unique_field_names.put(field_name, true) catch unreachable;
 
             const field_index = structure_type.getFieldIndex(field_name) orelse {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "field '{s}' does not exist on structure '{s}'", .{ field_name, structure_type.name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "field '{s}' does not exist on structure '{s}'", .{ field_name, structure_name });
                 return error.DiagnosticsEmitted;
             };
             const structure_type_field = structure_type.fields[@intCast(field_index)];
             _ = try self.checkNodeAgainstExpectedType(
                 field.value,
                 structure_type_field.type_id,
-                .{ .StructureFieldValue = .{ .field_name_token = field.name, .structure_name = structure_type.name } },
+                .{ .StructureFieldValue = .{ .field_name_token = field.name, .structure_name = structure_name } },
                 environment,
             );
         }
@@ -430,7 +428,7 @@ pub const NodeTypeAnalyzer = struct {
         for (structure_type.fields) |field| {
             const field_exists_in_construction = unique_field_names.get(field.name);
             if (field_exists_in_construction == null) {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, fields[0].name, "missing field '{s}' in construction of '{s}'", .{ field.name, structure_type.name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, fields[0].name, "missing field '{s}' in construction of '{s}'", .{ field.name, structure_name });
                 return error.DiagnosticsEmitted;
             }
         }
@@ -444,8 +442,8 @@ pub const NodeTypeAnalyzer = struct {
         binding_declaration: *const ast.BindingDeclaration,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const binding_information = environment.resolved_program.symbol_table.getSymbol(symbol_id).kind.Binding;
+        const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const binding_information = self.resolved_program.symbol_table.getSymbol(symbol_id).kind.Binding;
         const annotated_type_id_or_null = if (binding_information.declared_type_reference) |type_reference|
             self.resolveTypeReference(type_reference)
         else
@@ -541,8 +539,8 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!PlaceInfo {
         switch (node.kind) {
             .Identifier => |identifier| {
-                const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
-                const symbol = environment.resolved_program.symbol_table.getSymbol(symbol_id);
+                const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
+                const symbol = self.resolved_program.symbol_table.getSymbol(symbol_id);
                 switch (symbol.kind) {
                     .Binding => |binding| {
                         if (binding.binding_mutability == symbols.BindingMutability.Immutable) {
@@ -662,7 +660,7 @@ pub const NodeTypeAnalyzer = struct {
             },
         };
 
-        const item_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const item_symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         self.type_id_by_symbol_id.put(item_symbol_id, item_type_id) catch unreachable;
 
         _ = try self.checkNode(for_in.body_block, .asStatement, environment);
@@ -746,8 +744,8 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const member_name = member_expression.member_name_token.kind.Identifier;
         if (member_expression.base.kind == .Identifier) {
-            const base_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(member_expression.base.id) orelse unreachable;
-            const base_symbol = environment.resolved_program.symbol_table.getSymbol(base_symbol_id);
+            const base_symbol_id = self.resolved_program.symbol_id_by_node_id.get(member_expression.base.id) orelse unreachable;
+            const base_symbol = self.resolved_program.symbol_table.getSymbol(base_symbol_id);
             switch (base_symbol.kind) {
                 .Structure => {
                     const base_type_id = self.type_id_by_symbol_id.get(base_symbol_id) orelse unreachable;
@@ -755,8 +753,8 @@ pub const NodeTypeAnalyzer = struct {
                         .Structure => |structure_type| structure_type,
                         else => unreachable,
                     };
-                    const function_symbol_id = structure_type.getFunctionSymbolId(&environment.resolved_program.symbol_table, member_name) orelse {
-                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, structure_type.name });
+                    const function_symbol_id = structure_type.getFunctionSymbolId(&self.resolved_program.symbol_table, member_name) orelse {
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "no function named '{s}' exists on structure type '{s}'", .{ member_name, self.resolved_program.symbol_table.getSymbol(structure_type.symbol_id).name });
                         return error.DiagnosticsEmitted;
                     };
 
@@ -774,7 +772,6 @@ pub const NodeTypeAnalyzer = struct {
                         union_type_id,
                         member_expression.member_name_token,
                         parent_node_expectation,
-                        environment,
                     );
                 },
                 .Binding => return self.checkInstanceMemberExpressionNode(
@@ -801,7 +798,6 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         implicit_member_expression: *const ast.ImplicitMemberExpression,
         parent_node_expectation: ParentNodeExpectation,
-        environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const expected_type_id = parent_node_expectation.type_id orelse {
             try self.diagnostic_store.emitErrorFromToken(
@@ -827,7 +823,6 @@ pub const NodeTypeAnalyzer = struct {
             expected_type_id,
             implicit_member_expression.member_name_token,
             parent_node_expectation,
-            environment,
         );
     }
 
@@ -839,11 +834,10 @@ pub const NodeTypeAnalyzer = struct {
         union_type_id: typing.TypeId,
         member_name_token: lexing.Token,
         parent_node_expectation: ParentNodeExpectation,
-        environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const member_name = member_name_token.kind.Identifier;
         const union_type = self.type_store.getType(union_type_id).Union;
-        const union_symbol = environment.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
+        const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
         const union_symbol_information = union_symbol.kind.Union;
 
         for (union_symbol_information.cases, 0..) |union_case, case_index| {
@@ -861,7 +855,7 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
-            const function_symbol = environment.resolved_program.symbol_table.getSymbol(function_symbol_id);
+            const function_symbol = self.resolved_program.symbol_table.getSymbol(function_symbol_id);
             if (!std.mem.eql(u8, function_symbol.name, member_name)) continue;
 
             self.recordMemberAccess(node_id, .UnionTypeFunctionAccess);
@@ -894,7 +888,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, structure_type.fields[@intCast(structure_field_index)].type_id);
                 }
 
-                const function_symbol_id = structure_type.getFunctionSymbolId(&environment.resolved_program.symbol_table, member_name);
+                const function_symbol_id = structure_type.getFunctionSymbolId(&self.resolved_program.symbol_table, member_name);
                 if (function_symbol_id) |structure_function_symbol_id| {
                     // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                     const bound_function_type_id = try self.bindInstanceMethodFunctionType(
@@ -909,7 +903,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, bound_function_type_id);
                 }
 
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "type '{s}' has no member named '{s}'", .{ structure_type.name, member_name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, member_expression.member_name_token, "type '{s}' has no member named '{s}'", .{ self.resolved_program.symbol_table.getSymbol(structure_type.symbol_id).name, member_name });
                 return error.DiagnosticsEmitted;
             },
             .Array => {
@@ -965,10 +959,10 @@ pub const NodeTypeAnalyzer = struct {
                 return error.DiagnosticsEmitted;
             },
             .Union => |union_type| {
-                const union_symbol = environment.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
+                const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
                 const union_symbol_information = union_symbol.kind.Union;
                 for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
-                    const function_symbol = environment.resolved_program.symbol_table.getSymbol(function_symbol_id);
+                    const function_symbol = self.resolved_program.symbol_table.getSymbol(function_symbol_id);
                     if (std.mem.eql(u8, function_symbol.name, member_name)) {
                         // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                         const bound_function_type_id = try self.bindInstanceMethodFunctionType(
@@ -1176,10 +1170,9 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node_id: ast.NodeId,
         identifier_token: lexing.Token,
-        environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        const symbol = environment.resolved_program.symbol_table.getSymbol(symbol_id);
+        const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
+        const symbol = self.resolved_program.symbol_table.getSymbol(symbol_id);
         switch (symbol.kind) {
             .Binding, .Function => {},
             // A type name is only valid as the base of a member expression or in a qualified structure literal. Both are
@@ -1324,10 +1317,10 @@ pub const NodeTypeAnalyzer = struct {
         function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
     ) TypeError!void {
-        const function_symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_definition_node_id).?;
-        const function_information = self.getFunctionSymbolInformation(function_symbol_id, environment.resolved_program);
+        const function_symbol_id = self.resolved_program.symbol_id_by_node_id.get(function_definition_node_id).?;
+        const function_information = self.getFunctionSymbolInformation(function_symbol_id);
         for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
-            const declared_type_reference = switch (environment.resolved_program.symbol_table.getSymbol(parameter_symbol_id).kind) {
+            const declared_type_reference = switch (self.resolved_program.symbol_table.getSymbol(parameter_symbol_id).kind) {
                 .Binding => |binding_information| binding_information.declared_type_reference orelse unreachable,
                 else => unreachable,
             };
@@ -1348,8 +1341,8 @@ pub const NodeTypeAnalyzer = struct {
         function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
     ) TypeError!void {
-        const symbol_id = environment.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
-        const function_information = self.getFunctionSymbolInformation(symbol_id, environment.resolved_program);
+        const symbol_id = self.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
+        const function_information = self.getFunctionSymbolInformation(symbol_id);
         const function_return_type = self.resolveTypeReference(function_information.return_type_reference);
 
         const body_expression_type = try self.checkNode(
@@ -1358,7 +1351,7 @@ pub const NodeTypeAnalyzer = struct {
             environment.copyWithFunctionReturnType(function_return_type),
         );
 
-        const body_exit_behavior = environment.exit_behavior_by_node_id.get(
+        const body_exit_behavior = self.exit_behavior_by_node_id.get(
             function_definition.body_expression.id,
         ) orelse unreachable;
         switch (body_exit_behavior) {
@@ -1400,10 +1393,8 @@ pub const NodeTypeAnalyzer = struct {
     fn getFunctionSymbolInformation(
         self: *const @This(),
         function_symbol_id: symbols.SymbolId,
-        resolved_program: *const symbols.ResolvedProgram,
     ) symbols.FunctionSymbolInformation {
-        _ = self;
-        return switch (resolved_program.symbol_table.getSymbol(function_symbol_id).kind) {
+        return switch (self.resolved_program.symbol_table.getSymbol(function_symbol_id).kind) {
             .Function => |function_information| function_information,
             else => unreachable,
         };

@@ -452,7 +452,7 @@ test "NodeTypeAnalyzer > analyzeProgram > unions: reports a mismatch at the decl
 
     try expect(result).toBeError(error.DiagnosticsEmitted);
     try expect(fixture.diagnostic_store.items()).toMatch(.{
-        .{ .severity = .@"error", .message = "declaration 'result' expects tagged union, found int" },
+        .{ .severity = .@"error", .message = "declaration 'result' expects Result, found int" },
     });
 }
 
@@ -519,7 +519,7 @@ test "NodeTypeAnalyzer > analyzeProgram > unions: rejects an instance method cal
 
     try expect(result).toBeError(error.DiagnosticsEmitted);
     try expect(fixture.diagnostic_store.items()).toMatch(.{
-        .{ .severity = .@"error", .message = "instance method receiver expects int, found tagged union" },
+        .{ .severity = .@"error", .message = "instance method receiver expects int, found Result" },
     });
 }
 

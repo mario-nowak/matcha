@@ -30,14 +30,14 @@ pub const Type = union(TypeKind) {
 
     UnionConstructor: UnionConstructor,
 
-    pub fn name(self: @This(), store: *const TypeStore, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn name(self: @This(), store: *const TypeStore, symbol_table: *const symbols.SymbolTable, allocator: std.mem.Allocator) ![]const u8 {
         return switch (self) {
             .Unit => allocator.dupe(u8, "unit"),
             .Boolean => allocator.dupe(u8, "boolean"),
             .Integer => allocator.dupe(u8, "int"),
             .String => allocator.dupe(u8, "string"),
-            .Structure => |structure_type| allocator.dupe(u8, structure_type.name),
-            .Array => |element_type_id| std.fmt.allocPrint(allocator, "{s}[]", .{try store.getType(element_type_id).name(store, allocator)}),
+            .Structure => |structure_type| allocator.dupe(u8, symbol_table.getSymbol(structure_type.symbol_id).name),
+            .Array => |element_type_id| std.fmt.allocPrint(allocator, "{s}[]", .{try store.getType(element_type_id).name(store, symbol_table, allocator)}),
             .Function => |function_type| {
                 var parameter_text = std.ArrayList(u8){};
                 defer parameter_text.deinit(allocator);
@@ -45,15 +45,15 @@ pub const Type = union(TypeKind) {
                     if (index > 0) {
                         try parameter_text.appendSlice(allocator, ", ");
                     }
-                    try parameter_text.appendSlice(allocator, try store.getType(parameter_type_id).name(store, allocator));
+                    try parameter_text.appendSlice(allocator, try store.getType(parameter_type_id).name(store, symbol_table, allocator));
                 }
                 return std.fmt.allocPrint(
                     allocator,
                     "function taking ({s}) and returning {s}",
-                    .{ parameter_text.items, try store.getType(function_type.return_type_id).name(store, allocator) },
+                    .{ parameter_text.items, try store.getType(function_type.return_type_id).name(store, symbol_table, allocator) },
                 );
             },
-            .Union => allocator.dupe(u8, "tagged union"),
+            .Union => |union_type| allocator.dupe(u8, symbol_table.getSymbol(union_type.symbol_id).name),
             .UnionConstructor => allocator.dupe(u8, "union constructor"),
         };
     }
@@ -187,10 +187,7 @@ pub const TypeStore = struct {
 
 pub const StructureType = struct {
     symbol_id: symbols.SymbolId,
-    // This seems to be unnecessary except for diagnostics but this could be inferred from the symbol table
-    name: []const u8,
     fields: []const StructureTypeField,
-    // This also exists on the symbol, seems unnecessary
     function_symbol_ids: []const symbols.SymbolId,
 
     pub fn getFieldIndex(self: @This(), field_name: []const u8) ?u32 {
