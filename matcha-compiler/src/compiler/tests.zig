@@ -7,6 +7,7 @@ test {
     _ = @import("semantic_analysis/control_flow/structural_validator.test.zig");
     _ = @import("semantic_analysis/control_flow/exit_behavior_analyzer.test.zig");
     _ = @import("semantic_analysis/name_resolution/name_resolver.test.zig");
+    _ = @import("semantic_analysis/type_checking/node_type_analyzer.test.zig");
     _ = @import("semantic_analysis/semantic_analyzer.test.zig");
     _ = @import("llvm_codegen/lowering/call_lowerer.test.zig");
     _ = @import("llvm_codegen/lowering/member_access_lowerer.test.zig");

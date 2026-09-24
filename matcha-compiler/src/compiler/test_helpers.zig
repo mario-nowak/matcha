@@ -65,12 +65,7 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
     defer diagnostic_store.deinit();
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(allocator, &diagnostic_store);
-    const type_seeder = semantic_analysis.type_checking.TypeSeeder.init();
     const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(allocator, &diagnostic_store);
-    const type_checker = semantic_analysis.type_checking.TypeChecker.init(
-        type_seeder,
-        node_type_analyzer,
-    );
     const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(&diagnostic_store);
     const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(allocator, &diagnostic_store);
     const control_flow_validator = semantic_analysis.control_flow_validation.ControlFlowValidator.init(
@@ -80,7 +75,7 @@ pub fn analyzeProgram(source: []const u8) !AnalyzedProgram {
     const runtime_representation_analyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer.init(allocator);
     var analyzer = semantic_analysis.SemanticAnalyzer.init(
         name_resolver,
-        type_checker,
+        node_type_analyzer,
         control_flow_validator,
         runtime_representation_analyzer,
     );

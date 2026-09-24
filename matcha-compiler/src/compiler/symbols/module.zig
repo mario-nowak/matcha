@@ -39,6 +39,25 @@ pub const SymbolKind = union(enum) {
 
 pub const SymbolKindTag = std.meta.Tag(SymbolKind);
 
+pub const SymbolCreationPayload = struct {
+    name: []const u8,
+    declared_at: ?lexing.Token,
+    kind: SymbolKind,
+};
+
+pub const PreliminarySymbolCreationPayload = struct {
+    name: []const u8,
+    declared_at: ?lexing.Token,
+    kind: SymbolKindTag,
+};
+
+pub const PreliminarySymbol = struct {
+    id: SymbolId,
+    name: []const u8,
+    declared_at: ?lexing.Token,
+    kind: SymbolKindTag,
+};
+
 pub const BindingSymbolInformation = struct {
     binding_mutability: BindingMutability,
     declared_type_reference: ?ResolvedTypeReference = null,
@@ -55,22 +74,19 @@ pub const StructureSymbolInformation = struct {
     function_symbol_ids: []const SymbolId,
 };
 
+pub const ResolvedStructureField = struct {
+    name: []const u8,
+    type_reference: ResolvedTypeReference,
+};
+
 pub const UnionSymbolInformation = struct {
     cases: []const ResolvedUnionCase,
     function_symbol_ids: []const SymbolId,
 };
 
-pub const PreliminarySymbolCreationPayload = struct {
+pub const ResolvedUnionCase = struct {
     name: []const u8,
-    declared_at: ?lexing.Token,
-    kind: SymbolKindTag,
-};
-
-pub const PreliminarySymbol = struct {
-    id: SymbolId,
-    name: []const u8,
-    declared_at: ?lexing.Token,
-    kind: SymbolKindTag,
+    type_reference: ResolvedTypeReference,
 };
 
 pub const FunctionImplementationKind = union(enum) {
@@ -189,12 +205,6 @@ pub const SymbolTable = struct {
     }
 };
 
-pub const SymbolCreationPayload = struct {
-    name: []const u8,
-    declared_at: ?lexing.Token,
-    kind: SymbolKind,
-};
-
 pub const ResolvedTypeReference = union(enum) {
     Builtin: BuiltinType,
     Symbol: SymbolId,
@@ -206,16 +216,6 @@ pub const BuiltinType = enum {
     Boolean,
     Integer,
     String,
-};
-
-pub const ResolvedStructureField = struct {
-    name: []const u8,
-    type_reference: ResolvedTypeReference,
-};
-
-pub const ResolvedUnionCase = struct {
-    name: []const u8,
-    type_reference: ResolvedTypeReference,
 };
 
 pub const SymbolIdByNodeId = std.AutoHashMap(ast.NodeId, SymbolId);

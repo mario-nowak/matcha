@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
 const type_expressions = @import("type_expressions");
 const control_flow_types = @import("control_flow_types.zig");
@@ -58,7 +59,7 @@ pub const ExitBehaviorAnalyzer = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: anytype, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: lexing.Token, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {
@@ -125,8 +126,14 @@ pub const ExitBehaviorAnalyzer = struct {
         }
 
         if (block.result) |result_node| {
+            // A result expression that terminates on every path, e.g. an if-expression whose branches all return,
+            // terminates the block as well.
+            const result_behavior = try self.validateTerminatesWithValue(result_node);
+            if (result_behavior == .Terminates) {
+                return self.markNodeExitBehavior(node, .Terminates);
+            }
             _ = self.markNodeExitBehavior(node, .FallsThroughWithValue);
-            return self.validateTerminatesWithValue(result_node);
+            return result_behavior;
         }
 
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);

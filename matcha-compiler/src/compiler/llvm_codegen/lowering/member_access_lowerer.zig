@@ -28,6 +28,7 @@ pub const MemberAccessLowerer = struct {
                 .StructureInstanceFieldAccess => |structure_field| .{
                     .StructureField = .{ .field_index = structure_field.field_index },
                 },
+                .UnionTypeFunctionAccess => unreachable,
                 .StructureInstanceMethodAccess => .StructureMethod,
                 .StructureTypeFunctionAccess => .StructureTypeFunction,
                 .ArrayInstanceMethodAccess => .ArrayMethod,

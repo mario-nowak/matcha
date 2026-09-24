@@ -63,7 +63,7 @@ test "invalid structure member access reports a semantic diagnostic" {
     try e2e.expectCompileDiagnostic(&result, "type 'Point' has no member named 'z'");
 }
 
-test "anonymous structure literal without contextual type reports a semantic diagnostic" {
+test "anonymous structure literal without expected type reports a semantic diagnostic" {
     const source =
         \\item Point = structure { x: int; y: int; };
         \\val point = .{ x = 1, y = 2 };
@@ -72,7 +72,7 @@ test "anonymous structure literal without contextual type reports a semantic dia
     var result = try e2e.runSource("anonymous_structure_literal_without_context.mt", source);
     defer result.deinit();
 
-    try e2e.expectCompileDiagnostic(&result, "cannot infer the type of an anonymous structure literal without a contextual type");
+    try e2e.expectCompileDiagnostic(&result, "cannot infer the type of an anonymous structure literal without an expected type");
 }
 
 test "undefined structure reports a semantic diagnostic" {

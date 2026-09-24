@@ -106,13 +106,14 @@ pub const RuntimeRepresentationAnalyzer = struct {
             .Integer,
             .String,
             .Function,
+            .UnionConstructor,
             => .Present,
             .Structure => |structure_type| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type),
             .Array => |element_type_id| block: {
                 _ = try self.resolveRuntimeRepresentationOfType(type_store, element_type_id);
                 break :block .Present;
             },
-            .TaggedUnion => unreachable,
+            .Union => unreachable,
         };
 
         try self.analysis_state_by_type_id.put(type_id, .{ .Resolved = runtime_representation });

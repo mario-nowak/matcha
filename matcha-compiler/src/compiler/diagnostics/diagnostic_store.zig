@@ -17,16 +17,20 @@ pub const DiagnosticStore = struct {
         self.diagnostics.deinit(self.allocator);
     }
 
-    pub fn emit(self: *@This(), diagnostic: Diagnostic) !void {
+    fn emit(self: *@This(), diagnostic: Diagnostic) !void {
         try self.diagnostics.append(self.allocator, diagnostic);
     }
 
-    pub fn emitErrorFromToken(self: *@This(), token: anytype, message: []const u8) !void {
+    pub fn emitErrorFromSpan(self: *@This(), span: DiagnosticSpan, message: []const u8) !void {
         try self.emit(.{
             .severity = .@"error",
             .message = message,
-            .span = DiagnosticSpan.fromToken(token),
+            .span = span,
         });
+    }
+
+    pub fn emitErrorFromToken(self: *@This(), token: anytype, message: []const u8) !void {
+        try self.emitErrorFromSpan(DiagnosticSpan.fromToken(token), message);
     }
 
     pub fn emitFormattedErrorFromToken(

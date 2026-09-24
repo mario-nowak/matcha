@@ -87,16 +87,12 @@ pub const Lexer = struct {
         len_in_source: u32,
         message: []const u8,
     ) LexError {
-        self.diagnostic_store.emit(.{
-            .severity = .@"error",
-            .message = message,
-            .span = .{
-                .line = line,
-                .column = column,
-                .byte_offset = offset_in_source,
-                .byte_len = len_in_source,
-            },
-        }) catch return error.OutOfMemory;
+        self.diagnostic_store.emitErrorFromSpan(.{
+            .line = line,
+            .column = column,
+            .byte_offset = offset_in_source,
+            .byte_len = len_in_source,
+        }, message) catch return error.OutOfMemory;
         return error.DiagnosticsEmitted;
     }
 
