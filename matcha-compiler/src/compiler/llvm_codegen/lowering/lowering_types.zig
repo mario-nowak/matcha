@@ -12,12 +12,14 @@ pub const BuiltinCallKind = enum {
     GetArguments,
 };
 
+pub const UserFunctionCall = struct {
+    function_symbol_id: symbols.SymbolId,
+    owning_structure_symbol_id: ?symbols.SymbolId = null,
+    receiver_node_id: ?NodeId = null,
+};
+
 pub const CallDispatchDecision = union(enum) {
-    UserFunction: struct {
-        function_symbol_id: symbols.SymbolId,
-        owning_structure_symbol_id: ?symbols.SymbolId = null,
-        receiver_node_id: ?NodeId = null,
-    },
+    UserFunction: UserFunctionCall,
     Builtin: BuiltinCallKind,
     ArrayMethod: typing.ArrayInstanceMethod,
     StringMethod: typing.StringInstanceMethod,

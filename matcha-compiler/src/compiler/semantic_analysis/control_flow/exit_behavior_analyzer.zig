@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
 const type_expressions = @import("type_expressions");
 const control_flow_types = @import("control_flow_types.zig");
@@ -58,7 +59,7 @@ pub const ExitBehaviorAnalyzer = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: anytype, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: lexing.Token, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {

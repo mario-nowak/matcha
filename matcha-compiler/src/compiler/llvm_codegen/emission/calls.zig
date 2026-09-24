@@ -84,7 +84,7 @@ pub fn emitCallExpression(
 
 fn emitUserFunctionCall(
     emitter: *NodeEmitter,
-    user_function: anytype,
+    user_function: lowering.lowering_types.UserFunctionCall,
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,

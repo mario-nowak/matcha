@@ -1,3 +1,4 @@
+const ast = @import("ast");
 const semantic_analysis = @import("semantic_analysis");
 const lowering_types = @import("lowering_types.zig");
 
@@ -22,7 +23,7 @@ pub const RuntimeRequirementsLowerer = struct {
     }
 
     fn analyzeNode(
-        node: anytype,
+        node: *const ast.Node,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         plan: *lowering_types.RuntimeRequirementsPlan,
     ) void {
@@ -106,7 +107,7 @@ pub const RuntimeRequirementsLowerer = struct {
     }
 
     fn analyzeItemDefinition(
-        item_definition: anytype,
+        item_definition: ast.ItemDefinition,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         plan: *lowering_types.RuntimeRequirementsPlan,
     ) void {
@@ -124,7 +125,7 @@ pub const RuntimeRequirementsLowerer = struct {
     }
 
     fn analyzeStructureFieldInitializers(
-        fields: anytype,
+        fields: []const ast.StructureFieldInitializer,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         plan: *lowering_types.RuntimeRequirementsPlan,
     ) void {
@@ -134,8 +135,8 @@ pub const RuntimeRequirementsLowerer = struct {
     }
 
     fn analyzeCallExpression(
-        node: anytype,
-        call_expression: anytype,
+        node: *const ast.Node,
+        call_expression: *const ast.CallExpression,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         plan: *lowering_types.RuntimeRequirementsPlan,
     ) void {
@@ -186,7 +187,7 @@ pub const RuntimeRequirementsLowerer = struct {
     }
 
     fn analyzeBinaryExpression(
-        binary_expression: anytype,
+        binary_expression: *const ast.BinaryExpression,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         plan: *lowering_types.RuntimeRequirementsPlan,
     ) void {
