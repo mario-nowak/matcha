@@ -731,7 +731,8 @@ pub const NodeTypeAnalyzer = struct {
                 const union_type_case = union_type.cases[union_constructor_type.case_index];
                 _ = try self.checkNodeAgainstExpectedType(&argument, union_type_case.type_id, .UnionCasePayload, environment);
 
-                // TODO: add comment
+                // Only the callee has the constructor type. Applying it yields a value of the union, so the call
+                // itself is typed as the union.
                 return self.recordNodeType(node_id, union_constructor_type.union_type_id);
             },
             else => {
