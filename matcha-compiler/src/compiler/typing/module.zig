@@ -224,13 +224,11 @@ pub const StructureTypeField = struct {
     type_id: TypeId,
 };
 
-// TODO: this currently seems superfluous, sus
 pub const UnionType = struct {
     symbol_id: symbols.SymbolId,
     cases: []UnionTypeCase,
 };
 
-// TODO: this currently seems superfluous, sus
 pub const UnionTypeCase = struct {
     type_id: TypeId,
     constructor_type_id: TypeId,
