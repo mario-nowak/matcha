@@ -214,9 +214,6 @@ pub const StructureType = struct {
 };
 
 pub const StructureTypeField = struct {
-    // Also exists on a resolved structure field. Not sure if it makes sense keeping this here
-    // But on the other hand I do need some kind of identification between the two.
-    // Could be a map or just an index
     name: []const u8,
     type_id: TypeId,
 };
