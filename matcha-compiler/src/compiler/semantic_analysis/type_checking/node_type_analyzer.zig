@@ -572,10 +572,7 @@ pub const NodeTypeAnalyzer = struct {
                 const type_id = try self.checkNode(node, .asExpression, environment);
                 const member_expression = self.member_access_by_node_id.get(node.id) orelse unreachable;
                 return switch (member_expression) {
-                    // TODO: not sure if this is correct honestly
-                    .UnionTypeCaseAccess,
-                    .StructureInstanceFieldAccess,
-                    => .{ .type_id = type_id },
+                    .StructureInstanceFieldAccess => .{ .type_id = type_id },
                     .StructureInstanceMethodAccess => {
                         try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure instance method");
                         return error.DiagnosticsEmitted;
