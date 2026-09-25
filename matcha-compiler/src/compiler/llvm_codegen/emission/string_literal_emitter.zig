@@ -29,7 +29,7 @@ pub const StringLiteralEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
     ) Register {
-        const string_literal_global = string_literal_pool.intern(node_id, content);
+        const string_literal_global = string_literal_pool.registerLiteral(node_id, content);
         const pointer_register = self.emitStringLiteralPointer(
             string_literal_global.name,
             string_literal_global.len,
@@ -54,8 +54,8 @@ pub const StringLiteralEmitter = struct {
         const pointer_register = function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = getelementptr inbounds [{d} x i8], [{d} x i8]* {s}, i64 0, i64 0",
-            .{ pointer_register, len, len, global_name },
+            "{s} = getelementptr inbounds [{d} x i8], ptr {s}, i64 0, i64 0",
+            .{ pointer_register, len, global_name },
         ) catch unreachable;
         builder.emitInstruction(pointer_instruction);
 
@@ -72,7 +72,7 @@ pub const StringLiteralEmitter = struct {
         const partial_string_register = function_symbol_generator.generateRegister();
         const partial_string_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %String undef, i8* {s}, 0",
+            "{s} = insertvalue %String undef, ptr {s}, 0",
             .{ partial_string_register, pointer_register },
         ) catch unreachable;
         builder.emitInstruction(partial_string_instruction);

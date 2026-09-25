@@ -1,61 +1,60 @@
 const std = @import("std");
-const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
+const expect = @import("testing").expect;
+const setupLowererFixture = @import("testing").setupLowererFixture;
 
-const StructureLayoutFieldIndexKind = llvm_codegen.lowering.lowering_types.StructureLayoutFieldIndexKind;
-const StructureLayoutLowerer = llvm_codegen.lowering.StructureLayoutLowerer;
+const lowering = llvm_codegen.lowering;
 
-fn expectFieldIndex(expected: ?u32, actual: StructureLayoutFieldIndexKind) !void {
-    if (expected) |expected_index| {
-        switch (actual) {
-            .Absent => return error.TestExpectedEqual,
-            .Index => |actual_index| try std.testing.expectEqual(expected_index, actual_index),
+pub const StructureLayoutLowerer = struct {
+    pub const lower = struct {
+        test "omits unit fields from the field indices" {
+            const source =
+                \\item Mixed = structure { first: int; erased: unit; last: string; };
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.StructureLayoutLowerer, &arena, source);
+            const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{
+                .{ .Index = 0 },
+                .Absent,
+                .{ .Index = 1 },
+            } } });
         }
-    } else {
-        switch (actual) {
-            .Absent => {},
-            .Index => return error.TestExpectedEqual,
+
+        test "keeps a field of a structure with only unit fields" {
+            const source =
+                \\item Empty = structure { value: unit; };
+                \\item Outer = structure { empty: Empty; };
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.StructureLayoutLowerer, &arena, source);
+            const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
+            const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{.{ .Index = 0 }} } });
         }
-    }
-}
 
-test "structure layout lowering erases unit fields but retains structure fields" {
-    const source =
-        \\item UnitOnly = structure {
-        \\    first: unit;
-        \\    second: unit;
-        \\};
-        \\item Mixed = structure {
-        \\    first: int;
-        \\    erased: unit;
-        \\    nested: UnitOnly;
-        \\    last: string;
-        \\};
-    ;
+        test "gives a structure with only unit fields no layout" {
+            const source =
+                \\item Empty = structure { first: unit; second: unit; };
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.StructureLayoutLowerer, &arena, source);
+            const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
 
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = StructureLayoutLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-    const layouts = lowerer.lower(&analyzed.typed_program);
-    const unit_only_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[0].id).?;
-    const unit_only_type_id = analyzed.typed_program.type_id_by_symbol_id.get(unit_only_symbol_id).?;
-    const mixed_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
-    const mixed_type_id = analyzed.typed_program.type_id_by_symbol_id.get(mixed_symbol_id).?;
-
-    switch (layouts.get(unit_only_type_id).?) {
-        .Absent => {},
-        .Present => return error.TestExpectedEqual,
-    }
-
-    const mixed_layout = switch (layouts.get(mixed_type_id).?) {
-        .Absent => return error.TestExpectedEqual,
-        .Present => |layout| layout,
+            try expect(layouts.get(structure_type_id).?).toMatch(.Absent);
+        }
     };
-    try std.testing.expectEqual(@as(usize, 4), mixed_layout.field_index_kind_by_definition_index.len);
-    try expectFieldIndex(0, mixed_layout.field_index_kind_by_definition_index[0]);
-    try expectFieldIndex(null, mixed_layout.field_index_kind_by_definition_index[1]);
-    try expectFieldIndex(1, mixed_layout.field_index_kind_by_definition_index[2]);
-    try expectFieldIndex(2, mixed_layout.field_index_kind_by_definition_index[3]);
-}
+};

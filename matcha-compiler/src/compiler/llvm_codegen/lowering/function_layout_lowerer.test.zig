@@ -1,75 +1,94 @@
 const std = @import("std");
-const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
-const symbols = @import("symbols");
+const expect = @import("testing").expect;
+const setupLowererFixture = @import("testing").setupLowererFixture;
 
-const FunctionLayout = llvm_codegen.lowering.lowering_types.FunctionLayout;
-const FunctionLayoutLowerer = llvm_codegen.lowering.FunctionLayoutLowerer;
-const FunctionLayoutParameterIndexKind = llvm_codegen.lowering.lowering_types.FunctionLayoutParameterIndexKind;
+const lowering = llvm_codegen.lowering;
 
-fn expectParameterIndex(expected: ?u32, actual: FunctionLayoutParameterIndexKind) !void {
-    if (expected) |expected_index| {
-        switch (actual) {
-            .Absent => return error.TestExpectedEqual,
-            .Index => |actual_index| try std.testing.expectEqual(expected_index, actual_index),
+pub const FunctionLayoutLowerer = struct {
+    pub const lower = struct {
+        test "omits unit parameters from the parameter indices" {
+            const source =
+                \\item select(erased: unit, value: int): int = value;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{
+                .Absent,
+                .{ .Index = 0 },
+            } });
         }
-    } else {
-        switch (actual) {
-            .Absent => {},
-            .Index => return error.TestExpectedEqual,
+
+        test "keeps a parameter of a structure with only unit fields" {
+            const source =
+                \\item Empty = structure { value: unit; };
+                \\item keep(empty: Empty): int = 1;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{.{ .Index = 0 }} });
         }
-    }
-}
 
-fn expectFunctionLayout(
-    layout: FunctionLayout,
-    expected_parameter_indices: []const ?u32,
-    expected_return_type_value_kind: llvm_codegen.lowering.lowering_types.FunctionLayoutReturnTypeValueKind,
-) !void {
-    try std.testing.expectEqual(expected_parameter_indices.len, layout.parameter_index_kind_by_definition_index.len);
-    for (expected_parameter_indices, layout.parameter_index_kind_by_definition_index) |expected, actual| {
-        try expectParameterIndex(expected, actual);
-    }
-    try std.testing.expectEqual(expected_return_type_value_kind, layout.return_type_value_kind);
-}
+        test "keeps the receiver of a structure method as the first parameter" {
+            const source =
+                \\item Point = structure {
+                \\    x: int;
+                \\
+                \\    item shifted(self: Point, erased: unit, offset: int): int = offset;
+                \\};
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const method_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
 
-fn statementSymbolId(analyzed: *const helpers.AnalyzedProgram, statement_index: usize) symbols.SymbolId {
-    return analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[statement_index].id).?;
-}
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-test "function layout lowering erases unit parameters and returns but retains structure values" {
-    const source =
-        \\item UnitOnly = structure {
-        \\    field: unit;
-        \\
-        \\    item method(self: UnitOnly, erased: unit, value: int): UnitOnly = .{
-        \\        field = erased,
-        \\    };
-        \\};
-        \\item select(first: unit, value: int, nested: UnitOnly, suffix: string): UnitOnly = .{
-        \\    field = first,
-        \\};
-        \\item onlyErased(first: unit, second: unit): int = 42;
-        \\item unitReturn(value: UnitOnly): unit = unit;
-    ;
+            try expect(layouts.get(method_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{
+                .{ .Index = 0 },
+                .Absent,
+                .{ .Index = 1 },
+            } });
+        }
 
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = FunctionLayoutLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
+        test "omits the return value when the function returns unit" {
+            const source =
+                \\item nothing(): unit = unit;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
 
-    const layouts = lowerer.lower(&analyzed.typed_program);
-    const unit_only_symbol_id = statementSymbolId(&analyzed, 0);
-    const structure_information = switch (analyzed.typed_program.resolved_program.symbol_table.getSymbol(unit_only_symbol_id).kind) {
-        .Structure => |structure_information| structure_information,
-        else => unreachable,
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .return_type_value_kind = .Absent });
+        }
+
+        test "keeps the return value of a structure with only unit fields" {
+            const source =
+                \\item Empty = structure { value: unit; };
+                \\item make(): Empty = Empty { value = unit };
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .return_type_value_kind = .Present });
+        }
     };
-    const method_symbol_id = structure_information.function_symbol_ids[0];
-    const select_symbol_id = statementSymbolId(&analyzed, 1);
-    const only_erased_symbol_id = statementSymbolId(&analyzed, 2);
-
-    try expectFunctionLayout(layouts.get(method_symbol_id).?, &.{ 0, null, 1 }, .Present);
-    try expectFunctionLayout(layouts.get(select_symbol_id).?, &.{ null, 0, 1, 2 }, .Present);
-    try expectFunctionLayout(layouts.get(only_erased_symbol_id).?, &.{ null, null }, .Present);
-    try expectFunctionLayout(layouts.get(statementSymbolId(&analyzed, 3)).?, &.{0}, .Absent);
-}
+};

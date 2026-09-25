@@ -23,7 +23,7 @@ pub const FunctionEmitter = struct {
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     symbol_generator: *SymbolGenerator,
-    runtime_call_emitter: *const RuntimeCallEmitter,
+    runtime_call_emitter: *RuntimeCallEmitter,
     node_emitter: *NodeEmitter,
 
     pub fn init(
@@ -31,7 +31,7 @@ pub const FunctionEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
         symbol_generator: *SymbolGenerator,
-        runtime_call_emitter: *const RuntimeCallEmitter,
+        runtime_call_emitter: *RuntimeCallEmitter,
         node_emitter: *NodeEmitter,
     ) @This() {
         return .{
@@ -54,6 +54,8 @@ pub const FunctionEmitter = struct {
         var environment = Environment.init(self.allocator, null, lowered_program.analyzed_program.type_store.integer_type_id);
         defer environment.deinit();
 
+        // Boehm GC asks portable programs to initialize it at start-up, before the first allocation.
+        self.runtime_call_emitter.emitInitiateGarbageCollectorCall(self.function_ir_builder);
         self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {

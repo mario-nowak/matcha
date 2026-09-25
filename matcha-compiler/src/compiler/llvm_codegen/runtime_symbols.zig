@@ -2,6 +2,7 @@ pub const runtime_print_int_function_name = "matcha_print_int";
 pub const runtime_print_string_function_name = "matcha_print_string";
 pub const runtime_read_file_function_name = "matcha_read_file";
 pub const runtime_read_line_function_name = "matcha_read_line";
+pub const runtime_initiate_garbage_collector_function_name = "matcha_initiate_garbage_collector";
 pub const runtime_init_arguments_function_name = "matcha_init_arguments";
 pub const runtime_get_arguments_function_name = "matcha_get_arguments";
 pub const runtime_string_concatenate_function_name = "matcha_string_concatenate";

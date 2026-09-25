@@ -11,3 +11,4 @@ pub const StringLiteralGlobal = @import("string_literal_pool.zig").StringLiteral
 pub const StringLiteralPool = @import("string_literal_pool.zig").StringLiteralPool;
 pub const StringLiteralEmitter = @import("string_literal_emitter.zig").StringLiteralEmitter;
 pub const RuntimeCallEmitter = @import("runtime_call_emitter.zig").RuntimeCallEmitter;
+pub const RuntimeStringParts = @import("runtime_call_emitter.zig").RuntimeStringParts;

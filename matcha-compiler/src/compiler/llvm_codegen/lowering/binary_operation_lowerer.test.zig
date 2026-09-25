@@ -1,43 +1,80 @@
 const std = @import("std");
-const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
-const BinaryOperationLowerer = llvm_codegen.lowering.BinaryOperationLowerer;
+const expect = @import("testing").expect;
+const setupLowererFixture = @import("testing").setupLowererFixture;
 
-const TestError = helpers.TestError;
-const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
+const lowering = llvm_codegen.lowering;
 
-test "binary operation lowering records primitive and runtime-backed strategies" {
-    const source =
-        \\val sum = 1 + 2;
-        \\val text = "a" + "b";
-        \\val same = text == "ab";
-        \\val different = text != "c";
-    ;
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = BinaryOperationLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
+pub const BinaryOperationLowerer = struct {
+    pub const lower = struct {
+        test "lowers integer addition to a primitive operation" {
+            const source =
+                \\val sum = 1 + 2;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-    const decisions = lowerer.lower(&analyzed.typed_program);
-    const sum_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[0]);
-    const text_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const same_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const different_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
 
-    switch (decisions.get(sum_declaration.value.id).?) {
-        .PrimitiveOperation => |primitive_operation| try std.testing.expectEqual(.Add, primitive_operation),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(text_declaration.value.id).?) {
-        .StringConcatenate => {},
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(same_declaration.value.id).?) {
-        .StringCompareEqual => {},
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(different_declaration.value.id).?) {
-        .StringCompareNotEqual => {},
-        else => return TestError.UnexpectedNodeKind,
-    }
-}
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Add });
+        }
+
+        test "lowers integer equality to a primitive operation" {
+            const source =
+                \\val same = 1 == 2;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
+        }
+
+        test "lowers string addition to a runtime concatenation" {
+            const source =
+                \\val text = "a" + "b";
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.StringConcatenate);
+        }
+
+        test "lowers string equality to a runtime equality comparison" {
+            const source =
+                \\val same = "a" == "b";
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareEqual);
+        }
+
+        test "lowers string inequality to a runtime inequality comparison" {
+            const source =
+                \\val different = "a" != "b";
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareNotEqual);
+        }
+    };
+};

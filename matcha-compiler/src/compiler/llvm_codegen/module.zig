@@ -8,6 +8,7 @@ pub const FunctionSymbolGenerator = emission.FunctionSymbolGenerator;
 pub const FunctionEmitter = emission.FunctionEmitter;
 pub const NodeEmitter = emission.NodeEmitter;
 pub const RuntimeCallEmitter = emission.RuntimeCallEmitter;
+pub const RuntimeStringParts = emission.RuntimeStringParts;
 pub const RuntimeSymbolRenderer = rendering.RuntimeSymbolRenderer;
 pub const RuntimeRequirements = rendering.RuntimeRequirements;
 pub const StringLiteralPool = emission.StringLiteralPool;

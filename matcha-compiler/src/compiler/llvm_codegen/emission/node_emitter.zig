@@ -83,7 +83,7 @@ pub const NodeEmitter = struct {
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     symbol_generator: *SymbolGenerator,
-    runtime_call_emitter: *const RuntimeCallEmitter,
+    runtime_call_emitter: *RuntimeCallEmitter,
     string_literal_pool: *StringLiteralPool,
     string_literal_emitter: *StringLiteralEmitter,
 
@@ -92,7 +92,7 @@ pub const NodeEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
         symbol_generator: *SymbolGenerator,
-        runtime_call_emitter: *const RuntimeCallEmitter,
+        runtime_call_emitter: *RuntimeCallEmitter,
         string_literal_pool: *StringLiteralPool,
         string_literal_emitter: *StringLiteralEmitter,
     ) @This() {

@@ -33,7 +33,7 @@ pub const StringLiteralPool = struct {
         self.string_literal_global_counter = 0;
     }
 
-    pub fn intern(
+    pub fn registerLiteral(
         self: *@This(),
         node_id: ast.NodeId,
         content: []const u8,
