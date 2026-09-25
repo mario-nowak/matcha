@@ -40,10 +40,7 @@ pub const RuntimeRequirementsLowerer = struct {
                 analyzeNode(if_statement.then_branch, analyzed_program, plan);
             },
             .ExpressionStatement => |expression_statement| analyzeNode(expression_statement.expression, analyzed_program, plan),
-            .AssignmentStatement => |assignment_statement| {
-                analyzeNode(assignment_statement.target, analyzed_program, plan);
-                analyzeNode(assignment_statement.value, analyzed_program, plan);
-            },
+            .AssignmentStatement => |assignment_statement| analyzeAssignmentStatement(&assignment_statement, analyzed_program, plan),
             .Loop => |loop| analyzeNode(loop.body_block, analyzed_program, plan),
             .LeaveStatement, .ContinueStatement, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
             .While => |while_statement| {
@@ -183,6 +180,31 @@ pub const RuntimeRequirementsLowerer = struct {
             .BuiltinReadLine => plan.read_line = true,
             .BuiltinGetArguments => plan.get_arguments = true,
             .UserDefined => {},
+        }
+    }
+
+    fn analyzeAssignmentStatement(
+        assignment_statement: *const ast.AssignmentStatement,
+        analyzed_program: *const semantic_analysis.AnalyzedProgram,
+        plan: *lowering_types.RuntimeRequirementsPlan,
+    ) void {
+        analyzeNode(assignment_statement.target, analyzed_program, plan);
+        analyzeNode(assignment_statement.value, analyzed_program, plan);
+
+        const compound_operator = switch (assignment_statement.operator) {
+            .Assign => return,
+            .Compound => |compound_operator| compound_operator,
+        };
+        const target_type_id = analyzed_program.type_id_by_node_id.get(assignment_statement.target.id) orelse {
+            return;
+        };
+        if (target_type_id != analyzed_program.type_store.string_type_id) {
+            return;
+        }
+
+        switch (compound_operator) {
+            .Add => plan.string_concatenate = true,
+            else => {},
         }
     }
 

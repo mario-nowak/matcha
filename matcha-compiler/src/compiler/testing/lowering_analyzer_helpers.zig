@@ -5,7 +5,7 @@ const lowering = llvm_codegen.lowering;
 
 const AnalyzedProgram = semantic_analysis.AnalyzedProgram;
 const LoweringAnalyzer = lowering.LoweringAnalyzer;
-const setupRuntimeRepresentationAnalyzerFixture = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixture;
+const setupAnalyzedProgram = @import("analyzed_program_helpers.zig").setupAnalyzedProgram;
 
 const LoweringAnalyzerFixture = struct {
     analyzed_program: *const AnalyzedProgram,
@@ -17,19 +17,7 @@ pub fn setupLoweringAnalyzerFixture(
     source: []const u8,
 ) !LoweringAnalyzerFixture {
     const allocator = arena.allocator();
-    const runtime_representation_analyzer_fixture = try setupRuntimeRepresentationAnalyzerFixture(arena, source);
-    const runtime_representation_result = try runtime_representation_analyzer_fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(
-        &runtime_representation_analyzer_fixture.type_check_result,
-    );
-
-    // The lowered program keeps a pointer to the analyzed program, so it must outlive this function.
-    const analyzed_program = try allocator.create(AnalyzedProgram);
-    analyzed_program.* = AnalyzedProgram.init(
-        runtime_representation_analyzer_fixture.resolved_program,
-        runtime_representation_analyzer_fixture.exit_behavior_by_node_id,
-        runtime_representation_analyzer_fixture.type_check_result,
-        runtime_representation_result,
-    );
+    const analyzed_program = try setupAnalyzedProgram(arena, source);
 
     const llvm_type_table_lowerer = try allocator.create(lowering.LlvmTypeTableLowerer);
     llvm_type_table_lowerer.* = lowering.LlvmTypeTableLowerer.init(allocator);
