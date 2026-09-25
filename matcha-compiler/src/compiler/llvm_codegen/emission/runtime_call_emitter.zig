@@ -22,6 +22,18 @@ pub const RuntimeCallEmitter = struct {
         _ = self;
     }
 
+    pub fn emitInitiateGarbageCollectorCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+    ) void {
+        const init_instruction = std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}()",
+            .{runtime_symbols.runtime_initiate_garbage_collector_function_name},
+        ) catch unreachable;
+        builder.emitInstruction(init_instruction);
+    }
+
     pub fn emitInitializeArgumentsCall(
         self: *const @This(),
         builder: *FunctionIrBuilder,
