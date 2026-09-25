@@ -11,7 +11,6 @@ comptime {
     _ = @import("semantic_analysis/name_resolution/name_resolver.test.zig");
     referenceAllTestsRecursive(@import("semantic_analysis/type_checking/node_type_analyzer.test.zig"));
     referenceAllTestsRecursive(@import("semantic_analysis/runtime_representation/runtime_representation_analyzer.test.zig"));
-    _ = @import("semantic_analysis/semantic_analyzer.test.zig");
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/call_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/member_access_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/place_lowerer.test.zig"));

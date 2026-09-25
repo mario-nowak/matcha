@@ -885,5 +885,195 @@ pub const NodeTypeAnalyzer = struct {
                 }
             };
         };
+
+        pub const literals = struct {
+            test "types the unit literal as unit" {
+                const source =
+                    \\val value = unit;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const unit_literal = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(unit_literal.id).?)).toMatch(.Unit);
+            }
+        };
+
+        pub const functions = struct {
+            test "types a parameter reference in a function body as the parameter type" {
+                const source =
+                    \\item identity(value: int): int = value;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const body_expression = fixture.resolved_program.program.statements[0].kind.ItemDefinition.definition.Function.body_expression;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(body_expression.id).?)).toMatch(.Integer);
+            }
+
+            test "types array parameters and returns in a function signature as arrays" {
+                const source =
+                    \\item identity(values: int[]): int[] = values;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const function_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(function_symbol_id).?)).toMatch(.{ .Function = .{ .parameter_type_ids = .{result.type_store.getArrayType(result.type_store.integer_type_id).?}, .return_type_id = result.type_store.getArrayType(result.type_store.integer_type_id).? } });
+            }
+        };
+
+        pub const structures = struct {
+            test "records a field access with its field index" {
+                const source =
+                    \\item Point = structure { x: int; y: int; };
+                    \\val point = Point { x = 1, y = 2 };
+                    \\val y = point.y;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const member_expression = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .StructureInstanceFieldAccess = .{ .field_index = 1 } });
+            }
+
+            test "types a field access as the field type" {
+                const source =
+                    \\item Named = structure { name: string; };
+                    \\val named = Named { name = "a" };
+                    \\val name = named.name;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const member_expression = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.String);
+            }
+
+            test "records a type function access with its structure and function" {
+                const source =
+                    \\item Point = structure {
+                    \\    x: int;
+                    \\
+                    \\    item origin(): Point = Point { x = 0 };
+                    \\};
+                    \\val point = Point.origin();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+                const origin_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
+                const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .StructureTypeFunctionAccess = .{ .structure_symbol_id = point_symbol_id, .function_symbol_id = origin_symbol_id } });
+            }
+
+            test "records a method access with its structure and function" {
+                const source =
+                    \\item Point = structure {
+                    \\    x: int;
+                    \\
+                    \\    item moved(self: Point): Point = self;
+                    \\};
+                    \\val point = Point { x = 1 };
+                    \\val moved = point.moved();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+                const moved_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
+                const callee = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .StructureInstanceMethodAccess = .{ .structure_symbol_id = point_symbol_id, .function_symbol_id = moved_symbol_id } });
+            }
+
+            test "types a method callee without its receiver parameter" {
+                const source =
+                    \\item Point = structure {
+                    \\    x: int;
+                    \\
+                    \\    item shifted(self: Point, offset: int): Point = self;
+                    \\};
+                    \\val point = Point { x = 1 };
+                    \\val shifted = point.shifted(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const callee = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(callee.id).?)).toMatch(.{ .Function = .{ .parameter_type_ids = .{result.type_store.integer_type_id} } });
+            }
+        };
+
+        pub const arrays = struct {
+            test "records the length of an array as an array field access" {
+                const source =
+                    \\val numbers = [1, 2];
+                    \\val length = numbers.length;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const member_expression = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .ArrayInstanceFieldAccess = .Length });
+            }
+
+            test "types the length of an array as an integer" {
+                const source =
+                    \\val numbers = [1, 2];
+                    \\val length = numbers.length;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const member_expression = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.Integer);
+            }
+
+            test "records append on an array as an array method access" {
+                const source =
+                    \\val numbers = [1];
+                    \\numbers.append(2);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const callee = fixture.resolved_program.program.statements[1].kind.ExpressionStatement.expression.kind.CallExpression.callee;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .ArrayInstanceMethodAccess = .Append });
+            }
+        };
     };
 };
