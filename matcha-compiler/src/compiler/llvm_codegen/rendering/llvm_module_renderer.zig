@@ -15,7 +15,7 @@ const StructureTypeRenderer = structure_type_renderer_module.StructureTypeRender
 const FunctionEmitter = emission.FunctionEmitter;
 
 // A string is a header containing a pointer to the data and the length.
-const llvm_string_type_definition = "%String = type { i8*, i64 }";
+const llvm_string_type_definition = "%String = type { ptr, i64 }";
 // An array is a header containing the length, capacity, and a pointer to the data.
 const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
 

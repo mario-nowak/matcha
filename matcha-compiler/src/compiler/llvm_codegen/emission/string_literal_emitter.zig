@@ -72,7 +72,7 @@ pub const StringLiteralEmitter = struct {
         const partial_string_register = function_symbol_generator.generateRegister();
         const partial_string_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %String undef, i8* {s}, 0",
+            "{s} = insertvalue %String undef, ptr {s}, 0",
             .{ partial_string_register, pointer_register },
         ) catch unreachable;
         builder.emitInstruction(partial_string_instruction);

@@ -28,7 +28,7 @@ pub const LlvmIrCodeGenerator = struct {
                 \\declare void @matcha_init_arguments(i32, ptr)
                 \\declare void @matcha_print_int(i64)
                 \\
-                \\%String = type { i8*, i64 }
+                \\%String = type { ptr, i64 }
                 \\%Array = type { i64, i64, ptr }
                 \\
                 \\%matcha_structure_0_Point = type { i64, i64 }
@@ -49,6 +49,7 @@ pub const LlvmIrCodeGenerator = struct {
                 \\
                 \\define i32 @main(i32 %argc, ptr %argv) {
                 \\entry:
+                \\    call void @matcha_initiate_garbage_collector()
                 \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                 \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
                 \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
@@ -419,7 +420,7 @@ test "llvm codegen lowers string literals to String globals and runtime printStr
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%String = type { i8*, i64 }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%String = type { ptr, i64 }") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.string_literal_0 = private unnamed_addr constant [5 x i8] c\"hello\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@.string_literal_1 = private unnamed_addr constant [5 x i8] c\"world\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "declare void @matcha_print_string(ptr, i64)") != null);
@@ -429,7 +430,7 @@ test "llvm codegen lowers string literals to String globals and runtime printStr
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "define %String @matcha_function_0_echo(%String %arg_0_x)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "alloca %String") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "load %String, ptr %.s_0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, i8* %.t_0, 0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "insertvalue %String undef, ptr %.t_0, 0") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call %String @matcha_function_0_echo(%String ") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@printf") == null);
 }

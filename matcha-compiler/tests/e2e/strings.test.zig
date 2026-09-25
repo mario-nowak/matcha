@@ -16,6 +16,17 @@ test "string concatenation, comparison, and length behave as expected" {
     try e2e.expectSuccessOutput(&result, "hello world\n1\n11\n");
 }
 
+test "string literal escapes print their decoded characters" {
+    const source =
+        \\printString("quote \" backslash \\ tab\tend\n");
+    ;
+
+    var result = try e2e.runSource("strings_escapes.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "quote \" backslash \\ tab\tend\n\n");
+}
+
 test "compound addition appends to a string variable" {
     const source =
         \\var text = "a";
