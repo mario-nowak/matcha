@@ -24,7 +24,13 @@ run = "zig fmt --check ."
 
 [tasks.test-compiler]
 description = "Run Matcha compiler tests"
-run = "zig build unit-test --summary all"
+usage = 'arg "[filter]..." var=#true help="Only run tests whose names match one of these filters"'
+# mise passes the filters as one shell-quoted string, so `eval` splits them back into arguments.
+run = '''
+eval "set -- $usage_filter"
+for filter in "$@"; do set -- "$@" "-Dtest-filter=$filter"; shift; done
+zig build unit-test --summary all "$@"
+'''
 
 [tasks.test]
 description = "Run all Matcha tests"

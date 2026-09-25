@@ -30,11 +30,7 @@ pub const SemanticAnalyzer = struct {
         const exit_behavior_by_node_id = try self.control_flow_validator.validateProgram(program);
         const resolved_program = try self.name_resolver.resolveProgram(program);
         const type_check_result = try self.node_type_analyzer.analyzeProgram(&resolved_program, exit_behavior_by_node_id);
-        const runtime_representation_result = try self.runtime_representation_analyzer.analyzeProgram(
-            &resolved_program,
-            exit_behavior_by_node_id,
-            &type_check_result,
-        );
+        const runtime_representation_result = try self.runtime_representation_analyzer.analyzeRuntimeRepresentations(&type_check_result);
 
         return analyzed_program_module.AnalyzedProgram.init(
             resolved_program,
