@@ -194,6 +194,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
+            .{ .name = "llvm_codegen", .module = llvm_codegen_module },
         },
     });
 

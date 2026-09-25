@@ -1,6 +1,7 @@
 const std = @import("std");
 const symbols = @import("symbols");
 const semantic_analysis = @import("semantic_analysis");
+const control_flow_validation = semantic_analysis.control_flow_validation;
 
 const TypeCheckResult = semantic_analysis.type_checking.TypeCheckResult;
 const RuntimeRepresentationAnalyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer;
@@ -8,6 +9,7 @@ const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").s
 
 const RuntimeRepresentationAnalyzerFixture = struct {
     resolved_program: symbols.ResolvedProgram,
+    exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     type_check_result: TypeCheckResult,
     runtime_representation_analyzer: *RuntimeRepresentationAnalyzer,
 };
@@ -27,6 +29,7 @@ pub fn setupRuntimeRepresentationAnalyzerFixture(
 
     return .{
         .resolved_program = node_type_analyzer_fixture.resolved_program,
+        .exit_behavior_by_node_id = node_type_analyzer_fixture.exit_behavior_by_node_id,
         .type_check_result = type_check_result,
         .runtime_representation_analyzer = runtime_representation_analyzer,
     };

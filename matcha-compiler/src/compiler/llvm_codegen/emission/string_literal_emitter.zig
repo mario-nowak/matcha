@@ -29,7 +29,7 @@ pub const StringLiteralEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
     ) Register {
-        const string_literal_global = string_literal_pool.intern(node_id, content);
+        const string_literal_global = string_literal_pool.registerLiteral(node_id, content);
         const pointer_register = self.emitStringLiteralPointer(
             string_literal_global.name,
             string_literal_global.len,

@@ -7,3 +7,5 @@ pub const setupExitBehaviorAnalyzerFixture = @import("exit_behavior_analyzer_hel
 pub const setupNameResolverFixture = @import("name_resolver_helpers.zig").setupNameResolverFixture;
 pub const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixture;
 pub const setupRuntimeRepresentationAnalyzerFixture = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixture;
+pub const setupLoweringAnalyzerFixture = @import("lowering_analyzer_helpers.zig").setupLoweringAnalyzerFixture;
+pub const setupStructureTypeRendererFixture = @import("structure_type_renderer_helpers.zig").setupStructureTypeRendererFixture;

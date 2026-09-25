@@ -168,7 +168,6 @@ test "llvm codegen erases unit fields parameters returns and storage" {
     );
     defer std.testing.allocator.free(llvm_ir);
 
-    try expectIrContains(llvm_ir, "Mixed = type { i64, ptr, %String }");
     try expectIrContains(llvm_ir, "_use(ptr %arg_0_nested, i64 %arg_1_value)");
     try expectIrContains(llvm_ir, "call ptr @matcha_function_");
     try expectIrContains(llvm_ir, "call ptr @matcha_allocate_atomic(i64 1)");
@@ -442,17 +441,6 @@ test "llvm codegen lowers getArguments to runtime-backed cloned array access" {
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "@matcha_arguments_cache = internal global ptr null") == null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call void @matcha_init_arguments(i32 %argc, ptr %argv)") != null);
     try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "call ptr @matcha_get_arguments()") != null);
-}
-
-test "llvm codegen emits structure definitions as payload types" {
-    const llvm_ir = try emit(
-        \\item Point = structure { x: int; y: int; };
-        \\item User = structure { name: string; friend: User; location: Point; };
-    );
-    defer std.testing.allocator.free(llvm_ir);
-
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_0_Point = type { i64, i64 }") != null);
-    try std.testing.expect(std.mem.indexOf(u8, llvm_ir, "%matcha_structure_1_User = type { %String, ptr, ptr }") != null);
 }
 
 test "llvm codegen lowers structure construction" {
