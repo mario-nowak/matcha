@@ -1,41 +1,56 @@
 const std = @import("std");
-const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
-const MemberAccessLowerer = llvm_codegen.lowering.MemberAccessLowerer;
+const expect = @import("testing").expect;
+const setupLowererFixture = @import("testing").setupLowererFixture;
 
-const TestError = helpers.TestError;
-const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
+const lowering = llvm_codegen.lowering;
 
-test "member access lowering records field and synthetic field targets" {
-    const source =
-        \\item Point = structure { x: int; y: int; };
-        \\var point = Point { x = 1, y = 2 };
-        \\val field = point.x;
-        \\val text = "hello";
-        \\val text_length = text.length;
-        \\val numbers = [1, 2, 3];
-        \\val array_length = numbers.length;
-    ;
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = MemberAccessLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
+pub const MemberAccessLowerer = struct {
+    pub const lower = struct {
+        test "lowers a structure field access to its field index" {
+            const source =
+                \\item Point = structure { x: int; y: int; };
+                \\val point = Point { x = 1, y = 2 };
+                \\val y = point.y;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
 
-    const decisions = lowerer.lower(&analyzed.typed_program);
-    const field_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const text_length_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
-    const array_length_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[6]);
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
 
-    switch (decisions.get(field_declaration.value.id).?) {
-        .StructureField => |structure_field| try std.testing.expectEqual(@as(u32, 0), structure_field.field_index),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(text_length_declaration.value.id).?) {
-        .StringLength => {},
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(array_length_declaration.value.id).?) {
-        .ArrayLength => {},
-        else => return TestError.UnexpectedNodeKind,
-    }
-}
+            try expect(decisions.get(member_expression.id).?).toMatch(.{ .StructureField = .{ .field_index = 1 } });
+        }
+
+        test "lowers the length of a string to a string length access" {
+            const source =
+                \\val text = "hello";
+                \\val length = text.length;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(member_expression.id).?).toMatch(.StringLength);
+        }
+
+        test "lowers the length of an array to an array length access" {
+            const source =
+                \\val numbers = [1, 2];
+                \\val length = numbers.length;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(member_expression.id).?).toMatch(.ArrayLength);
+        }
+    };
+};

@@ -1,142 +1,233 @@
 const std = @import("std");
-const ast = @import("ast");
-const helpers = @import("../../test_helpers.zig");
 const llvm_codegen = @import("llvm_codegen");
-const CallLowerer = llvm_codegen.lowering.CallLowerer;
+const expect = @import("testing").expect;
+const setupLowererFixture = @import("testing").setupLowererFixture;
 
-const TestError = helpers.TestError;
-const expectBindingDeclarationNode = helpers.expectBindingDeclarationNode;
-const expectCallExpressionNode = helpers.expectCallExpressionNode;
+const lowering = llvm_codegen.lowering;
 
-fn expectExpressionStatement(node: *const ast.Node) TestError!ast.ExpressionStatement {
-    return switch (node.kind) {
-        .ExpressionStatement => |expression_statement| expression_statement,
-        else => return TestError.UnexpectedNodeKind,
+pub const CallLowerer = struct {
+    pub const lower = struct {
+        pub const user_functions = struct {
+            test "lowers a call to a top-level function without owner and receiver" {
+                const source =
+                    \\item identity(value: int): int = value;
+                    \\val copied = identity(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const identity_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = identity_symbol_id,
+                    .owning_structure_symbol_id = null,
+                    .receiver_node_id = null,
+                } });
+            }
+
+            test "lowers a type function call with its structure as owner and without receiver" {
+                const source =
+                    \\item Point = structure {
+                    \\    x: int;
+                    \\
+                    \\    item origin(): Point = Point { x = 0 };
+                    \\};
+                    \\val point = Point.origin();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const origin_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = origin_symbol_id,
+                    .owning_structure_symbol_id = point_symbol_id,
+                    .receiver_node_id = null,
+                } });
+            }
+
+            test "lowers a method call with its structure as owner and its base as receiver" {
+                const source =
+                    \\item Point = structure {
+                    \\    x: int;
+                    \\
+                    \\    item moved(self: Point): Point = self;
+                    \\};
+                    \\val point = Point { x = 1 };
+                    \\val moved = point.moved();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const moved_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const receiver_node_id = call_expression.kind.CallExpression.callee.kind.MemberExpression.base.id;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = moved_symbol_id,
+                    .owning_structure_symbol_id = point_symbol_id,
+                    .receiver_node_id = receiver_node_id,
+                } });
+            }
+        };
+
+        pub const builtins = struct {
+            test "lowers printInt to a builtin call" {
+                const source =
+                    \\printInt(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.ExpressionStatement.expression;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .PrintInt });
+            }
+
+            test "lowers printString to a builtin call" {
+                const source =
+                    \\printString("hello");
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.ExpressionStatement.expression;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .PrintString });
+            }
+
+            test "lowers readFile to a builtin call" {
+                const source =
+                    \\val input = readFile("input.txt");
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .ReadFile });
+            }
+
+            test "lowers readLine to a builtin call" {
+                const source =
+                    \\val line = readLine();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .ReadLine });
+            }
+
+            test "lowers getArguments to a builtin call" {
+                const source =
+                    \\val arguments = getArguments();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .GetArguments });
+            }
+        };
+
+        pub const methods = struct {
+            test "lowers trim on a string to a string method call" {
+                const source =
+                    \\val text = " a ";
+                    \\val trimmed = text.trim();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .Trim });
+            }
+
+            test "lowers split on a string to a string method call" {
+                const source =
+                    \\val text = "a,b";
+                    \\val parts = text.split(",");
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .Split });
+            }
+
+            test "lowers toInt on a string to a string method call" {
+                const source =
+                    \\val text = "1";
+                    \\val number = text.toInt();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .ToInt });
+            }
+
+            test "lowers toString on an integer to an integer method call" {
+                const source =
+                    \\val number = 1;
+                    \\val text = number.toString();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .IntegerMethod = .ToString });
+            }
+
+            test "lowers append on an array to an array method call" {
+                const source =
+                    \\val numbers = [1];
+                    \\numbers.append(2);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.ExpressionStatement.expression;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .ArrayMethod = .Append });
+            }
+        };
     };
-}
-
-test "call lowering records direct builtin and structure call strategies" {
-    const source =
-        \\item identity(value: int): int = value;
-        \\item Point = structure {
-        \\    x: int;
-        \\
-        \\    item origin(): Point = Point { x = 0 };
-        \\    item moved(self: Point): Point = self;
-        \\};
-        \\val point = Point.origin();
-        \\val copied = identity(1);
-        \\val moved = point.moved();
-        \\printString("hello");
-    ;
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = CallLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
-
-    const decisions = lowerer.lower(&analyzed.typed_program);
-    const point_symbol_id = analyzed.typed_program.resolved_program.symbol_id_by_node_id.get(analyzed.parsed.program.statements[1].id).?;
-    const point_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
-    _ = try expectCallExpressionNode(point_declaration.value);
-    const copied_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
-    _ = try expectCallExpressionNode(copied_declaration.value);
-    const moved_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
-    const moved_call = try expectCallExpressionNode(moved_declaration.value);
-    const moved_callee = switch (moved_call.callee.kind) {
-        .MemberExpression => |member_expression| member_expression,
-        else => return TestError.UnexpectedNodeKind,
-    };
-    const print_statement = try expectExpressionStatement(&analyzed.parsed.program.statements[5]);
-    _ = try expectCallExpressionNode(print_statement.expression);
-
-    switch (decisions.get(point_declaration.value.id).?) {
-        .UserFunction => |user_function| {
-            try std.testing.expectEqual(point_symbol_id, user_function.owning_structure_symbol_id.?);
-            try std.testing.expect(user_function.receiver_node_id == null);
-        },
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(copied_declaration.value.id).?) {
-        .UserFunction => |user_function| {
-            try std.testing.expect(user_function.owning_structure_symbol_id == null);
-            try std.testing.expect(user_function.receiver_node_id == null);
-            const function_symbol = analyzed.typed_program.resolved_program.symbol_table.getSymbol(user_function.function_symbol_id);
-            try std.testing.expectEqualStrings("identity", function_symbol.name);
-        },
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(moved_declaration.value.id).?) {
-        .UserFunction => |user_function| {
-            try std.testing.expectEqual(point_symbol_id, user_function.owning_structure_symbol_id.?);
-            try std.testing.expectEqual(moved_callee.base.id, user_function.receiver_node_id.?);
-            const function_symbol = analyzed.typed_program.resolved_program.symbol_table.getSymbol(user_function.function_symbol_id);
-            try std.testing.expectEqualStrings("moved", function_symbol.name);
-        },
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(print_statement.expression.id).?) {
-        .Builtin => |builtin| try std.testing.expectEqual(.PrintString, builtin),
-        else => return TestError.UnexpectedNodeKind,
-    }
-}
-
-test "call lowering records array string integer and io helper strategies" {
-    const source =
-        \\val input = readFile("input.txt");
-        \\val trimmed = input.trim();
-        \\val parts = trimmed.split(",");
-        \\val first = parts[0].toInt();
-        \\val text = first.toString();
-        \\val line = readLine();
-        \\val args = getArguments();
-        \\val numbers = [1, 2, 3];
-        \\numbers.append(4);
-    ;
-    var analyzed = try helpers.analyzeProgram(source);
-    defer analyzed.deinit();
-    var lowerer = CallLowerer.init(std.testing.allocator);
-    defer lowerer.deinit();
-
-    const decisions = lowerer.lower(&analyzed.typed_program);
-    const input_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[0]);
-    const trimmed_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[1]);
-    const parts_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[2]);
-    const first_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[3]);
-    const text_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[4]);
-    const line_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[5]);
-    const args_declaration = try expectBindingDeclarationNode(&analyzed.parsed.program.statements[6]);
-    const append_statement = try expectExpressionStatement(&analyzed.parsed.program.statements[8]);
-
-    switch (decisions.get(input_declaration.value.id).?) {
-        .Builtin => |builtin| try std.testing.expectEqual(.ReadFile, builtin),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(trimmed_declaration.value.id).?) {
-        .StringMethod => |string_method| try std.testing.expectEqual(.Trim, string_method),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(parts_declaration.value.id).?) {
-        .StringMethod => |string_method| try std.testing.expectEqual(.Split, string_method),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(first_declaration.value.id).?) {
-        .StringMethod => |string_method| try std.testing.expectEqual(.ToInt, string_method),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(text_declaration.value.id).?) {
-        .IntegerMethod => |integer_method| try std.testing.expectEqual(.ToString, integer_method),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(line_declaration.value.id).?) {
-        .Builtin => |builtin| try std.testing.expectEqual(.ReadLine, builtin),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(args_declaration.value.id).?) {
-        .Builtin => |builtin| try std.testing.expectEqual(.GetArguments, builtin),
-        else => return TestError.UnexpectedNodeKind,
-    }
-    switch (decisions.get(append_statement.expression.id).?) {
-        .ArrayMethod => |array_method| try std.testing.expectEqual(.Append, array_method),
-        else => return TestError.UnexpectedNodeKind,
-    }
-}
+};

@@ -8,6 +8,7 @@ pub const setupNameResolverFixture = @import("name_resolver_helpers.zig").setupN
 pub const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixture;
 pub const setupRuntimeRepresentationAnalyzerFixture = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixture;
 pub const setupAnalyzedProgram = @import("analyzed_program_helpers.zig").setupAnalyzedProgram;
+pub const setupLowererFixture = @import("lowerer_helpers.zig").setupLowererFixture;
 pub const setupLoweringAnalyzerFixture = @import("lowering_analyzer_helpers.zig").setupLoweringAnalyzerFixture;
 pub const setupStructureTypeRendererFixture = @import("structure_type_renderer_helpers.zig").setupStructureTypeRendererFixture;
 pub const setupLlvmIrCodeGeneratorFixture = @import("llvm_ir_code_generator_helpers.zig").setupLlvmIrCodeGeneratorFixture;

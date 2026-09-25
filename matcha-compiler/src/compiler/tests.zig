@@ -12,12 +12,12 @@ comptime {
     referenceAllTestsRecursive(@import("semantic_analysis/type_checking/node_type_analyzer.test.zig"));
     referenceAllTestsRecursive(@import("semantic_analysis/runtime_representation/runtime_representation_analyzer.test.zig"));
     _ = @import("semantic_analysis/semantic_analyzer.test.zig");
-    _ = @import("llvm_codegen/lowering/call_lowerer.test.zig");
-    _ = @import("llvm_codegen/lowering/member_access_lowerer.test.zig");
-    _ = @import("llvm_codegen/lowering/place_lowerer.test.zig");
-    _ = @import("llvm_codegen/lowering/binary_operation_lowerer.test.zig");
-    _ = @import("llvm_codegen/lowering/structure_layout_lowerer.test.zig");
-    _ = @import("llvm_codegen/lowering/function_layout_lowerer.test.zig");
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/call_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/member_access_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/place_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/binary_operation_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/structure_layout_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/function_layout_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/structure_type_renderer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/string_literal_renderer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/runtime_symbol_renderer.test.zig"));
