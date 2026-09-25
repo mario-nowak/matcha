@@ -54,8 +54,8 @@ pub const StringLiteralEmitter = struct {
         const pointer_register = function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = getelementptr inbounds [{d} x i8], [{d} x i8]* {s}, i64 0, i64 0",
-            .{ pointer_register, len, len, global_name },
+            "{s} = getelementptr inbounds [{d} x i8], ptr {s}, i64 0, i64 0",
+            .{ pointer_register, len, global_name },
         ) catch unreachable;
         builder.emitInstruction(pointer_instruction);
 
