@@ -9,3 +9,4 @@ pub const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig
 pub const setupRuntimeRepresentationAnalyzerFixture = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixture;
 pub const setupLoweringAnalyzerFixture = @import("lowering_analyzer_helpers.zig").setupLoweringAnalyzerFixture;
 pub const setupStructureTypeRendererFixture = @import("structure_type_renderer_helpers.zig").setupStructureTypeRendererFixture;
+pub const setupLlvmIrCodeGeneratorFixture = @import("llvm_ir_code_generator_helpers.zig").setupLlvmIrCodeGeneratorFixture;

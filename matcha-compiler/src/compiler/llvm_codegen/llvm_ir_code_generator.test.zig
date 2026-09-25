@@ -2,6 +2,68 @@ const std = @import("std");
 const compiler = @import("compiler");
 const llvm_codegen = @import("llvm_codegen");
 const helpers = @import("../test_helpers.zig");
+const expect = @import("testing").expect;
+const setupLlvmIrCodeGeneratorFixture = @import("testing").setupLlvmIrCodeGeneratorFixture;
+
+pub const LlvmIrCodeGenerator = struct {
+    pub const generateLlvmIr = struct {
+        test "lowers a structure passed to a function and printed" {
+            const source =
+                \\item Point = structure { x: int; y: int; };
+                \\item sum(point: Point): int = point.x + point.y;
+                \\printInt(sum(Point { x = 1, y = 2 }));
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+            const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+            try expect(llvm_ir).toMatch(
+                \\target triple = "x86_64-unknown-linux-gnu"
+                \\
+                \\declare void @matcha_initiate_garbage_collector()
+                \\declare ptr @matcha_allocate(i64)
+                \\declare ptr @matcha_allocate_atomic(i64)
+                \\declare void @matcha_init_arguments(i32, ptr)
+                \\declare void @matcha_print_int(i64)
+                \\
+                \\%String = type { i8*, i64 }
+                \\%Array = type { i64, i64, ptr }
+                \\
+                \\%matcha_structure_0_Point = type { i64, i64 }
+                \\
+                \\define i64 @matcha_function_1_sum(ptr %arg_0_point) {
+                \\entry:
+                \\    %.s_0 = alloca ptr
+                \\    store ptr %arg_0_point, ptr %.s_0
+                \\    %.t_0 = load ptr, ptr %.s_0
+                \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                \\    %.t_2 = load i64, ptr %.t_1
+                \\    %.t_3 = load ptr, ptr %.s_0
+                \\    %.t_4 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 1
+                \\    %.t_5 = load i64, ptr %.t_4
+                \\    %.t_6 = add i64 %.t_2, %.t_5
+                \\    ret i64 %.t_6
+                \\}
+                \\
+                \\define i32 @main(i32 %argc, ptr %argv) {
+                \\entry:
+                \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
+                \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                \\    store i64 1, ptr %.t_1
+                \\    %.t_2 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1
+                \\    store i64 2, ptr %.t_2
+                \\    %.t_3 = call i64 @matcha_function_1_sum(ptr %.t_0)
+                \\    call void @matcha_print_int(i64 %.t_3)
+                \\    ret i32 0
+                \\}
+                \\
+            );
+        }
+    };
+};
 
 fn emit(source: []const u8) ![]const u8 {
     var analyzed = try helpers.analyzeProgram(source);
