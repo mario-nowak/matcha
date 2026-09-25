@@ -78,9 +78,7 @@ pub const FunctionIrBuilder = struct {
             self.allocator,
             \\define {s} @{s}({s}) {{
             \\entry:
-            \\{s}
-            \\{s}
-            \\}}
+            \\{s}{s}}}
         ,
             .{
                 return_llvm_ir_type,

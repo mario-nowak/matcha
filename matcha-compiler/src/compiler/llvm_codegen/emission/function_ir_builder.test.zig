@@ -18,10 +18,8 @@ pub const FunctionIrBuilder = struct {
                 \\define void @example() {
                 \\entry:
                 \\    %value = alloca i64
-                \\
                 \\    store i64 1, ptr %value
                 \\    ret void
-                \\
                 \\}
             );
         }
@@ -40,11 +38,9 @@ pub const FunctionIrBuilder = struct {
             try expect(rendered).toMatch(
                 \\define void @example() {
                 \\entry:
-                \\
                 \\    br label %next
                 \\next:
                 \\    ret void
-                \\
                 \\}
             );
         }
@@ -62,9 +58,7 @@ pub const FunctionIrBuilder = struct {
                 \\define void @example() {
                 \\entry:
                 \\    %value = alloca i64
-                \\
                 \\    ret void
-                \\
                 \\}
             );
         }
@@ -80,9 +74,7 @@ pub const FunctionIrBuilder = struct {
             try expect(rendered).toMatch(
                 \\define i64 @example(i64 %value) {
                 \\entry:
-                \\
                 \\    ret i64 %value
-                \\
                 \\}
             );
         }
@@ -102,9 +94,7 @@ pub const FunctionIrBuilder = struct {
             try expect(rendered).toMatch(
                 \\define void @example() {
                 \\entry:
-                \\
                 \\    ret void
-                \\
                 \\}
             );
         }
