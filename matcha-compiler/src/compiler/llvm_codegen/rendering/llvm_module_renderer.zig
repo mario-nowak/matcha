@@ -9,6 +9,7 @@ const emission = @import("emission");
 const structure_type_renderer_module = @import("structure_type_renderer.zig");
 
 const RuntimeSymbolRenderer = @import("runtime_symbol_renderer.zig").RuntimeSymbolRenderer;
+const RuntimeCallEmitter = emission.RuntimeCallEmitter;
 const StringLiteralPool = emission.StringLiteralPool;
 const StringLiteralRenderer = @import("string_literal_renderer.zig").StringLiteralRenderer;
 const StructureTypeRenderer = structure_type_renderer_module.StructureTypeRenderer;
@@ -28,6 +29,7 @@ pub const LlvmModuleRenderer = struct {
     allocator: std.mem.Allocator,
     target_triple: []const u8,
     function_emitter: *FunctionEmitter,
+    runtime_call_emitter: *RuntimeCallEmitter,
     runtime_symbol_renderer: *const RuntimeSymbolRenderer,
     string_literal_pool: *StringLiteralPool,
     string_literal_renderer: *StringLiteralRenderer,
@@ -38,6 +40,7 @@ pub const LlvmModuleRenderer = struct {
         allocator: std.mem.Allocator,
         target_triple: []const u8,
         function_emitter: *FunctionEmitter,
+        runtime_call_emitter: *RuntimeCallEmitter,
         runtime_symbol_renderer: *const RuntimeSymbolRenderer,
         string_literal_pool: *StringLiteralPool,
         string_literal_renderer: *StringLiteralRenderer,
@@ -47,6 +50,7 @@ pub const LlvmModuleRenderer = struct {
             .allocator = allocator,
             .target_triple = target_triple,
             .function_emitter = function_emitter,
+            .runtime_call_emitter = runtime_call_emitter,
             .runtime_symbol_renderer = runtime_symbol_renderer,
             .string_literal_pool = string_literal_pool,
             .string_literal_renderer = string_literal_renderer,
@@ -74,7 +78,6 @@ pub const LlvmModuleRenderer = struct {
             user_defined_functions.items,
             structure_method_functions.items,
             main_function_ir,
-            lowered_program,
         );
     }
 
@@ -111,11 +114,10 @@ pub const LlvmModuleRenderer = struct {
         user_defined_functions: []const []const u8,
         structure_method_functions: []const []const u8,
         main_function_ir: []const u8,
-        lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         var sections = std.ArrayList([]const u8){};
         defer sections.deinit(self.allocator);
-        sections.append(self.allocator, self.renderModulePreamble(lowered_program)) catch unreachable;
+        sections.append(self.allocator, self.renderModulePreamble()) catch unreachable;
         if (user_defined_types.len > 0) {
             sections.append(self.allocator, user_defined_types) catch unreachable;
         }
@@ -142,13 +144,14 @@ pub const LlvmModuleRenderer = struct {
 
     fn resetModuleState(self: *@This()) void {
         self.string_literal_pool.reset();
+        self.runtime_call_emitter.reset();
     }
 
-    fn renderModulePreamble(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
+    fn renderModulePreamble(self: *@This()) []const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
         defer module_preamble_buffer.deinit(self.allocator);
 
-        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(runtimeRequirementsFromPlan(lowered_program.runtime_requirements_plan));
+        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
@@ -159,24 +162,6 @@ pub const LlvmModuleRenderer = struct {
             module_preamble_buffer.writer(self.allocator).print("\n\n{s}", .{string_literal_globals_ir}) catch unreachable;
         }
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
-    }
-
-    fn runtimeRequirementsFromPlan(plan: lowering.lowering_types.RuntimeRequirementsPlan) runtime_symbols.RuntimeRequirements {
-        return .{
-            .print_int = plan.print_int,
-            .print_string = plan.print_string,
-            .read_file = plan.read_file,
-            .read_line = plan.read_line,
-            .get_arguments = plan.get_arguments,
-            .string_concatenate = plan.string_concatenate,
-            .string_compare = plan.string_compare,
-            .string_trim = plan.string_trim,
-            .string_split = plan.string_split,
-            .string_to_int = plan.string_to_int,
-            .int_to_string = plan.int_to_string,
-            .panic_index_out_of_bounds = plan.panic_index_out_of_bounds,
-            .array_append_slot = plan.array_append_slot,
-        };
     }
 
     fn renderStructureMethodFunctionDefinitions(

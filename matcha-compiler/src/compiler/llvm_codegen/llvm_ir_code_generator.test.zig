@@ -623,6 +623,52 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                 );
             }
+
+            test "appends to an array of unit without calling the runtime" {
+                const source =
+                    \\val values: unit[] = [unit];
+                    \\values.append(unit);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
+                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    store i64 1, ptr %.t_2
+                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    store i64 1, ptr %.t_3
+                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    store ptr null, ptr %.t_4
+                    \\    store ptr %.t_0, ptr %.s_0
+                    \\    %.t_5 = load ptr, ptr %.s_0
+                    \\    %.t_6 = getelementptr inbounds %Array, ptr %.t_5, i32 0, i32 0
+                    \\    %.t_7 = load i64, ptr %.t_6
+                    \\    %.t_8 = add i64 %.t_7, 1
+                    \\    store i64 %.t_8, ptr %.t_6
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
         };
 
         pub const unit_erasure = struct {

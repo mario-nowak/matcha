@@ -64,6 +64,7 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         allocator,
         test_target_triple,
         function_emitter,
+        runtime_call_emitter,
         runtime_symbol_renderer,
         string_literal_pool,
         string_literal_renderer,

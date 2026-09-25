@@ -100,26 +100,6 @@ pub const StructureLayoutKind = union(enum) {
     Present: StructureLayout,
 };
 
-pub const RuntimeRequirementsPlan = struct {
-    print_int: bool = false,
-    print_string: bool = false,
-    read_file: bool = false,
-    read_line: bool = false,
-    get_arguments: bool = false,
-    string_concatenate: bool = false,
-    string_compare: bool = false,
-    string_trim: bool = false,
-    string_split: bool = false,
-    string_to_int: bool = false,
-    int_to_string: bool = false,
-    panic_index_out_of_bounds: bool = false,
-    array_append_slot: bool = false,
-
-    pub fn reset(self: *@This()) void {
-        self.* = .{};
-    }
-};
-
 pub const CallDispatchDecisionByNodeId = std.AutoHashMap(NodeId, CallDispatchDecision);
 pub const MemberAccessDecisionByNodeId = std.AutoHashMap(NodeId, MemberAccessDecision);
 pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperationDecision);

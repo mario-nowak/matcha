@@ -31,8 +31,6 @@ pub fn setupLoweringAnalyzerFixture(
     binary_operation_lowerer.* = lowering.BinaryOperationLowerer.init(allocator);
     const place_lowerer = try allocator.create(lowering.PlaceLowerer);
     place_lowerer.* = lowering.PlaceLowerer.init(allocator);
-    const runtime_requirements_lowerer = try allocator.create(lowering.RuntimeRequirementsLowerer);
-    runtime_requirements_lowerer.* = lowering.RuntimeRequirementsLowerer.init();
     const structure_layout_lowerer = try allocator.create(lowering.StructureLayoutLowerer);
     structure_layout_lowerer.* = lowering.StructureLayoutLowerer.init(allocator);
     const function_layout_lowerer = try allocator.create(lowering.FunctionLayoutLowerer);
@@ -46,7 +44,6 @@ pub fn setupLoweringAnalyzerFixture(
         member_access_lowerer,
         binary_operation_lowerer,
         place_lowerer,
-        runtime_requirements_lowerer,
         structure_layout_lowerer,
         function_layout_lowerer,
     );

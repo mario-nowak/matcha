@@ -11,15 +11,25 @@ pub const RuntimeStringParts = struct {
     length_register: Register,
 };
 
+/// Emits calls into the Matcha runtime. It records every runtime function it emits a call to, so the module
+/// declares exactly the functions it calls.
 pub const RuntimeCallEmitter = struct {
     allocator: std.mem.Allocator,
+    runtime_requirements: runtime_symbols.RuntimeRequirements,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
-        return .{ .allocator = allocator };
+        return .{
+            .allocator = allocator,
+            .runtime_requirements = .{},
+        };
     }
 
     pub fn deinit(self: *const @This()) void {
         _ = self;
+    }
+
+    pub fn reset(self: *@This()) void {
+        self.runtime_requirements.reset();
     }
 
     pub fn emitInitiateGarbageCollectorCall(
@@ -47,10 +57,11 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitPrintIntCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         integer_register: Register,
     ) void {
+        self.runtime_requirements.print_int = true;
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(i64 {s})",
@@ -59,10 +70,11 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitPrintStringCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         string_parts: RuntimeStringParts,
     ) void {
+        self.runtime_requirements.print_string = true;
         const print_instruction = std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
@@ -76,11 +88,12 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitReadFileCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         path_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.read_file = true;
         return self.emitStringOutputCall(
             builder,
             symbol_generator,
@@ -90,10 +103,11 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitReadLineCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
     ) Register {
+        self.runtime_requirements.read_line = true;
         return self.emitZeroInputStringOutputCall(
             builder,
             symbol_generator,
@@ -102,10 +116,11 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitGetArgumentsCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
     ) Register {
+        self.runtime_requirements.get_arguments = true;
         const result_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
@@ -116,12 +131,13 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitStringConcatenateCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         left_parts: RuntimeStringParts,
         right_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.string_concatenate = true;
         const result_storage = symbol_generator.generateStorage();
         builder.emitAlloca(result_storage, "%String");
         builder.emitInstruction(std.fmt.allocPrint(
@@ -143,12 +159,13 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitStringCompareCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         left_parts: RuntimeStringParts,
         right_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.string_compare = true;
         const result_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
@@ -166,11 +183,12 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitStringTrimCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         string_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.string_trim = true;
         return self.emitStringOutputCall(
             builder,
             symbol_generator,
@@ -180,12 +198,13 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitStringSplitCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         source_parts: RuntimeStringParts,
         delimiter_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.string_split = true;
         const result_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
@@ -203,11 +222,12 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitStringToIntCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         string_parts: RuntimeStringParts,
     ) Register {
+        self.runtime_requirements.string_to_int = true;
         const result_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
@@ -223,11 +243,12 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitIntToStringCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         integer_register: Register,
     ) Register {
+        self.runtime_requirements.int_to_string = true;
         const result_storage = symbol_generator.generateStorage();
         builder.emitAlloca(result_storage, "%String");
         builder.emitInstruction(std.fmt.allocPrint(
@@ -246,13 +267,14 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitPanicIndexOutOfBoundsCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         line: usize,
         column: usize,
         index_register: Register,
         length_register: Register,
     ) void {
+        self.runtime_requirements.panic_index_out_of_bounds = true;
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(i64 {d}, i64 {d}, i64 {s}, i64 {s})",
@@ -267,12 +289,13 @@ pub const RuntimeCallEmitter = struct {
     }
 
     pub fn emitArrayAppendSlotCall(
-        self: *const @This(),
+        self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         array_register: Register,
         element_llvm_type: []const u8,
     ) Register {
+        self.runtime_requirements.array_append_slot = true;
         const slot_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
