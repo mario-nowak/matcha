@@ -5,6 +5,7 @@ const ast = @import("ast");
 const type_expressions = @import("type_expressions");
 
 const TypeExpressionParser = @import("type_expression_parser.zig").TypeExpressionParser;
+const PatternParser = @import("pattern_parser.zig").PatternParser;
 
 pub const ParsedIf = union(enum) {
     statement: ast.Node,
@@ -873,76 +874,45 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        var subject: ?*ast.Node = null;
-        const post_match_token = try self.lexer.peek();
-        if (post_match_token.kind != .LeftBrace) {
-            const subject_node = self.allocator.create(ast.Node) catch unreachable;
-            subject_node.* = try self.parseExpression(.{
-                .current_binding_power = 0,
-                .allow_structure_literal = false,
-            });
-            subject = subject_node;
+        if ((try self.lexer.peek()).kind == .LeftBrace) {
+            return self.parseSubjectlessMatchExpression(match_token);
         }
 
-        const left_brace_token = try self.lexer.next();
-        if (left_brace_token.kind != .LeftBrace) {
-            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start match body");
-            return error.DiagnosticsEmitted;
-        }
+        const subject = self.allocator.create(ast.Node) catch unreachable;
+        subject.* = try self.parseExpression(.{
+            .current_binding_power = 0,
+            .allow_structure_literal = false,
+        });
+        try self.expectMatchBodyStart();
 
         var arms = std.ArrayList(ast.MatchArm){};
         var else_token: ?lexing.Token = null;
-        var else_arm: ?*ast.Node = null;
-
+        var else_arm_expression: ?*ast.Node = null;
         while (true) {
             const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
                 _ = try self.lexer.next();
                 break;
             }
+            try self.rejectArmAfterElseArm(next_token, else_token);
 
             if (next_token.kind == .Else) {
                 else_token = try self.lexer.next();
-                const arrow_token = try self.lexer.next();
-                if (arrow_token.kind != .FatArrow) {
-                    try self.diagnostic_store.emitErrorFromToken(arrow_token, "expected '=>' after 'else' in match expression");
-                    return error.DiagnosticsEmitted;
-                }
-
-                const body = self.allocator.create(ast.Node) catch unreachable;
-                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
-                else_arm = body;
+                _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
+                else_arm_expression = self.allocator.create(ast.Node) catch unreachable;
+                else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
             } else {
-                const pattern_or_condition = self.allocator.create(ast.Node) catch unreachable;
-                pattern_or_condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
-
-                const arrow_token = try self.lexer.next();
-                if (arrow_token.kind != .FatArrow) {
-                    try self.diagnostic_store.emitErrorFromToken(arrow_token, "expected '=>' in match arm");
-                    return error.DiagnosticsEmitted;
-                }
-
-                const body = self.allocator.create(ast.Node) catch unreachable;
-                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
-
+                const pattern = try self.parsePattern();
+                const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
+                const body_expression = self.allocator.create(ast.Node) catch unreachable;
+                body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
                 arms.append(self.allocator, .{
-                    .pattern_or_condition = pattern_or_condition,
-                    .body = body,
-                    .fat_arrow_token = arrow_token,
+                    .pattern = pattern,
+                    .fat_arrow_token = fat_arrow_token,
+                    .body_expression = body_expression,
                 }) catch unreachable;
             }
-
-            const separator_or_end = try self.lexer.peek();
-            switch (separator_or_end.kind) {
-                .Comma => {
-                    _ = try self.lexer.next();
-                },
-                .RightBrace => {},
-                else => {
-                    try self.diagnostic_store.emitErrorFromToken(separator_or_end, "expected ',' or '}' after match arm");
-                    return error.DiagnosticsEmitted;
-                },
-            }
+            try self.expectMatchArmSeparator();
         }
 
         return self.createNode(.{
@@ -951,9 +921,97 @@ pub const Parser = struct {
                 .subject = subject,
                 .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
                 .else_token = else_token,
-                .else_arm = else_arm,
+                .else_arm_expression = else_arm_expression,
             },
         });
+    }
+
+    fn parseSubjectlessMatchExpression(self: *Parser, match_token: lexing.Token) ParserError!ast.Node {
+        try self.expectMatchBodyStart();
+
+        var arms = std.ArrayList(ast.SubjectlessMatchArm){};
+        var else_token: ?lexing.Token = null;
+        var else_arm_expression: ?*ast.Node = null;
+        while (true) {
+            const next_token = try self.lexer.peek();
+            if (next_token.kind == .RightBrace) {
+                _ = try self.lexer.next();
+                break;
+            }
+            try self.rejectArmAfterElseArm(next_token, else_token);
+
+            if (next_token.kind == .Else) {
+                else_token = try self.lexer.next();
+                _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
+                else_arm_expression = self.allocator.create(ast.Node) catch unreachable;
+                else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
+            } else {
+                const condition = self.allocator.create(ast.Node) catch unreachable;
+                condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
+                const body_expression = self.allocator.create(ast.Node) catch unreachable;
+                body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                arms.append(self.allocator, .{
+                    .condition = condition,
+                    .body_expression = body_expression,
+                    .fat_arrow_token = fat_arrow_token,
+                }) catch unreachable;
+            }
+            try self.expectMatchArmSeparator();
+        }
+
+        return self.createNode(.{
+            .SubjectlessMatchExpression = .{
+                .match_token = match_token,
+                .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
+                .else_token = else_token,
+                .else_arm_expression = else_arm_expression,
+            },
+        });
+    }
+
+    fn expectMatchBodyStart(self: *Parser) ParserError!void {
+        const left_brace_token = try self.lexer.next();
+        if (left_brace_token.kind != .LeftBrace) {
+            try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start match body");
+            return error.DiagnosticsEmitted;
+        }
+    }
+
+    fn rejectArmAfterElseArm(self: *Parser, next_token: lexing.Token, else_token: ?lexing.Token) ParserError!void {
+        if (else_token != null) {
+            try self.diagnostic_store.emitErrorFromToken(next_token, "'else' must be the last match arm");
+            return error.DiagnosticsEmitted;
+        }
+    }
+
+    fn expectFatArrow(self: *Parser, missing_fat_arrow_message: []const u8) ParserError!lexing.Token {
+        const fat_arrow_token = try self.lexer.next();
+        if (fat_arrow_token.kind != .FatArrow) {
+            try self.diagnostic_store.emitErrorFromToken(fat_arrow_token, missing_fat_arrow_message);
+            return error.DiagnosticsEmitted;
+        }
+
+        return fat_arrow_token;
+    }
+
+    fn expectMatchArmSeparator(self: *Parser) ParserError!void {
+        const separator_or_end = try self.lexer.peek();
+        switch (separator_or_end.kind) {
+            .Comma => {
+                _ = try self.lexer.next();
+            },
+            .RightBrace => {},
+            else => {
+                try self.diagnostic_store.emitErrorFromToken(separator_or_end, "expected ',' or '}' after match arm");
+                return error.DiagnosticsEmitted;
+            },
+        }
+    }
+
+    fn parsePattern(self: *Parser) ParserError!ast.Pattern {
+        var pattern_parser = PatternParser.init(&self.lexer, self.allocator, self.diagnostic_store, &self.next_node_id);
+        return pattern_parser.parse();
     }
 
     fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) ParserError!ast.Node {

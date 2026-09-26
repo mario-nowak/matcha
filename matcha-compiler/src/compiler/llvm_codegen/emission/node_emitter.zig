@@ -249,6 +249,13 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
+            .SubjectlessMatchExpression => |subjectless_match_expression| return control_flow.emitSubjectlessMatchExpression(
+                self,
+                node,
+                &subjectless_match_expression,
+                lowered_program,
+                environment,
+            ),
             .ExpressionStatement => |expression_statement| {
                 _ = self.emitNode(expression_statement.expression, lowered_program, environment);
                 return .statement;

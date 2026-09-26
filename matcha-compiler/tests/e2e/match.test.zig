@@ -41,6 +41,23 @@ test "integer and string matches use else arms when needed" {
     try e2e.expectSuccessOutput(&result, "other\n2\n");
 }
 
+test "negative integer arms match negative subjects" {
+    const source =
+        \\val number = 0 - 1;
+        \\val name = match number {
+        \\    1 => "one",
+        \\    -1 => "minus one",
+        \\    else => "other",
+        \\};
+        \\printString(name);
+    ;
+
+    var result = try e2e.runSource("match_negative_integer.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "minus one\n");
+}
+
 test "match expressions can be used directly as function bodies" {
     const source =
         \\item describe(flag: boolean): string = match flag {
@@ -95,7 +112,22 @@ test "invalid integer match arm type reports a semantic diagnostic" {
     var result = try e2e.runSource("invalid_integer_match_arm_type.mt", source);
     defer result.deinit();
 
-    try e2e.expectCompileDiagnostic(&result, "integer match arms must be integer expressions");
+    try e2e.expectCompileDiagnostic(&result, "integer match arms must use integer literals");
+}
+
+test "name match arm reports a parse diagnostic" {
+    const source =
+        \\val limit = 3;
+        \\val label = match 3 {
+        \\    limit => "limit",
+        \\    else => "other",
+        \\};
+    ;
+
+    var result = try e2e.runSource("name_match_arm.mt", source);
+    defer result.deinit();
+
+    try e2e.expectCompileDiagnostic(&result, "a pattern must be a literal or a case, use a subjectless match to compare against 'limit'");
 }
 
 test "statement-position match with non-unit arms reports a semantic diagnostic" {
