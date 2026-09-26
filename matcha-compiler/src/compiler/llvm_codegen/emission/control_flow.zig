@@ -28,12 +28,12 @@ const DecisionConstruct = struct {
 };
 
 const DecisionArm = struct {
-    arm_test: DecisionArmTest,
+    condition: DecisionArmCondition,
     body: *const ast.Node,
 };
 
-const DecisionArmTest = union(enum) {
-    Condition: *const ast.Node,
+const DecisionArmCondition = union(enum) {
+    Expression: *const ast.Node,
     Pattern: *const ast.Pattern,
 };
 
@@ -111,7 +111,7 @@ pub fn emitIfStatement(
     environment: *Environment,
 ) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .arm_test = .{ .Condition = if_statement.condition },
+        .condition = .{ .Expression = if_statement.condition },
         .body = if_statement.then_branch,
     }};
     return emitDecisionConstruct(
@@ -141,7 +141,7 @@ pub fn emitIfExpression(
     environment: *Environment,
 ) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .arm_test = .{ .Condition = if_expression.condition },
+        .condition = .{ .Expression = if_expression.condition },
         .body = if_expression.then_block,
     }};
     return emitDecisionConstruct(
@@ -174,7 +174,7 @@ pub fn emitMatchExpression(
     defer decision_arms.deinit(emitter.allocator);
     for (match_expression.arms) |*arm| {
         decision_arms.append(emitter.allocator, .{
-            .arm_test = .{ .Pattern = &arm.pattern },
+            .condition = .{ .Pattern = &arm.pattern },
             .body = arm.body,
         }) catch unreachable;
     }
@@ -191,7 +191,12 @@ pub fn emitMatchExpression(
             .else_arm = match_expression.else_arm,
             .exhaustive_without_else = exhaustive_without_else,
         },
-        match_label_names,
+        .{
+            .arm = "match_arm",
+            .else_arm = "match_else",
+            .next = "match_next",
+            .continue_label = "match_continue",
+        },
         lowered_program,
         environment,
     );
@@ -208,7 +213,7 @@ pub fn emitSubjectlessMatchExpression(
     defer decision_arms.deinit(emitter.allocator);
     for (subjectless_match_expression.arms) |arm| {
         decision_arms.append(emitter.allocator, .{
-            .arm_test = .{ .Condition = arm.condition },
+            .condition = .{ .Expression = arm.condition },
             .body = arm.body,
         }) catch unreachable;
     }
@@ -221,18 +226,16 @@ pub fn emitSubjectlessMatchExpression(
             .arms = decision_arms.items,
             .else_arm = subjectless_match_expression.else_arm,
         },
-        match_label_names,
+        .{
+            .arm = "match_arm",
+            .else_arm = "match_else",
+            .next = "match_next",
+            .continue_label = "match_continue",
+        },
         lowered_program,
         environment,
     );
 }
-
-const match_label_names = DecisionLabelNames{
-    .arm = "match_arm",
-    .else_arm = "match_else",
-    .next = "match_next",
-    .continue_label = "match_continue",
-};
 
 pub fn emitLoop(
     emitter: *NodeEmitter,
@@ -512,8 +515,8 @@ fn emitDecisionConstruct(
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
             } else {
-                const test_register = switch (arm.arm_test) {
-                    .Condition => |condition| emitter.emitNode(condition, lowered_program, environment).expectRegister(),
+                const condition_register = switch (arm.condition) {
+                    .Expression => |expression| emitter.emitNode(expression, lowered_program, environment).expectRegister(),
                     .Pattern => |pattern| values.emitLoweredBinaryOperation(
                         emitter,
                         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
@@ -523,7 +526,7 @@ fn emitDecisionConstruct(
                         lowered_program,
                     ),
                 };
-                builder.emitBranchInstruction(test_register, &.{ arm_label, false_label.? });
+                builder.emitBranchInstruction(condition_register, &.{ arm_label, false_label.? });
             }
 
             builder.emitLabel(arm_label);

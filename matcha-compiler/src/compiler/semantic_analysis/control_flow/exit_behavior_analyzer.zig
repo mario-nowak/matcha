@@ -285,15 +285,15 @@ pub const ExitBehaviorAnalyzer = struct {
             return self.markNodeExitBehavior(node, .Terminates);
         }
 
-        var arm_exit_behaviors = MatchArmExitBehaviors{};
+        var arms_exit_behavior: ExitBehavior = .Terminates;
         for (match_expression.arms) |arm| {
-            arm_exit_behaviors.add(try self.validateTerminatesWithValue(arm.body));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body));
         }
         if (match_expression.else_arm) |else_arm| {
-            arm_exit_behaviors.add(try self.validateTerminatesWithValue(else_arm));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm));
         }
 
-        return self.markNodeExitBehavior(node, arm_exit_behaviors.combined());
+        return self.markNodeExitBehavior(node, arms_exit_behavior);
     }
 
     fn validateSubjectlessMatchExpressionNode(
@@ -301,20 +301,20 @@ pub const ExitBehaviorAnalyzer = struct {
         node: *const ast.Node,
         subjectless_match_expression: ast.SubjectlessMatchExpression,
     ) ControlFlowValidationError!ExitBehavior {
-        var arm_exit_behaviors = MatchArmExitBehaviors{};
+        var arms_exit_behavior: ExitBehavior = .Terminates;
         for (subjectless_match_expression.arms) |arm| {
             const condition_result = try self.validateTerminatesWithValue(arm.condition);
             if (condition_result == .Terminates) {
                 return self.markNodeExitBehavior(node, .Terminates);
             }
 
-            arm_exit_behaviors.add(try self.validateTerminatesWithValue(arm.body));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body));
         }
         if (subjectless_match_expression.else_arm) |else_arm| {
-            arm_exit_behaviors.add(try self.validateTerminatesWithValue(else_arm));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm));
         }
 
-        return self.markNodeExitBehavior(node, arm_exit_behaviors.combined());
+        return self.markNodeExitBehavior(node, arms_exit_behavior);
     }
 
     fn validateCallExpressionNode(
@@ -426,26 +426,13 @@ fn isUnitTypeExpression(type_expression: *const type_expressions.TypeExpression)
     };
 }
 
-const MatchArmExitBehaviors = struct {
-    saw_fallthrough_with_value: bool = false,
-    saw_fallthrough_without_value: bool = false,
-
-    fn add(self: *@This(), arm_exit_behavior: ExitBehavior) void {
-        switch (arm_exit_behavior) {
-            .Terminates => {},
-            .FallsThroughWithValue => self.saw_fallthrough_with_value = true,
-            .FallsThroughWithoutValue => self.saw_fallthrough_without_value = true,
-        }
+fn joinArmExitBehavior(current: ExitBehavior, arm_exit_behavior: ExitBehavior) ExitBehavior {
+    if (current == .FallsThroughWithoutValue or arm_exit_behavior == .FallsThroughWithoutValue) {
+        return .FallsThroughWithoutValue;
+    }
+    if (current == .FallsThroughWithValue or arm_exit_behavior == .FallsThroughWithValue) {
+        return .FallsThroughWithValue;
     }
 
-    fn combined(self: *const @This()) ExitBehavior {
-        if (self.saw_fallthrough_without_value) {
-            return .FallsThroughWithoutValue;
-        }
-        if (self.saw_fallthrough_with_value) {
-            return .FallsThroughWithValue;
-        }
-
-        return .Terminates;
-    }
-};
+    return .Terminates;
+}

@@ -80,3 +80,24 @@ test "ExitBehaviorAnalyzer > analyzeProgram: rejects non-unit union functions wh
         .{ .message = "not all control-flow paths in this function return a value" },
     });
 }
+
+test "ExitBehaviorAnalyzer > analyzeProgram: marks a match as falling through without a value when one arm leaves and another produces a value" {
+    const source =
+        \\item search(): unit = {
+        \\    loop {
+        \\        val found = match 1 {
+        \\            1 => { leave; },
+        \\            else => 2,
+        \\        };
+        \\    }
+        \\};
+    ;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
+    const match_expression = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression.kind.Block.statements[0].kind.Loop.body_block.kind.Block.statements[0].kind.BindingDeclaration.value;
+
+    const result = try fixture.analyzer.analyzeProgram(&fixture.program);
+
+    try expect(result.get(match_expression.id).?).toMatch(.FallsThroughWithoutValue);
+}
