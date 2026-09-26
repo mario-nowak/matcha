@@ -37,13 +37,17 @@ pub const PatternParser = struct {
             .StringLiteral => return self.createPattern(.{ .StringLiteral = token }),
             .Dot => return self.parseCase(null, token),
             .Identifier => {
-                const dot_token = try self.lexer.next();
-                if (dot_token.kind != .Dot) {
-                    try self.diagnostic_store.emitErrorFromToken(dot_token, "expected '.' after union name in pattern");
+                if ((try self.lexer.peek()).kind != .Dot) {
+                    try self.diagnostic_store.emitFormattedErrorFromToken(
+                        self.allocator,
+                        token,
+                        "a pattern must be a literal or a case, use a subjectless match to compare against '{s}'",
+                        .{token.kind.Identifier},
+                    );
                     return error.DiagnosticsEmitted;
                 }
 
-                return self.parseCase(token, dot_token);
+                return self.parseCase(token, try self.lexer.next());
             },
             else => {
                 try self.diagnostic_store.emitErrorFromToken(token, "expected pattern");

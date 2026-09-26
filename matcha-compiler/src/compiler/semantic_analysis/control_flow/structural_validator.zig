@@ -48,6 +48,7 @@ pub const StructuralValidator = struct {
             .IfStatement => |if_statement| try self.validateIfStatement(if_statement, context),
             .IfExpression => |if_expression| try self.validateIfExpression(if_expression, context),
             .MatchExpression => |match_expression| try self.validateMatchExpression(match_expression, context),
+            .SubjectlessMatchExpression => |subjectless_match_expression| try self.validateSubjectlessMatchExpression(subjectless_match_expression, context),
             .ExpressionStatement => |expression_statement| try self.validateExpressionStatement(expression_statement, context),
             .CallExpression => |call_expression| try self.validateCallExpression(call_expression, context),
             .BinaryExpression => |binary_expression| try self.validateBinaryExpression(binary_expression, context),
@@ -233,14 +234,25 @@ pub const StructuralValidator = struct {
         match_expression: ast.MatchExpression,
         context: *const ControlFlowValidationContext,
     ) ControlFlowValidationError!void {
-        if (match_expression.subject) |subject| {
-            try self.validateNode(subject, context);
-        }
+        try self.validateNode(match_expression.subject, context);
         for (match_expression.arms) |arm| {
-            try self.validateNode(arm.pattern_or_condition, context);
             try self.validateNode(arm.body, context);
         }
         if (match_expression.else_arm) |else_arm| {
+            try self.validateNode(else_arm, context);
+        }
+    }
+
+    fn validateSubjectlessMatchExpression(
+        self: *@This(),
+        subjectless_match_expression: ast.SubjectlessMatchExpression,
+        context: *const ControlFlowValidationContext,
+    ) ControlFlowValidationError!void {
+        for (subjectless_match_expression.arms) |arm| {
+            try self.validateNode(arm.condition, context);
+            try self.validateNode(arm.body, context);
+        }
+        if (subjectless_match_expression.else_arm) |else_arm| {
             try self.validateNode(else_arm, context);
         }
     }

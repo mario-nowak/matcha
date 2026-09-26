@@ -28,8 +28,13 @@ const DecisionConstruct = struct {
 };
 
 const DecisionArm = struct {
-    condition: *const ast.Node,
+    arm_test: DecisionArmTest,
     body: *const ast.Node,
+};
+
+const DecisionArmTest = union(enum) {
+    Condition: *const ast.Node,
+    Pattern: *const ast.Pattern,
 };
 
 const DecisionLabelNames = struct {
@@ -106,7 +111,7 @@ pub fn emitIfStatement(
     environment: *Environment,
 ) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .condition = if_statement.condition,
+        .arm_test = .{ .Condition = if_statement.condition },
         .body = if_statement.then_branch,
     }};
     return emitDecisionConstruct(
@@ -136,7 +141,7 @@ pub fn emitIfExpression(
     environment: *Environment,
 ) EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .condition = if_expression.condition,
+        .arm_test = .{ .Condition = if_expression.condition },
         .body = if_expression.then_block,
     }};
     return emitDecisionConstruct(
@@ -167,18 +172,15 @@ pub fn emitMatchExpression(
 ) EmissionResult {
     var decision_arms = std.ArrayList(DecisionArm){};
     defer decision_arms.deinit(emitter.allocator);
-    for (match_expression.arms) |arm| {
+    for (match_expression.arms) |*arm| {
         decision_arms.append(emitter.allocator, .{
-            .condition = arm.pattern_or_condition,
+            .arm_test = .{ .Pattern = &arm.pattern },
             .body = arm.body,
         }) catch unreachable;
     }
 
-    const exhaustive_without_else = if (match_expression.subject) |subject|
-        match_expression.else_arm == null and
-            lowered_program.analyzed_program.type_id_by_node_id.get(subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id
-    else
-        false;
+    const exhaustive_without_else = match_expression.else_arm == null and
+        lowered_program.analyzed_program.type_id_by_node_id.get(match_expression.subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id;
 
     return emitDecisionConstruct(
         emitter,
@@ -189,16 +191,48 @@ pub fn emitMatchExpression(
             .else_arm = match_expression.else_arm,
             .exhaustive_without_else = exhaustive_without_else,
         },
-        .{
-            .arm = "match_arm",
-            .else_arm = "match_else",
-            .next = "match_next",
-            .continue_label = "match_continue",
-        },
+        match_label_names,
         lowered_program,
         environment,
     );
 }
+
+pub fn emitSubjectlessMatchExpression(
+    emitter: *NodeEmitter,
+    node: *const ast.Node,
+    subjectless_match_expression: *const ast.SubjectlessMatchExpression,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) EmissionResult {
+    var decision_arms = std.ArrayList(DecisionArm){};
+    defer decision_arms.deinit(emitter.allocator);
+    for (subjectless_match_expression.arms) |arm| {
+        decision_arms.append(emitter.allocator, .{
+            .arm_test = .{ .Condition = arm.condition },
+            .body = arm.body,
+        }) catch unreachable;
+    }
+
+    return emitDecisionConstruct(
+        emitter,
+        node,
+        .{
+            .subject = null,
+            .arms = decision_arms.items,
+            .else_arm = subjectless_match_expression.else_arm,
+        },
+        match_label_names,
+        lowered_program,
+        environment,
+    );
+}
+
+const match_label_names = DecisionLabelNames{
+    .arm = "match_arm",
+    .else_arm = "match_else",
+    .next = "match_next",
+    .continue_label = "match_continue",
+};
 
 pub fn emitLoop(
     emitter: *NodeEmitter,
@@ -477,20 +511,19 @@ fn emitDecisionConstruct(
 
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
-            } else if (decision_construct.subject != null) {
-                const pattern_register = emitter.emitNode(arm.condition, lowered_program, environment);
-                const comparison_register = values.emitLoweredBinaryOperation(
-                    emitter,
-                    lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
-                    subject_type_id.?,
-                    subject_register.?,
-                    pattern_register.expectRegister(),
-                    lowered_program,
-                );
-                builder.emitBranchInstruction(comparison_register, &.{ arm_label, false_label.? });
             } else {
-                const condition_register = emitter.emitNode(arm.condition, lowered_program, environment);
-                builder.emitBranchInstruction(condition_register.expectRegister(), &.{ arm_label, false_label.? });
+                const test_register = switch (arm.arm_test) {
+                    .Condition => |condition| emitter.emitNode(condition, lowered_program, environment).expectRegister(),
+                    .Pattern => |pattern| values.emitLoweredBinaryOperation(
+                        emitter,
+                        lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
+                        subject_type_id.?,
+                        subject_register.?,
+                        emitPatternValue(emitter, pattern),
+                        lowered_program,
+                    ),
+                };
+                builder.emitBranchInstruction(test_register, &.{ arm_label, false_label.? });
             }
 
             builder.emitLabel(arm_label);
@@ -573,4 +606,23 @@ fn emitDecisionConstruct(
     builder.emitInstruction(phi_instruction);
 
     return .{ .register = result_register };
+}
+
+fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register {
+    return switch (pattern.kind) {
+        .IntegerLiteral => |integer_literal| std.fmt.allocPrint(
+            emitter.allocator,
+            "{d}",
+            .{integer_literal.value()},
+        ) catch unreachable,
+        .BooleanLiteral => |token| if (token.kind.BooleanLiteral) "1" else "0",
+        .StringLiteral => |token| emitter.string_literal_emitter.emitStringLiteralValue(
+            emitter.string_literal_pool,
+            pattern.id,
+            token.kind.StringLiteral,
+            emitter.function_symbol_generator,
+            emitter.function_ir_builder,
+        ),
+        .Case => unreachable,
+    };
 }

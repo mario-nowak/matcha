@@ -112,7 +112,22 @@ test "invalid integer match arm type reports a semantic diagnostic" {
     var result = try e2e.runSource("invalid_integer_match_arm_type.mt", source);
     defer result.deinit();
 
-    try e2e.expectCompileDiagnostic(&result, "integer match arms must be integer expressions");
+    try e2e.expectCompileDiagnostic(&result, "integer match arms must use integer literals");
+}
+
+test "name match arm reports a parse diagnostic" {
+    const source =
+        \\val limit = 3;
+        \\val label = match 3 {
+        \\    limit => "limit",
+        \\    else => "other",
+        \\};
+    ;
+
+    var result = try e2e.runSource("name_match_arm.mt", source);
+    defer result.deinit();
+
+    try e2e.expectCompileDiagnostic(&result, "a pattern must be a literal or a case, use a subjectless match to compare against 'limit'");
 }
 
 test "statement-position match with non-unit arms reports a semantic diagnostic" {

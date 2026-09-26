@@ -537,6 +537,75 @@ test "Parser > parse: allows a structure literal as a match subject when parenth
     } });
 }
 
+test "Parser > parse: parses match arms with a subject as patterns" {
+    const source = "val result = match level { -1 => 0, else => 1 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .MatchExpression = .{
+                .arms = .{
+                    .{ .pattern = .{ .kind = .{ .IntegerLiteral = .{
+                        .minus_token = .{ .kind = .Minus },
+                        .literal_token = .{ .kind = .{ .IntLiteral = 1 } },
+                    } } } },
+                },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: parses a match without a subject as a subjectless match" {
+    const source = "val result = match { level > 1 => 0, else => 1 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const program = try parser_pipeline.parser.parse();
+
+    try expect(program).toMatch(.{ .statements = .{
+        .{ .kind = .{ .BindingDeclaration = .{
+            .value = .{ .kind = .{ .SubjectlessMatchExpression = .{
+                .arms = .{
+                    .{ .condition = .{ .kind = .{ .BinaryExpression = .{ .operator = .GreaterThan } } } },
+                },
+            } } },
+        } } },
+    } });
+}
+
+test "Parser > parse: rejects a match arm after the else arm" {
+    const source = "val result = match level { else => 0, 1 => 1 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const result = parser_pipeline.parser.parse();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "'else' must be the last match arm" },
+    });
+}
+
+test "Parser > parse: rejects a second else arm in a subjectless match" {
+    const source = "val result = match { else => 0, else => 1 };";
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const parser_pipeline = try setupParserPipeline(&arena, source);
+
+    const result = parser_pipeline.parser.parse();
+
+    try std.testing.expectError(error.DiagnosticsEmitted, result);
+    try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+        .{ .severity = .@"error", .message = "'else' must be the last match arm" },
+    });
+}
+
 test "Parser > parse: parses union cases without payload types" {
     const source =
         \\item Direction = union {

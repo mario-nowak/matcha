@@ -26,6 +26,7 @@ pub const NodeKind = union(enum) {
     // Expressions-ish nodes
     IfExpression: IfExpression,
     MatchExpression: MatchExpression,
+    SubjectlessMatchExpression: SubjectlessMatchExpression,
     CallExpression: CallExpression,
     MemberExpression: MemberExpression,
     ImplicitMemberExpression: ImplicitMemberExpression,
@@ -62,6 +63,7 @@ pub const Node = struct {
             .ForIn => |for_in| for_in.for_token,
             .IfExpression => |if_expression| if_expression.if_token,
             .MatchExpression => |match_expression| match_expression.match_token,
+            .SubjectlessMatchExpression => |subjectless_match_expression| subjectless_match_expression.match_token,
             .CallExpression => |call_expression| call_expression.left_parenthesis,
             .MemberExpression => |member_expression| member_expression.member_name_token,
             .ImplicitMemberExpression => |implicit_call_expression| implicit_call_expression.member_name_token,
@@ -199,15 +201,28 @@ pub const IfExpression = struct {
 };
 
 pub const MatchArm = struct {
-    pattern_or_condition: *Node,
+    pattern: Pattern,
     body: *Node,
     fat_arrow_token: lexing.Token,
 };
 
 pub const MatchExpression = struct {
     match_token: lexing.Token,
-    subject: ?*Node,
+    subject: *Node,
     arms: []MatchArm,
+    else_token: ?lexing.Token,
+    else_arm: ?*Node,
+};
+
+pub const SubjectlessMatchArm = struct {
+    condition: *Node,
+    body: *Node,
+    fat_arrow_token: lexing.Token,
+};
+
+pub const SubjectlessMatchExpression = struct {
+    match_token: lexing.Token,
+    arms: []SubjectlessMatchArm,
     else_token: ?lexing.Token,
     else_arm: ?*Node,
 };

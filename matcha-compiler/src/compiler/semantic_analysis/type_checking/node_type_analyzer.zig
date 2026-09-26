@@ -224,6 +224,7 @@ pub const NodeTypeAnalyzer = struct {
             .IfStatement => |if_statement| try self.checkIfStatementNode(node.id, &if_statement, environment),
             .IfExpression => |if_expression| try self.checkIfExpressionNode(node.id, &if_expression, parent_node_expectation, environment),
             .MatchExpression => |match_expression| try self.checkMatchExpressionNode(node.id, &match_expression, parent_node_expectation, environment),
+            .SubjectlessMatchExpression => |subjectless_match_expression| try self.checkSubjectlessMatchExpressionNode(node.id, &subjectless_match_expression, parent_node_expectation, environment),
             .ExpressionStatement => |expression_statement| try self.checkExpressionStatementNode(node.id, &expression_statement, environment),
             .ArrayLiteral => |array_literal| try self.checkArrayLiteralNode(node.id, &array_literal, parent_node_expectation, environment),
             .IndexExpression => |index_expression| try self.checkIndexExpressionNode(node.id, &index_expression, environment),
@@ -1242,6 +1243,17 @@ pub const NodeTypeAnalyzer = struct {
         return self.recordNodeType(node_id, match_type);
     }
 
+    fn checkSubjectlessMatchExpressionNode(
+        self: *@This(),
+        node_id: ast.NodeId,
+        subjectless_match_expression: *const ast.SubjectlessMatchExpression,
+        parent_node_expectation: ParentNodeExpectation,
+        environment: TypeCheckEnvironment,
+    ) TypeError!typing.TypeId {
+        const match_type = try self.checkSubjectlessMatchExpression(subjectless_match_expression, parent_node_expectation, environment);
+        return self.recordNodeType(node_id, match_type);
+    }
+
     fn checkArrayLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
@@ -1406,19 +1418,16 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const context = parent_node_expectation.node_role;
-        const exhaustiveness_class: ExhaustivenessClass = if (match_expression.subject) |subject| class: {
-            const subject_type = try self.checkNode(subject, .asExpression, environment);
-            break :class switch (self.getType(subject_type)) {
-                .Boolean => .Boolean,
-                .Integer => .IntegerOpen,
-                .String => .StringOpen,
-                else => {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, match_expression.match_token, "match subject must be boolean, integer, or string, found {s}", .{try self.getTypeName(subject_type)});
-                    return error.DiagnosticsEmitted;
-                },
-            };
-        } else .Subjectless;
+        const subject_type = try self.checkNode(match_expression.subject, .asExpression, environment);
+        const exhaustiveness_class: ExhaustivenessClass = switch (self.getType(subject_type)) {
+            .Boolean => .Boolean,
+            .Integer => .IntegerOpen,
+            .String => .StringOpen,
+            else => {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, match_expression.match_token, "match subject must be boolean, integer, or string, found {s}", .{try self.getTypeName(subject_type)});
+                return error.DiagnosticsEmitted;
+            },
+        };
 
         var saw_true = false;
         var saw_false = false;
@@ -1428,14 +1437,7 @@ pub const NodeTypeAnalyzer = struct {
         var arm_result_type: ?typing.TypeId = null;
         for (match_expression.arms) |arm| {
             switch (exhaustiveness_class) {
-                .Subjectless => {
-                    const condition_type = try self.checkNode(arm.pattern_or_condition, .asExpression, environment);
-                    if (condition_type != self.type_store.boolean_type_id) {
-                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.pattern_or_condition.primaryToken(), "subjectless match arm condition must be boolean, found {s}", .{try self.getTypeName(condition_type)});
-                        return error.DiagnosticsEmitted;
-                    }
-                },
-                .Boolean => switch (arm.pattern_or_condition.kind) {
+                .Boolean => switch (arm.pattern.kind) {
                     .BooleanLiteral => |token| {
                         if (token.kind.BooleanLiteral) {
                             if (saw_true) {
@@ -1450,77 +1452,125 @@ pub const NodeTypeAnalyzer = struct {
                             }
                             saw_false = true;
                         }
-                        self.type_id_by_node_id.put(arm.pattern_or_condition.id, self.type_store.boolean_type_id) catch unreachable;
                     },
                     else => {
-                        try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "boolean match arms must use boolean literals");
+                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "boolean match arms must use boolean literals");
                         return error.DiagnosticsEmitted;
                     },
                 },
-                .IntegerOpen => switch (arm.pattern_or_condition.kind) {
-                    .IntegerLiteral => |token| {
-                        _ = try self.checkNode(arm.pattern_or_condition, .asExpression, environment);
-                        const value = token.kind.IntLiteral;
+                .IntegerOpen => switch (arm.pattern.kind) {
+                    .IntegerLiteral => |integer_literal| {
+                        const value = integer_literal.value();
                         if (integer_patterns.contains(value)) {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, token, "duplicate integer match arm for value {d}", .{value});
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.pattern.primaryToken(), "duplicate integer match arm for value {d}", .{value});
                             return error.DiagnosticsEmitted;
                         }
                         integer_patterns.put(value, {}) catch unreachable;
                     },
                     else => {
-                        const pattern_type = try self.checkNode(arm.pattern_or_condition, .asExpression, environment);
-                        if (pattern_type != self.type_store.integer_type_id) {
-                            try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "integer match arms must be integer expressions");
-                            return error.DiagnosticsEmitted;
-                        }
+                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "integer match arms must use integer literals");
+                        return error.DiagnosticsEmitted;
                     },
                 },
-                .StringOpen => {
-                    const pattern_type = try self.checkNode(arm.pattern_or_condition, .asExpression, environment);
-                    if (pattern_type != self.type_store.string_type_id) {
-                        try self.diagnostic_store.emitErrorFromToken(arm.pattern_or_condition.primaryToken(), "string match arms must be string expressions");
+                .StringOpen => switch (arm.pattern.kind) {
+                    .StringLiteral => {},
+                    else => {
+                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "string match arms must use string literals");
                         return error.DiagnosticsEmitted;
-                    }
+                    },
                 },
             }
 
-            const body_type = try self.checkNode(arm.body, parent_node_expectation.forwarded(), environment);
-            if (arm_result_type) |expected_type| {
-                if (expected_type != body_type) {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.body.primaryToken(), "match arms must all produce the same type, expected {s}, found {s}", .{ try self.getTypeName(expected_type), try self.getTypeName(body_type) });
-                    return error.DiagnosticsEmitted;
-                }
-            } else {
-                arm_result_type = body_type;
-            }
+            try self.joinMatchArmType(&arm_result_type, arm.body, parent_node_expectation, environment);
         }
 
         if (match_expression.else_arm) |else_arm| {
-            const else_type = try self.checkNode(else_arm, parent_node_expectation.forwarded(), environment);
-            if (arm_result_type) |expected_type| {
-                if (expected_type != else_type) {
-                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, else_arm.primaryToken(), "match else arm must produce the same type as other arms, expected {s}, found {s}", .{ try self.getTypeName(expected_type), try self.getTypeName(else_type) });
-                    return error.DiagnosticsEmitted;
-                }
-            } else {
-                arm_result_type = else_type;
-            }
+            try self.joinMatchElseArmType(&arm_result_type, else_arm, parent_node_expectation, environment);
         }
 
-        const is_exhaustive = switch (exhaustiveness_class) {
-            .Subjectless => match_expression.else_arm != null,
-            .Boolean => (saw_true and saw_false) or match_expression.else_arm != null,
-            .IntegerOpen => match_expression.else_arm != null,
-            .StringOpen => match_expression.else_arm != null,
+        const is_exhaustive = match_expression.else_arm != null or switch (exhaustiveness_class) {
+            .Boolean => saw_true and saw_false,
+            .IntegerOpen, .StringOpen => false,
         };
+        return self.finishMatchType(match_expression.match_token, arm_result_type, is_exhaustive, parent_node_expectation);
+    }
+
+    fn checkSubjectlessMatchExpression(
+        self: *@This(),
+        subjectless_match_expression: *const ast.SubjectlessMatchExpression,
+        parent_node_expectation: ParentNodeExpectation,
+        environment: TypeCheckEnvironment,
+    ) TypeError!typing.TypeId {
+        var arm_result_type: ?typing.TypeId = null;
+        for (subjectless_match_expression.arms) |arm| {
+            const condition_type = try self.checkNode(arm.condition, .asExpression, environment);
+            if (condition_type != self.type_store.boolean_type_id) {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.condition.primaryToken(), "subjectless match arm condition must be boolean, found {s}", .{try self.getTypeName(condition_type)});
+                return error.DiagnosticsEmitted;
+            }
+
+            try self.joinMatchArmType(&arm_result_type, arm.body, parent_node_expectation, environment);
+        }
+
+        if (subjectless_match_expression.else_arm) |else_arm| {
+            try self.joinMatchElseArmType(&arm_result_type, else_arm, parent_node_expectation, environment);
+        }
+
+        const is_exhaustive = subjectless_match_expression.else_arm != null;
+        return self.finishMatchType(subjectless_match_expression.match_token, arm_result_type, is_exhaustive, parent_node_expectation);
+    }
+
+    fn joinMatchArmType(
+        self: *@This(),
+        arm_result_type: *?typing.TypeId,
+        arm_body: *ast.Node,
+        parent_node_expectation: ParentNodeExpectation,
+        environment: TypeCheckEnvironment,
+    ) TypeError!void {
+        const body_type = try self.checkNode(arm_body, parent_node_expectation.forwarded(), environment);
+        if (arm_result_type.*) |expected_type| {
+            if (expected_type != body_type) {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm_body.primaryToken(), "match arms must all produce the same type, expected {s}, found {s}", .{ try self.getTypeName(expected_type), try self.getTypeName(body_type) });
+                return error.DiagnosticsEmitted;
+            }
+        } else {
+            arm_result_type.* = body_type;
+        }
+    }
+
+    fn joinMatchElseArmType(
+        self: *@This(),
+        arm_result_type: *?typing.TypeId,
+        else_arm: *ast.Node,
+        parent_node_expectation: ParentNodeExpectation,
+        environment: TypeCheckEnvironment,
+    ) TypeError!void {
+        const else_type = try self.checkNode(else_arm, parent_node_expectation.forwarded(), environment);
+        if (arm_result_type.*) |expected_type| {
+            if (expected_type != else_type) {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, else_arm.primaryToken(), "match else arm must produce the same type as other arms, expected {s}, found {s}", .{ try self.getTypeName(expected_type), try self.getTypeName(else_type) });
+                return error.DiagnosticsEmitted;
+            }
+        } else {
+            arm_result_type.* = else_type;
+        }
+    }
+
+    fn finishMatchType(
+        self: *@This(),
+        match_token: lexing.Token,
+        arm_result_type: ?typing.TypeId,
+        is_exhaustive: bool,
+        parent_node_expectation: ParentNodeExpectation,
+    ) TypeError!typing.TypeId {
         if (!is_exhaustive) {
-            try self.diagnostic_store.emitErrorFromToken(match_expression.match_token, "match expression is not exhaustive");
+            try self.diagnostic_store.emitErrorFromToken(match_token, "match expression is not exhaustive");
             return error.DiagnosticsEmitted;
         }
 
         const result_type = arm_result_type orelse self.type_store.unit_type_id;
-        if (context == .Statement and result_type != self.type_store.unit_type_id) {
-            try self.diagnostic_store.emitErrorFromToken(match_expression.match_token, "match expression used as a statement must evaluate to unit");
+        if (parent_node_expectation.node_role == .Statement and result_type != self.type_store.unit_type_id) {
+            try self.diagnostic_store.emitErrorFromToken(match_token, "match expression used as a statement must evaluate to unit");
             return error.DiagnosticsEmitted;
         }
 

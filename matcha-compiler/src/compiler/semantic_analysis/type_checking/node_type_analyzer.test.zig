@@ -932,6 +932,47 @@ pub const NodeTypeAnalyzer = struct {
             }
         };
 
+        pub const match_expressions = struct {
+            test "rejects a duplicate negative integer arm" {
+                const source =
+                    \\val name = match 0 {
+                    \\    -1 => "first",
+                    \\    -1 => "second",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "duplicate integer match arm for value -1" },
+                });
+            }
+
+            test "rejects a case pattern when the subject is an integer" {
+                const source =
+                    \\val name = match 0 {
+                    \\    .Some(value) => "some",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "integer match arms must use integer literals" },
+                });
+            }
+        };
+
         pub const structures = struct {
             test "records a field access with its field index" {
                 const source =

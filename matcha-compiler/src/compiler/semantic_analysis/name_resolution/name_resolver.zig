@@ -294,6 +294,7 @@ pub const NameResolver = struct {
             .IfStatement => |if_statement| try self.resolveIfStatementNode(if_statement, environment),
             .IfExpression => |if_expression| try self.resolveIfExpressionNode(if_expression, environment),
             .MatchExpression => |match_expression| try self.resolveMatchExpressionNode(match_expression, environment),
+            .SubjectlessMatchExpression => |subjectless_match_expression| try self.resolveSubjectlessMatchExpressionNode(subjectless_match_expression, environment),
             .ExpressionStatement => |expression_statement| try self.resolveExpressionStatementNode(expression_statement, environment),
             .QualifiedStructureLiteral => |*qualified_structure_literal| try self.resolveQualifiedStructureLiteral(node.id, qualified_structure_literal, environment),
             .StructureLiteral => |structure_literal| try self.resolveStructureLiteralNode(structure_literal, environment),
@@ -538,14 +539,25 @@ pub const NameResolver = struct {
         match_expression: ast.MatchExpression,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        if (match_expression.subject) |subject| {
-            try self.resolveNode(subject, environment);
-        }
+        try self.resolveNode(match_expression.subject, environment);
         for (match_expression.arms) |arm| {
-            try self.resolveNode(arm.pattern_or_condition, environment);
             try self.resolveNode(arm.body, environment);
         }
         if (match_expression.else_arm) |else_arm| {
+            try self.resolveNode(else_arm, environment);
+        }
+    }
+
+    fn resolveSubjectlessMatchExpressionNode(
+        self: *@This(),
+        subjectless_match_expression: ast.SubjectlessMatchExpression,
+        environment: ResolutionEnvironment,
+    ) NameResolutionError!void {
+        for (subjectless_match_expression.arms) |arm| {
+            try self.resolveNode(arm.condition, environment);
+            try self.resolveNode(arm.body, environment);
+        }
+        if (subjectless_match_expression.else_arm) |else_arm| {
             try self.resolveNode(else_arm, environment);
         }
     }

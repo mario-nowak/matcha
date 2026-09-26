@@ -80,14 +80,20 @@ pub const CallLowerer = struct {
                 self.lowerNode(if_expression.else_block, analyzed_program);
             },
             .MatchExpression => |match_expression| {
-                if (match_expression.subject) |subject| {
-                    self.lowerNode(subject, analyzed_program);
-                }
+                self.lowerNode(match_expression.subject, analyzed_program);
                 for (match_expression.arms) |arm| {
-                    self.lowerNode(arm.pattern_or_condition, analyzed_program);
                     self.lowerNode(arm.body, analyzed_program);
                 }
                 if (match_expression.else_arm) |else_arm| {
+                    self.lowerNode(else_arm, analyzed_program);
+                }
+            },
+            .SubjectlessMatchExpression => |subjectless_match_expression| {
+                for (subjectless_match_expression.arms) |arm| {
+                    self.lowerNode(arm.condition, analyzed_program);
+                    self.lowerNode(arm.body, analyzed_program);
+                }
+                if (subjectless_match_expression.else_arm) |else_arm| {
                     self.lowerNode(else_arm, analyzed_program);
                 }
             },

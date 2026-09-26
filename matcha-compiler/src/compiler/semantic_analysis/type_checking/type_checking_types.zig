@@ -26,7 +26,6 @@ pub const ExhaustivenessClass = enum {
     Boolean,
     IntegerOpen,
     StringOpen,
-    Subjectless,
 };
 
 pub const TypeError = error{

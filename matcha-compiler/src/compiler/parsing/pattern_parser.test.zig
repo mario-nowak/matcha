@@ -145,8 +145,8 @@ pub const PatternParser = struct {
                 });
             }
 
-            test "reports a union name that is not followed by a dot" {
-                const source = "Result Some";
+            test "reports a name that is not followed by a dot as a value comparison" {
+                const source = "limit";
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupPatternParserFixture(&arena, source);
@@ -155,7 +155,7 @@ pub const PatternParser = struct {
 
                 try std.testing.expectError(error.DiagnosticsEmitted, result);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .severity = .@"error", .message = "expected '.' after union name in pattern" },
+                    .{ .severity = .@"error", .message = "a pattern must be a literal or a case, use a subjectless match to compare against 'limit'" },
                 });
             }
 
