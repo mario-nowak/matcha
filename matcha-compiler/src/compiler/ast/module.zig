@@ -205,7 +205,7 @@ pub const MatchExpression = struct {
     subject: *Node,
     arms: []MatchArm,
     else_token: ?lexing.Token,
-    else_arm: ?*Node,
+    else_arm_expression: ?*Node,
 };
 
 pub const MatchArm = struct {

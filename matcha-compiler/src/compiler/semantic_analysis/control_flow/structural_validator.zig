@@ -236,10 +236,10 @@ pub const StructuralValidator = struct {
     ) ControlFlowValidationError!void {
         try self.validateNode(match_expression.subject, context);
         for (match_expression.arms) |arm| {
-            try self.validateNode(arm.body, context);
+            try self.validateNode(arm.body_expression, context);
         }
-        if (match_expression.else_arm) |else_arm| {
-            try self.validateNode(else_arm, context);
+        if (match_expression.else_arm_expression) |else_arm_expression| {
+            try self.validateNode(else_arm_expression, context);
         }
     }
 
@@ -250,10 +250,10 @@ pub const StructuralValidator = struct {
     ) ControlFlowValidationError!void {
         for (subjectless_match_expression.arms) |arm| {
             try self.validateNode(arm.condition, context);
-            try self.validateNode(arm.body, context);
+            try self.validateNode(arm.body_expression, context);
         }
-        if (subjectless_match_expression.else_arm) |else_arm| {
-            try self.validateNode(else_arm, context);
+        if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
+            try self.validateNode(else_arm_expression, context);
         }
     }
 

@@ -921,7 +921,7 @@ pub const Parser = struct {
                 .subject = subject,
                 .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
                 .else_token = else_token,
-                .else_arm = else_arm_expression,
+                .else_arm_expression = else_arm_expression,
             },
         });
     }
