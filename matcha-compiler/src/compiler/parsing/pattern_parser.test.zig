@@ -117,7 +117,7 @@ pub const PatternParser = struct {
         };
 
         pub const diagnostics = struct {
-            test "reports a token that starts no pattern" {
+            test "reports else when it is used as a pattern" {
                 const source = "else";
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();

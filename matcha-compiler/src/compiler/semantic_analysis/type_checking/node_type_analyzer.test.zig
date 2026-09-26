@@ -971,6 +971,198 @@ pub const NodeTypeAnalyzer = struct {
                     .{ .message = "integer match arms must use integer literals" },
                 });
             }
+
+            test "rejects a unit subject" {
+                const source =
+                    \\val name = match unit {
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match subject must be boolean, integer, or string, found unit" },
+                });
+            }
+
+            test "rejects an integer pattern when the subject is a boolean" {
+                const source =
+                    \\val name = match true {
+                    \\    1 => "one",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "boolean match arms must use boolean literals" },
+                });
+            }
+
+            test "rejects an integer pattern when the subject is a string" {
+                const source =
+                    \\val name = match "pro" {
+                    \\    1 => "one",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "string match arms must use string literals" },
+                });
+            }
+
+            test "rejects arms that produce different types" {
+                const source =
+                    \\val name = match 1 {
+                    \\    1 => "one",
+                    \\    2 => 2,
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match arms must all produce the same type, expected string, found int" },
+                });
+            }
+
+            test "rejects an else arm that produces a different type than the arms" {
+                const source =
+                    \\val name = match 1 {
+                    \\    1 => "one",
+                    \\    else => 2,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match else arm must produce the same type as other arms, expected string, found int" },
+                });
+            }
+
+            test "rejects a match without an else arm when the patterns do not cover every value" {
+                const source =
+                    \\val name = match 1 {
+                    \\    1 => "one",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive" },
+                });
+            }
+        };
+
+        pub const subjectless_match_expressions = struct {
+            test "rejects an integer condition" {
+                const source =
+                    \\val name = match {
+                    \\    1 => "one",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "subjectless match arm condition must be boolean, found int" },
+                });
+            }
+
+            test "rejects arms that produce different types" {
+                const source =
+                    \\val name = match {
+                    \\    true => "one",
+                    \\    false => 2,
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match arms must all produce the same type, expected string, found int" },
+                });
+            }
+
+            test "rejects an else arm that produces a different type than the arms" {
+                const source =
+                    \\val name = match {
+                    \\    true => "one",
+                    \\    else => 2,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match else arm must produce the same type as other arms, expected string, found int" },
+                });
+            }
+
+            test "rejects a match without an else arm" {
+                const source =
+                    \\val name = match {
+                    \\    true => "one",
+                    \\    false => "two",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive" },
+                });
+            }
         };
 
         pub const structures = struct {
