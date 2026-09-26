@@ -887,7 +887,7 @@ pub const Parser = struct {
 
         var arms = std.ArrayList(ast.MatchArm){};
         var else_token: ?lexing.Token = null;
-        var else_arm: ?*ast.Node = null;
+        var else_arm_expression: ?*ast.Node = null;
         while (true) {
             const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
@@ -899,17 +899,17 @@ pub const Parser = struct {
             if (next_token.kind == .Else) {
                 else_token = try self.lexer.next();
                 _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
-                else_arm = self.allocator.create(ast.Node) catch unreachable;
-                else_arm.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                else_arm_expression = self.allocator.create(ast.Node) catch unreachable;
+                else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
             } else {
                 const pattern = try self.parsePattern();
                 const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
-                const body = self.allocator.create(ast.Node) catch unreachable;
-                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                const body_expression = self.allocator.create(ast.Node) catch unreachable;
+                body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
                 arms.append(self.allocator, .{
                     .pattern = pattern,
-                    .body = body,
                     .fat_arrow_token = fat_arrow_token,
+                    .body_expression = body_expression,
                 }) catch unreachable;
             }
             try self.expectMatchArmSeparator();
@@ -921,7 +921,7 @@ pub const Parser = struct {
                 .subject = subject,
                 .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
                 .else_token = else_token,
-                .else_arm = else_arm,
+                .else_arm = else_arm_expression,
             },
         });
     }
@@ -931,7 +931,7 @@ pub const Parser = struct {
 
         var arms = std.ArrayList(ast.SubjectlessMatchArm){};
         var else_token: ?lexing.Token = null;
-        var else_arm: ?*ast.Node = null;
+        var else_arm_expression: ?*ast.Node = null;
         while (true) {
             const next_token = try self.lexer.peek();
             if (next_token.kind == .RightBrace) {
@@ -943,17 +943,17 @@ pub const Parser = struct {
             if (next_token.kind == .Else) {
                 else_token = try self.lexer.next();
                 _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
-                else_arm = self.allocator.create(ast.Node) catch unreachable;
-                else_arm.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                else_arm_expression = self.allocator.create(ast.Node) catch unreachable;
+                else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
             } else {
                 const condition = self.allocator.create(ast.Node) catch unreachable;
                 condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
                 const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
-                const body = self.allocator.create(ast.Node) catch unreachable;
-                body.* = try self.parseExpression(.{ .current_binding_power = 0 });
+                const body_expression = self.allocator.create(ast.Node) catch unreachable;
+                body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
                 arms.append(self.allocator, .{
                     .condition = condition,
-                    .body = body,
+                    .body_expression = body_expression,
                     .fat_arrow_token = fat_arrow_token,
                 }) catch unreachable;
             }
@@ -965,7 +965,7 @@ pub const Parser = struct {
                 .match_token = match_token,
                 .arms = arms.toOwnedSlice(self.allocator) catch unreachable,
                 .else_token = else_token,
-                .else_arm = else_arm,
+                .else_arm_expression = else_arm_expression,
             },
         });
     }

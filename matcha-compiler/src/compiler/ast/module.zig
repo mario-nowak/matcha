@@ -200,12 +200,6 @@ pub const IfExpression = struct {
     else_block: *Node,
 };
 
-pub const MatchArm = struct {
-    pattern: Pattern,
-    body: *Node,
-    fat_arrow_token: lexing.Token,
-};
-
 pub const MatchExpression = struct {
     match_token: lexing.Token,
     subject: *Node,
@@ -214,17 +208,23 @@ pub const MatchExpression = struct {
     else_arm: ?*Node,
 };
 
-pub const SubjectlessMatchArm = struct {
-    condition: *Node,
-    body: *Node,
+pub const MatchArm = struct {
+    pattern: Pattern,
     fat_arrow_token: lexing.Token,
+    body_expression: *Node,
 };
 
 pub const SubjectlessMatchExpression = struct {
     match_token: lexing.Token,
     arms: []SubjectlessMatchArm,
     else_token: ?lexing.Token,
-    else_arm: ?*Node,
+    else_arm_expression: ?*Node,
+};
+
+pub const SubjectlessMatchArm = struct {
+    condition: *Node,
+    fat_arrow_token: lexing.Token,
+    body_expression: *Node,
 };
 
 pub const ExpressionStatement = struct {
