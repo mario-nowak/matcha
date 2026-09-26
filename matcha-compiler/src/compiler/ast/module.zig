@@ -4,6 +4,12 @@ const type_expressions = @import("type_expressions");
 
 pub const NodeId = u32;
 
+pub const Pattern = @import("pattern.zig").Pattern;
+pub const PatternKind = @import("pattern.zig").PatternKind;
+pub const IntegerLiteralPattern = @import("pattern.zig").IntegerLiteralPattern;
+pub const CasePattern = @import("pattern.zig").CasePattern;
+pub const PayloadBinding = @import("pattern.zig").PayloadBinding;
+
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
     BindingDeclaration: BindingDeclaration,

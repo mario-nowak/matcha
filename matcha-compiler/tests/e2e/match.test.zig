@@ -41,6 +41,23 @@ test "integer and string matches use else arms when needed" {
     try e2e.expectSuccessOutput(&result, "other\n2\n");
 }
 
+test "negative integer arms match negative subjects" {
+    const source =
+        \\val number = 0 - 1;
+        \\val name = match number {
+        \\    1 => "one",
+        \\    -1 => "minus one",
+        \\    else => "other",
+        \\};
+        \\printString(name);
+    ;
+
+    var result = try e2e.runSource("match_negative_integer.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "minus one\n");
+}
+
 test "match expressions can be used directly as function bodies" {
     const source =
         \\item describe(flag: boolean): string = match flag {

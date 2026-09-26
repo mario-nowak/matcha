@@ -5,6 +5,7 @@ comptime {
     _ = @import("lexing/lexer.test.zig");
     _ = @import("parsing/type_expression_parser.test.zig");
     _ = @import("parsing/parser.test.zig");
+    referenceAllTestsRecursive(@import("parsing/pattern_parser.test.zig"));
     _ = @import("pipeline.test.zig");
     _ = @import("semantic_analysis/control_flow/structural_validator.test.zig");
     _ = @import("semantic_analysis/control_flow/exit_behavior_analyzer.test.zig");
