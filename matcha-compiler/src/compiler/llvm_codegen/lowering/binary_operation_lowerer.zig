@@ -91,19 +91,19 @@ pub const BinaryOperationLowerer = struct {
                 const subject_comparison_decision = decisionFor(.Equal, subject_type_id, analyzed_program);
                 self.decision_by_node_id.put(node.id, subject_comparison_decision) catch unreachable;
                 for (match_expression.arms) |arm| {
-                    self.lowerNode(arm.body, analyzed_program);
+                    self.lowerNode(arm.body_expression, analyzed_program);
                 }
-                if (match_expression.else_arm) |else_arm| {
-                    self.lowerNode(else_arm, analyzed_program);
+                if (match_expression.else_arm_expression) |else_arm_expression| {
+                    self.lowerNode(else_arm_expression, analyzed_program);
                 }
             },
             .SubjectlessMatchExpression => |subjectless_match_expression| {
                 for (subjectless_match_expression.arms) |arm| {
                     self.lowerNode(arm.condition, analyzed_program);
-                    self.lowerNode(arm.body, analyzed_program);
+                    self.lowerNode(arm.body_expression, analyzed_program);
                 }
-                if (subjectless_match_expression.else_arm) |else_arm| {
-                    self.lowerNode(else_arm, analyzed_program);
+                if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
+                    self.lowerNode(else_arm_expression, analyzed_program);
                 }
             },
             .CallExpression => |call_expression| {

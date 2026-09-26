@@ -287,10 +287,10 @@ pub const ExitBehaviorAnalyzer = struct {
 
         var arms_exit_behavior: ExitBehavior = .Terminates;
         for (match_expression.arms) |arm| {
-            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body_expression));
         }
-        if (match_expression.else_arm) |else_arm| {
-            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm));
+        if (match_expression.else_arm_expression) |else_arm_expression| {
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm_expression));
         }
 
         return self.markNodeExitBehavior(node, arms_exit_behavior);
@@ -308,10 +308,10 @@ pub const ExitBehaviorAnalyzer = struct {
                 return self.markNodeExitBehavior(node, .Terminates);
             }
 
-            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body));
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(arm.body_expression));
         }
-        if (subjectless_match_expression.else_arm) |else_arm| {
-            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm));
+        if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
+            arms_exit_behavior = joinArmExitBehavior(arms_exit_behavior, try self.validateTerminatesWithValue(else_arm_expression));
         }
 
         return self.markNodeExitBehavior(node, arms_exit_behavior);

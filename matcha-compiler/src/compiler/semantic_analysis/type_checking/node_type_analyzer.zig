@@ -1481,14 +1481,14 @@ pub const NodeTypeAnalyzer = struct {
                 },
             }
 
-            try self.joinMatchArmType(&arm_result_type, arm.body, parent_node_expectation, environment);
+            try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
         }
 
-        if (match_expression.else_arm) |else_arm| {
-            try self.joinMatchElseArmType(&arm_result_type, else_arm, parent_node_expectation, environment);
+        if (match_expression.else_arm_expression) |else_arm_expression| {
+            try self.joinMatchElseArmType(&arm_result_type, else_arm_expression, parent_node_expectation, environment);
         }
 
-        const is_exhaustive = match_expression.else_arm != null or switch (exhaustiveness_class) {
+        const is_exhaustive = match_expression.else_arm_expression != null or switch (exhaustiveness_class) {
             .Boolean => saw_true and saw_false,
             .IntegerOpen, .StringOpen => false,
         };
@@ -1509,14 +1509,14 @@ pub const NodeTypeAnalyzer = struct {
                 return error.DiagnosticsEmitted;
             }
 
-            try self.joinMatchArmType(&arm_result_type, arm.body, parent_node_expectation, environment);
+            try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
         }
 
-        if (subjectless_match_expression.else_arm) |else_arm| {
-            try self.joinMatchElseArmType(&arm_result_type, else_arm, parent_node_expectation, environment);
+        if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
+            try self.joinMatchElseArmType(&arm_result_type, else_arm_expression, parent_node_expectation, environment);
         }
 
-        const is_exhaustive = subjectless_match_expression.else_arm != null;
+        const is_exhaustive = subjectless_match_expression.else_arm_expression != null;
         return self.finishMatchType(subjectless_match_expression.match_token, arm_result_type, is_exhaustive, parent_node_expectation);
     }
 

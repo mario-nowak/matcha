@@ -175,11 +175,11 @@ pub fn emitMatchExpression(
     for (match_expression.arms) |*arm| {
         decision_arms.append(emitter.allocator, .{
             .condition = .{ .Pattern = &arm.pattern },
-            .body = arm.body,
+            .body = arm.body_expression,
         }) catch unreachable;
     }
 
-    const exhaustive_without_else = match_expression.else_arm == null and
+    const exhaustive_without_else = match_expression.else_arm_expression == null and
         lowered_program.analyzed_program.type_id_by_node_id.get(match_expression.subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id;
 
     return emitDecisionConstruct(
@@ -188,7 +188,7 @@ pub fn emitMatchExpression(
         .{
             .subject = match_expression.subject,
             .arms = decision_arms.items,
-            .else_arm = match_expression.else_arm,
+            .else_arm = match_expression.else_arm_expression,
             .exhaustive_without_else = exhaustive_without_else,
         },
         .{
@@ -214,7 +214,7 @@ pub fn emitSubjectlessMatchExpression(
     for (subjectless_match_expression.arms) |arm| {
         decision_arms.append(emitter.allocator, .{
             .condition = .{ .Expression = arm.condition },
-            .body = arm.body,
+            .body = arm.body_expression,
         }) catch unreachable;
     }
 
@@ -224,7 +224,7 @@ pub fn emitSubjectlessMatchExpression(
         .{
             .subject = null,
             .arms = decision_arms.items,
-            .else_arm = subjectless_match_expression.else_arm,
+            .else_arm = subjectless_match_expression.else_arm_expression,
         },
         .{
             .arm = "match_arm",

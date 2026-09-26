@@ -541,10 +541,10 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         try self.resolveNode(match_expression.subject, environment);
         for (match_expression.arms) |arm| {
-            try self.resolveNode(arm.body, environment);
+            try self.resolveNode(arm.body_expression, environment);
         }
-        if (match_expression.else_arm) |else_arm| {
-            try self.resolveNode(else_arm, environment);
+        if (match_expression.else_arm_expression) |else_arm_expression| {
+            try self.resolveNode(else_arm_expression, environment);
         }
     }
 
@@ -555,10 +555,10 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         for (subjectless_match_expression.arms) |arm| {
             try self.resolveNode(arm.condition, environment);
-            try self.resolveNode(arm.body, environment);
+            try self.resolveNode(arm.body_expression, environment);
         }
-        if (subjectless_match_expression.else_arm) |else_arm| {
-            try self.resolveNode(else_arm, environment);
+        if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
+            try self.resolveNode(else_arm_expression, environment);
         }
     }
 
