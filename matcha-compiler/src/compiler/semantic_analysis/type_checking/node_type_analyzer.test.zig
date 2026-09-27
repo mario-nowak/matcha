@@ -986,7 +986,7 @@ pub const NodeTypeAnalyzer = struct {
 
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "match subject must be boolean, integer, or string, found unit" },
+                    .{ .message = "match subject must be boolean, integer, string, or union, found unit" },
                 });
             }
 
@@ -1082,6 +1082,293 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "match expression is not exhaustive" },
+                });
+            }
+
+            test "rejects a boolean match with only a false arm" {
+                const source =
+                    \\val name = match true {
+                    \\    false => "no",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive" },
+                });
+            }
+
+            test "rejects an else arm when the arms already cover true and false" {
+                const source =
+                    \\val name = match true {
+                    \\    true => "yes",
+                    \\    false => "no",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "else arm is unreachable because the match arms already cover every value" },
+                });
+            }
+        };
+
+        pub const union_match_expressions = struct {
+            test "types a match that covers every union case as the arm type" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .None => 0,
+                    \\    .Some => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+            }
+
+            test "accepts a qualified case pattern that names the subject union" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    Result.None => 0,
+                    \\    Result.Some => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+            }
+
+            test "accepts a match that misses a union case when it has an else arm" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .Some => 1,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+            }
+
+            test "types a payload binding as the payload type of its case" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .None => 0,
+                    \\    .Some(value) => value,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const payload_binding = match_node.kind.MatchExpression.arms[1].pattern.kind.Case.binding.?;
+                const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.Integer);
+            }
+
+            test "types a payload binding of a unit case as unit" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .None(nothing) => 0,
+                    \\    .Some => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const payload_binding = match_node.kind.MatchExpression.arms[0].pattern.kind.Case.binding.?;
+                const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.Unit);
+            }
+
+            test "names the missing case when a match misses one union case without an else arm" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .Some => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive, missing case: 'None'" },
+                });
+            }
+
+            test "rejects a second arm for the same union case" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .Some => 1,
+                    \\    .Some(value) => value,
+                    \\    .None => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "duplicate match arm for case 'Some'" },
+                });
+            }
+
+            test "rejects a case name that the union does not have" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .Other => 1,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "no case named 'Other' exists on union type 'Result'" },
+                });
+            }
+
+            test "rejects a qualifier that names another union" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\item Other = union { None };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    Other.None => 0,
+                    \\    else => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "case pattern qualifier 'Other' does not match the subject type 'Result'" },
+                });
+            }
+
+            test "rejects an integer pattern when the subject is a union" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    1 => 1,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "union match arms must use case patterns" },
+                });
+            }
+
+            test "names every missing case when a match misses two union cases without an else arm" {
+                const source =
+                    \\item Direction = union { North, East, South };
+                    \\val direction: Direction = .North;
+                    \\val number = match direction {
+                    \\    .North => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive, missing cases: 'East', 'South'" },
+                });
+            }
+
+            test "rejects an else arm when the arms already cover every union case" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .None => 0,
+                    \\    .Some => 1,
+                    \\    else => 2,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "else arm is unreachable because the match arms already cover every value" },
                 });
             }
         };

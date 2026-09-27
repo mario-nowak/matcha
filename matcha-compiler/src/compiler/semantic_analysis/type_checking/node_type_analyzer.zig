@@ -841,9 +841,7 @@ pub const NodeTypeAnalyzer = struct {
         const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
         const union_symbol_information = union_symbol.kind.Union;
 
-        for (union_symbol_information.cases, 0..) |union_case, case_index| {
-            if (!std.mem.eql(u8, union_case.name, member_name)) continue;
-
+        if (findUnionCaseIndex(union_symbol_information, member_name)) |case_index| {
             // A unit case in value position is the constructed value itself, so `Result.None` reads as
             // `Result.None(unit)`. In callee position it stays a constructor so that the explicit form still type checks.
             const union_type_case = union_type.cases[case_index];
@@ -1418,80 +1416,145 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
-        const subject_type = try self.checkNode(match_expression.subject, .asExpression, environment);
-        const exhaustiveness_class: ExhaustivenessClass = switch (self.getType(subject_type)) {
+        const subject_type_id = try self.checkNode(match_expression.subject, .asExpression, environment);
+        const subject_type = self.getType(subject_type_id);
+        const exhaustiveness_class: ExhaustivenessClass = switch (subject_type) {
             .Boolean => .Boolean,
             .Integer => .IntegerOpen,
             .String => .StringOpen,
+            .Union => .Union,
             else => {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, match_expression.match_token, "match subject must be boolean, integer, or string, found {s}", .{try self.getTypeName(subject_type)});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, match_expression.match_token, "match subject must be boolean, integer, string, or union, found {s}", .{try self.getTypeName(subject_type_id)});
                 return error.DiagnosticsEmitted;
             },
         };
 
-        var saw_true = false;
-        var saw_false = false;
-        var integer_patterns = std.AutoHashMap(i64, void).init(self.allocator);
-        defer integer_patterns.deinit();
-
+        var is_exhaustive = false;
         var arm_result_type: ?typing.TypeId = null;
-        for (match_expression.arms) |arm| {
-            switch (exhaustiveness_class) {
-                .Boolean => switch (arm.pattern.kind) {
-                    .BooleanLiteral => |token| {
-                        if (token.kind.BooleanLiteral) {
-                            if (saw_true) {
-                                try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'true' match arm");
-                                return error.DiagnosticsEmitted;
-                            }
-                            saw_true = true;
-                        } else {
-                            if (saw_false) {
-                                try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'false' match arm");
-                                return error.DiagnosticsEmitted;
-                            }
-                            saw_false = true;
-                        }
-                    },
-                    else => {
-                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "boolean match arms must use boolean literals");
-                        return error.DiagnosticsEmitted;
-                    },
-                },
-                .IntegerOpen => switch (arm.pattern.kind) {
-                    .IntegerLiteral => |integer_literal| {
-                        const value = integer_literal.value();
-                        if (integer_patterns.contains(value)) {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.pattern.primaryToken(), "duplicate integer match arm for value {d}", .{value});
-                            return error.DiagnosticsEmitted;
-                        }
-                        integer_patterns.put(value, {}) catch unreachable;
-                    },
-                    else => {
-                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "integer match arms must use integer literals");
-                        return error.DiagnosticsEmitted;
-                    },
-                },
-                .StringOpen => switch (arm.pattern.kind) {
-                    .StringLiteral => {},
-                    else => {
-                        try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "string match arms must use string literals");
-                        return error.DiagnosticsEmitted;
-                    },
-                },
-            }
 
-            try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
+        switch (exhaustiveness_class) {
+            .Boolean => {
+                var saw_true = false;
+                var saw_false = false;
+                for (match_expression.arms) |arm| {
+                    switch (arm.pattern.kind) {
+                        .BooleanLiteral => |token| {
+                            if (token.kind.BooleanLiteral) {
+                                if (saw_true) {
+                                    try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'true' match arm");
+                                    return error.DiagnosticsEmitted;
+                                }
+                                saw_true = true;
+                            } else {
+                                if (saw_false) {
+                                    try self.diagnostic_store.emitErrorFromToken(token, "duplicate 'false' match arm");
+                                    return error.DiagnosticsEmitted;
+                                }
+                                saw_false = true;
+                            }
+                        },
+                        else => {
+                            try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "boolean match arms must use boolean literals");
+                            return error.DiagnosticsEmitted;
+                        },
+                    }
+                    try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
+                }
+                is_exhaustive = saw_true and saw_false;
+            },
+            .Union => {
+                const union_type = subject_type.Union;
+                const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
+                const union_symbol_information = union_symbol.kind.Union;
+
+                const is_case_matched = self.allocator.alloc(bool, union_type.cases.len) catch unreachable;
+                defer self.allocator.free(is_case_matched);
+                @memset(is_case_matched, false);
+
+                for (match_expression.arms) |arm| {
+                    switch (arm.pattern.kind) {
+                        .Case => |case_pattern| {
+                            if (case_pattern.qualifier_token) |qualifier_token| {
+                                const qualifier_symbol_id = self.resolved_program.symbol_id_by_node_id.get(arm.pattern.id).?;
+                                if (qualifier_symbol_id != union_type.symbol_id) {
+                                    try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, qualifier_token, "case pattern qualifier '{s}' does not match the subject type '{s}'", .{ qualifier_token.kind.Identifier, union_symbol.name });
+                                    return error.DiagnosticsEmitted;
+                                }
+                            }
+
+                            const case_name = case_pattern.case_name_token.kind.Identifier;
+                            const case_index = findUnionCaseIndex(union_symbol_information, case_name) orelse {
+                                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, case_pattern.case_name_token, "no case named '{s}' exists on union type '{s}'", .{ case_name, union_symbol.name });
+                                return error.DiagnosticsEmitted;
+                            };
+                            if (is_case_matched[case_index]) {
+                                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, case_pattern.case_name_token, "duplicate match arm for case '{s}'", .{case_name});
+                                return error.DiagnosticsEmitted;
+                            }
+                            is_case_matched[case_index] = true;
+
+                            if (case_pattern.binding) |payload_binding| {
+                                const binding_symbol_id = self.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
+                                self.type_id_by_symbol_id.put(binding_symbol_id, union_type.cases[case_index].type_id) catch unreachable;
+                            }
+                        },
+                        .IntegerLiteral, .BooleanLiteral, .StringLiteral => {
+                            try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "union match arms must use case patterns");
+                            return error.DiagnosticsEmitted;
+                        },
+                    }
+                    try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
+                }
+                is_exhaustive = std.mem.allEqual(bool, is_case_matched, true);
+                if (!is_exhaustive and match_expression.else_arm_expression == null) {
+                    try self.emitMissingUnionCasesError(match_expression.match_token, union_symbol_information, is_case_matched);
+                    return error.DiagnosticsEmitted;
+                }
+            },
+            .IntegerOpen => {
+                var integer_patterns = std.AutoHashMap(i64, void).init(self.allocator);
+                defer integer_patterns.deinit();
+                for (match_expression.arms) |arm| {
+                    switch (arm.pattern.kind) {
+                        .IntegerLiteral => |integer_literal| {
+                            const value = integer_literal.value();
+                            if (integer_patterns.contains(value)) {
+                                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, arm.pattern.primaryToken(), "duplicate integer match arm for value {d}", .{value});
+                                return error.DiagnosticsEmitted;
+                            }
+                            integer_patterns.put(value, {}) catch unreachable;
+                        },
+                        else => {
+                            try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "integer match arms must use integer literals");
+                            return error.DiagnosticsEmitted;
+                        },
+                    }
+                    try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
+                }
+            },
+            .StringOpen => {
+                for (match_expression.arms) |arm| {
+                    switch (arm.pattern.kind) {
+                        .StringLiteral => {},
+                        else => {
+                            try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "string match arms must use string literals");
+                            return error.DiagnosticsEmitted;
+                        },
+                    }
+                    try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
+                }
+            },
         }
 
         if (match_expression.else_arm_expression) |else_arm_expression| {
+            if (is_exhaustive) {
+                try self.diagnostic_store.emitErrorFromToken(match_expression.else_token.?, "else arm is unreachable because the match arms already cover every value");
+                return error.DiagnosticsEmitted;
+            }
             try self.joinMatchElseArmType(&arm_result_type, else_arm_expression, parent_node_expectation, environment);
+            is_exhaustive = true;
         }
 
-        const is_exhaustive = match_expression.else_arm_expression != null or switch (exhaustiveness_class) {
-            .Boolean => saw_true and saw_false,
-            .IntegerOpen, .StringOpen => false,
-        };
         return self.finishMatchType(match_expression.match_token, arm_result_type, is_exhaustive, parent_node_expectation);
     }
 
@@ -1556,6 +1619,32 @@ pub const NodeTypeAnalyzer = struct {
         }
     }
 
+    fn emitMissingUnionCasesError(
+        self: *@This(),
+        match_token: lexing.Token,
+        union_symbol_information: symbols.UnionSymbolInformation,
+        is_case_matched: []const bool,
+    ) TypeError!void {
+        var missing_cases = std.ArrayList(u8){};
+        defer missing_cases.deinit(self.allocator);
+        var missing_case_count: usize = 0;
+        for (union_symbol_information.cases, is_case_matched) |union_case, is_matched| {
+            if (is_matched) continue;
+            if (missing_case_count > 0) {
+                missing_cases.appendSlice(self.allocator, ", ") catch unreachable;
+            }
+            missing_cases.writer(self.allocator).print("'{s}'", .{union_case.name}) catch unreachable;
+            missing_case_count += 1;
+        }
+
+        try self.diagnostic_store.emitFormattedErrorFromToken(
+            self.allocator,
+            match_token,
+            "match expression is not exhaustive, missing {s}: {s}",
+            .{ if (missing_case_count == 1) "case" else "cases", missing_cases.items },
+        );
+    }
+
     fn finishMatchType(
         self: *@This(),
         match_token: lexing.Token,
@@ -1598,3 +1687,11 @@ pub const NodeTypeAnalyzer = struct {
         return self.type_store.getType(type_id);
     }
 };
+
+fn findUnionCaseIndex(union_symbol_information: symbols.UnionSymbolInformation, case_name: []const u8) ?usize {
+    for (union_symbol_information.cases, 0..) |union_case, case_index| {
+        if (std.mem.eql(u8, union_case.name, case_name)) return case_index;
+    }
+
+    return null;
+}
