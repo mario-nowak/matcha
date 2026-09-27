@@ -1653,7 +1653,6 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
     ) TypeError!typing.TypeId {
         if (!is_exhaustive) {
-            // Here it would be cool if we could explain which cases are not present
             try self.diagnostic_store.emitErrorFromToken(match_token, "match expression is not exhaustive");
             return error.DiagnosticsEmitted;
         }
