@@ -1102,6 +1102,26 @@ pub const NodeTypeAnalyzer = struct {
                     .{ .message = "match expression is not exhaustive" },
                 });
             }
+
+            test "rejects an else arm when the arms already cover true and false" {
+                const source =
+                    \\val name = match true {
+                    \\    true => "yes",
+                    \\    false => "no",
+                    \\    else => "other",
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "else arm is unreachable because the match arms already cover every value" },
+                });
+            }
         };
 
         pub const union_match_expressions = struct {
@@ -1204,7 +1224,7 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.Unit);
             }
 
-            test "rejects a match that misses a union case without an else arm" {
+            test "names the missing case when a match misses one union case without an else arm" {
                 const source =
                     \\item Result = union { None, Some: int };
                     \\val result: Result = .Some(1);
@@ -1220,7 +1240,7 @@ pub const NodeTypeAnalyzer = struct {
 
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "match expression is not exhaustive" },
+                    .{ .message = "match expression is not exhaustive, missing case: 'None'" },
                 });
             }
 
@@ -1307,6 +1327,48 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "union match arms must use case patterns" },
+                });
+            }
+
+            test "names every missing case when a match misses two union cases without an else arm" {
+                const source =
+                    \\item Direction = union { North, East, South };
+                    \\val direction: Direction = .North;
+                    \\val number = match direction {
+                    \\    .North => 1,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match expression is not exhaustive, missing cases: 'East', 'South'" },
+                });
+            }
+
+            test "rejects an else arm when the arms already cover every union case" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .None => 0,
+                    \\    .Some => 1,
+                    \\    else => 2,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "else arm is unreachable because the match arms already cover every value" },
                 });
             }
         };

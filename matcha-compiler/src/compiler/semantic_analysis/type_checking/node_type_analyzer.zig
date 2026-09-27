@@ -1506,6 +1506,10 @@ pub const NodeTypeAnalyzer = struct {
                     try self.joinMatchArmType(&arm_result_type, arm.body_expression, parent_node_expectation, environment);
                 }
                 is_exhaustive = std.mem.allEqual(bool, is_case_matched, true);
+                if (!is_exhaustive and match_expression.else_arm_expression == null) {
+                    try self.emitMissingUnionCasesError(match_expression.match_token, union_symbol_information, is_case_matched);
+                    return error.DiagnosticsEmitted;
+                }
             },
             .IntegerOpen => {
                 var integer_patterns = std.AutoHashMap(i64, void).init(self.allocator);
@@ -1543,6 +1547,10 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         if (match_expression.else_arm_expression) |else_arm_expression| {
+            if (is_exhaustive) {
+                try self.diagnostic_store.emitErrorFromToken(match_expression.else_token.?, "else arm is unreachable because the match arms already cover every value");
+                return error.DiagnosticsEmitted;
+            }
             try self.joinMatchElseArmType(&arm_result_type, else_arm_expression, parent_node_expectation, environment);
             is_exhaustive = true;
         }
@@ -1609,6 +1617,32 @@ pub const NodeTypeAnalyzer = struct {
         } else {
             arm_result_type.* = else_type;
         }
+    }
+
+    fn emitMissingUnionCasesError(
+        self: *@This(),
+        match_token: lexing.Token,
+        union_symbol_information: symbols.UnionSymbolInformation,
+        is_case_matched: []const bool,
+    ) TypeError!void {
+        var missing_cases = std.ArrayList(u8){};
+        defer missing_cases.deinit(self.allocator);
+        var missing_case_count: usize = 0;
+        for (union_symbol_information.cases, is_case_matched) |union_case, is_matched| {
+            if (is_matched) continue;
+            if (missing_case_count > 0) {
+                missing_cases.appendSlice(self.allocator, ", ") catch unreachable;
+            }
+            missing_cases.writer(self.allocator).print("'{s}'", .{union_case.name}) catch unreachable;
+            missing_case_count += 1;
+        }
+
+        try self.diagnostic_store.emitFormattedErrorFromToken(
+            self.allocator,
+            match_token,
+            "match expression is not exhaustive, missing {s}: {s}",
+            .{ if (missing_case_count == 1) "case" else "cases", missing_cases.items },
+        );
     }
 
     fn finishMatchType(
