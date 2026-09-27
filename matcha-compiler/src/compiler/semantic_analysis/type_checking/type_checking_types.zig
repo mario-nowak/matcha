@@ -24,6 +24,7 @@ pub const NodeRole = union(enum) {
 
 pub const ExhaustivenessClass = enum {
     Boolean,
+    Union,
     IntegerOpen,
     StringOpen,
 };
