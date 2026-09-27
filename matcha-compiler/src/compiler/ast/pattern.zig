@@ -40,6 +40,7 @@ pub const CasePattern = struct {
 };
 
 pub const PayloadBinding = struct {
+    id: NodeId,
     left_parenthesis: lexing.Token,
     name_token: lexing.Token,
     right_parenthesis: lexing.Token,

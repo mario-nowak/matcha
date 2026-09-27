@@ -318,7 +318,7 @@ pub const NameResolver = struct {
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
         const declaration_name = binding_declaration.name.kind.Identifier;
-        try self.validateBindingDeclarationName(binding_declaration.name, declaration_name, environment);
+        try self.validateBindingDeclarationName(binding_declaration.name, declaration_name, "value", environment);
 
         try self.resolveNode(binding_declaration.value, environment);
         const annotated_type_reference = if (binding_declaration.type_annotation) |type_annotation|
@@ -347,17 +347,18 @@ pub const NameResolver = struct {
         self: *@This(),
         declaration_token: lexing.Token,
         declaration_name: []const u8,
+        kind_name: []const u8,
         environment: ResolutionEnvironment,
     ) NameResolutionError!void {
-        try self.validateIdentifierIsAvailable(declaration_token, declaration_name, "value");
+        try self.validateIdentifierIsAvailable(declaration_token, declaration_name, kind_name);
         if (environment.options.module_shadowing == .Forbidden) {
             if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "value '{s}' is already declared in module scope", .{declaration_name});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "{s} '{s}' is already declared in module scope", .{ kind_name, declaration_name });
                 return error.DiagnosticsEmitted;
             }
         }
         if (environment.node_scope.lookupSymbol(declaration_name)) |_| {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "value '{s}' is already declared in this scope", .{declaration_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "{s} '{s}' is already declared in this scope", .{ kind_name, declaration_name });
             return error.DiagnosticsEmitted;
         }
     }
@@ -437,7 +438,7 @@ pub const NameResolver = struct {
 
         var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
         const item_name = for_in.item_name.kind.Identifier;
-        try self.validateIdentifierIsAvailable(for_in.item_name, item_name, "loop item");
+        try self.validateBindingDeclarationName(for_in.item_name, item_name, "for-in binding", environment);
         const item_symbol_id = self.symbol_table.insertSymbol(.{
             .name = item_name,
             .declared_at = for_in.item_name,
@@ -541,7 +542,32 @@ pub const NameResolver = struct {
     ) NameResolutionError!void {
         try self.resolveNode(match_expression.subject, environment);
         for (match_expression.arms) |arm| {
-            try self.resolveNode(arm.body_expression, environment);
+            var body_expression_environment = environment;
+            var body_expression_scope = scope.Scope.init(self.allocator, environment.node_scope);
+            switch (arm.pattern.kind) {
+                .Case => |case_pattern| {
+                    if (case_pattern.qualifier_token) |qualifier_token| {
+                        const qualifier_symbol_id = try self.getSymbolIdForName(qualifier_token, qualifier_token.kind.Identifier, environment);
+                        self.symbol_id_by_node_id.put(arm.pattern.id, qualifier_symbol_id) catch unreachable;
+                    }
+                    if (case_pattern.binding) |payload_binding| {
+                        const binding_name = payload_binding.name_token.kind.Identifier;
+                        try self.validateBindingDeclarationName(payload_binding.name_token, binding_name, "payload binding", environment);
+                        const binding_symbol_id = self.symbol_table.insertSymbol(.{
+                            .name = binding_name,
+                            .declared_at = payload_binding.name_token,
+                            .kind = .{ .Binding = .{ .binding_mutability = symbols.BindingMutability.Immutable } },
+                        });
+                        self.symbol_id_by_node_id.put(payload_binding.id, binding_symbol_id) catch unreachable;
+                        body_expression_scope.insertSymbol(binding_name, binding_symbol_id);
+
+                        body_expression_environment.node_scope = &body_expression_scope;
+                    }
+                },
+                .IntegerLiteral, .BooleanLiteral, .StringLiteral => {},
+            }
+
+            try self.resolveNode(arm.body_expression, body_expression_environment);
         }
         if (match_expression.else_arm_expression) |else_arm_expression| {
             try self.resolveNode(else_arm_expression, environment);

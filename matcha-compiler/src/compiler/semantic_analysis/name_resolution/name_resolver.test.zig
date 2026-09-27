@@ -512,3 +512,439 @@ test "NameResolver > resolveProgram: rejects declarations that use reserved buil
         .{ .message = "value name 'unit' is reserved" },
     });
 }
+
+pub const NameResolver = struct {
+    pub const resolveProgram = struct {
+        pub const match_expression = struct {
+            test "resolves a payload binding in its arm body" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .None => printString("None"),
+                    \\    .Some(value) => printInt(value),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
+                const second_match_arm = match_node.kind.MatchExpression.arms[1];
+                const print_call_argument = second_match_arm.body_expression.kind.CallExpression.arguments[0];
+
+                const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+                const value_pattern_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.Case.binding.?.id).?;
+                const value_body_symbol_id = result.symbol_id_by_node_id.get(print_call_argument.id).?;
+                try expect(value_body_symbol_id).toMatch(value_pattern_symbol_id);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+
+            test "keeps a payload binding out of the other arms" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(value) => printInt(value),
+                    \\    .None => printInt(value),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'value'" },
+                });
+            }
+
+            test "keeps a payload binding out of the else arm" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(value) => printInt(value),
+                    \\    else => printInt(value),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'value'" },
+                });
+            }
+
+            test "keeps a payload binding out of statements after the match" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(value) => printInt(value),
+                    \\    else => printInt(0),
+                    \\};
+                    \\printInt(value);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'value'" },
+                });
+            }
+
+            test "gives payload bindings with the same name in two arms separate symbols" {
+                const source =
+                    \\item Pair = union { First: int, Second: int };
+                    \\val pair = .First(1);
+                    \\match pair {
+                    \\    .First(value) => printInt(value),
+                    \\    .Second(value) => printInt(value),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
+                const first_match_arm = match_node.kind.MatchExpression.arms[0];
+                const second_match_arm = match_node.kind.MatchExpression.arms[1];
+
+                const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+                const first_value_symbol_id = result.symbol_id_by_node_id.get(first_match_arm.pattern.kind.Case.binding.?.id).?;
+                const second_value_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.Case.binding.?.id).?;
+                try std.testing.expect(first_value_symbol_id != second_value_symbol_id);
+            }
+
+            test "records a payload binding as an immutable binding symbol" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(value) => printInt(value),
+                    \\    else => printInt(0),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
+                const some_match_arm = match_node.kind.MatchExpression.arms[0];
+
+                const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+                const value_symbol_id = result.symbol_id_by_node_id.get(some_match_arm.pattern.kind.Case.binding.?.id).?;
+                try expect(result.symbol_table.getSymbol(value_symbol_id)).toMatch(.{
+                    .name = "value",
+                    .kind = .{ .Binding = .{ .binding_mutability = .Immutable } },
+                });
+            }
+
+            test "records no symbol for a case pattern without a qualifier" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .None => printInt(0),
+                    \\    else => printInt(1),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
+                const none_match_arm = match_node.kind.MatchExpression.arms[0];
+
+                const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result.symbol_id_by_node_id.get(none_match_arm.pattern.id)).toMatch(null);
+            }
+
+            test "rejects unit as a payload binding name" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(unit) => printInt(0),
+                    \\    else => printInt(1),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "payload binding name 'unit' is reserved" },
+                });
+            }
+
+            test "rejects a payload binding with the name of a parameter" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\item describe(result: Result, value: int): int = match result {
+                    \\    .Some(value) => value,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "payload binding 'value' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a payload binding with the name of a binding in an enclosing block" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\item describe(result: Result): int = {
+                    \\    val value = 1;
+                    \\    match result {
+                    \\        .Some(value) => value,
+                    \\        else => 0,
+                    \\    }
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "payload binding 'value' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a payload binding with the name of a payload binding in an enclosing arm" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\item describe(outer: Result, inner: Result): int = match outer {
+                    \\    .Some(value) => match inner {
+                    \\        .Some(value) => value,
+                    \\        else => 0,
+                    \\    },
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "payload binding 'value' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a payload binding with the name of a module item outside functions" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    .Some(printString) => printInt(0),
+                    \\    else => printInt(1),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "payload binding 'printString' is already declared in module scope" },
+                });
+            }
+
+            test "lets a payload binding shadow a module item inside a function" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\item value(): int = 1;
+                    \\item describe(result: Result): int = match result {
+                    \\    .Some(value) => value,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                _ = try fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+
+            test "resolves the qualifier of a case pattern to the union" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    Result.None => printInt(0),
+                    \\    else => printInt(1),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+                const union_node = fixture.program.statements[0];
+                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
+                const none_match_arm = match_node.kind.MatchExpression.arms[0];
+
+                const result = try fixture.resolver.resolveProgram(&fixture.program);
+
+                const union_symbol_id = result.symbol_id_by_node_id.get(union_node.id).?;
+                try expect(result.symbol_id_by_node_id.get(none_match_arm.pattern.id).?).toMatch(union_symbol_id);
+            }
+
+            test "rejects an undefined qualifier in a case pattern" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result = .Some(1);
+                    \\match result {
+                    \\    Missing.None => printInt(0),
+                    \\    else => printInt(1),
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'Missing'" },
+                });
+            }
+        };
+
+        pub const for_in = struct {
+            test "rejects a for-in binding with the name of a parameter" {
+                const source =
+                    \\item sum(numbers: int[], number: int): int = {
+                    \\    for number in numbers {
+                    \\        printInt(number);
+                    \\    }
+                    \\    return 0;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "for-in binding 'number' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a for-in binding with the name of a binding in an enclosing block" {
+                const source =
+                    \\item sum(numbers: int[]): int = {
+                    \\    val number = 1;
+                    \\    for number in numbers {
+                    \\        printInt(number);
+                    \\    }
+                    \\    return 0;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "for-in binding 'number' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a for-in binding with the name of a for-in binding in an enclosing loop" {
+                const source =
+                    \\item sum(numbers: int[]): int = {
+                    \\    for number in numbers {
+                    \\        for number in numbers {
+                    \\            printInt(number);
+                    \\        }
+                    \\    }
+                    \\    return 0;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "for-in binding 'number' is already declared in this scope" },
+                });
+            }
+
+            test "rejects a for-in binding with the name of a module item outside functions" {
+                const source =
+                    \\val numbers = [1, 2, 3];
+                    \\for printString in numbers {
+                    \\    printInt(printString);
+                    \\}
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "for-in binding 'printString' is already declared in module scope" },
+                });
+            }
+
+            test "lets a for-in binding shadow a module item inside a function" {
+                const source =
+                    \\item number(): int = 1;
+                    \\item sum(numbers: int[]): int = {
+                    \\    for number in numbers {
+                    \\        printInt(number);
+                    \\    }
+                    \\    return 0;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                _ = try fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+        };
+    };
+};

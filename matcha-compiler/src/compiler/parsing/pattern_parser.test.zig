@@ -114,6 +114,20 @@ pub const PatternParser = struct {
 
                 try expect(second_pattern).toMatch(.{ .id = 1 });
             }
+
+            test "gives a payload binding a node id before its case pattern" {
+                const source = ".Some(value)";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupPatternParserFixture(&arena, source);
+
+                const pattern = try fixture.pattern_parser.parse();
+
+                try expect(pattern).toMatch(.{
+                    .id = 1,
+                    .kind = .{ .Case = .{ .binding = .{ .id = 0 } } },
+                });
+            }
         };
 
         pub const diagnostics = struct {
