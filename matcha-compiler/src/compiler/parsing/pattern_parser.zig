@@ -103,6 +103,7 @@ pub const PatternParser = struct {
         }
 
         return .{
+            .id = self.generateNodeId(),
             .left_parenthesis = left_parenthesis,
             .name_token = name_token,
             .right_parenthesis = right_parenthesis,
@@ -110,8 +111,12 @@ pub const PatternParser = struct {
     }
 
     fn createPattern(self: *@This(), kind: ast.PatternKind) ast.Pattern {
+        return .{ .id = self.generateNodeId(), .kind = kind };
+    }
+
+    fn generateNodeId(self: *@This()) ast.NodeId {
         const id = self.next_node_id.*;
         self.next_node_id.* += 1;
-        return .{ .id = id, .kind = kind };
+        return id;
     }
 };

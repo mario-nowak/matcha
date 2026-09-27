@@ -9,7 +9,7 @@ comptime {
     _ = @import("pipeline.test.zig");
     _ = @import("semantic_analysis/control_flow/structural_validator.test.zig");
     referenceAllTestsRecursive(@import("semantic_analysis/control_flow/exit_behavior_analyzer.test.zig"));
-    _ = @import("semantic_analysis/name_resolution/name_resolver.test.zig");
+    referenceAllTestsRecursive(@import("semantic_analysis/name_resolution/name_resolver.test.zig"));
     referenceAllTestsRecursive(@import("semantic_analysis/type_checking/node_type_analyzer.test.zig"));
     referenceAllTestsRecursive(@import("semantic_analysis/runtime_representation/runtime_representation_analyzer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/call_lowerer.test.zig"));
