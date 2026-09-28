@@ -438,6 +438,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                 );
             }
+
+            test "pattern matching" {}
         };
 
         pub const arrays = struct {

@@ -20,6 +20,9 @@ const LoopConstruct = struct {
     body_block: *const ast.Block,
 };
 
+// This is a bit weird because we can have a decision construct with no subject but pattern arm conditions
+// Maybe we need two different decision constructs
+// Because pattern matching will become significantly different from subjectless match
 const DecisionConstruct = struct {
     subject: ?*const ast.Node,
     arms: []const DecisionArm,
@@ -512,6 +515,7 @@ fn emitDecisionConstruct(
                 continue_reachable = true;
             }
 
+            //
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
             } else {
@@ -626,6 +630,7 @@ fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register
             emitter.function_symbol_generator,
             emitter.function_ir_builder,
         ),
+        // This should emit the case index
         .Case => unreachable,
     };
 }

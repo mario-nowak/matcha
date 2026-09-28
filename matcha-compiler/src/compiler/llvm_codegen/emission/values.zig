@@ -122,6 +122,14 @@ pub fn emitLoweredBinaryOperation(
 
             return result_register;
         },
+        // Here we could add a UnionTagCompareEqual
+        // The left hand side would be a pointer to a union
+        // But I could emit them as the tag index. The the left hand side would be the ptr and the right hand side would be a register pointing at the tag
+        // emitPatternValue could then emit this tag
+        // I could reuse this later for something like `if result == .Some { ... }`
+        // And I could later add UnionCompareEqual
+        // The one thing I'm not sure about is that I would need to de-reference the subject register for each comparison
+        // this seems unnecessary but it would make the code a lot easier to write
         .StringConcatenate => emitter.runtime_call_emitter.emitStringConcatenateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,

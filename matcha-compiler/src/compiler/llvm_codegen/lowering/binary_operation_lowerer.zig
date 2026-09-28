@@ -37,7 +37,7 @@ pub const BinaryOperationLowerer = struct {
         switch (node.kind) {
             .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
             .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                .Union => unreachable,
+                .Union => {},
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
                 .Structure => |structure_definition| {
                     for (structure_definition.function_definitions) |*function_definition_node| {

@@ -13,3 +13,4 @@ pub const setupLowererFixture = @import("lowerer_helpers.zig").setupLowererFixtu
 pub const setupLoweringAnalyzerFixture = @import("lowering_analyzer_helpers.zig").setupLoweringAnalyzerFixture;
 pub const setupStructureTypeRendererFixture = @import("structure_type_renderer_helpers.zig").setupStructureTypeRendererFixture;
 pub const setupLlvmIrCodeGeneratorFixture = @import("llvm_ir_code_generator_helpers.zig").setupLlvmIrCodeGeneratorFixture;
+pub const setupUnionTypeRendererFixture = @import("union_type_renderer_helpers.zig").setupUnionTypeRendererFixture;
