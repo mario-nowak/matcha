@@ -29,17 +29,17 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Point = type { i64, i64 }
+                    \\%matcha_structure_0__Point = type { i64, i64 }
                     \\
-                    \\define i64 @matcha_function_1_sum(ptr %arg_0_point) {
+                    \\define i64 @matcha_function_1__sum(ptr %arg_0_point) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    store ptr %arg_0_point, ptr %.s_0
                     \\    %.t_0 = load ptr, ptr %.s_0
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    %.t_2 = load i64, ptr %.t_1
                     \\    %.t_3 = load ptr, ptr %.s_0
-                    \\    %.t_4 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 1
+                    \\    %.t_4 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_3, i32 0, i32 1
                     \\    %.t_5 = load i64, ptr %.t_4
                     \\    %.t_6 = add i64 %.t_2, %.t_5
                     \\    ret i64 %.t_6
@@ -49,12 +49,12 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Point, ptr null, i32 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
-                    \\    %.t_2 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_2 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_2
-                    \\    %.t_3 = call i64 @matcha_function_1_sum(ptr %.t_0)
+                    \\    %.t_3 = call i64 @matcha_function_1__sum(ptr %.t_0)
                     \\    call void @matcha_print_int(i64 %.t_3)
                     \\    ret i32 0
                     \\}
@@ -697,9 +697,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Mixed = type { i64 }
+                    \\%matcha_structure_0__Mixed = type { i64 }
                     \\
-                    \\define void @matcha_function_1_consume(ptr %arg_0_mixed) {
+                    \\define void @matcha_function_1__consume(ptr %arg_0_mixed) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    store ptr %arg_0_mixed, ptr %.s_0
@@ -710,10 +710,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Mixed, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Mixed, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Mixed, ptr null, i32 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Mixed, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
-                    \\    call void @matcha_function_1_consume(ptr %.t_0)
+                    \\    call void @matcha_function_1__consume(ptr %.t_0)
                     \\    ret i32 0
                     \\}
                     \\
@@ -747,7 +747,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\define ptr @matcha_function_1_choose(i1 %arg_0_flag) {
+                    \\define ptr @matcha_function_1__choose(i1 %arg_0_flag) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    store i1 %arg_0_flag, ptr %.s_0
@@ -769,7 +769,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_function_1_choose(i1 1)
+                    \\    %.t_0 = call ptr @matcha_function_1__choose(i1 1)
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    ret i32 0
                     \\}
@@ -885,19 +885,19 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Point = type { i64 }
+                    \\%matcha_structure_0__Point = type { i64 }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Point, ptr null, i32 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_2 = load ptr, ptr %.s_0
-                    \\    %.t_3 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_2, i32 0, i32 0
+                    \\    %.t_3 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_2, i32 0, i32 0
                     \\    store i64 2, ptr %.t_3
                     \\    ret i32 0
                     \\}
@@ -932,7 +932,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\@.string_literal_0 = private unnamed_addr constant [2 x i8] c"hi"
                     \\
-                    \\define %String @matcha_function_0_echo(%String %arg_0_text) {
+                    \\define %String @matcha_function_0__echo(%String %arg_0_text) {
                     \\entry:
                     \\    %.s_0 = alloca %String
                     \\    store %String %arg_0_text, ptr %.s_0
@@ -947,7 +947,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_0 = getelementptr inbounds [2 x i8], ptr @.string_literal_0, i64 0, i64 0
                     \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
                     \\    %.t_2 = insertvalue %String %.t_1, i64 2, 1
-                    \\    %.t_3 = call %String @matcha_function_0_echo(%String %.t_2)
+                    \\    %.t_3 = call %String @matcha_function_0__echo(%String %.t_2)
                     \\    %.t_4 = extractvalue %String %.t_3, 0
                     \\    %.t_5 = extractvalue %String %.t_3, 1
                     \\    call void @matcha_print_string(ptr %.t_4, i64 %.t_5)

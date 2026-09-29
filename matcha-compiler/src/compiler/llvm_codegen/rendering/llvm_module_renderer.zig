@@ -93,7 +93,6 @@ pub const LlvmModuleRenderer = struct {
                         const function_ir = self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
-                            null,
                             lowered_program,
                         );
                         user_defined_functions.append(self.allocator, function_ir) catch unreachable;
@@ -178,13 +177,9 @@ pub const LlvmModuleRenderer = struct {
                 },
                 else => continue,
             };
-
-            const structure_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
-            const structure_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
             self.appendStructureMethodDefinitions(
                 &method_definitions,
                 structure_definition,
-                structure_symbol,
                 lowered_program,
             );
         }
@@ -196,7 +191,6 @@ pub const LlvmModuleRenderer = struct {
         self: *@This(),
         method_definitions: *std.ArrayList([]const u8),
         structure_definition: ast.StructureDefinition,
-        structure_symbol: symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,
     ) void {
         for (structure_definition.function_definitions) |function_definition_node| {
@@ -210,7 +204,6 @@ pub const LlvmModuleRenderer = struct {
             const function_definition_emission = self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
-                structure_symbol,
                 lowered_program,
             );
             method_definitions.append(self.allocator, function_definition_emission) catch unreachable;

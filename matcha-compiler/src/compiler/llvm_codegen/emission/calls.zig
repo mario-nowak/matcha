@@ -124,7 +124,6 @@ fn emitUserFunctionCall(
     return emitDirectFunctionCall(
         emitter,
         user_function.function_symbol_id,
-        user_function.owning_structure_symbol_id,
         argument_registers.items,
         lowered_program,
     );
@@ -185,7 +184,6 @@ fn emitBuiltinCall(
 fn emitDirectFunctionCall(
     emitter: *NodeEmitter,
     callee_symbol_id: symbols.SymbolId,
-    owning_structure_symbol_id: ?symbols.SymbolId,
     argument_registers: []const Register,
     lowered_program: *const lowering.LoweredProgram,
 ) EmissionResult {
@@ -218,13 +216,7 @@ fn emitDirectFunctionCall(
         ) catch unreachable;
     }
 
-    const function_name = if (owning_structure_symbol_id) |structure_symbol_id|
-        emitter.symbol_generator.generateStructureFunctionName(
-            lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id),
-            callee_symbol,
-        )
-    else
-        emitter.symbol_generator.generateFunctionName(callee_symbol);
+    const function_name = function_layout.llvm_function_name;
     const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(callee_symbol_id) orelse unreachable;
     const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
         .Function => |function_type| function_type.return_type_id,

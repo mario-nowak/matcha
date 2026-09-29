@@ -21,8 +21,6 @@ pub fn setupLoweringAnalyzerFixture(
 
     const llvm_type_table_lowerer = try allocator.create(lowering.LlvmTypeTableLowerer);
     llvm_type_table_lowerer.* = lowering.LlvmTypeTableLowerer.init(allocator);
-    const structure_symbol_lowerer = try allocator.create(lowering.StructureSymbolLowerer);
-    structure_symbol_lowerer.* = lowering.StructureSymbolLowerer.init(allocator);
     const call_lowerer = try allocator.create(lowering.CallLowerer);
     call_lowerer.* = lowering.CallLowerer.init(allocator);
     const member_access_lowerer = try allocator.create(lowering.MemberAccessLowerer);
@@ -39,7 +37,6 @@ pub fn setupLoweringAnalyzerFixture(
     const lowering_analyzer = try allocator.create(LoweringAnalyzer);
     lowering_analyzer.* = LoweringAnalyzer.init(
         llvm_type_table_lowerer,
-        structure_symbol_lowerer,
         call_lowerer,
         member_access_lowerer,
         binary_operation_lowerer,

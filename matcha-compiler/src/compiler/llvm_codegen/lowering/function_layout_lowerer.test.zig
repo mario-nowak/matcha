@@ -7,6 +7,39 @@ const lowering = llvm_codegen.lowering;
 
 pub const FunctionLayoutLowerer = struct {
     pub const lower = struct {
+        test "names a top-level function after its symbol id and name" {
+            const source =
+                \\item identity(value: int): int = value;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_function_0__identity" });
+        }
+
+        test "names a structure function after its structure and its own symbol id and name" {
+            const source =
+                \\item Point = structure {
+                \\    x: int;
+                \\
+                \\    item origin(): Point = Point { x = 0 };
+                \\};
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const origin_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_structure_0__Point__function_9__origin" });
+        }
+
         test "omits unit parameters from the parameter indices" {
             const source =
                 \\item select(erased: unit, value: int): int = value;

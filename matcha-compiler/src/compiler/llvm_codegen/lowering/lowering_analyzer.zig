@@ -3,7 +3,6 @@ const semantic_analysis = @import("semantic_analysis");
 const lowered_program = @import("lowered_program.zig");
 
 const LlvmTypeTableLowerer = @import("llvm_type_table_lowerer.zig").LlvmTypeTableLowerer;
-const StructureSymbolLowerer = @import("structure_symbol_lowerer.zig").StructureSymbolLowerer;
 const CallLowerer = @import("call_lowerer.zig").CallLowerer;
 const MemberAccessLowerer = @import("member_access_lowerer.zig").MemberAccessLowerer;
 const BinaryOperationLowerer = @import("binary_operation_lowerer.zig").BinaryOperationLowerer;
@@ -13,7 +12,6 @@ const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLay
 
 pub const LoweringAnalyzer = struct {
     llvm_type_table_lowerer: *LlvmTypeTableLowerer,
-    structure_symbol_lowerer: *StructureSymbolLowerer,
     call_lowerer: *CallLowerer,
     member_access_lowerer: *MemberAccessLowerer,
     binary_operation_lowerer: *BinaryOperationLowerer,
@@ -23,7 +21,6 @@ pub const LoweringAnalyzer = struct {
 
     pub fn init(
         llvm_type_table_lowerer: *LlvmTypeTableLowerer,
-        structure_symbol_lowerer: *StructureSymbolLowerer,
         call_lowerer: *CallLowerer,
         member_access_lowerer: *MemberAccessLowerer,
         binary_operation_lowerer: *BinaryOperationLowerer,
@@ -33,7 +30,6 @@ pub const LoweringAnalyzer = struct {
     ) @This() {
         return .{
             .llvm_type_table_lowerer = llvm_type_table_lowerer,
-            .structure_symbol_lowerer = structure_symbol_lowerer,
             .call_lowerer = call_lowerer,
             .member_access_lowerer = member_access_lowerer,
             .binary_operation_lowerer = binary_operation_lowerer,
@@ -49,7 +45,6 @@ pub const LoweringAnalyzer = struct {
 
     pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {
         const llvm_ir_type_by_type_id = self.llvm_type_table_lowerer.lower(analyzed_program);
-        const structure_symbol_id_by_type_id = self.structure_symbol_lowerer.lower(analyzed_program);
         const call_dispatch_decision_by_node_id = self.call_lowerer.lower(analyzed_program);
         const member_access_decision_by_node_id = self.member_access_lowerer.lower(analyzed_program);
         const binary_operation_decision_by_node_id = self.binary_operation_lowerer.lower(analyzed_program);
@@ -60,7 +55,6 @@ pub const LoweringAnalyzer = struct {
         return .{
             .analyzed_program = analyzed_program,
             .llvm_ir_type_by_type_id = llvm_ir_type_by_type_id,
-            .structure_symbol_id_by_type_id = structure_symbol_id_by_type_id,
             .call_dispatch_decision_by_node_id = call_dispatch_decision_by_node_id,
             .member_access_decision_by_node_id = member_access_decision_by_node_id,
             .binary_operation_decision_by_node_id = binary_operation_decision_by_node_id,

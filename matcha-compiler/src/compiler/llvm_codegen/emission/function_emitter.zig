@@ -7,14 +7,12 @@ const lowering = @import("lowering");
 const runtime_call_emitter_module = @import("runtime_call_emitter.zig");
 const function_ir_builder_module = @import("function_ir_builder.zig");
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
-const symbol_generator_module = @import("symbol_generator.zig");
 const node_emitter_module = @import("node_emitter.zig");
 
 const Label = function_symbol_generator_module.Label;
 const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
 const RuntimeCallEmitter = runtime_call_emitter_module.RuntimeCallEmitter;
-const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const Environment = node_emitter_module.Environment;
 
@@ -22,7 +20,6 @@ pub const FunctionEmitter = struct {
     allocator: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
-    symbol_generator: *SymbolGenerator,
     runtime_call_emitter: *RuntimeCallEmitter,
     node_emitter: *NodeEmitter,
 
@@ -30,7 +27,6 @@ pub const FunctionEmitter = struct {
         allocator: std.mem.Allocator,
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
-        symbol_generator: *SymbolGenerator,
         runtime_call_emitter: *RuntimeCallEmitter,
         node_emitter: *NodeEmitter,
     ) @This() {
@@ -38,7 +34,6 @@ pub const FunctionEmitter = struct {
             .allocator = allocator,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = function_ir_builder,
-            .symbol_generator = symbol_generator,
             .runtime_call_emitter = runtime_call_emitter,
             .node_emitter = node_emitter,
         };
@@ -76,7 +71,6 @@ pub const FunctionEmitter = struct {
         self: *@This(),
         function_node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
-        owning_structure_symbol: ?symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         self.resetCurrentFunctionState();
@@ -154,10 +148,7 @@ pub const FunctionEmitter = struct {
         }
 
         return self.renderCurrentFunction(
-            if (owning_structure_symbol) |structure_symbol|
-                self.symbol_generator.generateStructureFunctionName(structure_symbol, function_symbol)
-            else
-                self.symbol_generator.generateFunctionName(function_symbol),
+            function_layout.llvm_function_name,
             function_return_llvm_ir_type,
             parameter_list_buffer.items,
         );

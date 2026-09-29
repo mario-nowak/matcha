@@ -163,8 +163,7 @@ pub fn emitStructureFieldPointer(
         .Absent => return .zero_sized,
         .Index => |field_layout_index| field_layout_index,
     };
-    const structure_symbol = lowered_program.getStructureSymbolForTypeId(base_type_id);
-    const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
+    const structure_llvm_type_name = structure_layout.llvm_type_name;
 
     const field_pointer_register = emitter.function_symbol_generator.generateRegister();
     emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(

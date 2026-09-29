@@ -14,7 +14,6 @@ pub const BuiltinCallKind = enum {
 
 pub const UserFunctionCall = struct {
     function_symbol_id: symbols.SymbolId,
-    owning_structure_symbol_id: ?symbols.SymbolId = null,
     receiver_node_id: ?NodeId = null,
 };
 
@@ -37,6 +36,7 @@ pub const FunctionLayoutReturnTypeValueKind = enum {
 };
 
 pub const FunctionLayout = struct {
+    llvm_function_name: []const u8,
     parameter_index_kind_by_definition_index: []const FunctionLayoutParameterIndexKind,
     return_type_value_kind: FunctionLayoutReturnTypeValueKind,
 };
@@ -92,6 +92,7 @@ pub const StructureLayoutFieldIndexKind = union(enum) {
 };
 
 pub const StructureLayout = struct {
+    llvm_type_name: []const u8,
     field_index_kind_by_definition_index: []const StructureLayoutFieldIndexKind,
 };
 

@@ -75,7 +75,7 @@ pub const StructureTypeRenderer = struct {
             .Structure => |structure_information| structure_information,
             else => unreachable,
         };
-        const structure_llvm_type_name = self.generateStructureName(structure_symbol);
+        const structure_llvm_type_name = structure_layout.llvm_type_name;
 
         var structure_definition_buffer = std.ArrayList(u8){};
         defer structure_definition_buffer.deinit(self.allocator);
@@ -108,16 +108,5 @@ pub const StructureTypeRenderer = struct {
         structure_definition_buffer.writer(self.allocator).print("}}", .{}) catch unreachable;
 
         return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definition_buffer.items}) catch unreachable;
-    }
-
-    fn generateStructureName(self: *@This(), symbol: symbols.Symbol) []const u8 {
-        switch (symbol.kind) {
-            .Structure => return std.fmt.allocPrint(
-                self.allocator,
-                "matcha_structure_{d}_{s}",
-                .{ symbol.id, symbol.name },
-            ) catch unreachable,
-            else => unreachable,
-        }
     }
 };

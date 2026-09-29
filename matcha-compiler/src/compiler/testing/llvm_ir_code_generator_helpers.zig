@@ -25,8 +25,6 @@ pub fn setupLlvmIrCodeGeneratorFixture(
     function_symbol_generator.* = llvm_codegen.FunctionSymbolGenerator.init(allocator);
     const function_ir_builder = try allocator.create(llvm_codegen.FunctionIrBuilder);
     function_ir_builder.* = llvm_codegen.FunctionIrBuilder.init(allocator);
-    const symbol_generator = try allocator.create(llvm_codegen.SymbolGenerator);
-    symbol_generator.* = llvm_codegen.SymbolGenerator.init(allocator);
     const runtime_call_emitter = try allocator.create(llvm_codegen.RuntimeCallEmitter);
     runtime_call_emitter.* = llvm_codegen.RuntimeCallEmitter.init(allocator);
     const runtime_symbol_renderer = try allocator.create(llvm_codegen.RuntimeSymbolRenderer);
@@ -45,7 +43,6 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         allocator,
         function_symbol_generator,
         function_ir_builder,
-        symbol_generator,
         runtime_call_emitter,
         string_literal_pool,
         string_literal_emitter,
@@ -55,7 +52,6 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         allocator,
         function_symbol_generator,
         function_ir_builder,
-        symbol_generator,
         runtime_call_emitter,
         node_emitter,
     );

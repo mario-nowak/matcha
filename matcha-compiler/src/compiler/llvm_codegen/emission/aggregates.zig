@@ -80,8 +80,6 @@ pub fn emitStructureLiteral(
     environment: *Environment,
 ) EmissionResult {
     const node_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
-    const structure_symbol = lowered_program.getStructureSymbolForTypeId(node_type_id);
-    const structure_llvm_type_name = emitter.symbol_generator.generateStructureName(structure_symbol);
     const structure_type = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
         .Structure => |structure_type| structure_type,
         else => unreachable,
@@ -91,10 +89,10 @@ pub fn emitStructureLiteral(
 
     const structure_header_register = emitter.function_symbol_generator.generateRegister();
     const allocate_call = switch (structure_layout_kind) {
-        .Present => std.fmt.allocPrint(
+        .Present => |structure_layout| std.fmt.allocPrint(
             emitter.allocator,
             "@matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
-            .{structure_llvm_type_name},
+            .{structure_layout.llvm_type_name},
         ) catch unreachable,
         // Structures without a layout only allocate a single byte for identity comparison
         .Absent => "@matcha_allocate_atomic(i64 1)",
@@ -111,19 +109,20 @@ pub fn emitStructureLiteral(
         const field_value_emission_result = emitter.emitNode(field.value, lowered_program, environment);
         const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
         const structure_field = structure_type.fields[@intCast(field_index)];
-        const layout_field_index = switch (structure_layout_kind) {
+        const structure_layout = switch (structure_layout_kind) {
             .Absent => continue,
-            .Present => |structure_layout| switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
-                .Absent => continue,
-                .Index => |layout_field_index| layout_field_index,
-            },
+            .Present => |structure_layout| structure_layout,
+        };
+        const layout_field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
+            .Absent => continue,
+            .Index => |layout_field_index| layout_field_index,
         };
 
         const field_pointer_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
             emitter.allocator,
             "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-            .{ field_pointer_register, structure_llvm_type_name, structure_header_register, layout_field_index },
+            .{ field_pointer_register, structure_layout.llvm_type_name, structure_header_register, layout_field_index },
         ) catch unreachable);
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);

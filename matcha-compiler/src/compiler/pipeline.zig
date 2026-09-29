@@ -48,8 +48,6 @@ pub fn generateLlvmIrFromFile(
 
     var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(allocator);
     defer llvm_type_table_lowerer.deinit();
-    var structure_symbol_lowerer = llvm_codegen.lowering.StructureSymbolLowerer.init(allocator);
-    defer structure_symbol_lowerer.deinit();
     var call_lowerer = llvm_codegen.lowering.CallLowerer.init(allocator);
     defer call_lowerer.deinit();
     var member_access_lowerer = llvm_codegen.lowering.MemberAccessLowerer.init(allocator);
@@ -65,7 +63,6 @@ pub fn generateLlvmIrFromFile(
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
-        &structure_symbol_lowerer,
         &call_lowerer,
         &member_access_lowerer,
         &binary_operation_lowerer,
@@ -78,8 +75,6 @@ pub fn generateLlvmIrFromFile(
     defer function_symbol_generator.deinit();
     var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(allocator);
     defer function_ir_builder.deinit();
-    var symbol_generator = llvm_codegen.SymbolGenerator.init(allocator);
-    defer symbol_generator.deinit();
     var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(allocator);
     defer runtime_call_emitter.deinit();
     var runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(allocator);
@@ -97,7 +92,6 @@ pub fn generateLlvmIrFromFile(
         allocator,
         &function_symbol_generator,
         &function_ir_builder,
-        &symbol_generator,
         &runtime_call_emitter,
         &string_literal_pool,
         &string_literal_emitter,
@@ -108,7 +102,6 @@ pub fn generateLlvmIrFromFile(
         allocator,
         &function_symbol_generator,
         &function_ir_builder,
-        &symbol_generator,
         &runtime_call_emitter,
         &node_emitter,
     );

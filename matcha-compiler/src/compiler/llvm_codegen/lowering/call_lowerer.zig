@@ -153,14 +153,12 @@ pub const CallLowerer = struct {
                 .StructureInstanceMethodAccess => |structure_method| .{
                     .UserFunction = .{
                         .function_symbol_id = structure_method.function_symbol_id,
-                        .owning_structure_symbol_id = structure_method.structure_symbol_id,
                         .receiver_node_id = callee_member_expression.base.id,
                     },
                 },
                 .StructureTypeFunctionAccess => |structure_function| .{
                     .UserFunction = .{
                         .function_symbol_id = structure_function.function_symbol_id,
-                        .owning_structure_symbol_id = structure_function.structure_symbol_id,
                     },
                 },
                 .ArrayInstanceMethodAccess => |array_method| .{ .ArrayMethod = array_method },
