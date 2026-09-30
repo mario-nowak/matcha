@@ -15,7 +15,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -63,6 +63,45 @@ pub const LlvmIrCodeGenerator = struct {
             }
         };
 
+        pub const unions = struct {
+            test "lowers a union" {
+                const source =
+                    \\item Point = structure { x: int; y: int; };
+                    \\item PointResult = union { None, Some: Point };
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_structure_0__Point = type { i64, i64 }
+                    \\
+                    \\%matcha_union_1__PointResult__case_0__None = type { i8 }
+                    \\%matcha_union_1__PointResult__case_1__Some = type { i8, ptr }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+        };
+
         pub const control_flow = struct {
             test "lowers an if expression with values to branches and a phi" {
                 const source =
@@ -73,7 +112,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -116,7 +155,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -157,7 +196,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -197,7 +236,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -246,7 +285,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -296,7 +335,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -346,7 +385,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -392,7 +431,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -454,7 +493,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -527,7 +566,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -587,7 +626,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -635,7 +674,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -684,7 +723,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -734,7 +773,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -786,7 +825,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -834,7 +873,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -872,7 +911,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -916,7 +955,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -967,7 +1006,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -1025,7 +1064,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -1101,7 +1140,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"

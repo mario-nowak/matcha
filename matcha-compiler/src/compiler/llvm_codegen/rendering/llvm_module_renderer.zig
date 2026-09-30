@@ -104,7 +104,7 @@ pub const LlvmModuleRenderer = struct {
                         user_defined_functions.append(self.allocator, function_ir) catch unreachable;
                     },
                     .Structure => {},
-                    .Union => unreachable,
+                    .Union => {},
                 },
                 else => {},
             }
