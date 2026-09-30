@@ -101,9 +101,18 @@ pub const StructureLayoutKind = union(enum) {
     Present: StructureLayout,
 };
 
+pub const UnionLayout = struct {
+    cases: []UnionCaseLayout,
+};
+
+pub const UnionCaseLayout = struct {
+    llvm_type_name: []const u8,
+};
+
 pub const CallDispatchDecisionByNodeId = std.AutoHashMap(NodeId, CallDispatchDecision);
 pub const MemberAccessDecisionByNodeId = std.AutoHashMap(NodeId, MemberAccessDecision);
 pub const BinaryOperationDecisionByNodeId = std.AutoHashMap(NodeId, BinaryOperationDecision);
 pub const PlaceDecisionByNodeId = std.AutoHashMap(NodeId, PlaceDecision);
 pub const StructureLayoutKindByTypeId = std.AutoHashMap(typing.TypeId, StructureLayoutKind);
+pub const UnionLayoutByTypeId = std.AutoHashMap(typing.TypeId, UnionLayout);
 pub const FunctionLayoutBySymbolId = std.AutoHashMap(symbols.SymbolId, FunctionLayout);

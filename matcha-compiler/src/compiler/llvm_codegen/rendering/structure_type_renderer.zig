@@ -6,16 +6,12 @@ const lowering_types = lowering.lowering_types;
 const llvm_type_lowering = lowering.llvm_type;
 
 pub const StructureTypeRenderer = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
         };
-    }
-
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
     }
 
     pub fn renderStructureTypeDefinitions(
@@ -23,7 +19,7 @@ pub const StructureTypeRenderer = struct {
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         var structure_definitions_buffer = std.ArrayList(u8){};
-        defer structure_definitions_buffer.deinit(self.allocator);
+        defer structure_definitions_buffer.deinit(self.arena);
         const resolved_program = lowered_program.analyzed_program.resolved_program;
 
         var has_structure_definition = false;
@@ -47,9 +43,9 @@ pub const StructureTypeRenderer = struct {
             const structure_symbol = resolved_program.symbol_table.getSymbol(structure_symbol_id);
 
             if (has_structure_definition) {
-                structure_definitions_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+                structure_definitions_buffer.writer(self.arena).print("\n", .{}) catch unreachable;
             }
-            structure_definitions_buffer.writer(self.allocator).print(
+            structure_definitions_buffer.writer(self.arena).print(
                 "{s}",
                 .{
                     self.renderStructureTypeDefinition(
@@ -62,7 +58,7 @@ pub const StructureTypeRenderer = struct {
             has_structure_definition = true;
         }
 
-        return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definitions_buffer.items}) catch unreachable;
+        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definitions_buffer.items}) catch unreachable;
     }
 
     fn renderStructureTypeDefinition(
@@ -78,9 +74,9 @@ pub const StructureTypeRenderer = struct {
         const structure_llvm_type_name = structure_layout.llvm_type_name;
 
         var structure_definition_buffer = std.ArrayList(u8){};
-        defer structure_definition_buffer.deinit(self.allocator);
+        defer structure_definition_buffer.deinit(self.arena);
 
-        structure_definition_buffer.writer(self.allocator).print(
+        structure_definition_buffer.writer(self.arena).print(
             "%{s} = type {{",
             .{structure_llvm_type_name},
         ) catch unreachable;
@@ -91,22 +87,22 @@ pub const StructureTypeRenderer = struct {
             };
 
             if (field_index == 0) {
-                structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
+                structure_definition_buffer.writer(self.arena).print(" ", .{}) catch unreachable;
             } else {
-                structure_definition_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+                structure_definition_buffer.writer(self.arena).print(", ", .{}) catch unreachable;
             }
 
             const field_type_id = llvm_type_lowering.getTypeIdFromResolvedTypeReference(lowered_program.analyzed_program, field.type_reference);
-            structure_definition_buffer.writer(self.allocator).print(
+            structure_definition_buffer.writer(self.arena).print(
                 "{s}",
                 .{lowered_program.getLlvmIrType(field_type_id)},
             ) catch unreachable;
         }
         if (structure_information.fields.len > 0) {
-            structure_definition_buffer.writer(self.allocator).print(" ", .{}) catch unreachable;
+            structure_definition_buffer.writer(self.arena).print(" ", .{}) catch unreachable;
         }
-        structure_definition_buffer.writer(self.allocator).print("}}", .{}) catch unreachable;
+        structure_definition_buffer.writer(self.arena).print("}}", .{}) catch unreachable;
 
-        return std.fmt.allocPrint(self.allocator, "{s}", .{structure_definition_buffer.items}) catch unreachable;
+        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definition_buffer.items}) catch unreachable;
     }
 };

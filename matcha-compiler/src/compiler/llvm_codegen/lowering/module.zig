@@ -7,5 +7,6 @@ pub const MemberAccessLowerer = @import("member_access_lowerer.zig").MemberAcces
 pub const BinaryOperationLowerer = @import("binary_operation_lowerer.zig").BinaryOperationLowerer;
 pub const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
 pub const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
+pub const UnionLayoutLowerer = @import("union_layout_lowerer.zig").UnionLayoutLowerer;
 pub const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
 pub const llvm_type = @import("llvm_type.zig");

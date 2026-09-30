@@ -24,8 +24,9 @@ pub const LlvmIrCodeGenerator = struct {
     pub fn generateLlvmIr(
         self: *@This(),
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
-    ) []const u8 {
-        const lowered_program = self.lowering_analyzer.lowerProgram(analyzed_program);
+    ) ![]const u8 {
+        const lowered_program = try self.lowering_analyzer.lowerProgram(analyzed_program);
+
         return self.module_renderer.renderLlvmIr(&lowered_program);
     }
 };

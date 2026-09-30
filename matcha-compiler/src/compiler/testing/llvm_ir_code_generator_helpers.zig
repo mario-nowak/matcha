@@ -37,6 +37,8 @@ pub fn setupLlvmIrCodeGeneratorFixture(
     string_literal_emitter.* = llvm_codegen.StringLiteralEmitter.init(allocator);
     const structure_type_renderer = try allocator.create(llvm_codegen.StructureTypeRenderer);
     structure_type_renderer.* = llvm_codegen.StructureTypeRenderer.init(allocator);
+    const union_type_renderer = try allocator.create(llvm_codegen.UnionTypeRenderer);
+    union_type_renderer.* = llvm_codegen.UnionTypeRenderer.init(allocator);
 
     const node_emitter = try allocator.create(llvm_codegen.NodeEmitter);
     node_emitter.* = llvm_codegen.NodeEmitter.init(
@@ -65,6 +67,7 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         string_literal_pool,
         string_literal_renderer,
         structure_type_renderer,
+        union_type_renderer,
     );
 
     const llvm_ir_code_generator = try allocator.create(LlvmIrCodeGenerator);

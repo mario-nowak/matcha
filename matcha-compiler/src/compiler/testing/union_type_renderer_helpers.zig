@@ -15,7 +15,7 @@ pub fn setupUnionTypeRendererFixture(
     source: []const u8,
 ) !UnionTypeRendererFixture {
     const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
-    const lowered_program = lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
+    const lowered_program = try lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
 
     const union_type_renderer = try arena.allocator().create(UnionTypeRenderer);
     union_type_renderer.* = UnionTypeRenderer.init(arena.allocator());

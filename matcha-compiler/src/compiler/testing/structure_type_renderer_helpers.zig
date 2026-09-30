@@ -15,7 +15,7 @@ pub fn setupStructureTypeRendererFixture(
     source: []const u8,
 ) !StructureTypeRendererFixture {
     const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
-    const lowered_program = lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
+    const lowered_program = try lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
 
     const structure_type_renderer = try arena.allocator().create(StructureTypeRenderer);
     structure_type_renderer.* = StructureTypeRenderer.init(arena.allocator());

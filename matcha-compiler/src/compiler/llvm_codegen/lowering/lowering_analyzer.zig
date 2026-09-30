@@ -8,6 +8,7 @@ const MemberAccessLowerer = @import("member_access_lowerer.zig").MemberAccessLow
 const BinaryOperationLowerer = @import("binary_operation_lowerer.zig").BinaryOperationLowerer;
 const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
 const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
+const UnionLayoutLowerer = @import("union_layout_lowerer.zig").UnionLayoutLowerer;
 const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
 
 pub const LoweringAnalyzer = struct {
@@ -17,6 +18,7 @@ pub const LoweringAnalyzer = struct {
     binary_operation_lowerer: *BinaryOperationLowerer,
     place_lowerer: *PlaceLowerer,
     structure_layout_lowerer: *StructureLayoutLowerer,
+    union_layout_lowerer: *UnionLayoutLowerer,
     function_layout_lowerer: *FunctionLayoutLowerer,
 
     pub fn init(
@@ -26,6 +28,7 @@ pub const LoweringAnalyzer = struct {
         binary_operation_lowerer: *BinaryOperationLowerer,
         place_lowerer: *PlaceLowerer,
         structure_layout_lowerer: *StructureLayoutLowerer,
+        union_layout_lowerer: *UnionLayoutLowerer,
         function_layout_lowerer: *FunctionLayoutLowerer,
     ) @This() {
         return .{
@@ -35,21 +38,19 @@ pub const LoweringAnalyzer = struct {
             .binary_operation_lowerer = binary_operation_lowerer,
             .place_lowerer = place_lowerer,
             .structure_layout_lowerer = structure_layout_lowerer,
+            .union_layout_lowerer = union_layout_lowerer,
             .function_layout_lowerer = function_layout_lowerer,
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
-    pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {
+    pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowered_program.LoweredProgram {
         const llvm_ir_type_by_type_id = self.llvm_type_table_lowerer.lower(analyzed_program);
         const call_dispatch_decision_by_node_id = self.call_lowerer.lower(analyzed_program);
         const member_access_decision_by_node_id = self.member_access_lowerer.lower(analyzed_program);
         const binary_operation_decision_by_node_id = self.binary_operation_lowerer.lower(analyzed_program);
         const place_decision_by_node_id = self.place_lowerer.lower(analyzed_program);
         const structure_layout_kind_by_type_id = self.structure_layout_lowerer.lower(analyzed_program);
+        const union_layout_by_type_id = try self.union_layout_lowerer.lower(analyzed_program);
         const function_layout_by_symbol_id = self.function_layout_lowerer.lower(analyzed_program);
 
         return .{
@@ -60,6 +61,7 @@ pub const LoweringAnalyzer = struct {
             .binary_operation_decision_by_node_id = binary_operation_decision_by_node_id,
             .place_decision_by_node_id = place_decision_by_node_id,
             .structure_layout_kind_by_type_id = structure_layout_kind_by_type_id,
+            .union_layout_by_type_id = union_layout_by_type_id,
             .function_layout_by_symbol_id = function_layout_by_symbol_id,
         };
     }

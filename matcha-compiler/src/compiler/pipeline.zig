@@ -58,6 +58,7 @@ pub fn generateLlvmIrFromFile(
     defer place_lowerer.deinit();
     var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(allocator);
     defer structure_layout_lowerer.deinit();
+    var union_layout_lowerer = llvm_codegen.lowering.UnionLayoutLowerer.init(allocator);
     var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(allocator);
     defer function_layout_lowerer.deinit();
 
@@ -68,9 +69,9 @@ pub fn generateLlvmIrFromFile(
         &binary_operation_lowerer,
         &place_lowerer,
         &structure_layout_lowerer,
+        &union_layout_lowerer,
         &function_layout_lowerer,
     );
-    defer lowering_analyzer.deinit();
     var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(allocator);
     defer function_symbol_generator.deinit();
     var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(allocator);
@@ -86,7 +87,7 @@ pub fn generateLlvmIrFromFile(
     var string_literal_emitter = llvm_codegen.StringLiteralEmitter.init(allocator);
     defer string_literal_emitter.deinit();
     var structure_type_renderer = llvm_codegen.StructureTypeRenderer.init(allocator);
-    defer structure_type_renderer.deinit();
+    var union_type_renderer = llvm_codegen.UnionTypeRenderer.init(allocator);
 
     var node_emitter = llvm_codegen.NodeEmitter.init(
         allocator,
@@ -116,6 +117,7 @@ pub fn generateLlvmIrFromFile(
         &string_literal_pool,
         &string_literal_renderer,
         &structure_type_renderer,
+        &union_type_renderer,
     );
     defer llvm_module_renderer.deinit();
 

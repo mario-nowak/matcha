@@ -10,6 +10,7 @@ pub const LoweredProgram = struct {
     binary_operation_decision_by_node_id: lowering_types.BinaryOperationDecisionByNodeId,
     place_decision_by_node_id: lowering_types.PlaceDecisionByNodeId,
     structure_layout_kind_by_type_id: lowering_types.StructureLayoutKindByTypeId,
+    union_layout_by_type_id: lowering_types.UnionLayoutByTypeId,
     function_layout_by_symbol_id: lowering_types.FunctionLayoutBySymbolId,
 
     pub fn getLlvmIrType(self: *const @This(), type_id: typing.TypeId) []const u8 {

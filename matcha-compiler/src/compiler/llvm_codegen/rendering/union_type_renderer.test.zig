@@ -12,7 +12,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__Signal__case_0__Ready = type { i8 }
@@ -27,7 +27,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__Count__case_0__Value = type { i8, i64 }
@@ -43,7 +43,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_1__Payload__case_0__Number = type { i8, i64 }
@@ -61,7 +61,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__Signal__case_0__Ready = type { i8 }
@@ -76,7 +76,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__Tree__case_0__Leaf = type { i8, i64 }
@@ -92,7 +92,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__Direction__case_0__North = type { i8 }
@@ -110,7 +110,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__First__case_0__A = type { i8, i64 }
@@ -129,7 +129,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha_union_0__First__case_0__A = type { i8 }
@@ -145,7 +145,7 @@ pub const UnionTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupUnionTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch("");
         }
