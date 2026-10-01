@@ -143,7 +143,7 @@ val y = SomeFunction;
     %MaybeInt.None = type { i8 }
     %MaybeInt.Some = type { i8, i64 }
     ```
-    - conceptually    - conceptually
+    - conceptually
 
 ---
 
@@ -269,3 +269,12 @@ now not all of them are real issues. But a lot of them are.
     - `MatchExpression` where the left hand sides of the arms are patterns and
     - `SubjectlessMatchExpression` where the left hand sides of the arms are expressions
 
+---
+
+# Cleanups for later
+
+- Merge the five identical error sets (`LexError`, `ParseError`, `ControlFlowValidationError`, `NameResolutionError`, `TypeError`) into one `CompileError = error{DiagnosticsEmitted} || std.mem.Allocator.Error` in the `diagnostics` module.
+- Switch all lowerers to the arena pattern of `UnionLayoutLowerer`: `lower()` returns a freshly allocated result, the lowerer keeps no state, and `deinit()`, `clearLayouts()` and all frees go away (the allocator is named `arena`).
+- Replace `catch unreachable` on allocations with `try`, so `error.OutOfMemory` propagates through `CompileError` instead of being undefined behavior in ReleaseFast (review item 51).
+- Delete `getTypeIdFromResolvedTypeReference()` and the unused `getLlvmIrTypeFromResolvedTypeReference()` in `llvm_type.zig`: they redo the type checker's reference-to-type translation in codegen. The renderers should read `StructureType.fields[i].type_id` and `UnionType.cases[i].type_id` instead.
+- Emit union payloads and structure field values before the allocation, not after it, so an early exit in a payload or field expression doesn't leave a wasted allocation behind.
