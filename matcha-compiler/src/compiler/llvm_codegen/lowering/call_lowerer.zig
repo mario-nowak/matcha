@@ -147,38 +147,54 @@ pub const CallLowerer = struct {
         call_expression: *const ast.CallExpression,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) void {
-        const decision: lowering_types.CallDispatchDecision = switch (call_expression.callee.kind) {
-            .ImplicitMemberExpression => unreachable,
-            .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
-                .StructureInstanceMethodAccess => |structure_method| .{
-                    .UserFunction = .{
-                        .function_symbol_id = structure_method.function_symbol_id,
-                        .receiver_node_id = callee_member_expression.base.id,
-                    },
-                },
-                .StructureTypeFunctionAccess => |structure_function| .{
-                    .UserFunction = .{
-                        .function_symbol_id = structure_function.function_symbol_id,
-                    },
-                },
-                .ArrayInstanceMethodAccess => |array_method| .{ .ArrayMethod = array_method },
-                .StringInstanceMethodAccess => |string_method| .{ .StringMethod = string_method },
-                .IntegerInstanceMethodAccess => |integer_method| .{ .IntegerMethod = integer_method },
-                else => unreachable,
-            },
-            else => self.lowerSymbolCall(call_expression.callee.id, analyzed_program),
-        };
+        const callee_type_id = analyzed_program.type_id_by_node_id.get(call_expression.callee.id).?;
+        const callee_type = analyzed_program.type_store.getType(callee_type_id);
 
-        self.decision_by_node_id.put(node.id, decision) catch unreachable;
+        switch (callee_type) {
+            .UnionConstructor => |union_construction| {
+                const union_type = analyzed_program.type_store.getType(union_construction.union_type_id).Union;
+
+                self.decision_by_node_id.put(
+                    node.id,
+                    .{ .UnionConstruction = .{
+                        .union_symbol_id = union_type.symbol_id,
+                        .case_index = union_construction.case_index,
+                    } },
+                ) catch unreachable;
+            },
+            .Function => {
+                const decision: lowering_types.CallDispatchDecision = switch (call_expression.callee.kind) {
+                    .ImplicitMemberExpression => unreachable,
+                    .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
+                        .StructureInstanceMethodAccess => |structure_method| .{
+                            .UserFunction = .{
+                                .function_symbol_id = structure_method.function_symbol_id,
+                                .receiver_node_id = callee_member_expression.base.id,
+                            },
+                        },
+                        .StructureTypeFunctionAccess => |structure_function| .{
+                            .UserFunction = .{
+                                .function_symbol_id = structure_function.function_symbol_id,
+                            },
+                        },
+                        .ArrayInstanceMethodAccess => |array_method| .{ .ArrayMethod = array_method },
+                        .StringInstanceMethodAccess => |string_method| .{ .StringMethod = string_method },
+                        .IntegerInstanceMethodAccess => |integer_method| .{ .IntegerMethod = integer_method },
+                        else => unreachable,
+                    },
+                    else => lowerSymbolCall(call_expression.callee.id, analyzed_program),
+                };
+
+                self.decision_by_node_id.put(node.id, decision) catch unreachable;
+            },
+            else => unreachable,
+        }
     }
 
     fn lowerSymbolCall(
-        self: *const @This(),
         callee_node_id: ast.NodeId,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
     ) lowering_types.CallDispatchDecision {
-        _ = self;
-
         const callee_symbol_id = analyzed_program.resolved_program.symbol_id_by_node_id.get(callee_node_id) orelse unreachable;
         const callee_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
         const function_info = switch (callee_symbol.kind) {

@@ -23,6 +23,12 @@ pub const CallDispatchDecision = union(enum) {
     ArrayMethod: typing.ArrayInstanceMethod,
     StringMethod: typing.StringInstanceMethod,
     IntegerMethod: typing.IntegerInstanceMethod,
+    UnionConstruction: UnionConstruction,
+};
+
+pub const UnionConstruction = struct {
+    union_symbol_id: symbols.SymbolId,
+    case_index: usize,
 };
 
 pub const FunctionLayoutParameterIndexKind = union(enum) {

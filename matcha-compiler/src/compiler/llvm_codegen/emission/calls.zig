@@ -6,6 +6,7 @@ const lowering = @import("lowering");
 
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const node_emitter_module = @import("node_emitter.zig");
+const emitUnionConstruction = @import("aggregates.zig").emitUnionConstruction;
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
@@ -26,6 +27,13 @@ pub fn emitCallExpression(
             emitter,
             user_function,
             call_expression,
+            lowered_program,
+            environment,
+        ),
+        .UnionConstruction => |union_construction| emitUnionConstruction(
+            emitter,
+            call_expression,
+            union_construction,
             lowered_program,
             environment,
         ),

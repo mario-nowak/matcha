@@ -66,8 +66,9 @@ pub const LlvmIrCodeGenerator = struct {
         pub const unions = struct {
             test "lowers a union" {
                 const source =
-                    \\item Point = structure { x: int; y: int; };
-                    \\item PointResult = union { None, Some: Point };
+                    \\item Offset = union { None, Horizontal: int, Vertical: int };
+                    \\val offset_1 = Offset.Horizontal(4);
+                    \\val offset_2 = Offset.Vertical(-3);
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
@@ -86,15 +87,29 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0__Point = type { i64, i64 }
-                    \\
-                    \\%matcha_union_1__PointResult__case_0__None = type { i8 }
-                    \\%matcha_union_1__PointResult__case_1__Some = type { i8, ptr }
+                    \\%matcha_union_0__Offset__case_0__None = type { i8 }
+                    \\%matcha_union_0__Offset__case_1__Horizontal = type { i8, i64 }
+                    \\%matcha_union_0__Offset__case_2__Vertical = type { i8, i64 }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    %.s_1 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_1__Horizontal, ptr null, i32 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Offset__case_1__Horizontal, ptr %.t_0, i32 0, i32 0
+                    \\    store i8 1, ptr %.t_1
+                    \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_1__Horizontal, ptr %.t_0, i32 0, i32 1
+                    \\    store i64 4, ptr %.t_2
+                    \\    store ptr %.t_0, ptr %.s_0
+                    \\    %.t_3 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_2__Vertical, ptr null, i32 1) to i64))
+                    \\    %.t_4 = getelementptr inbounds %matcha_union_0__Offset__case_2__Vertical, ptr %.t_3, i32 0, i32 0
+                    \\    store i8 2, ptr %.t_4
+                    \\    %.t_5 = sub i64 0, 3
+                    \\    %.t_6 = getelementptr inbounds %matcha_union_0__Offset__case_2__Vertical, ptr %.t_3, i32 0, i32 1
+                    \\    store i64 %.t_5, ptr %.t_6
+                    \\    store ptr %.t_3, ptr %.s_1
                     \\    ret i32 0
                     \\}
                     \\

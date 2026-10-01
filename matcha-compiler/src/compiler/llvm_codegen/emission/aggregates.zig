@@ -72,6 +72,74 @@ pub fn emitMemberExpression(
     }
 }
 
+pub fn emitUnionConstruction(
+    emitter: *NodeEmitter,
+    call_expression: *const ast.CallExpression,
+    union_construction: lowering.lowering_types.UnionConstruction,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) EmissionResult {
+    // Allocate memory for entire union
+    const union_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(union_construction.union_symbol_id).?;
+    const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
+    const union_case_layout = union_layout.cases[union_construction.case_index];
+    // TODO: this entire process could be extracted as "allocate memory for type" or something
+    const allocate_call = std.fmt.allocPrint(
+        emitter.allocator,
+        "@matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
+        .{union_case_layout.llvm_type_name},
+    ) catch unreachable;
+    const union_header_register = emitter.function_symbol_generator.generateRegister();
+    emitter.function_ir_builder.emitInstruction(
+        std.fmt.allocPrint(
+            emitter.allocator,
+            "{s} = call ptr {s}",
+            .{ union_header_register, allocate_call },
+        ) catch unreachable,
+    );
+
+    // Store case index in union
+    const case_index_pointer_register = emitter.function_symbol_generator.generateRegister();
+    emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+        emitter.allocator,
+        "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 0",
+        .{ case_index_pointer_register, union_case_layout.llvm_type_name, union_header_register },
+    ) catch unreachable);
+    // TODO: centralize this information
+    const field_llvm_ir_type = "i8";
+    emitter.function_ir_builder.emitStore(
+        std.fmt.allocPrint(emitter.allocator, "{d}", .{union_construction.case_index}) catch unreachable,
+        case_index_pointer_register,
+        field_llvm_ir_type,
+    );
+
+    // Emit and store call expression argument
+    const payload = call_expression.arguments[0];
+    const union_payload_emission_result = emitter.emitNode(&payload, lowered_program, environment);
+    switch (union_payload_emission_result) {
+        .register => |union_payload_emission_result_register| {
+            const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+            emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+                emitter.allocator,
+                "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
+                .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
+            ) catch unreachable);
+
+            const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(payload.id).?;
+            const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
+            emitter.function_ir_builder.emitStore(
+                union_payload_emission_result_register,
+                payload_pointer_register,
+                payload_llvm_ir_type,
+            );
+        },
+        .zero_sized => {},
+        .statement => unreachable,
+    }
+
+    return .{ .register = union_header_register };
+}
+
 pub fn emitStructureLiteral(
     emitter: *NodeEmitter,
     node: *const ast.Node,
