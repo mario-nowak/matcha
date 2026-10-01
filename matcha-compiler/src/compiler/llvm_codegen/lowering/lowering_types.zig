@@ -80,6 +80,7 @@ pub const BinaryOperationDecision = union(enum) {
     StringConcatenate,
     StringCompareEqual,
     StringCompareNotEqual,
+    UnionCaseIndexComparison,
 };
 
 pub const PlaceDecision = union(enum) {

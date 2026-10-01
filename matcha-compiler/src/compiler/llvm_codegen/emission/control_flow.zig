@@ -526,7 +526,7 @@ fn emitDecisionConstruct(
                         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                         subject_type_id.?,
                         subject_register.?,
-                        emitPatternValue(emitter, pattern),
+                        emitPatternValue(emitter, pattern, lowered_program),
                         lowered_program,
                     ),
                 };
@@ -615,7 +615,11 @@ fn emitDecisionConstruct(
     return .{ .register = result_register };
 }
 
-fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register {
+fn emitPatternValue(
+    emitter: *NodeEmitter,
+    pattern: *const ast.Pattern,
+    lowered_program: *const lowering.LoweredProgram,
+) Register {
     return switch (pattern.kind) {
         .IntegerLiteral => |integer_literal| std.fmt.allocPrint(
             emitter.allocator,
@@ -630,7 +634,9 @@ fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register
             emitter.function_symbol_generator,
             emitter.function_ir_builder,
         ),
-        // This should emit the case index
-        .Case => unreachable,
+        // TODO: add comment why we are emitting the case index here
+        .Case => std.fmt.allocPrint(emitter.allocator, "{d}", .{
+            lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
+        }) catch unreachable,
     };
 }

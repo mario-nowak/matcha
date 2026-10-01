@@ -130,6 +130,29 @@ pub fn emitLoweredBinaryOperation(
         // And I could later add UnionCompareEqual
         // The one thing I'm not sure about is that I would need to de-reference the subject register for each comparison
         // this seems unnecessary but it would make the code a lot easier to write
+        .UnionCaseIndexComparison => {
+            // TODO: I should centralize this information somewhere
+            const union_case_index_type = "i8";
+            const operator_instruction = "icmp eq";
+
+            // Load the first field of the type into the register
+            const union_case_register = emitter.function_symbol_generator.generateRegister();
+            emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+                emitter.allocator,
+                "{s} = load {s}, ptr {s}",
+                .{ union_case_register, union_case_index_type, left_register },
+            ) catch unreachable);
+
+            const result_register = emitter.function_symbol_generator.generateRegister();
+            const instruction = std.fmt.allocPrint(
+                emitter.allocator,
+                "{s} = {s} {s} {s}, {s}",
+                .{ result_register, operator_instruction, union_case_index_type, union_case_register, right_register },
+            ) catch unreachable;
+            emitter.function_ir_builder.emitInstruction(instruction);
+
+            return result_register;
+        },
         .StringConcatenate => emitter.runtime_call_emitter.emitStringConcatenateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
