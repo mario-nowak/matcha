@@ -34,6 +34,7 @@ pub const NodeTypeAnalyzer = struct {
     type_id_by_symbol_id: typing.TypeIdBySymbolId,
     type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
+    union_case_index_by_pattern_id: typing.UnionCaseIndexByPatternId,
     // Per-run inputs, valid from the start of `analyzeProgram` until it returns.
     resolved_program: *const symbols.ResolvedProgram,
     exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
@@ -46,6 +47,7 @@ pub const NodeTypeAnalyzer = struct {
             .type_id_by_symbol_id = typing.TypeIdBySymbolId.init(allocator),
             .type_id_by_node_id = typing.TypeIdByNodeId.init(allocator),
             .member_access_by_node_id = typing.MemberAccessByNodeId.init(allocator),
+            .union_case_index_by_pattern_id = typing.UnionCaseIndexByPatternId.init(allocator),
             .resolved_program = undefined,
             .exit_behavior_by_node_id = undefined,
         };
@@ -56,6 +58,7 @@ pub const NodeTypeAnalyzer = struct {
         self.type_id_by_symbol_id = typing.TypeIdBySymbolId.init(self.allocator);
         self.type_id_by_node_id = typing.TypeIdByNodeId.init(self.allocator);
         self.member_access_by_node_id = typing.MemberAccessByNodeId.init(self.allocator);
+        self.union_case_index_by_pattern_id = typing.UnionCaseIndexByPatternId.init(self.allocator);
     }
 
     pub fn analyzeProgram(
@@ -80,6 +83,7 @@ pub const NodeTypeAnalyzer = struct {
             .type_id_by_symbol_id = self.type_id_by_symbol_id,
             .type_id_by_node_id = self.type_id_by_node_id,
             .member_access_by_node_id = self.member_access_by_node_id,
+            .union_case_index_by_pattern_id = self.union_case_index_by_pattern_id,
         };
     }
 
@@ -1492,6 +1496,7 @@ pub const NodeTypeAnalyzer = struct {
                                 return error.DiagnosticsEmitted;
                             }
                             is_case_matched[case_index] = true;
+                            self.union_case_index_by_pattern_id.put(arm.pattern.id, case_index) catch unreachable;
 
                             if (case_pattern.binding) |payload_binding| {
                                 const binding_symbol_id = self.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;

@@ -11,6 +11,7 @@ pub const AnalyzedProgram = struct {
     type_id_by_symbol_id: typing.TypeIdBySymbolId,
     type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
+    union_case_index_by_pattern_id: typing.UnionCaseIndexByPatternId,
     runtime_representation_result: runtime_representation.RuntimeRepresentationResult,
 
     pub fn init(
@@ -26,6 +27,7 @@ pub const AnalyzedProgram = struct {
             .type_id_by_symbol_id = type_check_result.type_id_by_symbol_id,
             .type_id_by_node_id = type_check_result.type_id_by_node_id,
             .member_access_by_node_id = type_check_result.member_access_by_node_id,
+            .union_case_index_by_pattern_id = type_check_result.union_case_index_by_pattern_id,
             .runtime_representation_result = runtime_representation_result,
         };
     }

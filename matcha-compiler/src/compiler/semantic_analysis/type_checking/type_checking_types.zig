@@ -87,4 +87,5 @@ pub const TypeCheckResult = struct {
     type_id_by_symbol_id: typing.TypeIdBySymbolId,
     type_id_by_node_id: typing.TypeIdByNodeId,
     member_access_by_node_id: typing.MemberAccessByNodeId,
+    union_case_index_by_pattern_id: typing.UnionCaseIndexByPatternId,
 };

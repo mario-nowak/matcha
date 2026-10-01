@@ -1182,6 +1182,45 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
             }
 
+            test "records the declared case index of each case pattern when the arms list the cases in reverse order" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    .Some => 1,
+                    \\    .None => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_arms = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.MatchExpression.arms;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.union_case_index_by_pattern_id.get(match_arms[0].pattern.id).?).toMatch(1);
+                try expect(result.union_case_index_by_pattern_id.get(match_arms[1].pattern.id).?).toMatch(0);
+            }
+
+            test "records the case index of a qualified case pattern with a payload binding" {
+                const source =
+                    \\item Result = union { None, Some: int };
+                    \\val result: Result = .Some(1);
+                    \\val number = match result {
+                    \\    Result.Some(value) => value,
+                    \\    else => 0,
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_arms = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.MatchExpression.arms;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.union_case_index_by_pattern_id.get(match_arms[0].pattern.id).?).toMatch(1);
+            }
+
             test "types a payload binding as the payload type of its case" {
                 const source =
                     \\item Result = union { None, Some: int };
