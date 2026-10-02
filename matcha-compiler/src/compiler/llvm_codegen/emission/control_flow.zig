@@ -545,22 +545,27 @@ fn emitDecisionConstruct(
                 const union_case_layout = union_layout.cases[union_case_index];
 
                 // handle optional binding
-                const payload_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(arm.condition.Pattern.kind.Case.binding.?.id).?;
-                const payload_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(payload_symbol_id).?;
-                const payload_storage = emitter.function_symbol_generator.generateStorage();
-                const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-                builder.emitAlloca(payload_storage, payload_llvm_type);
-                environment.storage_by_symbol_id.put(payload_symbol_id, payload_storage) catch unreachable;
+                const optional_payload_binding = arm.condition.Pattern.kind.Case.binding;
+                if (optional_payload_binding) |payload_binding| {
+                    const payload_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(
+                        payload_binding.id,
+                    ).?;
+                    const payload_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(payload_symbol_id).?;
+                    const payload_storage = emitter.function_symbol_generator.generateStorage();
+                    const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
+                    builder.emitAlloca(payload_storage, payload_llvm_type);
+                    environment.storage_by_symbol_id.put(payload_symbol_id, payload_storage) catch unreachable;
 
-                const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
-                builder.emitInstruction(std.fmt.allocPrint(
-                    emitter.allocator,
-                    "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
-                    .{ payload_pointer_register, union_case_layout.llvm_type_name, subject_register.? },
-                ) catch unreachable);
-                const payload_register = emitter.function_symbol_generator.generateRegister();
-                builder.emitLoad(payload_register, payload_pointer_register, payload_llvm_type);
-                builder.emitStore(payload_register, payload_storage, payload_llvm_type);
+                    const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+                    builder.emitInstruction(std.fmt.allocPrint(
+                        emitter.allocator,
+                        "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
+                        .{ payload_pointer_register, union_case_layout.llvm_type_name, subject_register.? },
+                    ) catch unreachable);
+                    const payload_register = emitter.function_symbol_generator.generateRegister();
+                    builder.emitLoad(payload_register, payload_pointer_register, payload_llvm_type);
+                    builder.emitStore(payload_register, payload_storage, payload_llvm_type);
+                }
             }
 
             const arm_register = emitter.emitNode(arm.body, lowered_program, environment);

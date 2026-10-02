@@ -13,4 +13,5 @@ comptime {
     _ = @import("runtime.test.zig");
     _ = @import("smoke.test.zig");
     _ = @import("unit_type.test.zig");
+    _ = @import("pattern_matching.test.zig");
 }
