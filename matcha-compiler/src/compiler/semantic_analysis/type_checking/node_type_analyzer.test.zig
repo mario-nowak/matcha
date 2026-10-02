@@ -113,6 +113,38 @@ pub const NodeTypeAnalyzer = struct {
                     try expect(union_case_node_type_id).toMatch(union_type_id);
                 }
 
+                test "records a base case access with the case index when a unit case is not called" {
+                    const source =
+                        \\item Result = union { Some: int, None };
+                        \\val result = Result.None;
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const union_case_node = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .UnionTypeBaseCaseAccess = .{ .case_index = 1 } });
+                }
+
+                test "rejects an assignment to a unit case" {
+                    const source =
+                        \\item Result = union { Some: int, None };
+                        \\Result.None = Result.None;
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result).toBeError(error.DiagnosticsEmitted);
+                    try expect(fixture.diagnostic_store.items()).toMatch(.{
+                        .{ .message = "cannot assign to a union case" },
+                    });
+                }
+
                 test "types a unit case construction as the union" {
                     const source =
                         \\item Result = union { None, Some: int };
@@ -381,6 +413,21 @@ pub const NodeTypeAnalyzer = struct {
                     try expect(result_type_id).toMatch(union_type_id);
                     const union_case_node_type_id = result.type_id_by_node_id.get(union_case_node.id) orelse unreachable;
                     try expect(union_case_node_type_id).toMatch(union_type_id);
+                }
+
+                test "records a base case access with the case index when a unit case is not called" {
+                    const source =
+                        \\item Result = union { Some: int, None };
+                        \\val result: Result = .None;
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const union_case_node = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .UnionTypeBaseCaseAccess = .{ .case_index = 1 } });
                 }
 
                 test "types a payload case construction as the union" {

@@ -20,19 +20,13 @@ pub fn emitImplicitMemberExpression(
 ) EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
-        .UnionConstruction => |union_construction| {
-            const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
-            const result = emitUnionConstruction(
-                emitter,
-                union_type_id,
-                union_construction.case_index,
-                null,
-                lowered_program,
-                environment,
-            );
-
-            return .{ .register = result.expectRegister() };
-        },
+        .UnionConstruction => |union_construction| return emitBaseCaseConstruction(
+            emitter,
+            node,
+            union_construction.case_index,
+            lowered_program,
+            environment,
+        ),
         .ArrayLength,
         .ArrayMethod,
         .IntegerMethod,
@@ -98,25 +92,32 @@ pub fn emitMemberExpression(
 
             return .{ .register = member_register };
         },
-        .UnionConstruction => |union_construction| {
-            const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
-            const result = emitUnionConstruction(
-                emitter,
-                union_type_id,
-                union_construction.case_index,
-                null,
-                lowered_program,
-                environment,
-            );
-
-            return .{ .register = result.expectRegister() };
-        },
+        .UnionConstruction => |union_construction| return emitBaseCaseConstruction(
+            emitter,
+            node,
+            union_construction.case_index,
+            lowered_program,
+            environment,
+        ),
         .StructureMethod => unreachable,
         .StructureTypeFunction => unreachable,
         .ArrayMethod => unreachable,
         .StringMethod => unreachable,
         .IntegerMethod => unreachable,
     }
+}
+
+// A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload.
+fn emitBaseCaseConstruction(
+    emitter: *NodeEmitter,
+    node: *const ast.Node,
+    case_index: u32,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) EmissionResult {
+    const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
+
+    return emitUnionConstruction(emitter, union_type_id, case_index, null, lowered_program, environment);
 }
 
 pub fn emitUnionConstruction(

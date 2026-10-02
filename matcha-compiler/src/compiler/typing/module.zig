@@ -264,7 +264,7 @@ pub const MemberAccess = union(enum) {
     StructureInstanceFieldAccess: struct {
         field_index: u32,
     },
-    UnionTypeFunctionAccess, // TODO:
+    UnionTypeFunctionAccess,
     UnionTypeBaseCaseAccess: struct {
         case_index: u32,
     },
