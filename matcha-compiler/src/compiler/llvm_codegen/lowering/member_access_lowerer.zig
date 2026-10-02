@@ -28,7 +28,10 @@ pub const MemberAccessLowerer = struct {
                 .StructureInstanceFieldAccess => |structure_field| .{
                     .StructureField = .{ .field_index = structure_field.field_index },
                 },
-                .UnionTypeFunctionAccess => unreachable,
+                .UnionTypeFunctionAccess => unreachable, // TODO:
+                .UnionTypeBaseCaseAccess => |bare_case_access| .{
+                    .UnionConstruction = .{ .case_index = bare_case_access.case_index },
+                },
                 .StructureInstanceMethodAccess => .StructureMethod,
                 .StructureTypeFunctionAccess => .StructureTypeFunction,
                 .ArrayInstanceMethodAccess => .ArrayMethod,

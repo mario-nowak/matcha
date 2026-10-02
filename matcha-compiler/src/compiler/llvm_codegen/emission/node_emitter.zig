@@ -186,7 +186,12 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .ImplicitMemberExpression => unreachable,
+            .ImplicitMemberExpression => return aggregates.emitImplicitMemberExpression(
+                self,
+                node,
+                lowered_program,
+                environment,
+            ),
             .MemberExpression => |member_expression| return aggregates.emitMemberExpression(
                 self,
                 node,

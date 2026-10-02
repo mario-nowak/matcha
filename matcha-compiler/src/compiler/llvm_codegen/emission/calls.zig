@@ -30,13 +30,18 @@ pub fn emitCallExpression(
             lowered_program,
             environment,
         ),
-        .UnionConstruction => |union_construction| emitUnionConstruction(
-            emitter,
-            call_expression,
-            union_construction,
-            lowered_program,
-            environment,
-        ),
+        .UnionConstruction => |union_construction| block: {
+            const payload = call_expression.arguments[0];
+            const union_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(union_construction.union_symbol_id).?;
+            break :block emitUnionConstruction(
+                emitter,
+                union_type_id,
+                union_construction.case_index,
+                &payload,
+                lowered_program,
+                environment,
+            );
+        },
         .Builtin => |builtin_call_kind| emitBuiltinCall(
             emitter,
             builtin_call_kind,

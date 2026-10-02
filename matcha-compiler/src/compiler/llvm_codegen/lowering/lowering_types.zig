@@ -28,7 +28,7 @@ pub const CallDispatchDecision = union(enum) {
 
 pub const UnionConstruction = struct {
     union_symbol_id: symbols.SymbolId,
-    case_index: usize,
+    case_index: u32,
 };
 
 pub const FunctionLayoutParameterIndexKind = union(enum) {
@@ -50,6 +50,9 @@ pub const FunctionLayout = struct {
 pub const MemberAccessDecision = union(enum) {
     StructureField: struct {
         field_index: u32,
+    },
+    UnionConstruction: struct {
+        case_index: u32,
     },
     ArrayLength,
     StringLength,

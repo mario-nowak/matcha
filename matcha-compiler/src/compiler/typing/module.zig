@@ -230,7 +230,7 @@ pub const UnionTypeCase = struct {
 
 pub const UnionConstructor = struct {
     union_type_id: TypeId,
-    case_index: usize,
+    case_index: u32,
 };
 
 pub const FunctionType = struct {
@@ -264,7 +264,10 @@ pub const MemberAccess = union(enum) {
     StructureInstanceFieldAccess: struct {
         field_index: u32,
     },
-    UnionTypeFunctionAccess,
+    UnionTypeFunctionAccess, // TODO:
+    UnionTypeBaseCaseAccess: struct {
+        case_index: u32,
+    },
     StructureInstanceMethodAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,

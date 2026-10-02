@@ -139,7 +139,7 @@ pub const NodeTypeAnalyzer = struct {
                     var cases = std.ArrayList(typing.UnionTypeCase){};
                     for (union_information.cases, 0..) |case, case_index| {
                         const union_constructor_type_id = self.type_store.addType(.{ .UnionConstructor = .{
-                            .case_index = case_index,
+                            .case_index = @intCast(case_index),
                             .union_type_id = type_id,
                         } });
                         cases.append(
@@ -589,6 +589,10 @@ pub const NodeTypeAnalyzer = struct {
                         try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a union function");
                         return error.DiagnosticsEmitted;
                     },
+                    .UnionTypeBaseCaseAccess => {
+                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a union case");
+                        return error.DiagnosticsEmitted;
+                    },
                     .ArrayInstanceMethodAccess => {
                         try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to an array instance method");
                         return error.DiagnosticsEmitted;
@@ -851,10 +855,11 @@ pub const NodeTypeAnalyzer = struct {
             const union_type_case = union_type.cases[case_index];
             const is_implicitly_constructed = union_type_case.type_id == self.type_store.unit_type_id and
                 !parent_node_expectation.node_role.isInCalleePosition();
-            return self.recordNodeType(
-                node_id,
-                if (is_implicitly_constructed) union_type_id else union_type_case.constructor_type_id,
-            );
+            if (is_implicitly_constructed) {
+                try self.member_access_by_node_id.put(node_id, .{ .UnionTypeBaseCaseAccess = .{ .case_index = case_index } });
+            }
+            const node_type_id = if (is_implicitly_constructed) union_type_id else union_type_case.constructor_type_id;
+            return self.recordNodeType(node_id, node_type_id);
         }
 
         for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
@@ -1693,9 +1698,9 @@ pub const NodeTypeAnalyzer = struct {
     }
 };
 
-fn findUnionCaseIndex(union_symbol_information: symbols.UnionSymbolInformation, case_name: []const u8) ?usize {
+fn findUnionCaseIndex(union_symbol_information: symbols.UnionSymbolInformation, case_name: []const u8) ?u32 {
     for (union_symbol_information.cases, 0..) |union_case, case_index| {
-        if (std.mem.eql(u8, union_case.name, case_name)) return case_index;
+        if (std.mem.eql(u8, union_case.name, case_name)) return @intCast(case_index);
     }
 
     return null;

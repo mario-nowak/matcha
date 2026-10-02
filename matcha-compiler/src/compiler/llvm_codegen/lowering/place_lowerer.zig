@@ -60,7 +60,6 @@ pub const PlaceLowerer = struct {
                 self.lowerNode(assignment_statement.value, analyzed_program);
             },
             .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
-            .LeaveStatement, .ContinueStatement, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
             .While => |while_statement| {
                 self.lowerNode(while_statement.condition, analyzed_program);
                 if (while_statement.update) |update| {
@@ -102,7 +101,6 @@ pub const PlaceLowerer = struct {
                 }
             },
             .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
-            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -135,6 +133,15 @@ pub const PlaceLowerer = struct {
                 self.lowerNode(index_expression.base, analyzed_program);
                 self.lowerNode(index_expression.index, analyzed_program);
             },
+            .LeaveStatement,
+            .ContinueStatement,
+            .Identifier,
+            .IntegerLiteral,
+            .BooleanLiteral,
+            .StringLiteral,
+            .UnitLiteral,
+            .ImplicitMemberExpression,
+            => {},
         }
     }
 

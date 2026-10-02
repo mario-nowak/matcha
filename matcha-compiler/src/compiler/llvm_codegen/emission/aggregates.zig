@@ -1,5 +1,6 @@
 const std = @import("std");
 const ast = @import("ast");
+const typing = @import("typing");
 const lowering = @import("lowering");
 
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
@@ -10,6 +11,39 @@ const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
+
+pub fn emitImplicitMemberExpression(
+    emitter: *NodeEmitter,
+    node: *const ast.Node,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) EmissionResult {
+    const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
+    switch (member_access_decision) {
+        .UnionConstruction => |union_construction| {
+            const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
+            const result = emitUnionConstruction(
+                emitter,
+                union_type_id,
+                union_construction.case_index,
+                null,
+                lowered_program,
+                environment,
+            );
+
+            return .{ .register = result.expectRegister() };
+        },
+        .ArrayLength,
+        .ArrayMethod,
+        .IntegerMethod,
+        .StringLength,
+        .StringMethod,
+        .StructureField,
+        .StructureMethod,
+        .StructureTypeFunction,
+        => unreachable,
+    }
+}
 
 pub fn emitMemberExpression(
     emitter: *NodeEmitter,
@@ -64,6 +98,19 @@ pub fn emitMemberExpression(
 
             return .{ .register = member_register };
         },
+        .UnionConstruction => |union_construction| {
+            const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
+            const result = emitUnionConstruction(
+                emitter,
+                union_type_id,
+                union_construction.case_index,
+                null,
+                lowered_program,
+                environment,
+            );
+
+            return .{ .register = result.expectRegister() };
+        },
         .StructureMethod => unreachable,
         .StructureTypeFunction => unreachable,
         .ArrayMethod => unreachable,
@@ -74,15 +121,15 @@ pub fn emitMemberExpression(
 
 pub fn emitUnionConstruction(
     emitter: *NodeEmitter,
-    call_expression: *const ast.CallExpression,
-    union_construction: lowering.lowering_types.UnionConstruction,
+    union_type_id: typing.TypeId,
+    case_index: u32,
+    optional_payload: ?*const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     // Allocate memory for entire union
-    const union_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(union_construction.union_symbol_id).?;
     const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
-    const union_case_layout = union_layout.cases[union_construction.case_index];
+    const union_case_layout = union_layout.cases[case_index];
     // TODO: this entire process could be extracted as "allocate memory for type" or something
     const allocate_call = std.fmt.allocPrint(
         emitter.allocator,
@@ -108,33 +155,34 @@ pub fn emitUnionConstruction(
     // TODO: centralize this information
     const field_llvm_ir_type = "i8";
     emitter.function_ir_builder.emitStore(
-        std.fmt.allocPrint(emitter.allocator, "{d}", .{union_construction.case_index}) catch unreachable,
+        std.fmt.allocPrint(emitter.allocator, "{d}", .{case_index}) catch unreachable,
         case_index_pointer_register,
         field_llvm_ir_type,
     );
 
     // Emit and store call expression argument
-    const payload = call_expression.arguments[0];
-    const union_payload_emission_result = emitter.emitNode(&payload, lowered_program, environment);
-    switch (union_payload_emission_result) {
-        .register => |union_payload_emission_result_register| {
-            const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
-                "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
-                .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
-            ) catch unreachable);
+    if (optional_payload) |payload| {
+        const union_payload_emission_result = emitter.emitNode(payload, lowered_program, environment);
+        switch (union_payload_emission_result) {
+            .register => |union_payload_emission_result_register| {
+                const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+                emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+                    emitter.allocator,
+                    "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
+                    .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
+                ) catch unreachable);
 
-            const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(payload.id).?;
-            const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
-            emitter.function_ir_builder.emitStore(
-                union_payload_emission_result_register,
-                payload_pointer_register,
-                payload_llvm_ir_type,
-            );
-        },
-        .zero_sized => {},
-        .statement => unreachable,
+                const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(payload.id).?;
+                const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
+                emitter.function_ir_builder.emitStore(
+                    union_payload_emission_result_register,
+                    payload_pointer_register,
+                    payload_llvm_ir_type,
+                );
+            },
+            .zero_sized => {},
+            .statement => unreachable,
+        }
     }
 
     return .{ .register = union_header_register };
