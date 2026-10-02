@@ -163,14 +163,14 @@ pub fn emitStructureFieldPointer(
         .Absent => return .zero_sized,
         .Index => |field_layout_index| field_layout_index,
     };
-    const structure_llvm_type_name = structure_layout.llvm_type_name;
 
     const field_pointer_register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-        .{ field_pointer_register, structure_llvm_type_name, base_register, field_layout_index },
-    ) catch unreachable);
+    emitter.function_ir_builder.emitFieldPointer(
+        field_pointer_register,
+        structure_layout.llvm_type_name,
+        base_register,
+        field_layout_index,
+    );
 
     return .{ .register = field_pointer_register };
 }
@@ -193,21 +193,13 @@ pub fn emitIndexExpressionPointer(
 
     // Perform bounds check
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, base_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(length_pointer_register, lowering.llvm_type.array_llvm_type_name, base_register, 0);
 
     const length_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(length_register, length_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, base_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(data_pointer_register, lowering.llvm_type.array_llvm_type_name, base_register, 2);
 
     const negative_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
@@ -260,11 +252,7 @@ pub fn emitIndexExpressionPointer(
     builder.emitLoad(data_register, data_pointer_register, "ptr");
     const element_pointer_register = emitter.function_symbol_generator.generateRegister();
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
-        .{ element_pointer_register, element_llvm_type, data_register, index_register },
-    ) catch unreachable);
+    builder.emitElementPointer(element_pointer_register, element_llvm_type, data_register, index_register);
 
     return .{ .register = element_pointer_register };
 }

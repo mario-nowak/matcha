@@ -1,4 +1,5 @@
 const std = @import("std");
+const lowering = @import("lowering");
 const runtime_symbols = @import("runtime_symbols");
 
 const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
@@ -139,7 +140,7 @@ pub const RuntimeCallEmitter = struct {
     ) Register {
         self.runtime_requirements.string_concatenate = true;
         const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, "%String");
+        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s}, i64 {s})",
@@ -154,7 +155,7 @@ pub const RuntimeCallEmitter = struct {
         ) catch unreachable);
 
         const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, "%String");
+        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
         return result_register;
     }
 
@@ -250,7 +251,7 @@ pub const RuntimeCallEmitter = struct {
     ) Register {
         self.runtime_requirements.int_to_string = true;
         const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, "%String");
+        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
@@ -262,7 +263,7 @@ pub const RuntimeCallEmitter = struct {
         ) catch unreachable);
 
         const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, "%String");
+        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
         return result_register;
     }
 
@@ -299,16 +300,61 @@ pub const RuntimeCallEmitter = struct {
         const slot_register = symbol_generator.generateRegister();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
-            "{s} = call ptr @{s}(ptr {s}, i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 1) to i64))",
+            "{s} = call ptr @{s}(ptr {s}, i64 {s})",
             .{
                 slot_register,
                 runtime_symbols.runtime_array_append_slot_function_name,
                 array_register,
-                element_llvm_type,
+                self.sizeOf(element_llvm_type, 1),
             },
         ) catch unreachable);
 
         return slot_register;
+    }
+
+    /// Allocates garbage-collected memory for `count` values of `llvm_type`, which the collector scans for pointers.
+    pub fn emitAllocateCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        llvm_type: []const u8,
+        count: usize,
+    ) Register {
+        const memory_register = symbol_generator.generateRegister();
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @{s}(i64 {s})",
+            .{ memory_register, runtime_symbols.runtime_allocate_function_name, self.sizeOf(llvm_type, count) },
+        ) catch unreachable);
+
+        return memory_register;
+    }
+
+    /// Allocates garbage-collected memory of `byte_count` bytes, which the collector does not scan for pointers.
+    pub fn emitAllocateAtomicCall(
+        self: *const @This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        byte_count: usize,
+    ) Register {
+        const memory_register = symbol_generator.generateRegister();
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "{s} = call ptr @{s}(i64 {d})",
+            .{ memory_register, runtime_symbols.runtime_allocate_atomic_function_name, byte_count },
+        ) catch unreachable);
+
+        return memory_register;
+    }
+
+    /// Renders the size in bytes of `count` values of `llvm_type` as a constant expression. LLVM has no `sizeof`, so
+    /// this computes the address of the element after the last one, starting from a null pointer.
+    fn sizeOf(self: *const @This(), llvm_type: []const u8, count: usize) []const u8 {
+        return std.fmt.allocPrint(
+            self.allocator,
+            "ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64)",
+            .{ llvm_type, count },
+        ) catch unreachable;
     }
 
     fn emitStringOutputCall(
@@ -319,7 +365,7 @@ pub const RuntimeCallEmitter = struct {
         string_parts: RuntimeStringParts,
     ) Register {
         const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, "%String");
+        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s})",
@@ -332,7 +378,7 @@ pub const RuntimeCallEmitter = struct {
         ) catch unreachable);
 
         const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, "%String");
+        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
 
         return result_register;
     }
@@ -344,7 +390,7 @@ pub const RuntimeCallEmitter = struct {
         runtime_function_name: []const u8,
     ) Register {
         const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, "%String");
+        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s})",
@@ -352,7 +398,7 @@ pub const RuntimeCallEmitter = struct {
         ) catch unreachable);
 
         const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, "%String");
+        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
         return result_register;
     }
 };

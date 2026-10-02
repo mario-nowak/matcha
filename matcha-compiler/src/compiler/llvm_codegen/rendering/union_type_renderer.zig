@@ -44,8 +44,8 @@ pub const UnionTypeRenderer = struct {
                 }
 
                 try union_definitions_buffer.writer(self.allocator).print(
-                    "%{s} = type {{ i8",
-                    .{union_layout.cases[case_index].llvm_type_name},
+                    "%{s} = type {{ {s}",
+                    .{ union_layout.cases[case_index].llvm_type_name, lowering_types.union_case_index_llvm_type },
                 );
 
                 const payload_type_id = union_type.cases[case_index].type_id;

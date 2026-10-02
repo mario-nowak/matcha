@@ -27,7 +27,7 @@ pub const CallDispatchDecision = union(enum) {
 };
 
 pub const UnionConstruction = struct {
-    union_symbol_id: symbols.SymbolId,
+    union_type_id: typing.TypeId,
     case_index: u32,
 };
 
@@ -51,9 +51,7 @@ pub const MemberAccessDecision = union(enum) {
     StructureField: struct {
         field_index: u32,
     },
-    UnionConstruction: struct {
-        case_index: u32,
-    },
+    UnionConstruction: UnionConstruction,
     ArrayLength,
     StringLength,
     StructureMethod,
@@ -111,8 +109,13 @@ pub const StructureLayoutKind = union(enum) {
     Present: StructureLayout,
 };
 
+// Every union case is a structure that holds the case index first and the payload, if it has one, second.
+pub const union_case_index_llvm_type = "i32";
+pub const union_case_index_field_index: u32 = 0;
+pub const union_payload_field_index: u32 = 1;
+
 pub const UnionLayout = struct {
-    cases: []UnionCaseLayout,
+    cases: []const UnionCaseLayout,
 };
 
 pub const UnionCaseLayout = struct {

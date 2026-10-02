@@ -16,11 +16,6 @@ const StructureTypeRenderer = structure_type_renderer_module.StructureTypeRender
 const FunctionEmitter = emission.FunctionEmitter;
 const UnionTypeRenderer = @import("union_type_renderer.zig").UnionTypeRenderer;
 
-// A string is a header containing a pointer to the data and the length.
-const llvm_string_type_definition = "%String = type { ptr, i64 }";
-// An array is a header containing the length, capacity, and a pointer to the data.
-const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
-
 const LlvmTypeDefinition = struct {
     name: []const u8,
     types: []const u8,
@@ -163,7 +158,7 @@ pub const LlvmModuleRenderer = struct {
         const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
-            .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
+            .{ self.target_triple, runtime_symbol_declarations, lowering.llvm_type.string_llvm_type_definition, lowering.llvm_type.array_llvm_type_definition },
         ) catch unreachable;
 
         const string_literal_globals_ir = self.string_literal_renderer.renderGlobals(self.string_literal_pool);

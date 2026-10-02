@@ -277,7 +277,7 @@ now not all of them are real issues. But a lot of them are.
 - Switch all lowerers to the arena pattern of `UnionLayoutLowerer`: `lower()` returns a freshly allocated result, the lowerer keeps no state, and `deinit()`, `clearLayouts()` and all frees go away (the allocator is named `arena`).
 - Replace `catch unreachable` on allocations with `try`, so `error.OutOfMemory` propagates through `CompileError` instead of being undefined behavior in ReleaseFast (review item 51).
 - Delete `getTypeIdFromResolvedTypeReference()` and the unused `getLlvmIrTypeFromResolvedTypeReference()` in `llvm_type.zig`: they redo the type checker's reference-to-type translation in codegen. The renderers should read `StructureType.fields[i].type_id` and `UnionType.cases[i].type_id` instead.
-- Emit union payloads and structure field values before the allocation, not after it, so an early exit in a payload or field expression doesn't leave a wasted allocation behind.
+- Emit union payloads and structure field values before the allocation, not after it, so an early exit in a payload or field expression doesn't leave a wasted allocation behind. Fixed while lowering unions, for array literal elements too.
 - Rename the codegen value and slot concepts, so the names say what the IR contains:
     - `Register` becomes `Value`, because it often holds a literal like `1` and not a register. Rename `generateRegister()`, `EmissionResult.register` and `expectRegister()` to match. IR name: `%.value_<counter>`.
     - `Storage` becomes `Address`, because it holds a pointer to an `alloca` slot and not the slot itself. Rename `storage_by_symbol_id` to `address_by_symbol_id`.

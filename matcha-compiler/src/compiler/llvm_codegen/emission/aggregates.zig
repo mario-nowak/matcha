@@ -20,10 +20,12 @@ pub fn emitImplicitMemberExpression(
 ) EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
-        .UnionConstruction => |union_construction| return emitBaseCaseConstruction(
+        // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
+        .UnionConstruction => |union_construction| return emitUnionConstruction(
             emitter,
-            node,
+            union_construction.union_type_id,
             union_construction.case_index,
+            null,
             lowered_program,
             environment,
         ),
@@ -52,11 +54,12 @@ pub fn emitMemberExpression(
             const base_register = emitter.emitNode(member_expression.base, lowered_program, environment);
 
             const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
-                "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-                .{ length_pointer_register, base_register.expectRegister() },
-            ) catch unreachable);
+            emitter.function_ir_builder.emitFieldPointer(
+                length_pointer_register,
+                lowering.llvm_type.array_llvm_type_name,
+                base_register.expectRegister(),
+                0,
+            );
 
             const length_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
@@ -92,10 +95,12 @@ pub fn emitMemberExpression(
 
             return .{ .register = member_register };
         },
-        .UnionConstruction => |union_construction| return emitBaseCaseConstruction(
+        // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
+        .UnionConstruction => |union_construction| return emitUnionConstruction(
             emitter,
-            node,
+            union_construction.union_type_id,
             union_construction.case_index,
+            null,
             lowered_program,
             environment,
         ),
@@ -105,19 +110,6 @@ pub fn emitMemberExpression(
         .StringMethod => unreachable,
         .IntegerMethod => unreachable,
     }
-}
-
-// A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload.
-fn emitBaseCaseConstruction(
-    emitter: *NodeEmitter,
-    node: *const ast.Node,
-    case_index: u32,
-    lowered_program: *const lowering.LoweredProgram,
-    environment: *Environment,
-) EmissionResult {
-    const union_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
-
-    return emitUnionConstruction(emitter, union_type_id, case_index, null, lowered_program, environment);
 }
 
 pub fn emitUnionConstruction(
@@ -138,47 +130,40 @@ pub fn emitUnionConstruction(
     else
         null;
 
-    // Allocate memory for entire union
+    // Allocate the structure of the constructed case
     const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
     const union_case_layout = union_layout.cases[case_index];
-    // TODO: this entire process could be extracted as "allocate memory for type" or something
-    const allocate_call = std.fmt.allocPrint(
-        emitter.allocator,
-        "@matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
-        .{union_case_layout.llvm_type_name},
-    ) catch unreachable;
-    const union_header_register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitInstruction(
-        std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = call ptr {s}",
-            .{ union_header_register, allocate_call },
-        ) catch unreachable,
+    const union_case_llvm_type = std.fmt.allocPrint(emitter.allocator, "%{s}", .{union_case_layout.llvm_type_name}) catch unreachable;
+    const union_header_register = emitter.runtime_call_emitter.emitAllocateCall(
+        emitter.function_ir_builder,
+        emitter.function_symbol_generator,
+        union_case_llvm_type,
+        1,
     );
 
-    // Store case index in union
+    // Store the case index in union
     const case_index_pointer_register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 0",
-        .{ case_index_pointer_register, union_case_layout.llvm_type_name, union_header_register },
-    ) catch unreachable);
-    // TODO: centralize this information
-    const field_llvm_ir_type = "i8";
+    emitter.function_ir_builder.emitFieldPointer(
+        case_index_pointer_register,
+        union_case_layout.llvm_type_name,
+        union_header_register,
+        lowering.lowering_types.union_case_index_field_index,
+    );
     emitter.function_ir_builder.emitStore(
         std.fmt.allocPrint(emitter.allocator, "{d}", .{case_index}) catch unreachable,
         case_index_pointer_register,
-        field_llvm_ir_type,
+        lowering.lowering_types.union_case_index_llvm_type,
     );
 
     // Store the payload in union
     if (optional_payload_register) |payload_register| {
         const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
-            .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
-        ) catch unreachable);
+        emitter.function_ir_builder.emitFieldPointer(
+            payload_pointer_register,
+            union_case_layout.llvm_type_name,
+            union_header_register,
+            lowering.lowering_types.union_payload_field_index,
+        );
 
         const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(optional_payload.?.id).?;
         const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
@@ -210,23 +195,20 @@ pub fn emitStructureLiteral(
         field_value_emission_result.* = emitter.emitNode(field.value, lowered_program, environment);
     }
 
-    const structure_header_register = emitter.function_symbol_generator.generateRegister();
-    const allocate_call = switch (structure_layout_kind) {
-        .Present => |structure_layout| std.fmt.allocPrint(
-            emitter.allocator,
-            "@matcha_allocate(i64 ptrtoint (ptr getelementptr (%{s}, ptr null, i32 1) to i64))",
-            .{structure_layout.llvm_type_name},
-        ) catch unreachable,
+    const structure_header_register = switch (structure_layout_kind) {
+        .Present => |structure_layout| emitter.runtime_call_emitter.emitAllocateCall(
+            emitter.function_ir_builder,
+            emitter.function_symbol_generator,
+            std.fmt.allocPrint(emitter.allocator, "%{s}", .{structure_layout.llvm_type_name}) catch unreachable,
+            1,
+        ),
         // Structures without a layout only allocate a single byte for identity comparison
-        .Absent => "@matcha_allocate_atomic(i64 1)",
+        .Absent => emitter.runtime_call_emitter.emitAllocateAtomicCall(
+            emitter.function_ir_builder,
+            emitter.function_symbol_generator,
+            1,
+        ),
     };
-    emitter.function_ir_builder.emitInstruction(
-        std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = call ptr {s}",
-            .{ structure_header_register, allocate_call },
-        ) catch unreachable,
-    );
 
     for (fields, field_value_emission_results) |field, field_value_emission_result| {
         const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
@@ -241,11 +223,12 @@ pub fn emitStructureLiteral(
         };
 
         const field_pointer_register = emitter.function_symbol_generator.generateRegister();
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
-            .{ field_pointer_register, structure_layout.llvm_type_name, structure_header_register, layout_field_index },
-        ) catch unreachable);
+        emitter.function_ir_builder.emitFieldPointer(
+            field_pointer_register,
+            structure_layout.llvm_type_name,
+            structure_header_register,
+            layout_field_index,
+        );
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
         emitter.function_ir_builder.emitStore(
@@ -286,63 +269,40 @@ pub fn emitArrayLiteral(
         element_emission_result.* = emitter.emitNode(element, lowered_program, environment);
     }
 
-    // Array header register
-    const header_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))",
-        .{header_register},
-    ) catch unreachable);
-
-    var data_register = emitter.function_symbol_generator.generateRegister();
-    if (element_runtime_representation.hasRuntimeRepresentation()) {
-        builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64))",
-            .{ data_register, element_llvm_type, length },
-        ) catch unreachable);
-    } else {
-        // In case the element type does not have a runtime representation, we can just set the data pointer to null.
-        data_register = "null";
-    }
+    const header_register = emitter.runtime_call_emitter.emitAllocateCall(
+        builder,
+        emitter.function_symbol_generator,
+        lowering.llvm_type.array_llvm_type,
+        1,
+    );
+    // In case the element type does not have a runtime representation, we can just set the data pointer to null.
+    const data_register = if (element_runtime_representation.hasRuntimeRepresentation())
+        emitter.runtime_call_emitter.emitAllocateCall(builder, emitter.function_symbol_generator, element_llvm_type, length)
+    else
+        "null";
 
     for (element_emission_results, 0..) |element_register, index| {
         if (element_runtime_representation.hasRuntimeRepresentation()) {
             const element_pointer_register = emitter.function_symbol_generator.generateRegister();
-            builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
-                "{s} = getelementptr inbounds {s}, ptr {s}, i64 {d}",
-                .{ element_pointer_register, element_llvm_type, data_register, index },
-            ) catch unreachable);
+            const index_value = std.fmt.allocPrint(emitter.allocator, "{d}", .{index}) catch unreachable;
+            builder.emitElementPointer(element_pointer_register, element_llvm_type, data_register, index_value);
 
             builder.emitStore(element_register.expectRegister(), element_pointer_register, element_llvm_type);
         }
     }
 
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, header_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(length_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 0);
 
     const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
     builder.emitStore(length_number_string, length_pointer_register, "i64");
 
     const capacity_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 1",
-        .{ capacity_pointer_register, header_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(capacity_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 1);
     builder.emitStore(length_number_string, capacity_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, header_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(data_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 2);
     builder.emitStore(data_register, data_pointer_register, "ptr");
 
     return .{ .register = header_register };

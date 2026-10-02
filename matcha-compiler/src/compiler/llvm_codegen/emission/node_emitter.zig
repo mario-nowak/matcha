@@ -110,16 +110,16 @@ pub const NodeEmitter = struct {
         const pointer_register = self.function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = extractvalue %String {s}, 0",
-            .{ pointer_register, string_register },
+            "{s} = extractvalue {s} {s}, 0",
+            .{ pointer_register, lowering.llvm_type.string_llvm_type, string_register },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(pointer_instruction);
 
         const length_register = self.function_symbol_generator.generateRegister();
         const length_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = extractvalue %String {s}, 1",
-            .{ length_register, string_register },
+            "{s} = extractvalue {s} {s}, 1",
+            .{ length_register, lowering.llvm_type.string_llvm_type, string_register },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(length_instruction);
 

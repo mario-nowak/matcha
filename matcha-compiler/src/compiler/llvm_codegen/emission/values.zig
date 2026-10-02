@@ -122,20 +122,11 @@ pub fn emitLoweredBinaryOperation(
 
             return result_register;
         },
-        // Here we could add a UnionTagCompareEqual
-        // The left hand side would be a pointer to a union
-        // But I could emit them as the tag index. The the left hand side would be the ptr and the right hand side would be a register pointing at the tag
-        // emitPatternValue could then emit this tag
-        // I could reuse this later for something like `if result == .Some { ... }`
-        // And I could later add UnionCompareEqual
-        // The one thing I'm not sure about is that I would need to de-reference the subject register for each comparison
-        // this seems unnecessary but it would make the code a lot easier to write
         .UnionCaseIndexComparison => {
-            // TODO: I should centralize this information somewhere
-            const union_case_index_type = "i8";
+            const union_case_index_type = lowering.lowering_types.union_case_index_llvm_type;
             const operator_instruction = "icmp eq";
 
-            // Load the first field of the type into the register
+            // The case index is the first field of every case, so it can be loaded from the union pointer directly
             const union_case_register = emitter.function_symbol_generator.generateRegister();
             emitter.function_ir_builder.emitLoad(union_case_register, left_register, union_case_index_type);
 

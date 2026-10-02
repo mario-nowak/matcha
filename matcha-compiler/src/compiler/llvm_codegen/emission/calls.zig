@@ -32,7 +32,7 @@ pub fn emitCallExpression(
         ),
         .UnionConstruction => |union_construction| emitUnionConstruction(
             emitter,
-            lowered_program.analyzed_program.type_id_by_symbol_id.get(union_construction.union_symbol_id).?,
+            union_construction.union_type_id,
             union_construction.case_index,
             &call_expression.arguments[0],
             lowered_program,
@@ -287,11 +287,12 @@ fn emitArrayAppendCall(
 
         // load length of the array
         const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-            .{ length_pointer_register, base_register },
-        ) catch unreachable);
+        emitter.function_ir_builder.emitFieldPointer(
+            length_pointer_register,
+            lowering.llvm_type.array_llvm_type_name,
+            base_register,
+            0,
+        );
         const length_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
 

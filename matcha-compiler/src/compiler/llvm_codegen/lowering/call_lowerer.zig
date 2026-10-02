@@ -158,14 +158,12 @@ pub const CallLowerer = struct {
         const callee_type = analyzed_program.type_store.getType(callee_type_id);
 
         switch (callee_type) {
-            .UnionConstructor => |union_construction| {
-                const union_type = analyzed_program.type_store.getType(union_construction.union_type_id).Union;
-
+            .UnionConstructor => |union_constructor| {
                 self.decision_by_node_id.put(
                     node.id,
                     .{ .UnionConstruction = .{
-                        .union_symbol_id = union_type.symbol_id,
-                        .case_index = union_construction.case_index,
+                        .union_type_id = union_constructor.union_type_id,
+                        .case_index = union_constructor.case_index,
                     } },
                 ) catch unreachable;
             },

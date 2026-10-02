@@ -15,7 +15,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__Signal__case_0__Ready = type { i8 }
+                \\%matcha_union_0__Signal__case_0__Ready = type { i32 }
             );
         }
 
@@ -30,7 +30,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__Count__case_0__Value = type { i8, i64 }
+                \\%matcha_union_0__Count__case_0__Value = type { i32, i64 }
             );
         }
 
@@ -46,10 +46,10 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_1__Payload__case_0__Number = type { i8, i64 }
-                \\%matcha_union_1__Payload__case_1__Text = type { i8, %String }
-                \\%matcha_union_1__Payload__case_2__Owner = type { i8, ptr }
-                \\%matcha_union_1__Payload__case_3__Owners = type { i8, ptr }
+                \\%matcha_union_1__Payload__case_0__Number = type { i32, i64 }
+                \\%matcha_union_1__Payload__case_1__Text = type { i32, %String }
+                \\%matcha_union_1__Payload__case_2__Owner = type { i32, ptr }
+                \\%matcha_union_1__Payload__case_3__Owners = type { i32, ptr }
             );
         }
 
@@ -64,7 +64,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__Signal__case_0__Ready = type { i8 }
+                \\%matcha_union_0__Signal__case_0__Ready = type { i32 }
             );
         }
 
@@ -79,8 +79,8 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__Tree__case_0__Leaf = type { i8, i64 }
-                \\%matcha_union_0__Tree__case_1__Parent = type { i8, ptr }
+                \\%matcha_union_0__Tree__case_0__Leaf = type { i32, i64 }
+                \\%matcha_union_0__Tree__case_1__Parent = type { i32, ptr }
             );
         }
 
@@ -95,9 +95,9 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__Direction__case_0__North = type { i8 }
-                \\%matcha_union_0__Direction__case_1__East = type { i8 }
-                \\%matcha_union_0__Direction__case_2__South = type { i8 }
+                \\%matcha_union_0__Direction__case_0__North = type { i32 }
+                \\%matcha_union_0__Direction__case_1__East = type { i32 }
+                \\%matcha_union_0__Direction__case_2__South = type { i32 }
             );
         }
 
@@ -113,10 +113,10 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__First__case_0__A = type { i8, i64 }
-                \\%matcha_union_0__First__case_1__B = type { i8 }
-                \\%matcha_union_1__Second__case_0__C = type { i8, i64 }
-                \\%matcha_union_1__Second__case_1__D = type { i8 }
+                \\%matcha_union_0__First__case_0__A = type { i32, i64 }
+                \\%matcha_union_0__First__case_1__B = type { i32 }
+                \\%matcha_union_1__Second__case_0__C = type { i32, i64 }
+                \\%matcha_union_1__Second__case_1__D = type { i32 }
             );
         }
 
@@ -132,8 +132,8 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_union_0__First__case_0__A = type { i8 }
-                \\%matcha_union_1__Second__case_0__B = type { i8 }
+                \\%matcha_union_0__First__case_0__A = type { i32 }
+                \\%matcha_union_1__Second__case_0__B = type { i32 }
             );
         }
 

@@ -385,4 +385,4 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
 pub const TypeIdBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
 pub const TypeIdByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
 pub const MemberAccessByNodeId = std.AutoHashMap(ast.NodeId, MemberAccess);
-pub const UnionCaseIndexByPatternId = std.AutoHashMap(ast.NodeId, usize);
+pub const UnionCaseIndexByPatternId = std.AutoHashMap(ast.NodeId, u32);
