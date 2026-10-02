@@ -182,8 +182,7 @@ pub fn emitMatchExpression(
         }) catch unreachable;
     }
 
-    const exhaustive_without_else = match_expression.else_arm_expression == null and
-        lowered_program.analyzed_program.type_id_by_node_id.get(match_expression.subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id;
+    const exhaustive_without_else = match_expression.else_arm_expression == null;
 
     return emitDecisionConstruct(
         emitter,
@@ -471,7 +470,7 @@ fn emitDecisionConstruct(
         .analyzed_program
         .runtime_representation_result
         .runtime_representation_by_type_id
-        .get(result_type_id) orelse undefined;
+        .get(result_type_id).?;
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
     const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
     var incoming_values = std.ArrayList(PhiIncoming){};
@@ -515,7 +514,13 @@ fn emitDecisionConstruct(
                 continue_reachable = true;
             }
 
-            //
+            const optional_union_case_index: ?usize = switch (arm.condition) {
+                .Expression => null,
+                .Pattern => |pattern| switch (pattern.kind) {
+                    .Case => lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
+                    else => null,
+                },
+            };
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
             } else {
@@ -534,6 +539,30 @@ fn emitDecisionConstruct(
             }
 
             builder.emitLabel(arm_label);
+            if (optional_union_case_index) |union_case_index| {
+                const union_type_id = subject_type_id.?;
+                const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
+                const union_case_layout = union_layout.cases[union_case_index];
+
+                // handle optional binding
+                const payload_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(arm.condition.Pattern.kind.Case.binding.?.id).?;
+                const payload_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(payload_symbol_id).?;
+                const payload_storage = emitter.function_symbol_generator.generateStorage();
+                const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
+                builder.emitAlloca(payload_storage, payload_llvm_type);
+                environment.storage_by_symbol_id.put(payload_symbol_id, payload_storage) catch unreachable;
+
+                const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+                builder.emitInstruction(std.fmt.allocPrint(
+                    emitter.allocator,
+                    "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
+                    .{ payload_pointer_register, union_case_layout.llvm_type_name, subject_register.? },
+                ) catch unreachable);
+                const payload_register = emitter.function_symbol_generator.generateRegister();
+                builder.emitLoad(payload_register, payload_pointer_register, payload_llvm_type);
+                builder.emitStore(payload_register, payload_storage, payload_llvm_type);
+            }
+
             const arm_register = emitter.emitNode(arm.body, lowered_program, environment);
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;

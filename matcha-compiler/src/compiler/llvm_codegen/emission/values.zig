@@ -137,11 +137,7 @@ pub fn emitLoweredBinaryOperation(
 
             // Load the first field of the type into the register
             const union_case_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
-                "{s} = load {s}, ptr {s}",
-                .{ union_case_register, union_case_index_type, left_register },
-            ) catch unreachable);
+            emitter.function_ir_builder.emitLoad(union_case_register, left_register, union_case_index_type);
 
             const result_register = emitter.function_symbol_generator.generateRegister();
             const instruction = std.fmt.allocPrint(

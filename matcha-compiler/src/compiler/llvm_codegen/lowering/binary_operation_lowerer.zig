@@ -175,6 +175,14 @@ pub const BinaryOperationLowerer = struct {
             };
         }
 
+        const left_operand_type = analyzed_program.type_store.getType(left_operand_type_id);
+        if (left_operand_type == .Union) {
+            return switch (binary_operator) {
+                .Equal => .UnionCaseIndexComparison,
+                else => unreachable,
+            };
+        }
+
         return .{ .PrimitiveOperation = switch (binary_operator) {
             .Add => .Add,
             .Subtract => .Subtract,
