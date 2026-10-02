@@ -58,7 +58,7 @@ pub fn emitMemberExpression(
                 length_pointer_register,
                 lowering.llvm_type.array_llvm_type_name,
                 base_register.expectRegister(),
-                0,
+                lowering.llvm_type.array_length_field_index,
             );
 
             const length_register = emitter.function_symbol_generator.generateRegister();
@@ -292,17 +292,32 @@ pub fn emitArrayLiteral(
     }
 
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(length_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 0);
+    builder.emitFieldPointer(
+        length_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        header_register,
+        lowering.llvm_type.array_length_field_index,
+    );
 
     const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
     builder.emitStore(length_number_string, length_pointer_register, "i64");
 
     const capacity_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(capacity_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 1);
+    builder.emitFieldPointer(
+        capacity_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        header_register,
+        lowering.llvm_type.array_capacity_field_index,
+    );
     builder.emitStore(length_number_string, capacity_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(data_pointer_register, lowering.llvm_type.array_llvm_type_name, header_register, 2);
+    builder.emitFieldPointer(
+        data_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        header_register,
+        lowering.llvm_type.array_data_field_index,
+    );
     builder.emitStore(data_register, data_pointer_register, "ptr");
 
     return .{ .register = header_register };

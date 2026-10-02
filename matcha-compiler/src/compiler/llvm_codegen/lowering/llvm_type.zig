@@ -12,6 +12,9 @@ pub const string_llvm_type_definition = string_llvm_type ++ " = type { ptr, i64 
 pub const array_llvm_type_name = "Array";
 pub const array_llvm_type = "%" ++ array_llvm_type_name;
 pub const array_llvm_type_definition = array_llvm_type ++ " = type { i64, i64, ptr }";
+pub const array_length_field_index: u32 = 0;
+pub const array_capacity_field_index: u32 = 1;
+pub const array_data_field_index: u32 = 2;
 
 pub fn getLlvmIrTypeByMatchaType(type_store: *const typing.TypeStore, type_id: typing.TypeId) []const u8 {
     return switch (type_store.getType(type_id)) {

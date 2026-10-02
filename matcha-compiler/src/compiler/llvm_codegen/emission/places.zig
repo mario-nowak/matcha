@@ -193,13 +193,23 @@ pub fn emitIndexExpressionPointer(
 
     // Perform bounds check
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(length_pointer_register, lowering.llvm_type.array_llvm_type_name, base_register, 0);
+    builder.emitFieldPointer(
+        length_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        base_register,
+        lowering.llvm_type.array_length_field_index,
+    );
 
     const length_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(length_register, length_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(data_pointer_register, lowering.llvm_type.array_llvm_type_name, base_register, 2);
+    builder.emitFieldPointer(
+        data_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        base_register,
+        lowering.llvm_type.array_data_field_index,
+    );
 
     const negative_check_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(

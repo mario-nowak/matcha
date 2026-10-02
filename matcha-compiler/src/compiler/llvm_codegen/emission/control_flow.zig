@@ -20,9 +20,6 @@ const LoopConstruct = struct {
     body_block: *const ast.Block,
 };
 
-// This is a bit weird because we can have a decision construct with no subject but pattern arm conditions
-// Maybe we need two different decision constructs
-// Because pattern matching will become significantly different from subjectless match
 const DecisionConstruct = struct {
     subject: ?*const ast.Node,
     arms: []const DecisionArm,
@@ -320,13 +317,23 @@ pub fn emitForInArrayLoop(
     builder.emitStore("0", index_storage, "i64");
 
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(length_pointer_register, lowering.llvm_type.array_llvm_type_name, iterable_register, 0);
+    builder.emitFieldPointer(
+        length_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        iterable_register,
+        lowering.llvm_type.array_length_field_index,
+    );
 
     const length_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(length_register, length_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitFieldPointer(data_pointer_register, lowering.llvm_type.array_llvm_type_name, iterable_register, 2);
+    builder.emitFieldPointer(
+        data_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        iterable_register,
+        lowering.llvm_type.array_data_field_index,
+    );
 
     const data_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(data_register, data_pointer_register, "ptr");

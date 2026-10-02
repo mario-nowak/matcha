@@ -291,7 +291,7 @@ fn emitArrayAppendCall(
             length_pointer_register,
             lowering.llvm_type.array_llvm_type_name,
             base_register,
-            0,
+            lowering.llvm_type.array_length_field_index,
         );
         const length_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
