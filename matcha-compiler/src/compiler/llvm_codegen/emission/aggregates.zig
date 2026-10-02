@@ -128,6 +128,16 @@ pub fn emitUnionConstruction(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
+    // Emit the payload before the allocation, so that an early exit in the payload leaves no wasted allocation behind.
+    const optional_payload_register: ?Register = if (optional_payload) |payload|
+        switch (emitter.emitNode(payload, lowered_program, environment)) {
+            .register => |register| register,
+            .zero_sized => null,
+            .statement => unreachable,
+        }
+    else
+        null;
+
     // Allocate memory for entire union
     const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
     const union_case_layout = union_layout.cases[case_index];
@@ -161,29 +171,18 @@ pub fn emitUnionConstruction(
         field_llvm_ir_type,
     );
 
-    // Emit and store call expression argument
-    if (optional_payload) |payload| {
-        const union_payload_emission_result = emitter.emitNode(payload, lowered_program, environment);
-        switch (union_payload_emission_result) {
-            .register => |union_payload_emission_result_register| {
-                const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
-                emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                    emitter.allocator,
-                    "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
-                    .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
-                ) catch unreachable);
+    // Store the payload in union
+    if (optional_payload_register) |payload_register| {
+        const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
+            emitter.allocator,
+            "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 1",
+            .{ payload_pointer_register, union_case_layout.llvm_type_name, union_header_register },
+        ) catch unreachable);
 
-                const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(payload.id).?;
-                const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
-                emitter.function_ir_builder.emitStore(
-                    union_payload_emission_result_register,
-                    payload_pointer_register,
-                    payload_llvm_ir_type,
-                );
-            },
-            .zero_sized => {},
-            .statement => unreachable,
-        }
+        const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(optional_payload.?.id).?;
+        const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
+        emitter.function_ir_builder.emitStore(payload_register, payload_pointer_register, payload_llvm_ir_type);
     }
 
     return .{ .register = union_header_register };
@@ -204,6 +203,13 @@ pub fn emitStructureLiteral(
     const structure_layout_kind = lowered_program
         .structure_layout_kind_by_type_id.get(node_type_id) orelse unreachable;
 
+    // Emit the field values before the allocation, so that an early exit in a field value leaves no wasted
+    // allocation behind.
+    const field_value_emission_results = emitter.allocator.alloc(EmissionResult, fields.len) catch unreachable;
+    for (fields, field_value_emission_results) |field, *field_value_emission_result| {
+        field_value_emission_result.* = emitter.emitNode(field.value, lowered_program, environment);
+    }
+
     const structure_header_register = emitter.function_symbol_generator.generateRegister();
     const allocate_call = switch (structure_layout_kind) {
         .Present => |structure_layout| std.fmt.allocPrint(
@@ -222,8 +228,7 @@ pub fn emitStructureLiteral(
         ) catch unreachable,
     );
 
-    for (fields) |field| {
-        const field_value_emission_result = emitter.emitNode(field.value, lowered_program, environment);
+    for (fields, field_value_emission_results) |field, field_value_emission_result| {
         const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
         const structure_field = structure_type.fields[@intCast(field_index)];
         const structure_layout = switch (structure_layout_kind) {
@@ -274,6 +279,13 @@ pub fn emitArrayLiteral(
         .runtime_representation_by_type_id
         .get(element_type_id) orelse unreachable;
 
+    // Emit the elements before the allocations, so that an early exit in an element leaves no wasted allocation
+    // behind.
+    const element_emission_results = emitter.allocator.alloc(EmissionResult, length) catch unreachable;
+    for (array_literal.elements, element_emission_results) |*element, *element_emission_result| {
+        element_emission_result.* = emitter.emitNode(element, lowered_program, environment);
+    }
+
     // Array header register
     const header_register = emitter.function_symbol_generator.generateRegister();
     builder.emitInstruction(std.fmt.allocPrint(
@@ -294,9 +306,7 @@ pub fn emitArrayLiteral(
         data_register = "null";
     }
 
-    for (array_literal.elements, 0..) |*element, index| {
-        const element_register = emitter.emitNode(element, lowered_program, environment);
-
+    for (element_emission_results, 0..) |element_register, index| {
         if (element_runtime_representation.hasRuntimeRepresentation()) {
             const element_pointer_register = emitter.function_symbol_generator.generateRegister();
             builder.emitInstruction(std.fmt.allocPrint(

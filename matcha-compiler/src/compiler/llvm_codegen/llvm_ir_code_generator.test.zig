@@ -61,6 +61,51 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                 );
             }
+
+            test "allocates nothing when a field value returns early" {
+                const source =
+                    \\item Wrapper = structure {
+                    \\    value: unit;
+                    \\};
+                    \\item make(): int = {
+                    \\    val wrapper = Wrapper { value = {
+                    \\        return 1;
+                    \\    } };
+                    \\    return 2;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i64 @matcha_function_1__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    ret i64 1
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
         };
 
         pub const unions = struct {
@@ -94,13 +139,13 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_1__Vertical, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_0, i32 0, i32 0
-                    \\    store i8 1, ptr %.t_1
-                    \\    %.t_2 = sub i64 0, 3
-                    \\    %.t_3 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_0, i32 0, i32 1
-                    \\    store i64 %.t_2, ptr %.t_3
-                    \\    store ptr %.t_0, ptr %.s_0
+                    \\    %.t_0 = sub i64 0, 3
+                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_1__Vertical, ptr null, i32 1) to i64))
+                    \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_1, i32 0, i32 0
+                    \\    store i8 1, ptr %.t_2
+                    \\    %.t_3 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_1, i32 0, i32 1
+                    \\    store i64 %.t_0, ptr %.t_3
+                    \\    store ptr %.t_1, ptr %.s_0
                     \\    ret i32 0
                     \\}
                     \\
@@ -141,6 +186,55 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_1 = getelementptr inbounds %matcha_union_0__Signal__case_1__On, ptr %.t_0, i32 0, i32 0
                     \\    store i8 1, ptr %.t_1
                     \\    store ptr %.t_0, ptr %.s_0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "allocates nothing when the payload returns early" {
+                const source =
+                    \\item Signal = union { Off, On: unit };
+                    \\item make(): Signal = {
+                    \\    val signal = Signal.On({
+                    \\        return Signal.Off;
+                    \\    });
+                    \\    return signal;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_union_0__Signal__case_0__Off = type { i8 }
+                    \\%matcha_union_0__Signal__case_1__On = type { i8 }
+                    \\
+                    \\define ptr @matcha_function_1__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Signal__case_0__Off, ptr null, i32 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Signal__case_0__Off, ptr %.t_0, i32 0, i32 0
+                    \\    store i8 0, ptr %.t_1
+                    \\    ret ptr %.t_0
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -1010,6 +1104,48 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_7 = load i64, ptr %.t_6
                     \\    %.t_8 = add i64 %.t_7, 1
                     \\    store i64 %.t_8, ptr %.t_6
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "allocates nothing when an element returns early" {
+                const source =
+                    \\item make(): int = {
+                    \\    val values = [{
+                    \\        return 1;
+                    \\    }];
+                    \\    return 2;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i64 @matcha_function_0__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    ret i64 1
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
