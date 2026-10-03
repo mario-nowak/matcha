@@ -33,16 +33,16 @@ pub const FunctionLayoutLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.FunctionLayoutBySymbolId {
         self.clearLayouts();
 
-        var owning_structure_symbol_by_function_symbol_id = std.AutoHashMap(symbols.SymbolId, symbols.Symbol).init(self.allocator);
-        defer owning_structure_symbol_by_function_symbol_id.deinit();
-        var structure_symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
-        while (structure_symbols_iterator.next()) |symbol| {
+        var owner_symbol_by_function_symbol_id = std.AutoHashMap(symbols.SymbolId, symbols.Symbol).init(self.allocator);
+        defer owner_symbol_by_function_symbol_id.deinit();
+        var owner_symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
+        while (owner_symbols_iterator.next()) |symbol| {
             const structure_information = switch (symbol.kind) {
                 .Structure => |structure_information| structure_information,
                 else => continue,
             };
             for (structure_information.function_symbol_ids) |function_symbol_id| {
-                owning_structure_symbol_by_function_symbol_id.put(function_symbol_id, symbol) catch unreachable;
+                owner_symbol_by_function_symbol_id.put(function_symbol_id, symbol) catch unreachable;
             }
         }
 
@@ -92,7 +92,7 @@ pub const FunctionLayoutLowerer = struct {
                 .Absent;
 
             const function_layout = lowering_types.FunctionLayout{
-                .llvm_function_name = self.generateLlvmFunctionName(symbol, owning_structure_symbol_by_function_symbol_id.get(function_symbol_id)),
+                .llvm_function_name = self.generateLlvmFunctionName(symbol, owner_symbol_by_function_symbol_id.get(function_symbol_id)),
                 .parameter_index_kind_by_definition_index = parameter_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
                 .return_type_value_kind = return_type_value_kind,
             };
@@ -106,9 +106,9 @@ pub const FunctionLayoutLowerer = struct {
     fn generateLlvmFunctionName(
         self: *@This(),
         function_symbol: symbols.Symbol,
-        owning_structure_symbol: ?symbols.Symbol,
+        owner_symbol: ?symbols.Symbol,
     ) []const u8 {
-        if (owning_structure_symbol) |structure_symbol| {
+        if (owner_symbol) |structure_symbol| {
             return std.fmt.allocPrint(
                 self.allocator,
                 "matcha_structure_{d}__{s}__function_{d}__{s}",

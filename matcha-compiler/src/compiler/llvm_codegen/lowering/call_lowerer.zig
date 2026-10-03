@@ -171,15 +171,15 @@ pub const CallLowerer = struct {
                 const decision: lowering_types.CallDispatchDecision = switch (call_expression.callee.kind) {
                     .ImplicitMemberExpression => unreachable,
                     .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
-                        .StructureInstanceMethodAccess => |structure_method| .{
+                        .InstanceMethodAccess => |instance_method| .{
                             .UserFunction = .{
-                                .function_symbol_id = structure_method.function_symbol_id,
+                                .function_symbol_id = instance_method.function_symbol_id,
                                 .receiver_node_id = callee_member_expression.base.id,
                             },
                         },
-                        .StructureTypeFunctionAccess => |structure_function| .{
+                        .TypeFunctionAccess => |type_function| .{
                             .UserFunction = .{
-                                .function_symbol_id = structure_function.function_symbol_id,
+                                .function_symbol_id = type_function.function_symbol_id,
                             },
                         },
                         .ArrayInstanceMethodAccess => |array_method| .{ .ArrayMethod = array_method },

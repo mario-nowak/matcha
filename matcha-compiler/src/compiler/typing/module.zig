@@ -198,19 +198,6 @@ pub const StructureType = struct {
         }
         return null;
     }
-
-    pub fn getFunctionSymbolId(
-        self: @This(),
-        symbol_table: *const symbols.SymbolTable,
-        member_name: []const u8,
-    ) ?symbols.SymbolId {
-        for (self.function_symbol_ids) |function_symbol_id| {
-            if (std.mem.eql(u8, symbol_table.getSymbol(function_symbol_id).name, member_name)) {
-                return function_symbol_id;
-            }
-        }
-        return null;
-    }
 };
 
 pub const StructureTypeField = struct {
@@ -268,12 +255,12 @@ pub const MemberAccess = union(enum) {
     UnionTypeBaseCaseAccess: struct {
         case_index: u32,
     },
-    StructureInstanceMethodAccess: struct {
-        structure_symbol_id: symbols.SymbolId,
+    InstanceMethodAccess: struct {
+        owner_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
-    StructureTypeFunctionAccess: struct {
-        structure_symbol_id: symbols.SymbolId,
+    TypeFunctionAccess: struct {
+        owner_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
     },
     StringInstanceFieldAccess: StringInstanceField,

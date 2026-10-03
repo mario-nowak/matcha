@@ -1724,7 +1724,7 @@ pub const NodeTypeAnalyzer = struct {
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .StructureTypeFunctionAccess = .{ .structure_symbol_id = point_symbol_id, .function_symbol_id = origin_symbol_id } });
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = origin_symbol_id } });
             }
 
             test "records a method access with its structure and function" {
@@ -1746,7 +1746,7 @@ pub const NodeTypeAnalyzer = struct {
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .StructureInstanceMethodAccess = .{ .structure_symbol_id = point_symbol_id, .function_symbol_id = moved_symbol_id } });
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .InstanceMethodAccess = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = moved_symbol_id } });
             }
 
             test "types a method callee without its receiver parameter" {

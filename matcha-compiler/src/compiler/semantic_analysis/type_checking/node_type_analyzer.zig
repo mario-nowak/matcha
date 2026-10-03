@@ -601,30 +601,14 @@ pub const NodeTypeAnalyzer = struct {
                 const member_expression = self.member_access_by_node_id.get(node.id) orelse unreachable;
                 return switch (member_expression) {
                     .StructureInstanceFieldAccess => .{ .type_id = type_id },
-                    .StructureInstanceMethodAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure instance method");
-                        return error.DiagnosticsEmitted;
-                    },
                     .ArrayInstanceFieldAccess => |array_field| switch (array_field) {
                         .Length => {
                             try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to read-only array member 'length'");
                             return error.DiagnosticsEmitted;
                         },
                     },
-                    .StructureTypeFunctionAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a structure function");
-                        return error.DiagnosticsEmitted;
-                    },
-                    .UnionTypeFunctionAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a union function");
-                        return error.DiagnosticsEmitted;
-                    },
                     .UnionTypeBaseCaseAccess => {
                         try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a union case");
-                        return error.DiagnosticsEmitted;
-                    },
-                    .ArrayInstanceMethodAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to an array instance method");
                         return error.DiagnosticsEmitted;
                     },
                     .StringInstanceFieldAccess => |string_field| switch (string_field) {
@@ -633,14 +617,15 @@ pub const NodeTypeAnalyzer = struct {
                             return error.DiagnosticsEmitted;
                         },
                     },
-                    .StringInstanceMethodAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to a string instance method");
-                        return error.DiagnosticsEmitted;
-                    },
-                    .IntegerInstanceMethodAccess => {
-                        try self.diagnostic_store.emitErrorFromToken(node.primaryToken(), "cannot assign to an integer instance method");
-                        return error.DiagnosticsEmitted;
-                    },
+                    // A function member has a function type, and checking the target as a value already rejects
+                    // function values. Revisit these when function values are supported.
+                    .InstanceMethodAccess,
+                    .TypeFunctionAccess,
+                    .UnionTypeFunctionAccess,
+                    .ArrayInstanceMethodAccess,
+                    .StringInstanceMethodAccess,
+                    .IntegerInstanceMethodAccess,
+                    => unreachable,
                 };
             },
             .IndexExpression => {
@@ -812,7 +797,7 @@ pub const NodeTypeAnalyzer = struct {
                         .Structure => |structure_type| structure_type,
                         else => unreachable,
                     };
-                    const function_symbol_id = structure_type.getFunctionSymbolId(&self.resolved_program.symbol_table, member_name) orelse {
+                    const function_symbol_id = findFunctionSymbolId(&self.resolved_program.symbol_table, structure_type.function_symbol_ids, member_name) orelse {
                         try self.diagnostic_store.emitFormattedErrorFromToken(
                             self.allocator,
                             member_expression.member_name_token,
@@ -822,8 +807,8 @@ pub const NodeTypeAnalyzer = struct {
                         return error.DiagnosticsEmitted;
                     };
 
-                    self.recordMemberAccess(node_id, .{ .StructureTypeFunctionAccess = .{
-                        .structure_symbol_id = base_symbol_id,
+                    self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
+                        .owner_symbol_id = base_symbol_id,
                         .function_symbol_id = function_symbol_id,
                     } });
                     const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
@@ -922,10 +907,7 @@ pub const NodeTypeAnalyzer = struct {
             return self.recordNodeType(node_id, node_type_id);
         }
 
-        for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
-            const function_symbol = self.resolved_program.symbol_table.getSymbol(function_symbol_id);
-            if (!std.mem.eql(u8, function_symbol.name, member_name)) continue;
-
+        if (findFunctionSymbolId(&self.resolved_program.symbol_table, union_symbol_information.function_symbol_ids, member_name)) |function_symbol_id| {
             self.recordMemberAccess(node_id, .UnionTypeFunctionAccess);
             const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
             return self.recordNodeType(node_id, function_type_id);
@@ -956,7 +938,7 @@ pub const NodeTypeAnalyzer = struct {
                     return self.recordNodeType(node_id, structure_type.fields[@intCast(structure_field_index)].type_id);
                 }
 
-                const function_symbol_id = structure_type.getFunctionSymbolId(&self.resolved_program.symbol_table, member_name);
+                const function_symbol_id = findFunctionSymbolId(&self.resolved_program.symbol_table, structure_type.function_symbol_ids, member_name);
                 if (function_symbol_id) |structure_function_symbol_id| {
                     // Instance method access binds the receiver and drops the `self` parameter from the callable type.
                     const bound_function_type_id = try self.bindInstanceMethodFunctionType(
@@ -964,8 +946,8 @@ pub const NodeTypeAnalyzer = struct {
                         structure_function_symbol_id,
                         base_type_id,
                     );
-                    self.recordMemberAccess(node_id, .{ .StructureInstanceMethodAccess = .{
-                        .structure_symbol_id = structure_type.symbol_id,
+                    self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
+                        .owner_symbol_id = structure_type.symbol_id,
                         .function_symbol_id = structure_function_symbol_id,
                     } });
                     return self.recordNodeType(node_id, bound_function_type_id);
@@ -1049,17 +1031,14 @@ pub const NodeTypeAnalyzer = struct {
             .Union => |union_type| {
                 const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
                 const union_symbol_information = union_symbol.kind.Union;
-                for (union_symbol_information.function_symbol_ids) |function_symbol_id| {
-                    const function_symbol = self.resolved_program.symbol_table.getSymbol(function_symbol_id);
-                    if (std.mem.eql(u8, function_symbol.name, member_name)) {
-                        // Instance method access binds the receiver and drops the `self` parameter from the callable type.
-                        const bound_function_type_id = try self.bindInstanceMethodFunctionType(
-                            member_expression.member_name_token,
-                            function_symbol_id,
-                            base_type_id,
-                        );
-                        return self.recordNodeType(node_id, bound_function_type_id);
-                    }
+                if (findFunctionSymbolId(&self.resolved_program.symbol_table, union_symbol_information.function_symbol_ids, member_name)) |function_symbol_id| {
+                    // Instance method access binds the receiver and drops the `self` parameter from the callable type.
+                    const bound_function_type_id = try self.bindInstanceMethodFunctionType(
+                        member_expression.member_name_token,
+                        function_symbol_id,
+                        base_type_id,
+                    );
+                    return self.recordNodeType(node_id, bound_function_type_id);
                 }
 
                 try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -1919,6 +1898,15 @@ pub const NodeTypeAnalyzer = struct {
         return self.type_store.getType(type_id);
     }
 };
+
+/// Finds a function that a structure or union declares in its body.
+fn findFunctionSymbolId(symbol_table: *const symbols.SymbolTable, function_symbol_ids: []const symbols.SymbolId, function_name: []const u8) ?symbols.SymbolId {
+    for (function_symbol_ids) |function_symbol_id| {
+        if (std.mem.eql(u8, symbol_table.getSymbol(function_symbol_id).name, function_name)) return function_symbol_id;
+    }
+
+    return null;
+}
 
 fn findUnionCaseIndex(union_symbol_information: symbols.UnionSymbolInformation, case_name: []const u8) ?u32 {
     for (union_symbol_information.cases, 0..) |union_case, case_index| {
