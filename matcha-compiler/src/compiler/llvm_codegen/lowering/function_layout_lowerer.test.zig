@@ -40,6 +40,25 @@ pub const FunctionLayoutLowerer = struct {
             try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_structure_0__Point__function_9__origin" });
         }
 
+        test "names a union function after its union and its own symbol id and name" {
+            const source =
+                \\item Result = union {
+                \\    None,
+                \\    Some: int,
+                \\    item fromNumber(number: int): Result = .Some(number);
+                \\};
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
+            const result_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(result_symbol_id).kind.Union.function_symbol_ids[0];
+
+            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_union_0__Result__function_9__fromNumber" });
+        }
+
         test "omits unit parameters from the parameter indices" {
             const source =
                 \\item select(erased: unit, value: int): int = value;

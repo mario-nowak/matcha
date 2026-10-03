@@ -871,6 +871,48 @@ pub const NodeTypeAnalyzer = struct {
             };
 
             pub const static_functions = struct {
+                test "records a type function access with its union and function" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item fromNumber(number: int): Result = .Some(number);
+                        \\};
+                        \\val result = Result.fromNumber(1);
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
+                }
+
+                test "records a type function access with its union and function when it is an implicit member" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item fromNumber(number: int): Result = .Some(number);
+                        \\};
+                        \\val result: Result = .fromNumber(1);
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
+                }
+
                 test "types a qualified static function call as the return type when the function returns the union" {
                     const source =
                         \\item Result = union {
@@ -979,6 +1021,28 @@ pub const NodeTypeAnalyzer = struct {
             };
 
             pub const instance_methods = struct {
+                test "records a method access with its union and function" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\
+                        \\    item getSelf(self: Result): Result = self;
+                        \\};
+                        \\val result = Result.Some(3).getSelf();
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const get_self_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .InstanceMethodAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = get_self_symbol_id } });
+                }
+
                 test "types an instance method call on a constructed union as the method return type" {
                     const source =
                         \\item Result = union {
