@@ -181,6 +181,18 @@ pub const BinaryOperationLowerer = struct {
             };
         }
 
+        const left_operand_runtime_representation = analyzed_program
+            .runtime_representation_result
+            .runtime_representation_by_type_id
+            .get(left_operand_type_id) orelse unreachable;
+        if (!left_operand_runtime_representation.hasRuntimeRepresentation()) {
+            return switch (binary_operator) {
+                .Equal => .ZeroSizedCompareEqual,
+                .NotEqual => .ZeroSizedCompareNotEqual,
+                else => unreachable,
+            };
+        }
+
         const left_operand_type = analyzed_program.type_store.getType(left_operand_type_id);
         if (left_operand_type == .Union) {
             return switch (binary_operator) {

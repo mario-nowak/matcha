@@ -76,5 +76,33 @@ pub const BinaryOperationLowerer = struct {
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareNotEqual);
         }
+
+        test "lowers unit equality to a zero-sized equality comparison" {
+            const source =
+                \\val same = unit == unit;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareEqual);
+        }
+
+        test "lowers unit inequality to a zero-sized inequality comparison" {
+            const source =
+                \\val different = unit != unit;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareNotEqual);
+        }
     };
 };

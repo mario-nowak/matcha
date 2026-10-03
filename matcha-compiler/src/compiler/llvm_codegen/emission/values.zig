@@ -47,10 +47,18 @@ pub fn emitBinaryExpression(
     const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment);
     const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment);
     const left_operand_type = lowered_program.analyzed_program.type_id_by_node_id.get(binary_expression.left.id).?;
+    const decision = lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable;
+
+    // Unit operands have no runtime value. Their side effects already ran above, so the result is a constant.
+    switch (decision) {
+        .ZeroSizedCompareEqual => return .{ .register = "1" },
+        .ZeroSizedCompareNotEqual => return .{ .register = "0" },
+        else => {},
+    }
 
     return .{ .register = emitLoweredBinaryOperation(
         emitter,
-        lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
+        decision,
         left_operand_type,
         left_register.expectRegister(),
         right_register.expectRegister(),
@@ -167,5 +175,6 @@ pub fn emitLoweredBinaryOperation(
             ) catch unreachable);
             break :compare_not_equal result_register;
         },
+        .ZeroSizedCompareEqual, .ZeroSizedCompareNotEqual => unreachable,
     };
 }

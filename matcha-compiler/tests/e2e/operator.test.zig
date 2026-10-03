@@ -22,3 +22,32 @@ test "invalid compound assignment reports a semantic diagnostic" {
 
     try e2e.expectCompileDiagnostic(&result, "binary operator '+' is not supported for left operand type boolean");
 }
+
+test "unit values compare equal and never unequal" {
+    const source =
+        \\printString(match {
+        \\    unit == unit => "equal",
+        \\    else => "not equal",
+        \\});
+        \\printString(match {
+        \\    unit != unit => "unequal",
+        \\    else => "not unequal",
+        \\});
+    ;
+
+    var result = try e2e.runSource("unit_equality.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "equal\nnot unequal\n");
+}
+
+test "unit comparison evaluates both operands" {
+    const source =
+        \\val same = printInt(1) == printInt(2);
+    ;
+
+    var result = try e2e.runSource("unit_equality_side_effects.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "1\n2\n");
+}

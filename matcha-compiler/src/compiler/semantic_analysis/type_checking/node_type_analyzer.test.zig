@@ -1148,6 +1148,22 @@ pub const NodeTypeAnalyzer = struct {
             }
         };
 
+        pub const binary_expressions = struct {
+            test "types unit equality as a boolean" {
+                const source =
+                    \\val same = unit == unit;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const binary_expression = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
+            }
+        };
+
         pub const functions = struct {
             test "types a parameter reference in a function body as the parameter type" {
                 const source =
