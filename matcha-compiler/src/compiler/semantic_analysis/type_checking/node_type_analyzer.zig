@@ -1144,12 +1144,12 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const left_expression_type = try self.checkNode(binary_expression.left, .asExpression, environment);
-        const right_expression_type = try self.checkNode(binary_expression.right, .asExpression, environment);
         const operator_signature = try self.findBinaryOperatorSignature(
             binary_expression.operator_token,
             binary_expression.operator,
             left_expression_type,
         );
+        const right_expression_type = try self.checkNode(binary_expression.right, .asExpressionWithType(operator_signature.argument_type_id), environment);
         const result_type_id = try self.checkBinaryOperatorApplication(
             binary_expression.operator_token,
             binary_expression.operator,
