@@ -178,7 +178,7 @@ pub const LlvmModuleRenderer = struct {
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             const function_definitions = switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Structure => |structure| structure.function_definitions,
+                    inline .Structure, .Union => |type_definition| type_definition.function_definitions,
                     else => continue,
                 },
                 else => continue,

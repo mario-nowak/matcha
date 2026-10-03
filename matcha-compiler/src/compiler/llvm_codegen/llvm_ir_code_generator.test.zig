@@ -109,6 +109,83 @@ pub const LlvmIrCodeGenerator = struct {
         };
 
         pub const unions = struct {
+            test "renders a union method definition and calls it with the receiver" {
+                const source =
+                    \\item Result = union {
+                    \\    None,
+                    \\    Some: int,
+                    \\    item valueOr(self: Result, fallback: int): int = match self {
+                    \\        .None => fallback,
+                    \\        .Some(value) => value,
+                    \\    };
+                    \\};
+                    \\val value = Result.Some(4).valueOr(0);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_union_0__Result__case_0__None = type { i32 }
+                    \\%matcha_union_0__Result__case_1__Some = type { i32, i64 }
+                    \\
+                    \\define i64 @matcha_union_0__Result__function_9__valueOr(ptr %arg_0_self, i64 %arg_1_fallback) {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    %.s_1 = alloca i64
+                    \\    %.s_2 = alloca i64
+                    \\    store ptr %arg_0_self, ptr %.s_0
+                    \\    store i64 %arg_1_fallback, ptr %.s_1
+                    \\    %.t_0 = load ptr, ptr %.s_0
+                    \\    %.t_1 = load i32, ptr %.t_0
+                    \\    %.t_2 = icmp eq i32 %.t_1, 0
+                    \\    br i1 %.t_2, label %label_match_arm_1, label %label_match_next_2
+                    \\label_match_arm_1:
+                    \\    %.t_3 = load i64, ptr %.s_1
+                    \\    br label %label_match_continue_0
+                    \\label_match_next_2:
+                    \\    br label %label_match_arm_3
+                    \\label_match_arm_3:
+                    \\    %.t_4 = getelementptr inbounds %matcha_union_0__Result__case_1__Some, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_5 = load i64, ptr %.t_4
+                    \\    store i64 %.t_5, ptr %.s_2
+                    \\    %.t_6 = load i64, ptr %.s_2
+                    \\    br label %label_match_continue_0
+                    \\label_match_continue_0:
+                    \\    %.t_7 = phi i64 [%.t_3, %label_match_arm_1], [%.t_6, %label_match_arm_3]
+                    \\    ret i64 %.t_7
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca i64
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Result__case_1__Some, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Result__case_1__Some, ptr %.t_0, i32 0, i32 0
+                    \\    store i32 1, ptr %.t_1
+                    \\    %.t_2 = getelementptr inbounds %matcha_union_0__Result__case_1__Some, ptr %.t_0, i32 0, i32 1
+                    \\    store i64 4, ptr %.t_2
+                    \\    %.t_3 = call i64 @matcha_union_0__Result__function_9__valueOr(ptr %.t_0, i64 0)
+                    \\    store i64 %.t_3, ptr %.s_0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
             test "lowers a case construction to an allocation with a case index store and a payload store" {
                 const source =
                     \\item Offset = union { Horizontal: int, Vertical: int };

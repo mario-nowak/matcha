@@ -37,11 +37,11 @@ pub const FunctionLayoutLowerer = struct {
         defer owner_symbol_by_function_symbol_id.deinit();
         var owner_symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
         while (owner_symbols_iterator.next()) |symbol| {
-            const structure_information = switch (symbol.kind) {
-                .Structure => |structure_information| structure_information,
+            const owned_function_symbol_ids = switch (symbol.kind) {
+                inline .Structure, .Union => |owner_information| owner_information.function_symbol_ids,
                 else => continue,
             };
-            for (structure_information.function_symbol_ids) |function_symbol_id| {
+            for (owned_function_symbol_ids) |function_symbol_id| {
                 owner_symbol_by_function_symbol_id.put(function_symbol_id, symbol) catch unreachable;
             }
         }
@@ -108,11 +108,16 @@ pub const FunctionLayoutLowerer = struct {
         function_symbol: symbols.Symbol,
         owner_symbol: ?symbols.Symbol,
     ) []const u8 {
-        if (owner_symbol) |structure_symbol| {
+        if (owner_symbol) |owner| {
+            const owner_kind_name = switch (owner.kind) {
+                .Structure => "structure",
+                .Union => "union",
+                else => unreachable,
+            };
             return std.fmt.allocPrint(
                 self.allocator,
-                "matcha_structure_{d}__{s}__function_{d}__{s}",
-                .{ structure_symbol.id, structure_symbol.name, function_symbol.id, function_symbol.name },
+                "matcha_{s}_{d}__{s}__function_{d}__{s}",
+                .{ owner_kind_name, owner.id, owner.name, function_symbol.id, function_symbol.name },
             ) catch unreachable;
         }
 

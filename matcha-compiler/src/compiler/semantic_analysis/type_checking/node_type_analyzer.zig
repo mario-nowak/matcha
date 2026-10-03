@@ -621,7 +621,6 @@ pub const NodeTypeAnalyzer = struct {
                     // function values. Revisit these when function values are supported.
                     .InstanceMethodAccess,
                     .TypeFunctionAccess,
-                    .UnionTypeFunctionAccess,
                     .ArrayInstanceMethodAccess,
                     .StringInstanceMethodAccess,
                     .IntegerInstanceMethodAccess,
@@ -908,7 +907,10 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         if (findFunctionSymbolId(&self.resolved_program.symbol_table, union_symbol_information.function_symbol_ids, member_name)) |function_symbol_id| {
-            self.recordMemberAccess(node_id, .UnionTypeFunctionAccess);
+            self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
+                .owner_symbol_id = union_type.symbol_id,
+                .function_symbol_id = function_symbol_id,
+            } });
             const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
             return self.recordNodeType(node_id, function_type_id);
         }
@@ -1038,6 +1040,10 @@ pub const NodeTypeAnalyzer = struct {
                         function_symbol_id,
                         base_type_id,
                     );
+                    self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
+                        .owner_symbol_id = union_type.symbol_id,
+                        .function_symbol_id = function_symbol_id,
+                    } });
                     return self.recordNodeType(node_id, bound_function_type_id);
                 }
 
