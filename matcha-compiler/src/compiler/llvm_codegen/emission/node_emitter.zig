@@ -7,7 +7,6 @@ const lowering = @import("lowering");
 const runtime_call_emitter_module = @import("runtime_call_emitter.zig");
 const function_ir_builder_module = @import("function_ir_builder.zig");
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
-const symbol_generator_module = @import("symbol_generator.zig");
 const string_literal_pool_module = @import("string_literal_pool.zig");
 const string_literal_emitter_module = @import("string_literal_emitter.zig");
 
@@ -23,7 +22,6 @@ const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
 const RuntimeCallEmitter = runtime_call_emitter_module.RuntimeCallEmitter;
 const RuntimeStringParts = runtime_call_emitter_module.RuntimeStringParts;
-const SymbolGenerator = symbol_generator_module.SymbolGenerator;
 const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
 const StringLiteralEmitter = string_literal_emitter_module.StringLiteralEmitter;
 const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
@@ -82,7 +80,6 @@ pub const NodeEmitter = struct {
     allocator: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
-    symbol_generator: *SymbolGenerator,
     runtime_call_emitter: *RuntimeCallEmitter,
     string_literal_pool: *StringLiteralPool,
     string_literal_emitter: *StringLiteralEmitter,
@@ -91,7 +88,6 @@ pub const NodeEmitter = struct {
         allocator: std.mem.Allocator,
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
-        symbol_generator: *SymbolGenerator,
         runtime_call_emitter: *RuntimeCallEmitter,
         string_literal_pool: *StringLiteralPool,
         string_literal_emitter: *StringLiteralEmitter,
@@ -100,7 +96,6 @@ pub const NodeEmitter = struct {
             .allocator = allocator,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = function_ir_builder,
-            .symbol_generator = symbol_generator,
             .runtime_call_emitter = runtime_call_emitter,
             .string_literal_pool = string_literal_pool,
             .string_literal_emitter = string_literal_emitter,
@@ -115,16 +110,16 @@ pub const NodeEmitter = struct {
         const pointer_register = self.function_symbol_generator.generateRegister();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = extractvalue %String {s}, 0",
-            .{ pointer_register, string_register },
+            "{s} = extractvalue {s} {s}, 0",
+            .{ pointer_register, lowering.llvm_type.string_llvm_type, string_register },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(pointer_instruction);
 
         const length_register = self.function_symbol_generator.generateRegister();
         const length_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = extractvalue %String {s}, 1",
-            .{ length_register, string_register },
+            "{s} = extractvalue {s} {s}, 1",
+            .{ length_register, lowering.llvm_type.string_llvm_type, string_register },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(length_instruction);
 
@@ -191,7 +186,12 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .ImplicitMemberExpression => unreachable,
+            .ImplicitMemberExpression => return aggregates.emitImplicitMemberExpression(
+                self,
+                node,
+                lowered_program,
+                environment,
+            ),
             .MemberExpression => |member_expression| return aggregates.emitMemberExpression(
                 self,
                 node,

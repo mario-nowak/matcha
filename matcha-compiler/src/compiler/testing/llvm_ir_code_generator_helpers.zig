@@ -25,8 +25,6 @@ pub fn setupLlvmIrCodeGeneratorFixture(
     function_symbol_generator.* = llvm_codegen.FunctionSymbolGenerator.init(allocator);
     const function_ir_builder = try allocator.create(llvm_codegen.FunctionIrBuilder);
     function_ir_builder.* = llvm_codegen.FunctionIrBuilder.init(allocator);
-    const symbol_generator = try allocator.create(llvm_codegen.SymbolGenerator);
-    symbol_generator.* = llvm_codegen.SymbolGenerator.init(allocator);
     const runtime_call_emitter = try allocator.create(llvm_codegen.RuntimeCallEmitter);
     runtime_call_emitter.* = llvm_codegen.RuntimeCallEmitter.init(allocator);
     const runtime_symbol_renderer = try allocator.create(llvm_codegen.RuntimeSymbolRenderer);
@@ -39,13 +37,14 @@ pub fn setupLlvmIrCodeGeneratorFixture(
     string_literal_emitter.* = llvm_codegen.StringLiteralEmitter.init(allocator);
     const structure_type_renderer = try allocator.create(llvm_codegen.StructureTypeRenderer);
     structure_type_renderer.* = llvm_codegen.StructureTypeRenderer.init(allocator);
+    const union_type_renderer = try allocator.create(llvm_codegen.UnionTypeRenderer);
+    union_type_renderer.* = llvm_codegen.UnionTypeRenderer.init(allocator);
 
     const node_emitter = try allocator.create(llvm_codegen.NodeEmitter);
     node_emitter.* = llvm_codegen.NodeEmitter.init(
         allocator,
         function_symbol_generator,
         function_ir_builder,
-        symbol_generator,
         runtime_call_emitter,
         string_literal_pool,
         string_literal_emitter,
@@ -55,7 +54,6 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         allocator,
         function_symbol_generator,
         function_ir_builder,
-        symbol_generator,
         runtime_call_emitter,
         node_emitter,
     );
@@ -69,6 +67,7 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         string_literal_pool,
         string_literal_renderer,
         structure_type_renderer,
+        union_type_renderer,
     );
 
     const llvm_ir_code_generator = try allocator.create(LlvmIrCodeGenerator);

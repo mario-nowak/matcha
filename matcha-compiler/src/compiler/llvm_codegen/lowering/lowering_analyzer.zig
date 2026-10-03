@@ -3,69 +3,65 @@ const semantic_analysis = @import("semantic_analysis");
 const lowered_program = @import("lowered_program.zig");
 
 const LlvmTypeTableLowerer = @import("llvm_type_table_lowerer.zig").LlvmTypeTableLowerer;
-const StructureSymbolLowerer = @import("structure_symbol_lowerer.zig").StructureSymbolLowerer;
 const CallLowerer = @import("call_lowerer.zig").CallLowerer;
 const MemberAccessLowerer = @import("member_access_lowerer.zig").MemberAccessLowerer;
 const BinaryOperationLowerer = @import("binary_operation_lowerer.zig").BinaryOperationLowerer;
 const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
 const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
+const UnionLayoutLowerer = @import("union_layout_lowerer.zig").UnionLayoutLowerer;
 const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
 
 pub const LoweringAnalyzer = struct {
     llvm_type_table_lowerer: *LlvmTypeTableLowerer,
-    structure_symbol_lowerer: *StructureSymbolLowerer,
     call_lowerer: *CallLowerer,
     member_access_lowerer: *MemberAccessLowerer,
     binary_operation_lowerer: *BinaryOperationLowerer,
     place_lowerer: *PlaceLowerer,
     structure_layout_lowerer: *StructureLayoutLowerer,
+    union_layout_lowerer: *UnionLayoutLowerer,
     function_layout_lowerer: *FunctionLayoutLowerer,
 
     pub fn init(
         llvm_type_table_lowerer: *LlvmTypeTableLowerer,
-        structure_symbol_lowerer: *StructureSymbolLowerer,
         call_lowerer: *CallLowerer,
         member_access_lowerer: *MemberAccessLowerer,
         binary_operation_lowerer: *BinaryOperationLowerer,
         place_lowerer: *PlaceLowerer,
         structure_layout_lowerer: *StructureLayoutLowerer,
+        union_layout_lowerer: *UnionLayoutLowerer,
         function_layout_lowerer: *FunctionLayoutLowerer,
     ) @This() {
         return .{
             .llvm_type_table_lowerer = llvm_type_table_lowerer,
-            .structure_symbol_lowerer = structure_symbol_lowerer,
             .call_lowerer = call_lowerer,
             .member_access_lowerer = member_access_lowerer,
             .binary_operation_lowerer = binary_operation_lowerer,
             .place_lowerer = place_lowerer,
             .structure_layout_lowerer = structure_layout_lowerer,
+            .union_layout_lowerer = union_layout_lowerer,
             .function_layout_lowerer = function_layout_lowerer,
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
-    pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowered_program.LoweredProgram {
+    pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowered_program.LoweredProgram {
         const llvm_ir_type_by_type_id = self.llvm_type_table_lowerer.lower(analyzed_program);
-        const structure_symbol_id_by_type_id = self.structure_symbol_lowerer.lower(analyzed_program);
         const call_dispatch_decision_by_node_id = self.call_lowerer.lower(analyzed_program);
         const member_access_decision_by_node_id = self.member_access_lowerer.lower(analyzed_program);
         const binary_operation_decision_by_node_id = self.binary_operation_lowerer.lower(analyzed_program);
         const place_decision_by_node_id = self.place_lowerer.lower(analyzed_program);
         const structure_layout_kind_by_type_id = self.structure_layout_lowerer.lower(analyzed_program);
+        const union_layout_by_type_id = try self.union_layout_lowerer.lower(analyzed_program);
         const function_layout_by_symbol_id = self.function_layout_lowerer.lower(analyzed_program);
 
         return .{
             .analyzed_program = analyzed_program,
             .llvm_ir_type_by_type_id = llvm_ir_type_by_type_id,
-            .structure_symbol_id_by_type_id = structure_symbol_id_by_type_id,
             .call_dispatch_decision_by_node_id = call_dispatch_decision_by_node_id,
             .member_access_decision_by_node_id = member_access_decision_by_node_id,
             .binary_operation_decision_by_node_id = binary_operation_decision_by_node_id,
             .place_decision_by_node_id = place_decision_by_node_id,
             .structure_layout_kind_by_type_id = structure_layout_kind_by_type_id,
+            .union_layout_by_type_id = union_layout_by_type_id,
             .function_layout_by_symbol_id = function_layout_by_symbol_id,
         };
     }

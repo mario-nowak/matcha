@@ -387,6 +387,12 @@ pub fn build(b: *std.Build) void {
     });
     const run_cli_tests = b.addRunArtifact(cli_tests);
 
+    // Compiling the tests without running them makes `check` report errors in code
+    // that only the tests reference so far.
+    check_step.dependOn(&mod_tests.step);
+    check_step.dependOn(&exe_tests.step);
+    check_step.dependOn(&cli_tests.step);
+
     const unit_test_step = b.step("unit-test", "Run compiler unit tests");
     unit_test_step.dependOn(&run_mod_tests.step);
     unit_test_step.dependOn(&run_exe_tests.step);

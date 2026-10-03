@@ -15,7 +15,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -29,17 +29,17 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Point = type { i64, i64 }
+                    \\%matcha_structure_0__Point = type { i64, i64 }
                     \\
-                    \\define i64 @matcha_function_1_sum(ptr %arg_0_point) {
+                    \\define i64 @matcha_function_1__sum(ptr %arg_0_point) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    store ptr %arg_0_point, ptr %.s_0
                     \\    %.t_0 = load ptr, ptr %.s_0
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    %.t_2 = load i64, ptr %.t_1
                     \\    %.t_3 = load ptr, ptr %.s_0
-                    \\    %.t_4 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_3, i32 0, i32 1
+                    \\    %.t_4 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_3, i32 0, i32 1
                     \\    %.t_5 = load i64, ptr %.t_4
                     \\    %.t_6 = add i64 %.t_2, %.t_5
                     \\    ret i64 %.t_6
@@ -49,13 +49,192 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Point, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
-                    \\    %.t_2 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_2 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_2
-                    \\    %.t_3 = call i64 @matcha_function_1_sum(ptr %.t_0)
+                    \\    %.t_3 = call i64 @matcha_function_1__sum(ptr %.t_0)
                     \\    call void @matcha_print_int(i64 %.t_3)
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "allocates nothing when a field value returns early" {
+                const source =
+                    \\item Wrapper = structure {
+                    \\    value: unit;
+                    \\};
+                    \\item make(): int = {
+                    \\    val wrapper = Wrapper { value = {
+                    \\        return 1;
+                    \\    } };
+                    \\    return 2;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i64 @matcha_function_1__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    ret i64 1
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+        };
+
+        pub const unions = struct {
+            test "lowers a case construction to an allocation with a case index store and a payload store" {
+                const source =
+                    \\item Offset = union { Horizontal: int, Vertical: int };
+                    \\val offset = Offset.Vertical(-3);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_union_0__Offset__case_0__Horizontal = type { i32, i64 }
+                    \\%matcha_union_0__Offset__case_1__Vertical = type { i32, i64 }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = sub i64 0, 3
+                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_1__Vertical, ptr null, i64 1) to i64))
+                    \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_1, i32 0, i32 0
+                    \\    store i32 1, ptr %.t_2
+                    \\    %.t_3 = getelementptr inbounds %matcha_union_0__Offset__case_1__Vertical, ptr %.t_1, i32 0, i32 1
+                    \\    store i64 %.t_0, ptr %.t_3
+                    \\    store ptr %.t_1, ptr %.s_0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "stores only the case index when constructing a case with a unit payload" {
+                const source =
+                    \\item Signal = union { Off, On: unit };
+                    \\val signal = Signal.On(unit);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_union_0__Signal__case_0__Off = type { i32 }
+                    \\%matcha_union_0__Signal__case_1__On = type { i32 }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Signal__case_1__On, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Signal__case_1__On, ptr %.t_0, i32 0, i32 0
+                    \\    store i32 1, ptr %.t_1
+                    \\    store ptr %.t_0, ptr %.s_0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "allocates nothing when the payload returns early" {
+                const source =
+                    \\item Signal = union { Off, On: unit };
+                    \\item make(): Signal = {
+                    \\    val signal = Signal.On({
+                    \\        return Signal.Off;
+                    \\    });
+                    \\    return signal;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\%matcha_union_0__Signal__case_0__Off = type { i32 }
+                    \\%matcha_union_0__Signal__case_1__On = type { i32 }
+                    \\
+                    \\define ptr @matcha_function_1__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Signal__case_0__Off, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_union_0__Signal__case_0__Off, ptr %.t_0, i32 0, i32 0
+                    \\    store i32 0, ptr %.t_1
+                    \\    ret ptr %.t_0
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -73,7 +252,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -116,7 +295,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -157,7 +336,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -197,7 +376,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -246,7 +425,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -296,7 +475,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -346,7 +525,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -392,7 +571,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -438,6 +617,267 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                 );
             }
+
+            pub const unions = struct {
+                test "lowers to case index comparisons and payload loads" {
+                    const source =
+                        \\item Offset = union { None, Horizontal: int, Vertical: int };
+                        \\val offset = Offset.Horizontal(4);
+                        \\val result = match offset {
+                        \\    .None => 0,
+                        \\    .Horizontal(value) => value,
+                        \\    .Vertical(value) => value,
+                        \\};
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                    const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                    try expect(llvm_ir).toMatch(
+                        \\target triple = "x86_64-unknown-linux-gnu"
+                        \\
+                        \\declare void @matcha_initiate_garbage_collector()
+                        \\declare ptr @matcha_allocate(i64)
+                        \\declare ptr @matcha_allocate_atomic(i64)
+                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\
+                        \\%String = type { ptr, i64 }
+                        \\%Array = type { i64, i64, ptr }
+                        \\
+                        \\%matcha_union_0__Offset__case_0__None = type { i32 }
+                        \\%matcha_union_0__Offset__case_1__Horizontal = type { i32, i64 }
+                        \\%matcha_union_0__Offset__case_2__Vertical = type { i32, i64 }
+                        \\
+                        \\define i32 @main(i32 %argc, ptr %argv) {
+                        \\entry:
+                        \\    %.s_0 = alloca ptr
+                        \\    %.s_1 = alloca i64
+                        \\    %.s_2 = alloca i64
+                        \\    %.s_3 = alloca i64
+                        \\    call void @matcha_initiate_garbage_collector()
+                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_1__Horizontal, ptr null, i64 1) to i64))
+                        \\    %.t_1 = getelementptr inbounds %matcha_union_0__Offset__case_1__Horizontal, ptr %.t_0, i32 0, i32 0
+                        \\    store i32 1, ptr %.t_1
+                        \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_1__Horizontal, ptr %.t_0, i32 0, i32 1
+                        \\    store i64 4, ptr %.t_2
+                        \\    store ptr %.t_0, ptr %.s_0
+                        \\    %.t_3 = load ptr, ptr %.s_0
+                        \\    %.t_4 = load i32, ptr %.t_3
+                        \\    %.t_5 = icmp eq i32 %.t_4, 0
+                        \\    br i1 %.t_5, label %label_match_arm_1, label %label_match_next_2
+                        \\label_match_arm_1:
+                        \\    br label %label_match_continue_0
+                        \\label_match_next_2:
+                        \\    %.t_6 = load i32, ptr %.t_3
+                        \\    %.t_7 = icmp eq i32 %.t_6, 1
+                        \\    br i1 %.t_7, label %label_match_arm_3, label %label_match_next_4
+                        \\label_match_arm_3:
+                        \\    %.t_8 = getelementptr inbounds %matcha_union_0__Offset__case_1__Horizontal, ptr %.t_3, i32 0, i32 1
+                        \\    %.t_9 = load i64, ptr %.t_8
+                        \\    store i64 %.t_9, ptr %.s_1
+                        \\    %.t_10 = load i64, ptr %.s_1
+                        \\    br label %label_match_continue_0
+                        \\label_match_next_4:
+                        \\    br label %label_match_arm_5
+                        \\label_match_arm_5:
+                        \\    %.t_11 = getelementptr inbounds %matcha_union_0__Offset__case_2__Vertical, ptr %.t_3, i32 0, i32 1
+                        \\    %.t_12 = load i64, ptr %.t_11
+                        \\    store i64 %.t_12, ptr %.s_2
+                        \\    %.t_13 = load i64, ptr %.s_2
+                        \\    br label %label_match_continue_0
+                        \\label_match_continue_0:
+                        \\    %.t_14 = phi i64 [0, %label_match_arm_1], [%.t_10, %label_match_arm_3], [%.t_13, %label_match_arm_5]
+                        \\    store i64 %.t_14, ptr %.s_3
+                        \\    ret i32 0
+                        \\}
+                        \\
+                    );
+                }
+
+                test "loads no payload when a case pattern has no binding" {
+                    const source =
+                        \\item Offset = union { Horizontal: int, Vertical: int };
+                        \\val offset = Offset.Horizontal(4);
+                        \\val result = match offset {
+                        \\    .Horizontal => 1,
+                        \\    .Vertical => 2,
+                        \\};
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                    const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                    try expect(llvm_ir).toMatch(
+                        \\target triple = "x86_64-unknown-linux-gnu"
+                        \\
+                        \\declare void @matcha_initiate_garbage_collector()
+                        \\declare ptr @matcha_allocate(i64)
+                        \\declare ptr @matcha_allocate_atomic(i64)
+                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\
+                        \\%String = type { ptr, i64 }
+                        \\%Array = type { i64, i64, ptr }
+                        \\
+                        \\%matcha_union_0__Offset__case_0__Horizontal = type { i32, i64 }
+                        \\%matcha_union_0__Offset__case_1__Vertical = type { i32, i64 }
+                        \\
+                        \\define i32 @main(i32 %argc, ptr %argv) {
+                        \\entry:
+                        \\    %.s_0 = alloca ptr
+                        \\    %.s_1 = alloca i64
+                        \\    call void @matcha_initiate_garbage_collector()
+                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_0__Horizontal, ptr null, i64 1) to i64))
+                        \\    %.t_1 = getelementptr inbounds %matcha_union_0__Offset__case_0__Horizontal, ptr %.t_0, i32 0, i32 0
+                        \\    store i32 0, ptr %.t_1
+                        \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_0__Horizontal, ptr %.t_0, i32 0, i32 1
+                        \\    store i64 4, ptr %.t_2
+                        \\    store ptr %.t_0, ptr %.s_0
+                        \\    %.t_3 = load ptr, ptr %.s_0
+                        \\    %.t_4 = load i32, ptr %.t_3
+                        \\    %.t_5 = icmp eq i32 %.t_4, 0
+                        \\    br i1 %.t_5, label %label_match_arm_1, label %label_match_next_2
+                        \\label_match_arm_1:
+                        \\    br label %label_match_continue_0
+                        \\label_match_next_2:
+                        \\    br label %label_match_arm_3
+                        \\label_match_arm_3:
+                        \\    br label %label_match_continue_0
+                        \\label_match_continue_0:
+                        \\    %.t_6 = phi i64 [1, %label_match_arm_1], [2, %label_match_arm_3]
+                        \\    store i64 %.t_6, ptr %.s_1
+                        \\    ret i32 0
+                        \\}
+                        \\
+                    );
+                }
+
+                test "compares the last arm when the match has an else arm" {
+                    const source =
+                        \\item Offset = union { Horizontal: int, Vertical: int };
+                        \\val offset = Offset.Horizontal(4);
+                        \\val result = match offset {
+                        \\    .Horizontal(value) => value,
+                        \\    else => 0,
+                        \\};
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                    const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                    try expect(llvm_ir).toMatch(
+                        \\target triple = "x86_64-unknown-linux-gnu"
+                        \\
+                        \\declare void @matcha_initiate_garbage_collector()
+                        \\declare ptr @matcha_allocate(i64)
+                        \\declare ptr @matcha_allocate_atomic(i64)
+                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\
+                        \\%String = type { ptr, i64 }
+                        \\%Array = type { i64, i64, ptr }
+                        \\
+                        \\%matcha_union_0__Offset__case_0__Horizontal = type { i32, i64 }
+                        \\%matcha_union_0__Offset__case_1__Vertical = type { i32, i64 }
+                        \\
+                        \\define i32 @main(i32 %argc, ptr %argv) {
+                        \\entry:
+                        \\    %.s_0 = alloca ptr
+                        \\    %.s_1 = alloca i64
+                        \\    %.s_2 = alloca i64
+                        \\    call void @matcha_initiate_garbage_collector()
+                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Offset__case_0__Horizontal, ptr null, i64 1) to i64))
+                        \\    %.t_1 = getelementptr inbounds %matcha_union_0__Offset__case_0__Horizontal, ptr %.t_0, i32 0, i32 0
+                        \\    store i32 0, ptr %.t_1
+                        \\    %.t_2 = getelementptr inbounds %matcha_union_0__Offset__case_0__Horizontal, ptr %.t_0, i32 0, i32 1
+                        \\    store i64 4, ptr %.t_2
+                        \\    store ptr %.t_0, ptr %.s_0
+                        \\    %.t_3 = load ptr, ptr %.s_0
+                        \\    %.t_4 = load i32, ptr %.t_3
+                        \\    %.t_5 = icmp eq i32 %.t_4, 0
+                        \\    br i1 %.t_5, label %label_match_arm_2, label %label_match_else_1
+                        \\label_match_arm_2:
+                        \\    %.t_6 = getelementptr inbounds %matcha_union_0__Offset__case_0__Horizontal, ptr %.t_3, i32 0, i32 1
+                        \\    %.t_7 = load i64, ptr %.t_6
+                        \\    store i64 %.t_7, ptr %.s_1
+                        \\    %.t_8 = load i64, ptr %.s_1
+                        \\    br label %label_match_continue_0
+                        \\label_match_else_1:
+                        \\    br label %label_match_continue_0
+                        \\label_match_continue_0:
+                        \\    %.t_9 = phi i64 [%.t_8, %label_match_arm_2], [0, %label_match_else_1]
+                        \\    store i64 %.t_9, ptr %.s_2
+                        \\    ret i32 0
+                        \\}
+                        \\
+                    );
+                }
+
+                test "binds no payload storage when a case pattern binds a unit payload" {
+                    const source =
+                        \\item Signal = union { Off, On: unit };
+                        \\val signal = Signal.On(unit);
+                        \\val result = match signal {
+                        \\    .Off => 0,
+                        \\    .On(nothing) => 1,
+                        \\};
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                    const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                    try expect(llvm_ir).toMatch(
+                        \\target triple = "x86_64-unknown-linux-gnu"
+                        \\
+                        \\declare void @matcha_initiate_garbage_collector()
+                        \\declare ptr @matcha_allocate(i64)
+                        \\declare ptr @matcha_allocate_atomic(i64)
+                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\
+                        \\%String = type { ptr, i64 }
+                        \\%Array = type { i64, i64, ptr }
+                        \\
+                        \\%matcha_union_0__Signal__case_0__Off = type { i32 }
+                        \\%matcha_union_0__Signal__case_1__On = type { i32 }
+                        \\
+                        \\define i32 @main(i32 %argc, ptr %argv) {
+                        \\entry:
+                        \\    %.s_0 = alloca ptr
+                        \\    %.s_1 = alloca i64
+                        \\    call void @matcha_initiate_garbage_collector()
+                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_union_0__Signal__case_1__On, ptr null, i64 1) to i64))
+                        \\    %.t_1 = getelementptr inbounds %matcha_union_0__Signal__case_1__On, ptr %.t_0, i32 0, i32 0
+                        \\    store i32 1, ptr %.t_1
+                        \\    store ptr %.t_0, ptr %.s_0
+                        \\    %.t_2 = load ptr, ptr %.s_0
+                        \\    %.t_3 = load i32, ptr %.t_2
+                        \\    %.t_4 = icmp eq i32 %.t_3, 0
+                        \\    br i1 %.t_4, label %label_match_arm_1, label %label_match_next_2
+                        \\label_match_arm_1:
+                        \\    br label %label_match_continue_0
+                        \\label_match_next_2:
+                        \\    br label %label_match_arm_3
+                        \\label_match_arm_3:
+                        \\    br label %label_match_continue_0
+                        \\label_match_continue_0:
+                        \\    %.t_5 = phi i64 [0, %label_match_arm_1], [1, %label_match_arm_3]
+                        \\    store i64 %.t_5, ptr %.s_1
+                        \\    ret i32 0
+                        \\}
+                        \\
+                    );
+                }
+            };
         };
 
         pub const arrays = struct {
@@ -452,7 +892,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -473,7 +913,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_2 = alloca i64
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
                     \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 2) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
@@ -525,7 +965,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -544,7 +984,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
                     \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
@@ -585,7 +1025,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -604,7 +1044,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
                     \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
@@ -633,7 +1073,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -651,19 +1091,61 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
-                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    store i64 1, ptr %.t_1
+                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 1, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
-                    \\    store i64 1, ptr %.t_3
-                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
-                    \\    store ptr null, ptr %.t_4
+                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    store ptr null, ptr %.t_3
                     \\    store ptr %.t_0, ptr %.s_0
-                    \\    %.t_5 = load ptr, ptr %.s_0
-                    \\    %.t_6 = getelementptr inbounds %Array, ptr %.t_5, i32 0, i32 0
-                    \\    %.t_7 = load i64, ptr %.t_6
-                    \\    %.t_8 = add i64 %.t_7, 1
-                    \\    store i64 %.t_8, ptr %.t_6
+                    \\    %.t_4 = load ptr, ptr %.s_0
+                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_4, i32 0, i32 0
+                    \\    %.t_6 = load i64, ptr %.t_5
+                    \\    %.t_7 = add i64 %.t_6, 1
+                    \\    store i64 %.t_7, ptr %.t_5
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "allocates nothing when an element returns early" {
+                const source =
+                    \\item make(): int = {
+                    \\    val values = [{
+                    \\        return 1;
+                    \\    }];
+                    \\    return 2;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i64 @matcha_function_0__make() {
+                    \\entry:
+                    \\    %.s_0 = alloca ptr
+                    \\    ret i64 1
+                    \\}
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -682,7 +1164,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -695,9 +1177,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Mixed = type { i64 }
+                    \\%matcha_structure_0__Mixed = type { i64 }
                     \\
-                    \\define void @matcha_function_1_consume(ptr %arg_0_mixed) {
+                    \\define void @matcha_function_1__consume(ptr %arg_0_mixed) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    store ptr %arg_0_mixed, ptr %.s_0
@@ -708,10 +1190,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Mixed, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Mixed, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Mixed, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Mixed, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
-                    \\    call void @matcha_function_1_consume(ptr %.t_0)
+                    \\    call void @matcha_function_1__consume(ptr %.t_0)
                     \\    ret i32 0
                     \\}
                     \\
@@ -732,7 +1214,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -745,7 +1227,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\define ptr @matcha_function_1_choose(i1 %arg_0_flag) {
+                    \\define ptr @matcha_function_1__choose(i1 %arg_0_flag) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    store i1 %arg_0_flag, ptr %.s_0
@@ -767,7 +1249,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_function_1_choose(i1 1)
+                    \\    %.t_0 = call ptr @matcha_function_1__choose(i1 1)
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    ret i32 0
                     \\}
@@ -784,7 +1266,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -803,18 +1285,18 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i32 1) to i64))
-                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    store i64 2, ptr %.t_1
+                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
-                    \\    store i64 2, ptr %.t_3
-                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
-                    \\    store ptr null, ptr %.t_4
+                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    store ptr null, ptr %.t_3
                     \\    store ptr %.t_0, ptr %.s_0
-                    \\    %.t_5 = load ptr, ptr %.s_0
-                    \\    %.t_6 = getelementptr inbounds %Array, ptr %.t_5, i32 0, i32 0
-                    \\    %.t_7 = load i64, ptr %.t_6
-                    \\    call void @matcha_print_int(i64 %.t_7)
+                    \\    %.t_4 = load ptr, ptr %.s_0
+                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_4, i32 0, i32 0
+                    \\    %.t_6 = load i64, ptr %.t_5
+                    \\    call void @matcha_print_int(i64 %.t_6)
                     \\    ret i32 0
                     \\}
                     \\
@@ -832,7 +1314,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -870,7 +1352,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -883,19 +1365,19 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%String = type { ptr, i64 }
                     \\%Array = type { i64, i64, ptr }
                     \\
-                    \\%matcha_structure_0_Point = type { i64 }
+                    \\%matcha_structure_0__Point = type { i64 }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0_Point, ptr null, i32 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha_structure_0__Point, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_2 = load ptr, ptr %.s_0
-                    \\    %.t_3 = getelementptr inbounds %matcha_structure_0_Point, ptr %.t_2, i32 0, i32 0
+                    \\    %.t_3 = getelementptr inbounds %matcha_structure_0__Point, ptr %.t_2, i32 0, i32 0
                     \\    store i64 2, ptr %.t_3
                     \\    ret i32 0
                     \\}
@@ -914,7 +1396,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -930,7 +1412,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\@.string_literal_0 = private unnamed_addr constant [2 x i8] c"hi"
                     \\
-                    \\define %String @matcha_function_0_echo(%String %arg_0_text) {
+                    \\define %String @matcha_function_0__echo(%String %arg_0_text) {
                     \\entry:
                     \\    %.s_0 = alloca %String
                     \\    store %String %arg_0_text, ptr %.s_0
@@ -945,7 +1427,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_0 = getelementptr inbounds [2 x i8], ptr @.string_literal_0, i64 0, i64 0
                     \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
                     \\    %.t_2 = insertvalue %String %.t_1, i64 2, 1
-                    \\    %.t_3 = call %String @matcha_function_0_echo(%String %.t_2)
+                    \\    %.t_3 = call %String @matcha_function_0__echo(%String %.t_2)
                     \\    %.t_4 = extractvalue %String %.t_3, 0
                     \\    %.t_5 = extractvalue %String %.t_3, 1
                     \\    call void @matcha_print_string(ptr %.t_4, i64 %.t_5)
@@ -965,7 +1447,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -1023,7 +1505,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
@@ -1099,7 +1581,7 @@ pub const LlvmIrCodeGenerator = struct {
                 defer arena.deinit();
                 const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
 
-                const llvm_ir = fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
 
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"

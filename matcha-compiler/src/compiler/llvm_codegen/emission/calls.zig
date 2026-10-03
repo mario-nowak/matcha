@@ -6,6 +6,7 @@ const lowering = @import("lowering");
 
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const node_emitter_module = @import("node_emitter.zig");
+const emitUnionConstruction = @import("aggregates.zig").emitUnionConstruction;
 
 const Register = function_symbol_generator_module.Register;
 const NodeEmitter = node_emitter_module.NodeEmitter;
@@ -26,6 +27,14 @@ pub fn emitCallExpression(
             emitter,
             user_function,
             call_expression,
+            lowered_program,
+            environment,
+        ),
+        .UnionConstruction => |union_construction| emitUnionConstruction(
+            emitter,
+            union_construction.union_type_id,
+            union_construction.case_index,
+            &call_expression.arguments[0],
             lowered_program,
             environment,
         ),
@@ -124,7 +133,6 @@ fn emitUserFunctionCall(
     return emitDirectFunctionCall(
         emitter,
         user_function.function_symbol_id,
-        user_function.owning_structure_symbol_id,
         argument_registers.items,
         lowered_program,
     );
@@ -185,7 +193,6 @@ fn emitBuiltinCall(
 fn emitDirectFunctionCall(
     emitter: *NodeEmitter,
     callee_symbol_id: symbols.SymbolId,
-    owning_structure_symbol_id: ?symbols.SymbolId,
     argument_registers: []const Register,
     lowered_program: *const lowering.LoweredProgram,
 ) EmissionResult {
@@ -218,13 +225,7 @@ fn emitDirectFunctionCall(
         ) catch unreachable;
     }
 
-    const function_name = if (owning_structure_symbol_id) |structure_symbol_id|
-        emitter.symbol_generator.generateStructureFunctionName(
-            lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id),
-            callee_symbol,
-        )
-    else
-        emitter.symbol_generator.generateFunctionName(callee_symbol);
+    const function_name = function_layout.llvm_function_name;
     const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(callee_symbol_id) orelse unreachable;
     const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
         .Function => |function_type| function_type.return_type_id,
@@ -286,11 +287,12 @@ fn emitArrayAppendCall(
 
         // load length of the array
         const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-            .{ length_pointer_register, base_register },
-        ) catch unreachable);
+        emitter.function_ir_builder.emitFieldPointer(
+            length_pointer_register,
+            lowering.llvm_type.array_llvm_type_name,
+            base_register,
+            lowering.llvm_type.array_length_field_index,
+        );
         const length_register = emitter.function_symbol_generator.generateRegister();
         emitter.function_ir_builder.emitLoad(length_register, length_pointer_register, "i64");
 

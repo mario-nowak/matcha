@@ -2,26 +2,26 @@ const std = @import("std");
 const llvm_codegen = @import("llvm_codegen");
 
 const LoweredProgram = llvm_codegen.lowering.LoweredProgram;
-const StructureTypeRenderer = llvm_codegen.rendering.StructureTypeRenderer;
+const UnionTypeRenderer = llvm_codegen.rendering.UnionTypeRenderer;
 const setupLoweringAnalyzerFixture = @import("lowering_analyzer_helpers.zig").setupLoweringAnalyzerFixture;
 
-const StructureTypeRendererFixture = struct {
+const UnionTypeRendererFixture = struct {
     lowered_program: LoweredProgram,
-    structure_type_renderer: *StructureTypeRenderer,
+    union_type_renderer: *UnionTypeRenderer,
 };
 
-pub fn setupStructureTypeRendererFixture(
+pub fn setupUnionTypeRendererFixture(
     arena: *std.heap.ArenaAllocator,
     source: []const u8,
-) !StructureTypeRendererFixture {
+) !UnionTypeRendererFixture {
     const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
     const lowered_program = try lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
 
-    const structure_type_renderer = try arena.allocator().create(StructureTypeRenderer);
-    structure_type_renderer.* = StructureTypeRenderer.init(arena.allocator());
+    const union_type_renderer = try arena.allocator().create(UnionTypeRenderer);
+    union_type_renderer.* = UnionTypeRenderer.init(arena.allocator());
 
     return .{
         .lowered_program = lowered_program,
-        .structure_type_renderer = structure_type_renderer,
+        .union_type_renderer = union_type_renderer,
     };
 }

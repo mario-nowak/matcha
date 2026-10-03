@@ -3,3 +3,4 @@ pub const StructureTypeRenderer = @import("structure_type_renderer.zig").Structu
 pub const RuntimeSymbolRenderer = @import("runtime_symbol_renderer.zig").RuntimeSymbolRenderer;
 pub const StringLiteralRenderer = @import("string_literal_renderer.zig").StringLiteralRenderer;
 pub const RuntimeRequirements = @import("runtime_symbols").RuntimeRequirements;
+pub const UnionTypeRenderer = @import("union_type_renderer.zig").UnionTypeRenderer;

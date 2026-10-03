@@ -1,4 +1,5 @@
 const std = @import("std");
+const lowering = @import("lowering");
 const ast = @import("ast");
 
 const function_ir_builder_module = @import("function_ir_builder.zig");
@@ -72,16 +73,16 @@ pub const StringLiteralEmitter = struct {
         const partial_string_register = function_symbol_generator.generateRegister();
         const partial_string_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %String undef, ptr {s}, 0",
-            .{ partial_string_register, pointer_register },
+            "{s} = insertvalue {s} undef, ptr {s}, 0",
+            .{ partial_string_register, lowering.llvm_type.string_llvm_type, pointer_register },
         ) catch unreachable;
         builder.emitInstruction(partial_string_instruction);
 
         const string_register = function_symbol_generator.generateRegister();
         const string_instruction = std.fmt.allocPrint(
             self.allocator,
-            "{s} = insertvalue %String {s}, i64 {d}, 1",
-            .{ string_register, partial_string_register, len },
+            "{s} = insertvalue {s} {s}, i64 {d}, 1",
+            .{ string_register, lowering.llvm_type.string_llvm_type, partial_string_register, len },
         ) catch unreachable;
         builder.emitInstruction(string_instruction);
 

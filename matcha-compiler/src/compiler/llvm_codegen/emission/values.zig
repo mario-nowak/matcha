@@ -122,6 +122,24 @@ pub fn emitLoweredBinaryOperation(
 
             return result_register;
         },
+        .UnionCaseIndexComparison => {
+            const union_case_index_type = lowering.lowering_types.union_case_index_llvm_type;
+            const operator_instruction = "icmp eq";
+
+            // The case index is the first field of every case, so it can be loaded from the union pointer directly
+            const union_case_register = emitter.function_symbol_generator.generateRegister();
+            emitter.function_ir_builder.emitLoad(union_case_register, left_register, union_case_index_type);
+
+            const result_register = emitter.function_symbol_generator.generateRegister();
+            const instruction = std.fmt.allocPrint(
+                emitter.allocator,
+                "{s} = {s} {s} {s}, {s}",
+                .{ result_register, operator_instruction, union_case_index_type, union_case_register, right_register },
+            ) catch unreachable;
+            emitter.function_ir_builder.emitInstruction(instruction);
+
+            return result_register;
+        },
         .StringConcatenate => emitter.runtime_call_emitter.emitStringConcatenateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,

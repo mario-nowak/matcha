@@ -38,7 +38,13 @@ run = "zig build test --summary all"
 
 [tasks.e2e]
 description = "Run Matcha end-to-end tests"
-run = "zig build e2e --summary all"
+usage = 'arg "[filter]..." var=#true help="Only run tests whose names match one of these filters"'
+# mise passes the filters as one shell-quoted string, so `eval` splits them back into arguments.
+run = '''
+eval "set -- $usage_filter"
+for filter in "$@"; do set -- "$@" "-Dtest-filter=$filter"; shift; done
+zig build e2e --summary all "$@"
+'''
 
 [tasks.verify]
 description = "Run the full local verification workflow"

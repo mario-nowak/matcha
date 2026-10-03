@@ -230,7 +230,7 @@ pub const UnionTypeCase = struct {
 
 pub const UnionConstructor = struct {
     union_type_id: TypeId,
-    case_index: usize,
+    case_index: u32,
 };
 
 pub const FunctionType = struct {
@@ -265,6 +265,9 @@ pub const MemberAccess = union(enum) {
         field_index: u32,
     },
     UnionTypeFunctionAccess,
+    UnionTypeBaseCaseAccess: struct {
+        case_index: u32,
+    },
     StructureInstanceMethodAccess: struct {
         structure_symbol_id: symbols.SymbolId,
         function_symbol_id: symbols.SymbolId,
@@ -382,3 +385,4 @@ pub fn getUnaryOperatorRules(type_store: *const TypeStore, operand_type_id: Type
 pub const TypeIdBySymbolId = std.AutoHashMap(symbols.SymbolId, TypeId);
 pub const TypeIdByNodeId = std.AutoHashMap(ast.NodeId, TypeId);
 pub const MemberAccessByNodeId = std.AutoHashMap(ast.NodeId, MemberAccess);
+pub const UnionCaseIndexByPatternId = std.AutoHashMap(ast.NodeId, u32);

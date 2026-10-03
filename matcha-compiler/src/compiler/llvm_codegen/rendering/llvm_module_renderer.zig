@@ -14,11 +14,7 @@ const StringLiteralPool = emission.StringLiteralPool;
 const StringLiteralRenderer = @import("string_literal_renderer.zig").StringLiteralRenderer;
 const StructureTypeRenderer = structure_type_renderer_module.StructureTypeRenderer;
 const FunctionEmitter = emission.FunctionEmitter;
-
-// A string is a header containing a pointer to the data and the length.
-const llvm_string_type_definition = "%String = type { ptr, i64 }";
-// An array is a header containing the length, capacity, and a pointer to the data.
-const llvm_array_type_definition = "%Array = type { i64, i64, ptr }";
+const UnionTypeRenderer = @import("union_type_renderer.zig").UnionTypeRenderer;
 
 const LlvmTypeDefinition = struct {
     name: []const u8,
@@ -34,6 +30,7 @@ pub const LlvmModuleRenderer = struct {
     string_literal_pool: *StringLiteralPool,
     string_literal_renderer: *StringLiteralRenderer,
     structure_type_renderer: *StructureTypeRenderer,
+    union_type_renderer: *UnionTypeRenderer,
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
 
     pub fn init(
@@ -45,6 +42,7 @@ pub const LlvmModuleRenderer = struct {
         string_literal_pool: *StringLiteralPool,
         string_literal_renderer: *StringLiteralRenderer,
         structure_type_renderer: *StructureTypeRenderer,
+        union_type_renderer: *UnionTypeRenderer,
     ) @This() {
         return .{
             .allocator = allocator,
@@ -55,6 +53,7 @@ pub const LlvmModuleRenderer = struct {
             .string_literal_pool = string_literal_pool,
             .string_literal_renderer = string_literal_renderer,
             .structure_type_renderer = structure_type_renderer,
+            .union_type_renderer = union_type_renderer,
             .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
         };
     }
@@ -63,10 +62,11 @@ pub const LlvmModuleRenderer = struct {
         self.llvm_matcha_type_by_type_id.deinit();
     }
 
-    pub fn renderLlvmIr(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
+    pub fn renderLlvmIr(self: *@This(), lowered_program: *const lowering.LoweredProgram) ![]const u8 {
         self.resetModuleState();
 
         const structure_type_definitions = self.structure_type_renderer.renderStructureTypeDefinitions(lowered_program);
+        const union_type_definitions = try self.union_type_renderer.renderUnionTypeDefinitions(lowered_program);
         var user_defined_functions = self.renderTopLevelFunctionDefinitions(lowered_program);
         defer user_defined_functions.deinit(self.allocator);
         var structure_method_functions = self.renderStructureMethodFunctionDefinitions(lowered_program);
@@ -75,6 +75,7 @@ pub const LlvmModuleRenderer = struct {
 
         return self.renderModule(
             structure_type_definitions,
+            union_type_definitions,
             user_defined_functions.items,
             structure_method_functions.items,
             main_function_ir,
@@ -93,13 +94,12 @@ pub const LlvmModuleRenderer = struct {
                         const function_ir = self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
-                            null,
                             lowered_program,
                         );
                         user_defined_functions.append(self.allocator, function_ir) catch unreachable;
                     },
                     .Structure => {},
-                    .Union => unreachable,
+                    .Union => {},
                 },
                 else => {},
             }
@@ -110,16 +110,20 @@ pub const LlvmModuleRenderer = struct {
 
     fn renderModule(
         self: *@This(),
-        user_defined_types: []const u8,
+        structure_type_definitions: []const u8,
+        union_type_definitions: []const u8,
         user_defined_functions: []const []const u8,
         structure_method_functions: []const []const u8,
         main_function_ir: []const u8,
-    ) []const u8 {
+    ) ![]const u8 {
         var sections = std.ArrayList([]const u8){};
         defer sections.deinit(self.allocator);
-        sections.append(self.allocator, self.renderModulePreamble()) catch unreachable;
-        if (user_defined_types.len > 0) {
-            sections.append(self.allocator, user_defined_types) catch unreachable;
+        try sections.append(self.allocator, self.renderModulePreamble());
+        if (structure_type_definitions.len > 0) {
+            sections.append(self.allocator, structure_type_definitions) catch unreachable;
+        }
+        if (union_type_definitions.len > 0) {
+            try sections.append(self.allocator, union_type_definitions);
         }
         for (user_defined_functions) |function_ir| {
             sections.append(self.allocator, function_ir) catch unreachable;
@@ -154,7 +158,7 @@ pub const LlvmModuleRenderer = struct {
         const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
         module_preamble_buffer.writer(self.allocator).print(
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
-            .{ self.target_triple, runtime_symbol_declarations, llvm_string_type_definition, llvm_array_type_definition },
+            .{ self.target_triple, runtime_symbol_declarations, lowering.llvm_type.string_llvm_type_definition, lowering.llvm_type.array_llvm_type_definition },
         ) catch unreachable;
 
         const string_literal_globals_ir = self.string_literal_renderer.renderGlobals(self.string_literal_pool);
@@ -178,13 +182,9 @@ pub const LlvmModuleRenderer = struct {
                 },
                 else => continue,
             };
-
-            const structure_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(statement.id) orelse unreachable;
-            const structure_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(structure_symbol_id);
             self.appendStructureMethodDefinitions(
                 &method_definitions,
                 structure_definition,
-                structure_symbol,
                 lowered_program,
             );
         }
@@ -196,7 +196,6 @@ pub const LlvmModuleRenderer = struct {
         self: *@This(),
         method_definitions: *std.ArrayList([]const u8),
         structure_definition: ast.StructureDefinition,
-        structure_symbol: symbols.Symbol,
         lowered_program: *const lowering.LoweredProgram,
     ) void {
         for (structure_definition.function_definitions) |function_definition_node| {
@@ -210,7 +209,6 @@ pub const LlvmModuleRenderer = struct {
             const function_definition_emission = self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
-                structure_symbol,
                 lowered_program,
             );
             method_definitions.append(self.allocator, function_definition_emission) catch unreachable;

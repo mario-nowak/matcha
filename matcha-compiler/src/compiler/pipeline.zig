@@ -48,8 +48,6 @@ pub fn generateLlvmIrFromFile(
 
     var llvm_type_table_lowerer = llvm_codegen.lowering.LlvmTypeTableLowerer.init(allocator);
     defer llvm_type_table_lowerer.deinit();
-    var structure_symbol_lowerer = llvm_codegen.lowering.StructureSymbolLowerer.init(allocator);
-    defer structure_symbol_lowerer.deinit();
     var call_lowerer = llvm_codegen.lowering.CallLowerer.init(allocator);
     defer call_lowerer.deinit();
     var member_access_lowerer = llvm_codegen.lowering.MemberAccessLowerer.init(allocator);
@@ -60,26 +58,24 @@ pub fn generateLlvmIrFromFile(
     defer place_lowerer.deinit();
     var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(allocator);
     defer structure_layout_lowerer.deinit();
+    var union_layout_lowerer = llvm_codegen.lowering.UnionLayoutLowerer.init(allocator);
     var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(allocator);
     defer function_layout_lowerer.deinit();
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
-        &structure_symbol_lowerer,
         &call_lowerer,
         &member_access_lowerer,
         &binary_operation_lowerer,
         &place_lowerer,
         &structure_layout_lowerer,
+        &union_layout_lowerer,
         &function_layout_lowerer,
     );
-    defer lowering_analyzer.deinit();
     var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(allocator);
     defer function_symbol_generator.deinit();
     var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(allocator);
     defer function_ir_builder.deinit();
-    var symbol_generator = llvm_codegen.SymbolGenerator.init(allocator);
-    defer symbol_generator.deinit();
     var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(allocator);
     defer runtime_call_emitter.deinit();
     var runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(allocator);
@@ -91,13 +87,12 @@ pub fn generateLlvmIrFromFile(
     var string_literal_emitter = llvm_codegen.StringLiteralEmitter.init(allocator);
     defer string_literal_emitter.deinit();
     var structure_type_renderer = llvm_codegen.StructureTypeRenderer.init(allocator);
-    defer structure_type_renderer.deinit();
+    var union_type_renderer = llvm_codegen.UnionTypeRenderer.init(allocator);
 
     var node_emitter = llvm_codegen.NodeEmitter.init(
         allocator,
         &function_symbol_generator,
         &function_ir_builder,
-        &symbol_generator,
         &runtime_call_emitter,
         &string_literal_pool,
         &string_literal_emitter,
@@ -108,7 +103,6 @@ pub fn generateLlvmIrFromFile(
         allocator,
         &function_symbol_generator,
         &function_ir_builder,
-        &symbol_generator,
         &runtime_call_emitter,
         &node_emitter,
     );
@@ -123,6 +117,7 @@ pub fn generateLlvmIrFromFile(
         &string_literal_pool,
         &string_literal_renderer,
         &structure_type_renderer,
+        &union_type_renderer,
     );
     defer llvm_module_renderer.deinit();
 

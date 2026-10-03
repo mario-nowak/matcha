@@ -1,5 +1,6 @@
 const std = @import("std");
 const semantic_analysis = @import("semantic_analysis");
+const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
 
 pub const StructureLayoutLowerer = struct {
@@ -23,7 +24,10 @@ pub const StructureLayoutLowerer = struct {
         while (layouts.next()) |layout| {
             switch (layout.*) {
                 .Absent => {},
-                .Present => |present| self.allocator.free(present.field_index_kind_by_definition_index),
+                .Present => |present| {
+                    self.allocator.free(present.llvm_type_name);
+                    self.allocator.free(present.field_index_kind_by_definition_index);
+                },
             }
         }
         self.structure_layout_kind_by_type_id.clearRetainingCapacity();
@@ -75,6 +79,7 @@ pub const StructureLayoutLowerer = struct {
 
                     const structure_layout: lowering_types.StructureLayoutKind = if (has_field_with_runtime_representation) .{
                         .Present = .{
+                            .llvm_type_name = self.generateLlvmTypeName(analyzed_program, structure_type),
                             .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
                         },
                         // Structures without any runtime fields don't have a layout.
@@ -89,5 +94,18 @@ pub const StructureLayoutLowerer = struct {
         }
 
         return self.structure_layout_kind_by_type_id;
+    }
+
+    fn generateLlvmTypeName(
+        self: *@This(),
+        analyzed_program: *const semantic_analysis.AnalyzedProgram,
+        structure_type: typing.StructureType,
+    ) []const u8 {
+        const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
+        return std.fmt.allocPrint(
+            self.allocator,
+            "matcha_structure_{d}__{s}",
+            .{ structure_symbol.id, structure_symbol.name },
+        ) catch unreachable;
     }
 };

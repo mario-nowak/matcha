@@ -24,6 +24,7 @@ comptime {
     referenceAllTestsRecursive(@import("llvm_codegen/emission/function_ir_builder.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/emission/runtime_call_emitter.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/llvm_ir_code_generator.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/rendering/union_type_renderer.test.zig"));
 }
 
 /// Test blocks inside nested structs are only analyzed when the struct is referenced.

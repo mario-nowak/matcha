@@ -1,3 +1,5 @@
+pub const runtime_allocate_function_name = "matcha_allocate";
+pub const runtime_allocate_atomic_function_name = "matcha_allocate_atomic";
 pub const runtime_print_int_function_name = "matcha_print_int";
 pub const runtime_print_string_function_name = "matcha_print_string";
 pub const runtime_read_file_function_name = "matcha_read_file";

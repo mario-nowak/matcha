@@ -149,6 +149,38 @@ pub const FunctionIrBuilder = struct {
         self.emitInstruction(instruction);
     }
 
+    /// Emits a pointer to the field at `field_index` of the structure type `%<llvm_type_name>` that `base_register` points to.
+    pub fn emitFieldPointer(
+        self: *@This(),
+        result_register: []const u8,
+        llvm_type_name: []const u8,
+        base_register: []const u8,
+        field_index: u32,
+    ) void {
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
+            .{ result_register, llvm_type_name, base_register, field_index },
+        ) catch unreachable;
+        self.emitInstruction(instruction);
+    }
+
+    /// Emits a pointer to the element at `index` of the `element_llvm_type` values that `base_register` points to.
+    pub fn emitElementPointer(
+        self: *@This(),
+        result_register: []const u8,
+        element_llvm_type: []const u8,
+        base_register: []const u8,
+        index: []const u8,
+    ) void {
+        const instruction = std.fmt.allocPrint(
+            self.allocator,
+            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
+            .{ result_register, element_llvm_type, base_register, index },
+        ) catch unreachable;
+        self.emitInstruction(instruction);
+    }
+
     pub fn emitLoad(self: *@This(), result_register: []const u8, storage: Storage, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,

@@ -179,8 +179,7 @@ pub fn emitMatchExpression(
         }) catch unreachable;
     }
 
-    const exhaustive_without_else = match_expression.else_arm_expression == null and
-        lowered_program.analyzed_program.type_id_by_node_id.get(match_expression.subject.id).? == lowered_program.analyzed_program.type_store.boolean_type_id;
+    const exhaustive_without_else = match_expression.else_arm_expression == null;
 
     return emitDecisionConstruct(
         emitter,
@@ -318,21 +317,23 @@ pub fn emitForInArrayLoop(
     builder.emitStore("0", index_storage, "i64");
 
     const length_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 0",
-        .{ length_pointer_register, iterable_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(
+        length_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        iterable_register,
+        lowering.llvm_type.array_length_field_index,
+    );
 
     const length_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(length_register, length_pointer_register, "i64");
 
     const data_pointer_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
-        "{s} = getelementptr inbounds %Array, ptr {s}, i32 0, i32 2",
-        .{ data_pointer_register, iterable_register },
-    ) catch unreachable);
+    builder.emitFieldPointer(
+        data_pointer_register,
+        lowering.llvm_type.array_llvm_type_name,
+        iterable_register,
+        lowering.llvm_type.array_data_field_index,
+    );
 
     const data_register = emitter.function_symbol_generator.generateRegister();
     builder.emitLoad(data_register, data_pointer_register, "ptr");
@@ -365,11 +366,7 @@ pub fn emitForInArrayLoop(
 
     if (item_storage) |storage| {
         const element_pointer_register = emitter.function_symbol_generator.generateRegister();
-        builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
-            "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
-            .{ element_pointer_register, element_llvm_type, data_register, current_index_register },
-        ) catch unreachable);
+        builder.emitElementPointer(element_pointer_register, element_llvm_type, data_register, current_index_register);
         const element_register = emitter.function_symbol_generator.generateRegister();
         builder.emitLoad(element_register, element_pointer_register, element_llvm_type);
         builder.emitStore(element_register, storage, element_llvm_type);
@@ -468,7 +465,7 @@ fn emitDecisionConstruct(
         .analyzed_program
         .runtime_representation_result
         .runtime_representation_by_type_id
-        .get(result_type_id) orelse undefined;
+        .get(result_type_id).?;
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
     const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
     var incoming_values = std.ArrayList(PhiIncoming){};
@@ -512,6 +509,13 @@ fn emitDecisionConstruct(
                 continue_reachable = true;
             }
 
+            const optional_union_case_index: ?u32 = switch (arm.condition) {
+                .Expression => null,
+                .Pattern => |pattern| switch (pattern.kind) {
+                    .Case => lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
+                    else => null,
+                },
+            };
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
             } else {
@@ -522,7 +526,7 @@ fn emitDecisionConstruct(
                         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                         subject_type_id.?,
                         subject_register.?,
-                        emitPatternValue(emitter, pattern),
+                        emitPatternValue(emitter, pattern, lowered_program),
                         lowered_program,
                     ),
                 };
@@ -530,6 +534,20 @@ fn emitDecisionConstruct(
             }
 
             builder.emitLabel(arm_label);
+            if (optional_union_case_index) |union_case_index| {
+                if (arm.condition.Pattern.kind.Case.binding) |payload_binding| {
+                    emitCasePatternBinding(
+                        emitter,
+                        payload_binding,
+                        subject_type_id.?,
+                        subject_register.?,
+                        union_case_index,
+                        lowered_program,
+                        environment,
+                    );
+                }
+            }
+
             const arm_register = emitter.emitNode(arm.body, lowered_program, environment);
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;
@@ -611,7 +629,52 @@ fn emitDecisionConstruct(
     return .{ .register = result_register };
 }
 
-fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register {
+// Binds the payload of the matched case to the binding of its case pattern. A payload without a runtime
+// representation gets no storage, because reading the binding never loads it.
+fn emitCasePatternBinding(
+    emitter: *NodeEmitter,
+    payload_binding: ast.PayloadBinding,
+    union_type_id: typing.TypeId,
+    union_register: Register,
+    case_index: u32,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) void {
+    const builder = emitter.function_ir_builder;
+    const payload_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
+    const payload_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(payload_symbol_id).?;
+    const payload_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(payload_type_id).?;
+    if (!payload_runtime_representation.hasRuntimeRepresentation()) {
+        return;
+    }
+
+    const payload_storage = emitter.function_symbol_generator.generateStorage();
+    const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
+    builder.emitAlloca(payload_storage, payload_llvm_type);
+    environment.storage_by_symbol_id.put(payload_symbol_id, payload_storage) catch unreachable;
+
+    const union_case_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?.cases[case_index];
+    const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+    builder.emitFieldPointer(
+        payload_pointer_register,
+        union_case_layout.llvm_type_name,
+        union_register,
+        lowering.lowering_types.union_payload_field_index,
+    );
+    const payload_register = emitter.function_symbol_generator.generateRegister();
+    builder.emitLoad(payload_register, payload_pointer_register, payload_llvm_type);
+    builder.emitStore(payload_register, payload_storage, payload_llvm_type);
+}
+
+fn emitPatternValue(
+    emitter: *NodeEmitter,
+    pattern: *const ast.Pattern,
+    lowered_program: *const lowering.LoweredProgram,
+) Register {
     return switch (pattern.kind) {
         .IntegerLiteral => |integer_literal| std.fmt.allocPrint(
             emitter.allocator,
@@ -626,6 +689,10 @@ fn emitPatternValue(emitter: *NodeEmitter, pattern: *const ast.Pattern) Register
             emitter.function_symbol_generator,
             emitter.function_ir_builder,
         ),
-        .Case => unreachable,
+        // A case pattern matches when the subject stores the case index of the pattern, so the case index is the value
+        // that `UnionCaseIndexComparison` compares the loaded case index with.
+        .Case => std.fmt.allocPrint(emitter.allocator, "{d}", .{
+            lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
+        }) catch unreachable,
     };
 }

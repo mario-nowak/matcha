@@ -8,7 +8,7 @@ const lowering = llvm_codegen.lowering;
 pub const CallLowerer = struct {
     pub const lower = struct {
         pub const user_functions = struct {
-            test "lowers a call to a top-level function without owner and receiver" {
+            test "lowers a call to a top-level function without receiver" {
                 const source =
                     \\item identity(value: int): int = value;
                     \\val copied = identity(1);
@@ -23,12 +23,11 @@ pub const CallLowerer = struct {
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = identity_symbol_id,
-                    .owning_structure_symbol_id = null,
                     .receiver_node_id = null,
                 } });
             }
 
-            test "lowers a type function call with its structure as owner and without receiver" {
+            test "lowers a type function call without receiver" {
                 const source =
                     \\item Point = structure {
                     \\    x: int;
@@ -48,12 +47,11 @@ pub const CallLowerer = struct {
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = origin_symbol_id,
-                    .owning_structure_symbol_id = point_symbol_id,
                     .receiver_node_id = null,
                 } });
             }
 
-            test "lowers a method call with its structure as owner and its base as receiver" {
+            test "lowers a method call with its base as receiver" {
                 const source =
                     \\item Point = structure {
                     \\    x: int;
@@ -75,7 +73,6 @@ pub const CallLowerer = struct {
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = moved_symbol_id,
-                    .owning_structure_symbol_id = point_symbol_id,
                     .receiver_node_id = receiver_node_id,
                 } });
             }

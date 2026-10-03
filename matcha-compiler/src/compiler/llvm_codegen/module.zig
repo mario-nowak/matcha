@@ -14,6 +14,6 @@ pub const RuntimeRequirements = rendering.RuntimeRequirements;
 pub const StringLiteralPool = emission.StringLiteralPool;
 pub const StringLiteralEmitter = emission.StringLiteralEmitter;
 pub const StringLiteralRenderer = rendering.StringLiteralRenderer;
-pub const SymbolGenerator = emission.SymbolGenerator;
 pub const StructureTypeRenderer = rendering.StructureTypeRenderer;
+pub const UnionTypeRenderer = rendering.UnionTypeRenderer;
 pub const llvm_type_lowering = lowering.llvm_type;

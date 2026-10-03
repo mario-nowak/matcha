@@ -37,7 +37,7 @@ pub const BinaryOperationLowerer = struct {
         switch (node.kind) {
             .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
             .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                .Union => unreachable,
+                .Union => {},
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
                 .Structure => |structure_definition| {
                     for (structure_definition.function_definitions) |*function_definition_node| {
@@ -68,7 +68,6 @@ pub const BinaryOperationLowerer = struct {
                 }
             },
             .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
-            .LeaveStatement, .ContinueStatement, .Identifier, .IntegerLiteral, .BooleanLiteral, .StringLiteral, .UnitLiteral => {},
             .While => |while_statement| {
                 self.lowerNode(while_statement.condition, analyzed_program);
                 if (while_statement.update) |update| {
@@ -113,7 +112,6 @@ pub const BinaryOperationLowerer = struct {
                 }
             },
             .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
-            .ImplicitMemberExpression => unreachable,
             .BinaryExpression => |binary_expression| {
                 self.lowerNode(binary_expression.left, analyzed_program);
                 self.lowerNode(binary_expression.right, analyzed_program);
@@ -147,6 +145,15 @@ pub const BinaryOperationLowerer = struct {
                 self.lowerNode(index_expression.base, analyzed_program);
                 self.lowerNode(index_expression.index, analyzed_program);
             },
+            .LeaveStatement,
+            .ContinueStatement,
+            .Identifier,
+            .IntegerLiteral,
+            .BooleanLiteral,
+            .StringLiteral,
+            .UnitLiteral,
+            .ImplicitMemberExpression,
+            => {},
         }
     }
 
@@ -171,6 +178,14 @@ pub const BinaryOperationLowerer = struct {
                 .Add => .StringConcatenate,
                 .Equal => .StringCompareEqual,
                 .NotEqual => .StringCompareNotEqual,
+                else => unreachable,
+            };
+        }
+
+        const left_operand_type = analyzed_program.type_store.getType(left_operand_type_id);
+        if (left_operand_type == .Union) {
+            return switch (binary_operator) {
+                .Equal => .UnionCaseIndexComparison,
                 else => unreachable,
             };
         }

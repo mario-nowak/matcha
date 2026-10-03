@@ -143,7 +143,7 @@ val y = SomeFunction;
     %MaybeInt.None = type { i8 }
     %MaybeInt.Some = type { i8, i64 }
     ```
-    - conceptually    - conceptually
+    - conceptually
 
 ---
 
@@ -269,3 +269,30 @@ now not all of them are real issues. But a lot of them are.
     - `MatchExpression` where the left hand sides of the arms are patterns and
     - `SubjectlessMatchExpression` where the left hand sides of the arms are expressions
 
+---
+
+# Cleanups for later
+
+- Merge the five identical error sets (`LexError`, `ParseError`, `ControlFlowValidationError`, `NameResolutionError`, `TypeError`) into one `CompileError = error{DiagnosticsEmitted} || std.mem.Allocator.Error` in the `diagnostics` module.
+- Switch all lowerers to the arena pattern of `UnionLayoutLowerer`: `lower()` returns a freshly allocated result, the lowerer keeps no state, and `deinit()`, `clearLayouts()` and all frees go away (the allocator is named `arena`).
+- Replace `catch unreachable` on allocations with `try`, so `error.OutOfMemory` propagates through `CompileError` instead of being undefined behavior in ReleaseFast (review item 51).
+- Delete `getTypeIdFromResolvedTypeReference()` and the unused `getLlvmIrTypeFromResolvedTypeReference()` in `llvm_type.zig`: they redo the type checker's reference-to-type translation in codegen. The renderers should read `StructureType.fields[i].type_id` and `UnionType.cases[i].type_id` instead.
+- Emit union payloads and structure field values before the allocation, not after it, so an early exit in a payload or field expression doesn't leave a wasted allocation behind. Fixed while lowering unions, for array literal elements too.
+- Rename the codegen value and slot concepts, so the names say what the IR contains:
+    - `Register` becomes `Value`, because it often holds a literal like `1` and not a register. Rename `generateRegister()`, `EmissionResult.register` and `expectRegister()` to match. IR name: `%.value_<counter>`.
+    - `Storage` becomes `Address`, because it holds a pointer to an `alloca` slot and not the slot itself. Rename `storage_by_symbol_id` to `address_by_symbol_id`.
+    - Symbol slots (bindings, parameters, `for` items, payload bindings) use `generateSymbolAddress(symbol)`. IR name: `%.address__symbol_<id>__<name>`. No counter, because the symbol id is already unique.
+    - Synthetic slots (the `for` index, runtime call result slots) use `generateSyntheticAddress()`. IR name: `%.address__synthetic_<counter>`.
+    - `%String` and `%Array` become `%matcha_string` and `%matcha_array`, like the other generated names (`matcha_structure_0__Point`, `matcha_print_int`). Only `string_llvm_type_name` and `array_llvm_type_name` in `llvm_type.zig` change.
+- Name labels after the AST construct, so the IR shows where it is in the source:
+    - Use node kind, node id and arm index, for example `.match_expression_12__arm_1`. No counter, because the node id is already unique. No `matcha__` prefix, because the leading `.` already prevents collisions.
+    - Name the block that checks an arm after that arm: `.match_expression_12__arm_2__condition`, not `__arm_1__next`.
+    - Keep values as `%.value_<counter>`. One node makes many values, some values have no node, and about 130 `generateRegister()` sites would each need a role name.
+    - Consider `;` comments with a source snippet before each statement or arm instead, for example `; .Horizontal(value) => value`.
+    - Risk: node ids shift when the parser adds or removes nodes, so one parser change renames labels in many IR tests at once.
+- Learn about optimization flags. `linker.zig` calls `clang` without `-O`, so it compiles at `-O0` and `mem2reg` never runs. Every `alloca`/`store`/`load` of a binding stays in the binary as a real stack access. Consider a `--release` flag on `matcha build` that passes `-O2`.
+- Load the case index of a union match subject once, not again in every arm. Today `UnionCaseIndexComparison` loads it for each comparison. The LLVM optimizer removes the extra loads at `-O1` and above.
+- Construct unit cases like `Maybe.None` once, as one global constant per case, instead of allocating on every use.
+- Allocate case structures without pointers, for example a unit case or an `int` payload, with `matcha_allocate_atomic`, so the garbage collector does not scan them. This belongs with the atomic allocation work in issue #25.
+- Split `DecisionConstruct` in `control_flow.zig` into a pattern match construct and a condition chain construct. Today one construct serves both, so it allows a construct without a subject but with pattern arms. Pattern matching will grow apart from the subjectless match, like the planned split of `MatchExpression` above.
+- Keep the case names and the case types of a union in one place (review item 33). The names are in the union symbol and the types are in `UnionType`, matched by index. `UnionLayoutLowerer` reads the names from the symbol.
