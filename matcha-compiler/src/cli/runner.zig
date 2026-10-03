@@ -77,6 +77,22 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !u8 {
     }
 }
 
+/// Prints an error that no earlier step reported, so the CLI never exits without a message.
+pub fn reportUnreportedError(run_error: anyerror) void {
+    switch (run_error) {
+        // These errors print their own message where they happen, because only that place knows the context.
+        error.InvalidCommandLine,
+        error.MissingInputPath,
+        error.InputPathWithoutMatchaExtension,
+        error.InputFileUnreadable,
+        error.OutputFileUnwritable,
+        error.ChildProcessFailed,
+        error.DependencyLookupFailed,
+        => {},
+        else => std.fs.File.stderr().deprecatedWriter().print("error: unexpected failure: {s}\n", .{@errorName(run_error)}) catch {},
+    }
+}
+
 fn handleCompilationError(
     allocator: std.mem.Allocator,
     input_path: []const u8,
