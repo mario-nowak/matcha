@@ -1424,34 +1424,38 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        var next_token = try self.lexer.peek();
         var arguments = std.ArrayList(ast.Node){};
-
-        while (true) : (next_token = try self.lexer.peek()) {
-            if (next_token.kind == .RightParenthesis) {
-                const right_parenthesis = try self.lexer.next();
-
-                const callee = self.allocator.create(ast.Node) catch unreachable;
-                callee.* = left_hand_size;
-
-                return self.createNode(.{
-                    .CallExpression = .{
-                        .callee = callee,
-                        .left_parenthesis = left_parenthesis,
-                        .arguments = arguments.toOwnedSlice(self.allocator) catch unreachable,
-                        .right_parenthesis = right_parenthesis,
-                    },
-                });
+        while (true) {
+            if ((try self.lexer.peek()).kind == .RightParenthesis) {
+                break;
             }
-
-            if (next_token.kind == .Comma) {
-                _ = try self.lexer.next(); // consume comma
-                continue;
-            }
-
             const argument = try self.parseExpression(.{ .current_binding_power = 0.0 });
             arguments.append(self.allocator, argument) catch unreachable;
+
+            const post_argument_token = try self.lexer.peek();
+            if (post_argument_token.kind == .Comma) {
+                _ = try self.lexer.next();
+                continue;
+            }
+            if (post_argument_token.kind == .RightParenthesis) {
+                break;
+            }
+            try self.diagnostic_store.emitErrorFromToken(post_argument_token, "expected ',' or ')' after call argument");
+            return error.DiagnosticsEmitted;
         }
+
+        const right_parenthesis = try self.lexer.next();
+        const callee = self.allocator.create(ast.Node) catch unreachable;
+        callee.* = left_hand_size;
+
+        return self.createNode(.{
+            .CallExpression = .{
+                .callee = callee,
+                .left_parenthesis = left_parenthesis,
+                .arguments = arguments.toOwnedSlice(self.allocator) catch unreachable,
+                .right_parenthesis = right_parenthesis,
+            },
+        });
     }
 
     fn parseArrayLiteral(self: *@This(), left_bracket_token: lexing.Token) ParserError!ast.Node {
