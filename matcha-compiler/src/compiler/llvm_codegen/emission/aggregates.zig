@@ -35,8 +35,8 @@ pub fn emitImplicitMemberExpression(
         .StringLength,
         .StringMethod,
         .StructureField,
-        .StructureMethod,
-        .StructureTypeFunction,
+        .InstanceMethod,
+        .TypeFunction,
         => unreachable,
     }
 }
@@ -104,8 +104,8 @@ pub fn emitMemberExpression(
             lowered_program,
             environment,
         ),
-        .StructureMethod => unreachable,
-        .StructureTypeFunction => unreachable,
+        .InstanceMethod => unreachable,
+        .TypeFunction => unreachable,
         .ArrayMethod => unreachable,
         .StringMethod => unreachable,
         .IntegerMethod => unreachable,

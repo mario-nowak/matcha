@@ -357,6 +357,87 @@ pub const Matcha = struct {
                     try e2e.expectSuccessOutput(&result, "1\n");
                 }
             };
+
+            pub const functions = struct {
+                test "calls a method that matches on its receiver" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item valueOr(self: Result, fallback: int): int = match self {
+                        \\        .None => fallback,
+                        \\        .Some(value) => value,
+                        \\    };
+                        \\};
+                        \\printInt(Result.Some(4).valueOr(0));
+                    ;
+
+                    var result = try e2e.runSource("unions_method.mt", source);
+                    defer result.deinit();
+
+                    try e2e.expectSuccessOutput(&result, "4\n");
+                }
+
+                test "calls a type function through the union name" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item fromNumber(number: int): Result = .Some(number);
+                        \\};
+                        \\val result = Result.fromNumber(2);
+                        \\printInt(match result {
+                        \\    .None => 0,
+                        \\    .Some(value) => value,
+                        \\});
+                    ;
+
+                    var result = try e2e.runSource("unions_qualified_type_function.mt", source);
+                    defer result.deinit();
+
+                    try e2e.expectSuccessOutput(&result, "2\n");
+                }
+
+                test "constructs a union through an implicit type function call" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item fromNumber(number: int): Result = .Some(number);
+                        \\};
+                        \\val x: Result = .fromNumber(1);
+                        \\printInt(match x {
+                        \\    .None => 0,
+                        \\    .Some(value) => value,
+                        \\});
+                    ;
+
+                    var result = try e2e.runSource("unions_implicit_type_function.mt", source);
+                    defer result.deinit();
+
+                    try e2e.expectSuccessOutput(&result, "1\n");
+                }
+
+                test "calls a method from another method of the same union" {
+                    const source =
+                        \\item Result = union {
+                        \\    None,
+                        \\    Some: int,
+                        \\    item valueOr(self: Result, fallback: int): int = match self {
+                        \\        .None => fallback,
+                        \\        .Some(value) => value,
+                        \\    };
+                        \\    item doubledOr(self: Result, fallback: int): int = self.valueOr(fallback) * 2;
+                        \\};
+                        \\printInt(Result.None.doubledOr(5));
+                    ;
+
+                    var result = try e2e.runSource("unions_method_calls_method.mt", source);
+                    defer result.deinit();
+
+                    try e2e.expectSuccessOutput(&result, "10\n");
+                }
+            };
         };
     };
 };

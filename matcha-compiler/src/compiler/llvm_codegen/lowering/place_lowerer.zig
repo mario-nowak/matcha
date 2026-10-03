@@ -37,12 +37,11 @@ pub const PlaceLowerer = struct {
             .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
             .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
-                .Structure => |structure_definition| {
-                    for (structure_definition.function_definitions) |*function_definition_node| {
+                inline .Structure, .Union => |type_definition| {
+                    for (type_definition.function_definitions) |*function_definition_node| {
                         self.lowerNode(function_definition_node, analyzed_program);
                     }
                 },
-                .Union => {},
             },
             .ReturnStatement => |return_statement| {
                 if (return_statement.value) |value| {

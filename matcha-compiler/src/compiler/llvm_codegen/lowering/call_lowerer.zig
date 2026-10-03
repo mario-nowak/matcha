@@ -40,12 +40,11 @@ pub const CallLowerer = struct {
             .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
             .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
-                .Structure => |structure_definition| {
-                    for (structure_definition.function_definitions) |*function_definition_node| {
+                inline .Structure, .Union => |type_definition| {
+                    for (type_definition.function_definitions) |*function_definition_node| {
                         self.lowerNode(function_definition_node, analyzed_program);
                     }
                 },
-                .Union => {},
             },
             .ReturnStatement => |return_statement| {
                 if (return_statement.value) |value| {
@@ -169,17 +168,25 @@ pub const CallLowerer = struct {
             },
             .Function => {
                 const decision: lowering_types.CallDispatchDecision = switch (call_expression.callee.kind) {
-                    .ImplicitMemberExpression => unreachable,
-                    .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
-                        .StructureInstanceMethodAccess => |structure_method| .{
+                    // An implicit member that is called names a type function of the expected union, so it has no receiver.
+                    .ImplicitMemberExpression => switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
+                        .TypeFunctionAccess => |type_function| .{
                             .UserFunction = .{
-                                .function_symbol_id = structure_method.function_symbol_id,
+                                .function_symbol_id = type_function.function_symbol_id,
+                            },
+                        },
+                        else => unreachable,
+                    },
+                    .MemberExpression => |callee_member_expression| switch (analyzed_program.member_access_by_node_id.get(call_expression.callee.id) orelse unreachable) {
+                        .InstanceMethodAccess => |instance_method| .{
+                            .UserFunction = .{
+                                .function_symbol_id = instance_method.function_symbol_id,
                                 .receiver_node_id = callee_member_expression.base.id,
                             },
                         },
-                        .StructureTypeFunctionAccess => |structure_function| .{
+                        .TypeFunctionAccess => |type_function| .{
                             .UserFunction = .{
-                                .function_symbol_id = structure_function.function_symbol_id,
+                                .function_symbol_id = type_function.function_symbol_id,
                             },
                         },
                         .ArrayInstanceMethodAccess => |array_method| .{ .ArrayMethod = array_method },

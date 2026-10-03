@@ -28,7 +28,6 @@ pub const MemberAccessLowerer = struct {
                 .StructureInstanceFieldAccess => |structure_field| .{
                     .StructureField = .{ .field_index = structure_field.field_index },
                 },
-                .UnionTypeFunctionAccess => unreachable,
                 .UnionTypeBaseCaseAccess => |base_case_access| .{
                     .UnionConstruction = .{
                         // A base case access constructs the case, so the node has the type of the union
@@ -36,8 +35,8 @@ pub const MemberAccessLowerer = struct {
                         .case_index = base_case_access.case_index,
                     },
                 },
-                .StructureInstanceMethodAccess => .StructureMethod,
-                .StructureTypeFunctionAccess => .StructureTypeFunction,
+                .InstanceMethodAccess => .InstanceMethod,
+                .TypeFunctionAccess => .TypeFunction,
                 .ArrayInstanceMethodAccess => .ArrayMethod,
                 .ArrayInstanceFieldAccess => .ArrayLength,
                 .StringInstanceMethodAccess => .StringMethod,

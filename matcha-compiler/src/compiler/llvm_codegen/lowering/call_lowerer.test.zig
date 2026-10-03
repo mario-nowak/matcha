@@ -76,6 +76,81 @@ pub const CallLowerer = struct {
                     .receiver_node_id = receiver_node_id,
                 } });
             }
+
+            test "lowers a union type function call without receiver" {
+                const source =
+                    \\item Result = union {
+                    \\    None,
+                    \\    Some: int,
+                    \\    item fromNumber(number: int): Result = .Some(number);
+                    \\};
+                    \\val result = Result.fromNumber(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const union_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = from_number_symbol_id,
+                    .receiver_node_id = null,
+                } });
+            }
+
+            test "lowers an implicit union type function call without receiver" {
+                const source =
+                    \\item Result = union {
+                    \\    None,
+                    \\    Some: int,
+                    \\    item fromNumber(number: int): Result = .Some(number);
+                    \\};
+                    \\val result: Result = .fromNumber(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const union_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = from_number_symbol_id,
+                    .receiver_node_id = null,
+                } });
+            }
+
+            test "lowers a union method call with its base as receiver" {
+                const source =
+                    \\item Result = union {
+                    \\    None,
+                    \\    Some: int,
+                    \\
+                    \\    item getSelf(self: Result): Result = self;
+                    \\};
+                    \\val result = Result.None;
+                    \\val same = result.getSelf();
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const union_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+                const get_self_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const receiver_node_id = call_expression.kind.CallExpression.callee.kind.MemberExpression.base.id;
+
+                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
+                    .function_symbol_id = get_self_symbol_id,
+                    .receiver_node_id = receiver_node_id,
+                } });
+            }
         };
 
         pub const builtins = struct {

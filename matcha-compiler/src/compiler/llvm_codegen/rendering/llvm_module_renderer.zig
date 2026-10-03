@@ -69,15 +69,15 @@ pub const LlvmModuleRenderer = struct {
         const union_type_definitions = try self.union_type_renderer.renderUnionTypeDefinitions(lowered_program);
         var user_defined_functions = self.renderTopLevelFunctionDefinitions(lowered_program);
         defer user_defined_functions.deinit(self.allocator);
-        var structure_method_functions = self.renderStructureMethodFunctionDefinitions(lowered_program);
-        defer structure_method_functions.deinit(self.allocator);
+        var owned_functions = self.renderOwnedFunctionDefinitions(lowered_program);
+        defer owned_functions.deinit(self.allocator);
         const main_function_ir = self.function_emitter.emitMainFunction(lowered_program);
 
         return self.renderModule(
             structure_type_definitions,
             union_type_definitions,
             user_defined_functions.items,
-            structure_method_functions.items,
+            owned_functions.items,
             main_function_ir,
         );
     }
@@ -113,7 +113,7 @@ pub const LlvmModuleRenderer = struct {
         structure_type_definitions: []const u8,
         union_type_definitions: []const u8,
         user_defined_functions: []const []const u8,
-        structure_method_functions: []const []const u8,
+        owned_functions: []const []const u8,
         main_function_ir: []const u8,
     ) ![]const u8 {
         var sections = std.ArrayList([]const u8){};
@@ -128,7 +128,7 @@ pub const LlvmModuleRenderer = struct {
         for (user_defined_functions) |function_ir| {
             sections.append(self.allocator, function_ir) catch unreachable;
         }
-        for (structure_method_functions) |function_ir| {
+        for (owned_functions) |function_ir| {
             sections.append(self.allocator, function_ir) catch unreachable;
         }
         sections.append(self.allocator, main_function_ir) catch unreachable;
@@ -168,37 +168,38 @@ pub const LlvmModuleRenderer = struct {
         return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
     }
 
-    fn renderStructureMethodFunctionDefinitions(
+    /// Renders the functions that a type declares in its body.
+    fn renderOwnedFunctionDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
     ) std.ArrayList([]const u8) {
-        var method_definitions = std.ArrayList([]const u8){};
+        var owned_function_definitions = std.ArrayList([]const u8){};
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
-            const structure_definition = switch (statement.kind) {
+            const function_definitions = switch (statement.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Structure => |structure| structure,
+                    inline .Structure, .Union => |type_definition| type_definition.function_definitions,
                     else => continue,
                 },
                 else => continue,
             };
-            self.appendStructureMethodDefinitions(
-                &method_definitions,
-                structure_definition,
+            self.appendOwnedFunctionDefinitions(
+                &owned_function_definitions,
+                function_definitions,
                 lowered_program,
             );
         }
 
-        return method_definitions;
+        return owned_function_definitions;
     }
 
-    fn appendStructureMethodDefinitions(
+    fn appendOwnedFunctionDefinitions(
         self: *@This(),
-        method_definitions: *std.ArrayList([]const u8),
-        structure_definition: ast.StructureDefinition,
+        owned_function_definitions: *std.ArrayList([]const u8),
+        function_definitions: []const ast.Node,
         lowered_program: *const lowering.LoweredProgram,
     ) void {
-        for (structure_definition.function_definitions) |function_definition_node| {
+        for (function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
                 .ItemDefinition => |item_definition| switch (item_definition.definition) {
                     .Function => |function| function,
@@ -211,7 +212,7 @@ pub const LlvmModuleRenderer = struct {
                 &function_definition,
                 lowered_program,
             );
-            method_definitions.append(self.allocator, function_definition_emission) catch unreachable;
+            owned_function_definitions.append(self.allocator, function_definition_emission) catch unreachable;
         }
     }
 };
