@@ -319,7 +319,7 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
             .And = null,
             .Or = null,
         }),
-        .Structure => BinaryOperatorRules.init(.{
+        .Structure, .Array => BinaryOperatorRules.init(.{
             .Add = null,
             .Equal = .{ .argument_type_id = operand_type_id, .return_type_id = type_store.boolean_type_id },
             .NotEqual = .{ .argument_type_id = operand_type_id, .return_type_id = type_store.boolean_type_id },
@@ -348,7 +348,6 @@ pub fn getBinaryOperatorRules(type_store: *const TypeStore, operand_type_id: Typ
             .Or = null,
         }),
         .Function,
-        .Array,
         .Union,
         .UnionConstructor,
         => null,

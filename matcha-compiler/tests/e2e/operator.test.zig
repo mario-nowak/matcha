@@ -51,3 +51,25 @@ test "unit comparison evaluates both operands" {
 
     try e2e.expectSuccessOutput(&result, "1\n2\n");
 }
+
+test "arrays compare by reference identity" {
+    const source =
+        \\val first = [1, 2, 3];
+        \\val alias = first;
+        \\val separate = [1, 2, 3];
+        \\alias.append(4);
+        \\printString(match {
+        \\    first == alias => "alias equal",
+        \\    else => "alias different",
+        \\});
+        \\printString(match {
+        \\    first != separate => "separate different",
+        \\    else => "separate equal",
+        \\});
+    ;
+
+    var result = try e2e.runSource("array_equality.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "alias equal\nseparate different\n");
+}
