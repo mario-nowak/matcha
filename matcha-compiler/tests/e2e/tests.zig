@@ -15,6 +15,7 @@ comptime {
     _ = @import("runtime.test.zig");
     _ = @import("smoke.test.zig");
     _ = @import("unit_type.test.zig");
+    referenceAllTestsRecursive(@import("cli.test.zig"));
     referenceAllTestsRecursive(@import("pattern_matching.test.zig"));
 }
 

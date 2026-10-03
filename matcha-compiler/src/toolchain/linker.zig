@@ -113,11 +113,14 @@ fn runNativeBinary(allocator: std.mem.Allocator, binary_path: []const u8, progra
 }
 
 fn brewPrefix(allocator: std.mem.Allocator, package_name: []const u8) ![]const u8 {
-    const result = try std.process.Child.run(.{
+    const result = std.process.Child.run(.{
         .allocator = allocator,
         .argv = &.{ "brew", "--prefix", package_name },
         .max_output_bytes = 1024,
-    });
+    }) catch |spawn_error| {
+        try std.fs.File.stderr().deprecatedWriter().print("error: cannot start 'brew': {s}\n", .{@errorName(spawn_error)});
+        return error.DependencyLookupFailed;
+    };
 
     if (result.term != .Exited or result.term.Exited != 0) {
         try std.fs.File.stderr().deprecatedWriter().print("error: failed to resolve Homebrew prefix for {s}\n", .{package_name});
@@ -148,10 +151,20 @@ fn runChildProcess(allocator: std.mem.Allocator, argv: []const []const u8, stdio
         },
     }
 
-    const term = try child.spawnAndWait();
+    const stderr = std.fs.File.stderr().deprecatedWriter();
+    const term = child.spawnAndWait() catch |spawn_error| {
+        try stderr.print("error: cannot start '{s}': {s}\n", .{ argv[0], @errorName(spawn_error) });
+        return error.ChildProcessFailed;
+    };
     switch (term) {
-        .Exited => |code| if (code != 0) return error.ChildProcessFailed,
-        else => return error.ChildProcessFailed,
+        .Exited => |code| if (code != 0) {
+            try stderr.print("error: '{s}' failed with exit code {d}\n", .{ argv[0], code });
+            return error.ChildProcessFailed;
+        },
+        else => {
+            try stderr.print("error: '{s}' terminated abnormally\n", .{argv[0]});
+            return error.ChildProcessFailed;
+        },
     }
 }
 
