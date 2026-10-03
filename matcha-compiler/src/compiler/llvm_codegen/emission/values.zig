@@ -44,10 +44,16 @@ pub fn emitBinaryExpression(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
+    const decision = lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable;
+    switch (decision) {
+        .ShortCircuitAnd => return emitShortCircuitOperation(emitter, binary_expression, .And, lowered_program, environment),
+        .ShortCircuitOr => return emitShortCircuitOperation(emitter, binary_expression, .Or, lowered_program, environment),
+        else => {},
+    }
+
     const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment);
     const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment);
     const left_operand_type = lowered_program.analyzed_program.type_id_by_node_id.get(binary_expression.left.id).?;
-    const decision = lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable;
 
     // Unit operands have no runtime value. Their side effects already ran above, so the result is a constant.
     switch (decision) {
@@ -64,6 +70,48 @@ pub fn emitBinaryExpression(
         right_register.expectRegister(),
         lowered_program,
     ) };
+}
+
+// Emits the right operand only when the left operand does not decide the result already. The result is a phi of
+// the deciding constant (false for `and`, true for `or`) and the value of the right operand.
+fn emitShortCircuitOperation(
+    emitter: *NodeEmitter,
+    binary_expression: *const ast.BinaryExpression,
+    operator: enum { And, Or },
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) EmissionResult {
+    const builder = emitter.function_ir_builder;
+    const end_label_name, const right_label_name, const deciding_value = switch (operator) {
+        .And => .{ "and_end", "and_right", "0" },
+        .Or => .{ "or_end", "or_right", "1" },
+    };
+    const end_label = emitter.function_symbol_generator.generateLabel(end_label_name);
+    const right_label = emitter.function_symbol_generator.generateLabel(right_label_name);
+
+    const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment).expectRegister();
+    // The phi needs the block where the left operand ended, which is not the start block when the operand branches.
+    const left_exit_label = builder.currentLabel() orelse unreachable;
+    switch (operator) {
+        .And => builder.emitBranchInstruction(left_register, &.{ right_label, end_label }),
+        .Or => builder.emitBranchInstruction(left_register, &.{ end_label, right_label }),
+    }
+
+    builder.emitLabel(right_label);
+    const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment).expectRegister();
+    const right_exit_label = builder.currentLabel() orelse unreachable;
+    builder.emitBranchInstruction(null, &.{end_label});
+
+    builder.emitLabel(end_label);
+    const result_register = emitter.function_symbol_generator.generateRegister();
+    const phi_instruction = std.fmt.allocPrint(
+        emitter.allocator,
+        "{s} = phi i1 [{s}, %{s}], [{s}, %{s}]",
+        .{ result_register, deciding_value, left_exit_label, right_register, right_exit_label },
+    ) catch unreachable;
+    builder.emitInstruction(phi_instruction);
+
+    return .{ .register = result_register };
 }
 
 pub fn emitUnaryExpression(
@@ -116,8 +164,6 @@ pub fn emitLoweredBinaryOperation(
                 .LessThanOrEqual => "icmp sle",
                 .GreaterThan => "icmp sgt",
                 .GreaterThanOrEqual => "icmp sge",
-                .And => "and",
-                .Or => "or",
             };
 
             const result_register = emitter.function_symbol_generator.generateRegister();
@@ -175,6 +221,6 @@ pub fn emitLoweredBinaryOperation(
             ) catch unreachable);
             break :compare_not_equal result_register;
         },
-        .ZeroSizedCompareEqual, .ZeroSizedCompareNotEqual => unreachable,
+        .ZeroSizedCompareEqual, .ZeroSizedCompareNotEqual, .ShortCircuitAnd, .ShortCircuitOr => unreachable,
     };
 }

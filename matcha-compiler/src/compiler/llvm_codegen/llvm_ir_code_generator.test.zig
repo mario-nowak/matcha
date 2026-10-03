@@ -491,10 +491,93 @@ pub const LlvmIrCodeGenerator = struct {
                 );
             }
 
+            test "lowers and to a branch around the right operand and a phi" {
+                const source =
+                    \\val left = false;
+                    \\val both = left and true;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca i1
+                    \\    %.s_1 = alloca i1
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    store i1 0, ptr %.s_0
+                    \\    %.t_0 = load i1, ptr %.s_0
+                    \\    br i1 %.t_0, label %label_and_right_1, label %label_and_end_0
+                    \\label_and_right_1:
+                    \\    br label %label_and_end_0
+                    \\label_and_end_0:
+                    \\    %.t_1 = phi i1 [0, %entry], [1, %label_and_right_1]
+                    \\    store i1 %.t_1, ptr %.s_1
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
+            test "lowers or to a branch around the right operand and a phi" {
+                const source =
+                    \\val left = true;
+                    \\val either = left or false;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha_initiate_garbage_collector()
+                    \\declare ptr @matcha_allocate(i64)
+                    \\declare ptr @matcha_allocate_atomic(i64)
+                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\
+                    \\%String = type { ptr, i64 }
+                    \\%Array = type { i64, i64, ptr }
+                    \\
+                    \\define i32 @main(i32 %argc, ptr %argv) {
+                    \\entry:
+                    \\    %.s_0 = alloca i1
+                    \\    %.s_1 = alloca i1
+                    \\    call void @matcha_initiate_garbage_collector()
+                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    store i1 1, ptr %.s_0
+                    \\    %.t_0 = load i1, ptr %.s_0
+                    \\    br i1 %.t_0, label %label_or_end_0, label %label_or_right_1
+                    \\label_or_right_1:
+                    \\    br label %label_or_end_0
+                    \\label_or_end_0:
+                    \\    %.t_1 = phi i1 [1, %entry], [0, %label_or_right_1]
+                    \\    store i1 %.t_1, ptr %.s_1
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+
             test "lowers boolean operators and comparisons" {
                 const source =
                     \\val negated = not false;
-                    \\val both = negated and true;
                     \\val greater = 2 >= 1;
                     \\val same = true == false;
                 ;
@@ -520,18 +603,14 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i1
                     \\    %.s_2 = alloca i1
-                    \\    %.s_3 = alloca i1
                     \\    call void @matcha_initiate_garbage_collector()
                     \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = xor i1 0, 1
                     \\    store i1 %.t_0, ptr %.s_0
-                    \\    %.t_1 = load i1, ptr %.s_0
-                    \\    %.t_2 = and i1 %.t_1, 1
-                    \\    store i1 %.t_2, ptr %.s_1
-                    \\    %.t_3 = icmp sge i64 2, 1
-                    \\    store i1 %.t_3, ptr %.s_2
-                    \\    %.t_4 = icmp eq i1 1, 0
-                    \\    store i1 %.t_4, ptr %.s_3
+                    \\    %.t_1 = icmp sge i64 2, 1
+                    \\    store i1 %.t_1, ptr %.s_1
+                    \\    %.t_2 = icmp eq i1 1, 0
+                    \\    store i1 %.t_2, ptr %.s_2
                     \\    ret i32 0
                     \\}
                     \\
