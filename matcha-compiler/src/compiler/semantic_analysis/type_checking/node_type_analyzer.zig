@@ -1351,14 +1351,28 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!typing.TypeId {
         const if_condition_type = try self.checkNode(if_expression.condition, .asExpression, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_expression.if_token, "if condition must be boolean, found {s}", .{try self.getTypeName(if_condition_type)});
+            try self.diagnostic_store.emitFormattedErrorFromToken(
+                self.allocator,
+                if_expression.if_token,
+                "if condition must be boolean, found {s}",
+                .{try self.getTypeName(if_condition_type)},
+            );
             return error.DiagnosticsEmitted;
         }
 
         const then_block_type = try self.checkNode(if_expression.then_block, parent_node_expectation.forwarded(), environment);
-        const else_block_type = try self.checkNode(if_expression.else_block, parent_node_expectation.forwarded(), environment);
+        const else_block_type = try self.checkNode(
+            if_expression.else_block,
+            getBranchExpectation(parent_node_expectation, then_block_type),
+            environment,
+        );
         if (then_block_type != else_block_type) {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_expression.else_token, "if-expression branches must have the same type, found then: {s}, else: {s}", .{ try self.getTypeName(then_block_type), try self.getTypeName(else_block_type) });
+            try self.diagnostic_store.emitFormattedErrorFromToken(
+                self.allocator,
+                if_expression.else_token,
+                "if-expression branches must have the same type, found then: {s}, else: {s}",
+                .{ try self.getTypeName(then_block_type), try self.getTypeName(else_block_type) },
+            );
             return error.DiagnosticsEmitted;
         }
 
@@ -1792,7 +1806,7 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!void {
         const body_type = try self.checkNode(
             arm_body,
-            getMatchArmExpectation(parent_node_expectation, arm_result_type.*),
+            getBranchExpectation(parent_node_expectation, arm_result_type.*),
             environment,
         );
         if (arm_result_type.*) |expected_type| {
@@ -1819,7 +1833,7 @@ pub const NodeTypeAnalyzer = struct {
     ) TypeError!void {
         const else_type = try self.checkNode(
             else_arm,
-            getMatchArmExpectation(parent_node_expectation, arm_result_type.*),
+            getBranchExpectation(parent_node_expectation, arm_result_type.*),
             environment,
         );
         if (arm_result_type.*) |expected_type| {
@@ -1914,12 +1928,12 @@ fn findUnionCaseIndex(union_symbol_information: symbols.UnionSymbolInformation, 
     return null;
 }
 
-/// The expectation for a match arm body. Without an expected type from the parent, every arm after the first one
-/// expects the type of the first arm, so `.Some(1)` can follow `Result.None`.
-fn getMatchArmExpectation(parent_node_expectation: ParentNodeExpectation, first_arm_type_id: ?typing.TypeId) ParentNodeExpectation {
+/// The expectation for a branch of an if or match expression. Without an expected type from the parent, every branch
+/// after the first one expects the type of the first branch, so `.Some(1)` can follow `Result.None`.
+fn getBranchExpectation(parent_node_expectation: ParentNodeExpectation, first_branch_type_id: ?typing.TypeId) ParentNodeExpectation {
     const forwarded_expectation = parent_node_expectation.forwarded();
     return switch (forwarded_expectation.node_role) {
         .Statement => forwarded_expectation,
-        .Expression => .asExpressionWithType(forwarded_expectation.type_id orelse first_arm_type_id),
+        .Expression => .asExpressionWithType(forwarded_expectation.type_id orelse first_branch_type_id),
     };
 }

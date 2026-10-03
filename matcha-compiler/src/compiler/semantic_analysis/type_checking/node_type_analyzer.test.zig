@@ -799,6 +799,24 @@ pub const NodeTypeAnalyzer = struct {
                     try expect(result.type_id_by_node_id.get(else_arm_node.id) orelse unreachable).toMatch(union_type_id);
                 }
 
+                test "resolves an implicit case against the then branch type when it is the else branch" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\val result = if true { Result.None } else { .Some(1) };
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const program = fixture.resolved_program.program;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
+                    const else_block_node = program.statements[1].kind.BindingDeclaration.value.kind.IfExpression.else_block;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+                    try expect(result.type_id_by_node_id.get(else_block_node.id) orelse unreachable).toMatch(union_type_id);
+                }
+
                 test "rejects an implicit case when it is the first element of an array without an expected type" {
                     const source =
                         \\item Result = union { None, Some: int };
@@ -1829,6 +1847,20 @@ pub const NodeTypeAnalyzer = struct {
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                 try expect(result.type_store.getType(result.type_id_by_node_id.get(else_arm_node.id) orelse unreachable)).toMatch(.{ .Array = result.type_store.integer_type_id });
+            }
+
+            test "types an empty array literal as the then branch type when it is the else branch of an if" {
+                const source =
+                    \\val numbers = if true { [1] } else { [] };
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const else_block_node = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value.kind.IfExpression.else_block;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(else_block_node.id) orelse unreachable)).toMatch(.{ .Array = result.type_store.integer_type_id });
             }
         };
     };
