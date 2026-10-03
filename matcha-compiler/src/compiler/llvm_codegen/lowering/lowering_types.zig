@@ -81,6 +81,8 @@ pub const BinaryOperationDecision = union(enum) {
     StringConcatenate,
     StringCompareEqual,
     StringCompareNotEqual,
+    ZeroSizedCompareEqual,
+    ZeroSizedCompareNotEqual,
     UnionCaseIndexComparison,
 };
 
