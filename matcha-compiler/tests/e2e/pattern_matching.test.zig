@@ -247,7 +247,7 @@ pub const Matcha = struct {
                 test "stores unions in an array" {
                     const source =
                         \\item Maybe = union { None, Some: int };
-                        \\val maybes = [Maybe.Some(1), Maybe.None, Maybe.Some(20)];
+                        \\val maybes: Maybe[] = [.Some(1), .None, .Some(20)];
                         \\var sum = 0;
                         \\for maybe in maybes {
                         \\    sum += match maybe {

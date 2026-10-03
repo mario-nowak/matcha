@@ -717,6 +717,102 @@ pub const NodeTypeAnalyzer = struct {
                     try expect(result.type_id_by_node_id.get(argument_node.id) orelse unreachable).toMatch(structure_type_id);
                 }
 
+                test "resolves implicit cases against the element type when they are array elements" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\val results: Result[] = [.Some(1), .None];
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const program = fixture.resolved_program.program;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
+                    const element_nodes = program.statements[1].kind.BindingDeclaration.value.kind.ArrayLiteral.elements;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+                    try expect(.{
+                        result.type_id_by_node_id.get(element_nodes[0].id) orelse unreachable,
+                        result.type_id_by_node_id.get(element_nodes[1].id) orelse unreachable,
+                    }).toMatch(.{ union_type_id, union_type_id });
+                }
+
+                test "resolves an implicit case against the first element type when the array has no expected type" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\val results = [Result.Some(1), .None];
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const program = fixture.resolved_program.program;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
+                    const implicit_case_node = &program.statements[1].kind.BindingDeclaration.value.kind.ArrayLiteral.elements[1];
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+                    try expect(result.type_id_by_node_id.get(implicit_case_node.id) orelse unreachable).toMatch(union_type_id);
+                }
+
+                test "resolves an implicit case against the first arm type when the match has no expected type" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\val result = match 1 {
+                        \\    1 => Result.None,
+                        \\    2 => .Some(1),
+                        \\    else => Result.None,
+                        \\};
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                    const program = fixture.resolved_program.program;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
+                    const implicit_case_node = program.statements[1].kind.BindingDeclaration.value.kind.MatchExpression.arms[1].body_expression;
+
+                    const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
+                    try expect(result.type_id_by_node_id.get(implicit_case_node.id) orelse unreachable).toMatch(union_type_id);
+                }
+
+                test "rejects an implicit case when it is the first element of an array without an expected type" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\val results = [.None, Result.Some(1)];
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result).toBeError(error.DiagnosticsEmitted);
+                    try expect(fixture.diagnostic_store.items()).toMatch(.{
+                        .{ .message = "cannot infer the type of an implicit member expression without an expected type" },
+                    });
+                }
+
+                test "rejects a compound assignment when the target is a union and the value is an implicit case" {
+                    const source =
+                        \\item Result = union { None, Some: int };
+                        \\var result = Result.None;
+                        \\result += .Some(1);
+                    ;
+                    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                    defer arena.deinit();
+                    const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                    const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                    try expect(result).toBeError(error.DiagnosticsEmitted);
+                    try expect(fixture.diagnostic_store.items()).toMatch(.{
+                        .{ .message = "no binary operator rules exist for left operand type Result" },
+                    });
+                }
+
                 test "rejects an implicit case when the expected type is not a union" {
                     const source =
                         \\item Result = union { None, Some: int };
@@ -1679,6 +1775,22 @@ pub const NodeTypeAnalyzer = struct {
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                 try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .ArrayInstanceMethodAccess = .Append });
+            }
+
+            test "rejects an empty array literal when the expected type is an integer" {
+                const source =
+                    \\val x: int = [];
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "empty array literal requires an array type, found int" },
+                });
             }
         };
     };
