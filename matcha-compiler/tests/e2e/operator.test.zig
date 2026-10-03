@@ -51,3 +51,19 @@ test "unit comparison evaluates both operands" {
 
     try e2e.expectSuccessOutput(&result, "1\n2\n");
 }
+
+test "compares a structure with an anonymous structure literal" {
+    const source =
+        \\item Point = structure { x: int; };
+        \\val point = Point { x = 1 };
+        \\printString(match {
+        \\    point == .{ x = 1 } => "same",
+        \\    else => "different",
+        \\});
+    ;
+
+    var result = try e2e.runSource("structure_equality_anonymous_literal.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "different\n");
+}

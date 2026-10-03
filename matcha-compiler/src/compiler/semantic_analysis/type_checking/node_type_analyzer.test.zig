@@ -1162,6 +1162,25 @@ pub const NodeTypeAnalyzer = struct {
 
                 try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
             }
+
+            test "resolves an anonymous structure literal against the left operand type when it is the right operand of an equality" {
+                const source =
+                    \\item Point = structure { x: int; };
+                    \\val point = Point { x = 1 };
+                    \\val same = point == .{ x = 1 };
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const program = fixture.resolved_program.program;
+                const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
+                const right_operand = program.statements[2].kind.BindingDeclaration.value.kind.BinaryExpression.right;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                const structure_type_id = result.type_id_by_symbol_id.get(structure_symbol_id) orelse unreachable;
+                try expect(result.type_id_by_node_id.get(right_operand.id) orelse unreachable).toMatch(structure_type_id);
+            }
         };
 
         pub const functions = struct {
