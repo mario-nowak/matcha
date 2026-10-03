@@ -193,6 +193,12 @@ pub const BinaryOperationLowerer = struct {
             };
         }
 
+        switch (binary_operator) {
+            .And => return .ShortCircuitAnd,
+            .Or => return .ShortCircuitOr,
+            else => {},
+        }
+
         const left_operand_type = analyzed_program.type_store.getType(left_operand_type_id);
         if (left_operand_type == .Union) {
             return switch (binary_operator) {
@@ -212,8 +218,7 @@ pub const BinaryOperationLowerer = struct {
             .LessThanOrEqual => .LessThanOrEqual,
             .GreaterThan => .GreaterThan,
             .GreaterThanOrEqual => .GreaterThanOrEqual,
-            .And => .And,
-            .Or => .Or,
+            .And, .Or => unreachable,
         } };
     }
 };
