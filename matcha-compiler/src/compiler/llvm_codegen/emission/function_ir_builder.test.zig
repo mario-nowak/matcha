@@ -4,7 +4,7 @@ const expect = @import("testing").expect;
 
 pub const FunctionIrBuilder = struct {
     pub const render = struct {
-        test "hoists storage allocations into the entry block" {
+        test "hoists address allocations into the entry block" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
@@ -45,7 +45,7 @@ pub const FunctionIrBuilder = struct {
             );
         }
 
-        test "keeps storage allocations emitted after a terminator" {
+        test "keeps address allocations emitted after a terminator" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());

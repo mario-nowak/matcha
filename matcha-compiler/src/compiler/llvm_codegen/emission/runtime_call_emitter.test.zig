@@ -25,7 +25,7 @@ pub const RuntimeCallEmitter = struct {
             defer arena.deinit();
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             runtime_call_emitter.emitPrintStringCall(&function_ir_builder, string_parts);
 
@@ -40,7 +40,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitReadFileCall(&function_ir_builder, &function_symbol_generator, string_parts);
 
@@ -83,7 +83,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitStringConcatenateCall(&function_ir_builder, &function_symbol_generator, string_parts, string_parts);
 
@@ -98,7 +98,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitStringCompareCall(&function_ir_builder, &function_symbol_generator, string_parts, string_parts);
 
@@ -113,7 +113,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitStringTrimCall(&function_ir_builder, &function_symbol_generator, string_parts);
 
@@ -128,7 +128,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitStringSplitCall(&function_ir_builder, &function_symbol_generator, string_parts, string_parts);
 
@@ -143,7 +143,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const string_parts = RuntimeStringParts{ .pointer_register = "%pointer", .length_register = "%length" };
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
 
             _ = runtime_call_emitter.emitStringToIntCall(&function_ir_builder, &function_symbol_generator, string_parts);
 

@@ -321,8 +321,9 @@ now not all of them are real issues. But a lot of them are.
 - Builtins and runtime internals live in compiler-provided modules. The kind `compiler_module` cannot clash with a user module, because user modules use the kind `module`. So a user file `builtin.mt` stays allowed and no name is reserved.
     - Not `internal_module`: `internal` is an LLVM linkage and a common visibility keyword, and builtins are public.
     - Not `$builtin` or `module..builtin`: `$` is unwanted, and an empty name breaks the pairs.
-- The runtime exports its functions with `@export(&matcha_print_int, .{ .name = runtime_symbols.runtime_print_int_function_name })` instead of `export fn matcha_print_int`. The runtime imports the `runtime_symbols` module, so the compiler and the runtime share one spelling of every name.
+- The runtime exports its functions with `@export(&printInt, .{ .name = runtime_symbols.builtin_print_int_function_name })` instead of `export fn matcha_print_int`. The runtime imports the `runtime_symbols` module, so the compiler and the runtime share one spelling of every name.
 - Runtime internal names translate the old names to camel case: `matcha_string_concatenate` becomes `stringConcatenate`, `matcha_init_arguments` becomes `initArguments`.
+- The `runtime_symbols` constants say what they name: `builtin_print_int_function_name`, `builtin_string_trim_method_name`, `runtime_allocate_function_name`. The Zig functions in the runtime use the same camel case names as the IR, for example `fn stringConcatenate`.
 - `@main` stays. Its parameters become `%parameter.argc` and `%parameter.argv`.
 
 ## Modules
