@@ -103,6 +103,18 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.runtime_panic_index_out_of_bounds_function_name},
             ) catch unreachable;
         }
+        if (requirements.panic_division_by_zero) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(i64, i64) noreturn",
+                .{runtime_symbols.runtime_panic_division_by_zero_function_name},
+            ) catch unreachable;
+        }
+        if (requirements.panic_division_overflow) {
+            runtime_symbol_declarations.writer(self.allocator).print(
+                "\ndeclare void @{s}(i64, i64) noreturn",
+                .{runtime_symbols.runtime_panic_division_overflow_function_name},
+            ) catch unreachable;
+        }
         if (requirements.array_append_slot) {
             runtime_symbol_declarations.writer(self.allocator).print(
                 "\ndeclare ptr @{s}(ptr, i64)",

@@ -146,3 +146,46 @@ test "evaluates an or nested in the right operand of an and" {
 
     try e2e.expectSuccessOutput(&result, "yes\n");
 }
+
+pub const Matcha = struct {
+    pub const run = struct {
+        pub const integer_division = struct {
+            test "divides integers toward zero" {
+                const source =
+                    \\printInt(7 / 2);
+                    \\printInt(-7 / 2);
+                ;
+
+                var result = try e2e.runSource("integer_division.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "3\n-3\n");
+            }
+
+            test "reports a division by zero with its location" {
+                const source =
+                    \\val divisor = 0;
+                    \\printInt(10 / divisor);
+                ;
+
+                var result = try e2e.runSource("division_by_zero.mt", source);
+                defer result.deinit();
+
+                try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  at line 2, column 13\n");
+            }
+
+            test "reports an overflowing division with its location" {
+                const source =
+                    \\val dividend = -9223372036854775807 - 1;
+                    \\val divisor = -1;
+                    \\printInt(dividend / divisor);
+                ;
+
+                var result = try e2e.runSource("division_overflow.mt", source);
+                defer result.deinit();
+
+                try e2e.expectRuntimeError(&result, "runtime error: integer overflow in division\n  at line 3, column 19\n");
+            }
+        };
+    };
+};

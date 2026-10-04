@@ -21,6 +21,20 @@ pub const BinaryOperationLowerer = struct {
             try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Add });
         }
 
+        test "lowers integer division to a checked division" {
+            const source =
+                \\val quotient = 7 / 2;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.CheckedDivide);
+        }
+
         test "lowers integer equality to a primitive operation" {
             const source =
                 \\val same = 1 == 2;

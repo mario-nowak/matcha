@@ -59,6 +59,13 @@ pub fn emitBinaryExpression(
     switch (decision) {
         .ZeroSizedCompareEqual => return .{ .value = "1" },
         .ZeroSizedCompareNotEqual => return .{ .value = "0" },
+        .CheckedDivide => return .{ .value = emitCheckedDivision(
+            emitter,
+            binary_expression.operator_token.line,
+            binary_expression.operator_token.column,
+            left_value.expectValue(),
+            right_value.expectValue(),
+        ) },
         else => {},
     }
 
@@ -70,6 +77,50 @@ pub fn emitBinaryExpression(
         right_value.expectValue(),
         lowered_program,
     ) };
+}
+
+// Panics on a zero divisor, because `sdiv` is undefined behavior for it. Also panics on `INT_MIN / -1`, whose quotient
+// does not fit into an `int`.
+fn emitCheckedDivision(
+    emitter: *NodeEmitter,
+    line: usize,
+    column: usize,
+    dividend_value: Value,
+    divisor_value: Value,
+) Value {
+    const builder = emitter.function_ir_builder;
+    const labels = emitter.function_symbol_generator.generateConstructLabels("division");
+    const zero_divisor_label = labels.role("zero_divisor");
+    const nonzero_divisor_label = labels.role("nonzero_divisor");
+    const overflow_label = labels.role("overflow");
+    const no_overflow_label = labels.role("no_overflow");
+
+    const zero_divisor_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, 0", .{ zero_divisor_value, divisor_value }) catch unreachable);
+    builder.emitBranchInstruction(zero_divisor_value, &.{ zero_divisor_label, nonzero_divisor_label });
+
+    builder.emitLabel(zero_divisor_label);
+    emitter.runtime_call_emitter.emitPanicDivisionByZeroCall(builder, line, column);
+    builder.emitTerminatorInstruction("unreachable");
+
+    builder.emitLabel(nonzero_divisor_label);
+    const minimum_dividend_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, {d}", .{ minimum_dividend_value, dividend_value, std.math.minInt(i64) }) catch unreachable);
+    const negative_one_divisor_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, -1", .{ negative_one_divisor_value, divisor_value }) catch unreachable);
+    const overflow_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = and i1 {s}, {s}", .{ overflow_value, minimum_dividend_value, negative_one_divisor_value }) catch unreachable);
+    builder.emitBranchInstruction(overflow_value, &.{ overflow_label, no_overflow_label });
+
+    builder.emitLabel(overflow_label);
+    emitter.runtime_call_emitter.emitPanicDivisionOverflowCall(builder, line, column);
+    builder.emitTerminatorInstruction("unreachable");
+
+    builder.emitLabel(no_overflow_label);
+    const quotient_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = sdiv i64 {s}, {s}", .{ quotient_value, dividend_value, divisor_value }) catch unreachable);
+
+    return quotient_value;
 }
 
 // Emits the right operand only when the left operand does not decide the result already. The result is a phi of
@@ -158,7 +209,6 @@ pub fn emitLoweredBinaryOperation(
                 .Add => "add",
                 .Subtract => "sub",
                 .Multiply => "mul",
-                .Divide => "sdiv",
                 .Equal => "icmp eq",
                 .NotEqual => "icmp ne",
                 .LessThan => "icmp slt",
@@ -222,6 +272,11 @@ pub fn emitLoweredBinaryOperation(
             ) catch unreachable);
             break :compare_not_equal result_value;
         },
-        .ZeroSizedCompareEqual, .ZeroSizedCompareNotEqual, .ShortCircuitAnd, .ShortCircuitOr => unreachable,
+        .ZeroSizedCompareEqual,
+        .ZeroSizedCompareNotEqual,
+        .ShortCircuitAnd,
+        .ShortCircuitOr,
+        .CheckedDivide,
+        => unreachable,
     };
 }

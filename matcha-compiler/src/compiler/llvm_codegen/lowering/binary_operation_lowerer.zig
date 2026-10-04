@@ -196,6 +196,7 @@ pub const BinaryOperationLowerer = struct {
         switch (binary_operator) {
             .And => return .ShortCircuitAnd,
             .Or => return .ShortCircuitOr,
+            .Divide => return .CheckedDivide,
             else => {},
         }
 
@@ -211,14 +212,16 @@ pub const BinaryOperationLowerer = struct {
             .Add => .Add,
             .Subtract => .Subtract,
             .Multiply => .Multiply,
-            .Divide => .Divide,
             .Equal => .Equal,
             .NotEqual => .NotEqual,
             .LessThan => .LessThan,
             .LessThanOrEqual => .LessThanOrEqual,
             .GreaterThan => .GreaterThan,
             .GreaterThanOrEqual => .GreaterThanOrEqual,
-            .And, .Or => unreachable,
+            .And,
+            .Or,
+            .Divide,
+            => unreachable,
         } };
     }
 };
