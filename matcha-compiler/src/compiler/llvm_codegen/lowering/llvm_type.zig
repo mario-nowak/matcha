@@ -1,7 +1,4 @@
-const std = @import("std");
-const symbols = @import("symbols");
 const typing = @import("typing");
-const semantic_analysis = @import("semantic_analysis");
 const runtime_symbols = @import("runtime_symbols");
 
 // The runtime library defines the layouts of strings and arrays, so these structure types must match it.
@@ -30,32 +27,4 @@ pub fn getLlvmIrTypeByMatchaType(type_store: *const typing.TypeStore, type_id: t
         // Internal type
         .UnionConstructor => "ptr",
     };
-}
-
-pub fn getTypeIdFromResolvedTypeReference(
-    typed_program: *const semantic_analysis.AnalyzedProgram,
-    type_reference: symbols.ResolvedTypeReference,
-) typing.TypeId {
-    return switch (type_reference) {
-        .Builtin => |builtin_type| switch (builtin_type) {
-            .Unit => typed_program.type_store.unit_type_id,
-            .Boolean => typed_program.type_store.boolean_type_id,
-            .Integer => typed_program.type_store.integer_type_id,
-            .String => typed_program.type_store.string_type_id,
-        },
-        .Symbol => |symbol_id| typed_program.type_id_by_symbol_id.get(symbol_id).?,
-        .Array => |element_type_reference| typed_program.type_store.getArrayType(
-            getTypeIdFromResolvedTypeReference(typed_program, element_type_reference.*),
-        ).?,
-    };
-}
-
-pub fn getLlvmIrTypeFromResolvedTypeReference(
-    typed_program: *const semantic_analysis.AnalyzedProgram,
-    type_reference: symbols.ResolvedTypeReference,
-) []const u8 {
-    return getLlvmIrTypeByMatchaType(
-        &typed_program.type_store,
-        getTypeIdFromResolvedTypeReference(typed_program, type_reference),
-    );
 }
