@@ -307,16 +307,17 @@ pub fn emitForInArrayLoop(
     var item_address: ?function_symbol_generator_module.Address = null;
     if (element_runtime_representation.hasRuntimeRepresentation()) {
         const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-        item_address = emitter.function_symbol_generator.generateAddress();
-        builder.emitAlloca(item_address orelse unreachable, element_llvm_type); // don't
+        const item_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(item_symbol_id).name;
+        item_address = emitter.function_symbol_generator.generateBindingAddressName(item_name);
+        builder.emitStackAllocation(item_address orelse unreachable, element_llvm_type); // don't
         environment.address_by_symbol_id.put(item_symbol_id, item_address orelse unreachable) catch unreachable;
     }
 
-    const index_address = emitter.function_symbol_generator.generateAddress();
-    builder.emitAlloca(index_address, "i64");
+    const index_address = emitter.function_symbol_generator.generateSyntheticAddressName();
+    builder.emitStackAllocation(index_address, "i64");
     builder.emitStore("0", index_address, "i64");
 
-    const length_pointer_value = emitter.function_symbol_generator.generateValue();
+    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -324,10 +325,10 @@ pub fn emitForInArrayLoop(
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_value = emitter.function_symbol_generator.generateValue();
+    const length_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(length_value, length_pointer_value, "i64");
 
-    const data_pointer_value = emitter.function_symbol_generator.generateValue();
+    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -335,7 +336,7 @@ pub fn emitForInArrayLoop(
         lowering.llvm_type.array_data_field_index,
     );
 
-    const data_value = emitter.function_symbol_generator.generateValue();
+    const data_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(data_value, data_pointer_value, "ptr");
 
     const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
@@ -351,10 +352,10 @@ pub fn emitForInArrayLoop(
     builder.emitBranchInstruction(null, &.{loop_header_label});
     builder.emitLabel(loop_header_label);
 
-    const current_index_value = emitter.function_symbol_generator.generateValue();
+    const current_index_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(current_index_value, index_address, "i64");
 
-    const within_bounds_value = emitter.function_symbol_generator.generateValue();
+    const within_bounds_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, {s}",
@@ -365,9 +366,9 @@ pub fn emitForInArrayLoop(
     builder.emitLabel(loop_body_label);
 
     if (item_address) |address| {
-        const element_pointer_value = emitter.function_symbol_generator.generateValue();
+        const element_pointer_value = emitter.function_symbol_generator.generateValueName();
         builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, current_index_value);
-        const element_value = emitter.function_symbol_generator.generateValue();
+        const element_value = emitter.function_symbol_generator.generateValueName();
         builder.emitLoad(element_value, element_pointer_value, element_llvm_type);
         builder.emitStore(element_value, address, element_llvm_type);
     }
@@ -381,9 +382,9 @@ pub fn emitForInArrayLoop(
     builder.emitBranchInstruction(null, &.{loop_continue_label});
     builder.emitLabel(loop_continue_label);
 
-    const loop_index_value = emitter.function_symbol_generator.generateValue();
+    const loop_index_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(loop_index_value, index_address, "i64");
-    const next_index_value = emitter.function_symbol_generator.generateValue();
+    const next_index_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = add i64 {s}, 1",
@@ -586,7 +587,7 @@ fn emitDecisionConstruct(
         // Every path through the construct diverged; the cursor is already
         // null, so the poison value below is never used in emitted code.
         return if (produces_value)
-            .{ .value = emitter.function_symbol_generator.generateValue() }
+            .{ .value = emitter.function_symbol_generator.generateValueName() }
         else
             .zero_sized;
     }
@@ -596,7 +597,7 @@ fn emitDecisionConstruct(
         return .zero_sized;
     }
     if (incoming_values.items.len == 0) {
-        return .{ .value = emitter.function_symbol_generator.generateValue() };
+        return .{ .value = emitter.function_symbol_generator.generateValueName() };
     }
     if (incoming_values.items.len == 1) {
         return .{ .value = incoming_values.items[0].value };
@@ -614,7 +615,7 @@ fn emitDecisionConstruct(
         ) catch unreachable;
     }
 
-    const result_value = emitter.function_symbol_generator.generateValue();
+    const result_value = emitter.function_symbol_generator.generateValueName();
     const phi_instruction = std.fmt.allocPrint(
         emitter.allocator,
         "{s} = phi {s} {s}",
@@ -652,20 +653,21 @@ fn emitCasePatternBinding(
         return;
     }
 
-    const payload_address = emitter.function_symbol_generator.generateAddress();
+    const payload_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(payload_symbol_id).name;
+    const payload_address = emitter.function_symbol_generator.generateBindingAddressName(payload_name);
     const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-    builder.emitAlloca(payload_address, payload_llvm_type);
+    builder.emitStackAllocation(payload_address, payload_llvm_type);
     environment.address_by_symbol_id.put(payload_symbol_id, payload_address) catch unreachable;
 
     const union_case_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?.cases[case_index];
-    const payload_pointer_value = emitter.function_symbol_generator.generateValue();
+    const payload_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         payload_pointer_value,
         union_case_layout.llvm_type_name,
         union_value,
         lowering.lowering_types.union_payload_field_index,
     );
-    const payload_value = emitter.function_symbol_generator.generateValue();
+    const payload_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(payload_value, payload_pointer_value, payload_llvm_type);
     builder.emitStore(payload_value, payload_address, payload_llvm_type);
 }

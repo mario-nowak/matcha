@@ -346,6 +346,7 @@ now not all of them are real issues. But a lot of them are.
 | parameter | `%parameter.<name>` | none, parameter names are unique |
 
 - Code renames to match: `Register` becomes `Value`, `Storage` becomes `Address` (`generateRegister()`, `EmissionResult.register`, `expectRegister()`, `storage_by_symbol_id`).
+- `FunctionSymbolGenerator` hands out names and emits nothing, so its functions say so: `generateValueName()`, `generateBindingAddressName(name)`, `generateSyntheticAddressName()` and `parameterName(name)`.
 
 ## Labels
 

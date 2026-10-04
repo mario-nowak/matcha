@@ -52,7 +52,7 @@ pub const StringLiteralEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
     ) Value {
-        const pointer_value = function_symbol_generator.generateValue();
+        const pointer_value = function_symbol_generator.generateValueName();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = getelementptr inbounds [{d} x i8], ptr {s}, i64 0, i64 0",
@@ -70,7 +70,7 @@ pub const StringLiteralEmitter = struct {
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
     ) Value {
-        const partial_string_value = function_symbol_generator.generateValue();
+        const partial_string_value = function_symbol_generator.generateValueName();
         const partial_string_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = insertvalue {s} undef, ptr {s}, 0",
@@ -78,7 +78,7 @@ pub const StringLiteralEmitter = struct {
         ) catch unreachable;
         builder.emitInstruction(partial_string_instruction);
 
-        const string_value = function_symbol_generator.generateValue();
+        const string_value = function_symbol_generator.generateValueName();
         const string_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = insertvalue {s} {s}, i64 {d}, 1",
