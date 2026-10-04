@@ -52,8 +52,6 @@ pub const NameResolver = struct {
 
         var module_scope = try self.buildModuleScope(program);
 
-        self.addBuiltinFunctions(&module_scope);
-
         const root_environment = ResolutionEnvironment{
             .node_scope = &root_scope,
             .module_scope = &module_scope,
@@ -174,6 +172,8 @@ pub const NameResolver = struct {
 
     fn buildModuleScope(self: *@This(), program: *const ast.Program) NameResolutionError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.allocator, null);
+        // Builtins come first, so the duplicate checks of the module items see them.
+        self.addBuiltinFunctions(&module_scope);
 
         for (program.statements) |*statement| {
             switch (statement.kind) {
