@@ -79,7 +79,7 @@
       "patterns": [
         {
           "name": "storage.type.matcha",
-          "match": "\\b(item|val|var|structure)\\b"
+          "match": "\\b(item|val|var|structure|union)\\b"
         }
       ]
     },

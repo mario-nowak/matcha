@@ -1,23 +1,19 @@
-item AuditDecision = structure {
-    status: string;
-    reason: string;
+// A decision is exactly one of three cases. Only the problem cases carry a reason.
+item AuditDecision = union {
+    Valid,
+    Invalid: string,
+    Suspicious: string,
 
-    item valid(): AuditDecision = .{
-        status = "valid",
-        reason = "ok",
+    item needsAttention(self: AuditDecision): boolean = match self {
+        .Valid => false,
+        else => true,
     };
 
-    item invalid(reason: string): AuditDecision = .{
-        status = "invalid",
-        reason = reason,
+    item describe(self: AuditDecision): string = match self {
+        .Valid => "[valid]: ok",
+        .Invalid(reason) => "[invalid]: " + reason,
+        .Suspicious(reason) => "[suspicious]: " + reason,
     };
-
-    item suspicious(reason: string): AuditDecision = .{
-        status = "suspicious",
-        reason = reason,
-    };
-
-    item needsAttention(self: AuditDecision): boolean = self.status != "valid";
 };
 
 item CustomerSubscription = structure {
@@ -50,12 +46,12 @@ item CustomerSubscription = structure {
     };
 
     item classify(self: CustomerSubscription): AuditDecision = match {
-        self.plan == "unknown" => AuditDecision.invalid("unknown imported plan: " + self.importedPlan),
-        self.seats <= 0 => AuditDecision.invalid("non-positive seat count"),
-        self.active == false and self.seats > 0 => AuditDecision.suspicious("inactive account still has seats assigned"),
-        self.plan == "enterprise" and self.seats < 100 => AuditDecision.suspicious("enterprise account with very low seats"),
-        self.plan == "basic" and self.seats > 50 => AuditDecision.suspicious("basic plan with unusually high seats"),
-        else => AuditDecision.valid(),
+        self.plan == "unknown" => .Invalid("unknown imported plan: " + self.importedPlan),
+        self.seats <= 0 => .Invalid("non-positive seat count"),
+        self.active == false and self.seats > 0 => .Suspicious("inactive account still has seats assigned"),
+        self.plan == "enterprise" and self.seats < 100 => .Suspicious("enterprise account with very low seats"),
+        self.plan == "basic" and self.seats > 50 => .Suspicious("basic plan with unusually high seats"),
+        else => .Valid,
     };
 
     item normalizationDetails(self: CustomerSubscription): string = match {
@@ -64,10 +60,8 @@ item CustomerSubscription = structure {
     };
 
     item findingLine(self: CustomerSubscription, decision: AuditDecision): string = self.customerId
-        + " ["
-        + decision.status
-        + "]: "
-        + decision.reason
+        + " "
+        + decision.describe()
         + self.normalizationDetails();
 };
 
@@ -82,14 +76,15 @@ item AuditSummary = structure {
         suspicious = 0,
     };
 
-    item record(self: AuditSummary, decision: AuditDecision): unit = match decision.status {
-        "valid" => {
+    // The match is exhaustive, so a new decision case cannot be silently miscounted.
+    item record(self: AuditSummary, decision: AuditDecision): unit = match decision {
+        .Valid => {
             self.valid = self.valid + 1;
         },
-        "invalid" => {
+        .Invalid => {
             self.invalid = self.invalid + 1;
         },
-        else => {
+        .Suspicious => {
             self.suspicious = self.suspicious + 1;
         },
     };

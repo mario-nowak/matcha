@@ -27,7 +27,9 @@ The current compiler supports a practical core language, including:
 - `int`, `boolean`, and `string`
 - arrays with indexing, `append`, and `length`
 - structures with fields, methods, and type functions
-- `if`, `while`, `for`, `loop`, and `match`
+- tagged unions with payloads, methods, and type functions
+- `if`, `while`, `for`, `loop`, and `match`, including exhaustive pattern matching on unions
+- short-circuiting `and` and `or`
 - built-ins such as `printInt`, `printString`, `readFile`, `readLine`, and `getArguments`
 
 For the most accurate view of what works today, use the examples in [`examples/`](./examples) and the tests in [`tests/e2e/`](./tests/e2e).
@@ -278,7 +280,7 @@ Example programs live in [`examples/`](./examples):
 
 - [`learning-matcha.mt`](./examples/learning-matcha.mt), which gives a guided tour of the currently implemented language
 - [`aoc-2024-01.mt`](./examples/aoc-2024-01.mt), which shows Advent of Code-style parsing and list processing
-- [`customer-import-audit.mt`](./examples/customer-import-audit.mt), which offers a more idiomatic example with structures, normalization, and decision logic
+- [`customer-import-audit.mt`](./examples/customer-import-audit.mt), which offers a more idiomatic example with structures, unions, normalization, and decision logic
 
 If you want one file to read first, start with [`examples/learning-matcha.mt`](./examples/learning-matcha.mt).
 
