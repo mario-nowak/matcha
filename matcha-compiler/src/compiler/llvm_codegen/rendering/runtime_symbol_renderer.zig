@@ -22,12 +22,13 @@ pub const RuntimeSymbolRenderer = struct {
         defer runtime_symbol_declarations.deinit(self.allocator);
 
         runtime_symbol_declarations.writer(self.allocator).print(
-            \\declare void @matcha_initiate_garbage_collector()
-            \\declare ptr @matcha_allocate(i64)
-            \\declare ptr @matcha_allocate_atomic(i64)
-            \\declare void @matcha_init_arguments(i32, ptr)
-        ,
-            .{},
+            "declare void @{s}()\ndeclare ptr @{s}(i64)\ndeclare ptr @{s}(i64)\ndeclare void @{s}(i32, ptr)",
+            .{
+                runtime_symbols.runtime_initiate_garbage_collector_function_name,
+                runtime_symbols.runtime_allocate_function_name,
+                runtime_symbols.runtime_allocate_atomic_function_name,
+                runtime_symbols.runtime_init_arguments_function_name,
+            },
         ) catch unreachable;
 
         if (requirements.print_int) {

@@ -1,4 +1,26 @@
 const std = @import("std");
+const runtime_symbols = @import("runtime_symbols");
+
+// Exports every runtime function under the name the compiler uses for it.
+comptime {
+    @export(&matcha_initiate_garbage_collector, .{ .name = runtime_symbols.runtime_initiate_garbage_collector_function_name });
+    @export(&matcha_allocate, .{ .name = runtime_symbols.runtime_allocate_function_name });
+    @export(&matcha_allocate_atomic, .{ .name = runtime_symbols.runtime_allocate_atomic_function_name });
+    @export(&matcha_array_append_slot, .{ .name = runtime_symbols.runtime_array_append_slot_function_name });
+    @export(&matcha_print_int, .{ .name = runtime_symbols.runtime_print_int_function_name });
+    @export(&matcha_print_string, .{ .name = runtime_symbols.runtime_print_string_function_name });
+    @export(&matcha_read_file, .{ .name = runtime_symbols.runtime_read_file_function_name });
+    @export(&matcha_read_line, .{ .name = runtime_symbols.runtime_read_line_function_name });
+    @export(&matcha_init_arguments, .{ .name = runtime_symbols.runtime_init_arguments_function_name });
+    @export(&matcha_get_arguments, .{ .name = runtime_symbols.runtime_get_arguments_function_name });
+    @export(&matcha_string_concatenate, .{ .name = runtime_symbols.runtime_string_concatenate_function_name });
+    @export(&matcha_string_compare, .{ .name = runtime_symbols.runtime_string_compare_function_name });
+    @export(&matcha_string_trim, .{ .name = runtime_symbols.runtime_string_trim_function_name });
+    @export(&matcha_string_split, .{ .name = runtime_symbols.runtime_string_split_function_name });
+    @export(&matcha_string_to_int, .{ .name = runtime_symbols.runtime_string_to_int_function_name });
+    @export(&matcha_int_to_string, .{ .name = runtime_symbols.runtime_int_to_string_function_name });
+    @export(&matcha_panic_index_out_of_bounds, .{ .name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name });
+}
 
 extern fn GC_init() void;
 extern fn GC_malloc(size: usize) ?*anyopaque;
@@ -78,19 +100,19 @@ fn countSplitParts(bytes: []const u8, delimiter: []const u8) usize {
     return parts;
 }
 
-export fn matcha_initiate_garbage_collector() void {
+fn matcha_initiate_garbage_collector() callconv(.c) void {
     GC_init();
 }
 
-export fn matcha_allocate(size: usize) ?*anyopaque {
+fn matcha_allocate(size: usize) callconv(.c) ?*anyopaque {
     return GC_malloc(size);
 }
 
-export fn matcha_allocate_atomic(size: usize) ?*anyopaque {
+fn matcha_allocate_atomic(size: usize) callconv(.c) ?*anyopaque {
     return GC_malloc_atomic(size);
 }
 
-export fn matcha_array_append_slot(header: *ArrayHeader, element_size: usize) ?*anyopaque {
+fn matcha_array_append_slot(header: *ArrayHeader, element_size: usize) callconv(.c) ?*anyopaque {
     const length: usize = @intCast(header.length);
     const capacity: usize = @intCast(header.capacity);
 
@@ -117,18 +139,18 @@ export fn matcha_array_append_slot(header: *ArrayHeader, element_size: usize) ?*
     return @ptrCast(slot);
 }
 
-export fn matcha_print_int(value: i64) void {
+fn matcha_print_int(value: i64) callconv(.c) void {
     var buffer: [32]u8 = undefined;
     const formatted = std.fmt.bufPrint(&buffer, "{d}\n", .{value}) catch unreachable;
     writeStdout(formatted);
 }
 
-export fn matcha_print_string(ptr: [*]const u8, len: usize) void {
+fn matcha_print_string(ptr: [*]const u8, len: usize) callconv(.c) void {
     writeStdout(ptr[0..len]);
     writeStdout("\n");
 }
 
-export fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: usize) void {
+fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: usize) callconv(.c) void {
     const path = path_ptr[0..path_len];
     var file = std.fs.cwd().openFile(path, .{}) catch panic("runtime error: failed to open file");
     defer file.close();
@@ -145,7 +167,7 @@ export fn matcha_read_file(out: *MatchaString, path_ptr: [*]const u8, path_len: 
     };
 }
 
-export fn matcha_read_line(out: *MatchaString) void {
+fn matcha_read_line(out: *MatchaString) callconv(.c) void {
     const maybe_line = std.fs.File.stdin().deprecatedReader().readUntilDelimiterOrEofAlloc(
         std.heap.page_allocator,
         '\n',
@@ -232,22 +254,22 @@ fn cloneArguments(arguments_header: *ArrayHeader) *ArrayHeader {
     return cloned_header;
 }
 
-export fn matcha_init_arguments(argument_count_from_main: i32, argument_values_raw: *anyopaque) void {
+fn matcha_init_arguments(argument_count_from_main: i32, argument_values_raw: *anyopaque) callconv(.c) void {
     cached_program_arguments = buildArguments(argument_count_from_main, argument_values_raw);
 }
 
-export fn matcha_get_arguments() *ArrayHeader {
+fn matcha_get_arguments() callconv(.c) *ArrayHeader {
     const arguments_header = cached_program_arguments orelse panic("runtime error: program arguments were not initialized");
     return cloneArguments(arguments_header);
 }
 
-export fn matcha_string_concatenate(
+fn matcha_string_concatenate(
     out: *MatchaString,
     left_ptr: [*]const u8,
     left_len: usize,
     right_ptr: [*]const u8,
     right_len: usize,
-) void {
+) callconv(.c) void {
     const result_len = left_len + right_len;
     const allocation = matcha_allocate_atomic(@max(result_len, 1)) orelse panic("runtime error: out of memory");
     const result_ptr: [*]u8 = @ptrCast(allocation);
@@ -265,16 +287,16 @@ export fn matcha_string_concatenate(
     };
 }
 
-export fn matcha_string_compare(
+fn matcha_string_compare(
     left_ptr: [*]const u8,
     left_len: usize,
     right_ptr: [*]const u8,
     right_len: usize,
-) bool {
+) callconv(.c) bool {
     return std.mem.eql(u8, left_ptr[0..left_len], right_ptr[0..right_len]);
 }
 
-export fn matcha_string_trim(out: *MatchaString, ptr: [*]const u8, len: usize) void {
+fn matcha_string_trim(out: *MatchaString, ptr: [*]const u8, len: usize) callconv(.c) void {
     const trimmed = trimSlice(ptr[0..len]);
     out.* = .{
         .ptr = trimmed.ptr,
@@ -282,12 +304,12 @@ export fn matcha_string_trim(out: *MatchaString, ptr: [*]const u8, len: usize) v
     };
 }
 
-export fn matcha_string_split(
+fn matcha_string_split(
     ptr: [*]const u8,
     len: usize,
     delimiter_ptr: [*]const u8,
     delimiter_len: usize,
-) *ArrayHeader {
+) callconv(.c) *ArrayHeader {
     if (delimiter_len == 0) {
         panic("runtime error: cannot split by empty string");
     }
@@ -333,17 +355,17 @@ export fn matcha_string_split(
     return header;
 }
 
-export fn matcha_string_to_int(ptr: [*]const u8, len: usize) i64 {
+fn matcha_string_to_int(ptr: [*]const u8, len: usize) callconv(.c) i64 {
     return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("runtime error: failed to parse int");
 }
 
-export fn matcha_int_to_string(out: *MatchaString, value: i64) void {
+fn matcha_int_to_string(out: *MatchaString, value: i64) callconv(.c) void {
     var buffer: [32]u8 = undefined;
     const rendered = std.fmt.bufPrint(&buffer, "{d}", .{value}) catch panic("runtime error: failed to render int");
     out.* = copyBytesToAtomic(rendered);
 }
 
-export fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i64, length: usize) noreturn {
+fn matcha_panic_index_out_of_bounds(line: usize, column: usize, index: i64, length: usize) callconv(.c) noreturn {
     var buffer: [256]u8 = undefined;
     const formatted = std.fmt.bufPrint(
         &buffer,

@@ -20,14 +20,14 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_print_int(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.structure.Point = type { i64, i64 }
                     \\
@@ -47,15 +47,15 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.structure.Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
                     \\    %.t_2 = getelementptr inbounds %matcha.structure.Point, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_2
                     \\    %.t_3 = call i64 @matcha.function.sum(ptr %.t_0)
-                    \\    call void @matcha_print_int(i64 %.t_3)
+                    \\    call void @matcha.compiler_module.builtin.function.printInt(i64 %.t_3)
                     \\    ret i32 0
                     \\}
                     \\
@@ -83,13 +83,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i64 @matcha.function.make() {
                     \\entry:
@@ -99,8 +99,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -130,13 +130,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.union.Result.case.None = type { i32 }
                     \\%matcha.union.Result.case.Some = type { i32, i64 }
@@ -171,9 +171,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Result.case.Some, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Result.case.Some, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %.t_0, i32 0, i32 0
                     \\    store i32 1, ptr %.t_1
                     \\    %.t_2 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %.t_0, i32 0, i32 1
@@ -200,13 +200,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
                     \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
@@ -214,10 +214,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = sub i64 0, 3
-                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Vertical, ptr null, i64 1) to i64))
+                    \\    %.t_1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Vertical, ptr null, i64 1) to i64))
                     \\    %.t_2 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %.t_1, i32 0, i32 0
                     \\    store i32 1, ptr %.t_2
                     \\    %.t_3 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %.t_1, i32 0, i32 1
@@ -243,13 +243,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.union.Signal.case.Off = type { i32 }
                     \\%matcha.union.Signal.case.On = type { i32 }
@@ -257,9 +257,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.union.Signal.case.On, ptr %.t_0, i32 0, i32 0
                     \\    store i32 1, ptr %.t_1
                     \\    store ptr %.t_0, ptr %.s_0
@@ -288,13 +288,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.union.Signal.case.Off = type { i32 }
                     \\%matcha.union.Signal.case.On = type { i32 }
@@ -302,7 +302,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define ptr @matcha.function.make() {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.Off, ptr null, i64 1) to i64))
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.Off, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.union.Signal.case.Off, ptr %.t_0, i32 0, i32 0
                     \\    store i32 0, ptr %.t_1
                     \\    ret ptr %.t_0
@@ -310,8 +310,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -334,20 +334,20 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i1 1, ptr %.s_0
                     \\    %.t_0 = load i1, ptr %.s_0
                     \\    br i1 %.t_0, label %label_then_2, label %label_else_1
@@ -377,20 +377,20 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
                     \\    %.s_1 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    br i1 1, label %label_then_2, label %label_else_1
                     \\label_then_2:
                     \\    store i64 1, ptr %.s_0
@@ -418,19 +418,19 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    br i1 1, label %label_then_1, label %label_continue_0
                     \\label_then_1:
                     \\    store i64 1, ptr %.s_0
@@ -458,19 +458,19 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i64 0, ptr %.s_0
                     \\    br label %label_loop_header_0
                     \\label_loop_header_0:
@@ -505,20 +505,20 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i1
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i1 0, ptr %.s_0
                     \\    %.t_0 = load i1, ptr %.s_0
                     \\    br i1 %.t_0, label %label_and_right_1, label %label_and_end_0
@@ -547,20 +547,20 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i1
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i1 1, ptr %.s_0
                     \\    %.t_0 = load i1, ptr %.s_0
                     \\    br i1 %.t_0, label %label_or_end_0, label %label_or_right_1
@@ -590,21 +590,21 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i1
                     \\    %.s_2 = alloca i1
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = xor i1 0, 1
                     \\    store i1 %.t_0, ptr %.s_0
                     \\    %.t_1 = icmp sge i64 2, 1
@@ -636,19 +636,19 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = icmp eq i64 2, 1
                     \\    br i1 %.t_0, label %label_match_arm_2, label %label_match_next_3
                     \\label_match_arm_2:
@@ -686,20 +686,20 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i1
                     \\    %.s_1 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i1 1, ptr %.s_0
                     \\    %.t_0 = load i1, ptr %.s_0
                     \\    br i1 %.t_0, label %label_match_arm_2, label %label_match_else_1
@@ -732,14 +732,14 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare i1 @matcha_string_compare(ptr, i64, ptr, i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare i1 @matcha.compiler_module.runtime.function.stringCompare(ptr, i64, ptr, i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [3 x i8] c"pro"
                     \\@matcha.string_literal.1 = private unnamed_addr constant [3 x i8] c"pro"
@@ -747,19 +747,19 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = getelementptr inbounds [3 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
-                    \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
-                    \\    %.t_2 = insertvalue %String %.t_1, i64 3, 1
+                    \\    %.t_1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_0, 0
+                    \\    %.t_2 = insertvalue %matcha.compiler_module.builtin.type.string %.t_1, i64 3, 1
                     \\    %.t_3 = getelementptr inbounds [3 x i8], ptr @matcha.string_literal.1, i64 0, i64 0
-                    \\    %.t_4 = insertvalue %String undef, ptr %.t_3, 0
-                    \\    %.t_5 = insertvalue %String %.t_4, i64 3, 1
-                    \\    %.t_6 = extractvalue %String %.t_2, 0
-                    \\    %.t_7 = extractvalue %String %.t_2, 1
-                    \\    %.t_8 = extractvalue %String %.t_5, 0
-                    \\    %.t_9 = extractvalue %String %.t_5, 1
-                    \\    %.t_10 = call i1 @matcha_string_compare(ptr %.t_6, i64 %.t_7, ptr %.t_8, i64 %.t_9)
+                    \\    %.t_4 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_3, 0
+                    \\    %.t_5 = insertvalue %matcha.compiler_module.builtin.type.string %.t_4, i64 3, 1
+                    \\    %.t_6 = extractvalue %matcha.compiler_module.builtin.type.string %.t_2, 0
+                    \\    %.t_7 = extractvalue %matcha.compiler_module.builtin.type.string %.t_2, 1
+                    \\    %.t_8 = extractvalue %matcha.compiler_module.builtin.type.string %.t_5, 0
+                    \\    %.t_9 = extractvalue %matcha.compiler_module.builtin.type.string %.t_5, 1
+                    \\    %.t_10 = call i1 @matcha.compiler_module.runtime.function.stringCompare(ptr %.t_6, i64 %.t_7, ptr %.t_8, i64 %.t_9)
                     \\    br i1 %.t_10, label %label_match_arm_2, label %label_match_else_1
                     \\label_match_arm_2:
                     \\    br label %label_match_continue_0
@@ -794,13 +794,13 @@ pub const LlvmIrCodeGenerator = struct {
                     try expect(llvm_ir).toMatch(
                         \\target triple = "x86_64-unknown-linux-gnu"
                         \\
-                        \\declare void @matcha_initiate_garbage_collector()
-                        \\declare ptr @matcha_allocate(i64)
-                        \\declare ptr @matcha_allocate_atomic(i64)
-                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                        \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                         \\
-                        \\%String = type { ptr, i64 }
-                        \\%Array = type { i64, i64, ptr }
+                        \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                        \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
                         \\%matcha.union.Offset.case.None = type { i32 }
                         \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
@@ -812,9 +812,9 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %.s_1 = alloca i64
                         \\    %.s_2 = alloca i64
                         \\    %.s_3 = alloca i64
-                        \\    call void @matcha_initiate_garbage_collector()
-                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
                         \\    %.t_1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 0
                         \\    store i32 1, ptr %.t_1
                         \\    %.t_2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 1
@@ -871,13 +871,13 @@ pub const LlvmIrCodeGenerator = struct {
                     try expect(llvm_ir).toMatch(
                         \\target triple = "x86_64-unknown-linux-gnu"
                         \\
-                        \\declare void @matcha_initiate_garbage_collector()
-                        \\declare ptr @matcha_allocate(i64)
-                        \\declare ptr @matcha_allocate_atomic(i64)
-                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                        \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                         \\
-                        \\%String = type { ptr, i64 }
-                        \\%Array = type { i64, i64, ptr }
+                        \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                        \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
                         \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
                         \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
@@ -886,9 +886,9 @@ pub const LlvmIrCodeGenerator = struct {
                         \\entry:
                         \\    %.s_0 = alloca ptr
                         \\    %.s_1 = alloca i64
-                        \\    call void @matcha_initiate_garbage_collector()
-                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
                         \\    %.t_1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 0
                         \\    store i32 0, ptr %.t_1
                         \\    %.t_2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 1
@@ -931,13 +931,13 @@ pub const LlvmIrCodeGenerator = struct {
                     try expect(llvm_ir).toMatch(
                         \\target triple = "x86_64-unknown-linux-gnu"
                         \\
-                        \\declare void @matcha_initiate_garbage_collector()
-                        \\declare ptr @matcha_allocate(i64)
-                        \\declare ptr @matcha_allocate_atomic(i64)
-                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                        \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                         \\
-                        \\%String = type { ptr, i64 }
-                        \\%Array = type { i64, i64, ptr }
+                        \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                        \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
                         \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
                         \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
@@ -947,9 +947,9 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %.s_0 = alloca ptr
                         \\    %.s_1 = alloca i64
                         \\    %.s_2 = alloca i64
-                        \\    call void @matcha_initiate_garbage_collector()
-                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
                         \\    %.t_1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 0
                         \\    store i32 0, ptr %.t_1
                         \\    %.t_2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %.t_0, i32 0, i32 1
@@ -994,13 +994,13 @@ pub const LlvmIrCodeGenerator = struct {
                     try expect(llvm_ir).toMatch(
                         \\target triple = "x86_64-unknown-linux-gnu"
                         \\
-                        \\declare void @matcha_initiate_garbage_collector()
-                        \\declare ptr @matcha_allocate(i64)
-                        \\declare ptr @matcha_allocate_atomic(i64)
-                        \\declare void @matcha_init_arguments(i32, ptr)
+                        \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                        \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                        \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                         \\
-                        \\%String = type { ptr, i64 }
-                        \\%Array = type { i64, i64, ptr }
+                        \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                        \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
                         \\%matcha.union.Signal.case.Off = type { i32 }
                         \\%matcha.union.Signal.case.On = type { i32 }
@@ -1009,9 +1009,9 @@ pub const LlvmIrCodeGenerator = struct {
                         \\entry:
                         \\    %.s_0 = alloca ptr
                         \\    %.s_1 = alloca i64
-                        \\    call void @matcha_initiate_garbage_collector()
-                        \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                        \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
+                        \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                        \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                        \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
                         \\    %.t_1 = getelementptr inbounds %matcha.union.Signal.case.On, ptr %.t_0, i32 0, i32 0
                         \\    store i32 1, ptr %.t_1
                         \\    store ptr %.t_0, ptr %.s_0
@@ -1053,40 +1053,40 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_print_int(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
                     \\    %.s_1 = alloca i64
                     \\    %.s_2 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
-                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 2) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.compiler_module.builtin.type.array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 2) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
                     \\    %.t_3 = getelementptr inbounds i64, ptr %.t_1, i64 1
                     \\    store i64 2, ptr %.t_3
-                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_4 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 0
                     \\    store i64 2, ptr %.t_4
-                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_5 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_5
-                    \\    %.t_6 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    %.t_6 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 2
                     \\    store ptr %.t_1, ptr %.t_6
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_7 = load ptr, ptr %.s_0
                     \\    store i64 0, ptr %.s_2
-                    \\    %.t_8 = getelementptr inbounds %Array, ptr %.t_7, i32 0, i32 0
+                    \\    %.t_8 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_7, i32 0, i32 0
                     \\    %.t_9 = load i64, ptr %.t_8
-                    \\    %.t_10 = getelementptr inbounds %Array, ptr %.t_7, i32 0, i32 2
+                    \\    %.t_10 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_7, i32 0, i32 2
                     \\    %.t_11 = load ptr, ptr %.t_10
                     \\    br label %label_loop_header_0
                     \\label_loop_header_0:
@@ -1098,7 +1098,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_15 = load i64, ptr %.t_14
                     \\    store i64 %.t_15, ptr %.s_1
                     \\    %.t_16 = load i64, ptr %.s_1
-                    \\    call void @matcha_print_int(i64 %.t_16)
+                    \\    call void @matcha.compiler_module.builtin.function.printInt(i64 %.t_16)
                     \\    br label %label_loop_continue_2
                     \\label_loop_continue_2:
                     \\    %.t_17 = load i64, ptr %.s_2
@@ -1126,41 +1126,41 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_panic_index_out_of_bounds(i64, i64, i64, i64) noreturn
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64, i64, i64, i64) noreturn
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
-                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.compiler_module.builtin.type.array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_3 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_3
-                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_4 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 1, ptr %.t_4
-                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    %.t_5 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 2
                     \\    store ptr %.t_1, ptr %.t_5
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_6 = load ptr, ptr %.s_0
-                    \\    %.t_7 = getelementptr inbounds %Array, ptr %.t_6, i32 0, i32 0
+                    \\    %.t_7 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_6, i32 0, i32 0
                     \\    %.t_8 = load i64, ptr %.t_7
-                    \\    %.t_9 = getelementptr inbounds %Array, ptr %.t_6, i32 0, i32 2
+                    \\    %.t_9 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_6, i32 0, i32 2
                     \\    %.t_10 = icmp slt i64 0, 0
                     \\    %.t_11 = icmp sge i64 0, %.t_8
                     \\    %.t_12 = or i1 %.t_10, %.t_11
                     \\    br i1 %.t_12, label %label_index_panic_0, label %label_index_ok_1
                     \\label_index_panic_0:
-                    \\    call void @matcha_panic_index_out_of_bounds(i64 2, i64 8, i64 0, i64 %.t_8)
+                    \\    call void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64 2, i64 8, i64 0, i64 %.t_8)
                     \\    unreachable
                     \\label_index_ok_1:
                     \\    %.t_13 = load ptr, ptr %.t_9
@@ -1186,33 +1186,33 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare ptr @matcha_array_append_slot(ptr, i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare ptr @matcha.compiler_module.runtime.function.arrayAppendSlot(ptr, i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
-                    \\    %.t_1 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.compiler_module.builtin.type.array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
                     \\    %.t_2 = getelementptr inbounds i64, ptr %.t_1, i64 0
                     \\    store i64 1, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    %.t_3 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_3
-                    \\    %.t_4 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_4 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 1, ptr %.t_4
-                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    %.t_5 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 2
                     \\    store ptr %.t_1, ptr %.t_5
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_6 = load ptr, ptr %.s_0
-                    \\    %.t_7 = call ptr @matcha_array_append_slot(ptr %.t_6, i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
+                    \\    %.t_7 = call ptr @matcha.compiler_module.runtime.function.arrayAppendSlot(ptr %.t_6, i64 ptrtoint (ptr getelementptr (i64, ptr null, i64 1) to i64))
                     \\    store i64 2, ptr %.t_7
                     \\    ret i32 0
                     \\}
@@ -1234,29 +1234,29 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.compiler_module.builtin.type.array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
-                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_2 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 1, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    %.t_3 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 2
                     \\    store ptr null, ptr %.t_3
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_4 = load ptr, ptr %.s_0
-                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_4, i32 0, i32 0
+                    \\    %.t_5 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_4, i32 0, i32 0
                     \\    %.t_6 = load i64, ptr %.t_5
                     \\    %.t_7 = add i64 %.t_6, 1
                     \\    store i64 %.t_7, ptr %.t_5
@@ -1284,13 +1284,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i64 @matcha.function.make() {
                     \\entry:
@@ -1300,8 +1300,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    ret i32 0
                     \\}
                     \\
@@ -1325,13 +1325,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.structure.Mixed = type { i64 }
                     \\
@@ -1344,9 +1344,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Mixed, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Mixed, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.structure.Mixed, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
                     \\    call void @matcha.function.consume(ptr %.t_0)
@@ -1375,13 +1375,13 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define ptr @matcha.function.choose(i1 %arg_0_flag) {
                     \\entry:
@@ -1390,10 +1390,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %.t_0 = load i1, ptr %.s_0
                     \\    br i1 %.t_0, label %label_then_2, label %label_else_1
                     \\label_then_2:
-                    \\    %.t_1 = call ptr @matcha_allocate_atomic(i64 1)
+                    \\    %.t_1 = call ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64 1)
                     \\    br label %label_continue_0
                     \\label_else_1:
-                    \\    %.t_2 = call ptr @matcha_allocate_atomic(i64 1)
+                    \\    %.t_2 = call ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64 1)
                     \\    br label %label_continue_0
                     \\label_continue_0:
                     \\    %.t_3 = phi ptr [%.t_1, %label_then_2], [%.t_2, %label_else_1]
@@ -1403,8 +1403,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = call ptr @matcha.function.choose(i1 1)
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    ret i32 0
@@ -1427,32 +1427,32 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_print_int(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%Array, ptr null, i64 1) to i64))
-                    \\    %.t_1 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 0
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.compiler_module.builtin.type.array, ptr null, i64 1) to i64))
+                    \\    %.t_1 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 0
                     \\    store i64 2, ptr %.t_1
-                    \\    %.t_2 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 1
+                    \\    %.t_2 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 1
                     \\    store i64 2, ptr %.t_2
-                    \\    %.t_3 = getelementptr inbounds %Array, ptr %.t_0, i32 0, i32 2
+                    \\    %.t_3 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_0, i32 0, i32 2
                     \\    store ptr null, ptr %.t_3
                     \\    store ptr %.t_0, ptr %.s_0
                     \\    %.t_4 = load ptr, ptr %.s_0
-                    \\    %.t_5 = getelementptr inbounds %Array, ptr %.t_4, i32 0, i32 0
+                    \\    %.t_5 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %.t_4, i32 0, i32 0
                     \\    %.t_6 = load i64, ptr %.t_5
-                    \\    call void @matcha_print_int(i64 %.t_6)
+                    \\    call void @matcha.compiler_module.builtin.function.printInt(i64 %.t_6)
                     \\    ret i32 0
                     \\}
                     \\
@@ -1475,19 +1475,19 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca i64
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    store i64 5, ptr %.s_0
                     \\    %.t_0 = load i64, ptr %.s_0
                     \\    %.t_1 = add i64 %.t_0, 2
@@ -1513,22 +1513,22 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\%matcha.structure.Point = type { i64 }
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
                     \\    %.s_0 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    %.t_0 = call ptr @matcha_allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    %.t_0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
                     \\    %.t_1 = getelementptr inbounds %matcha.structure.Point, ptr %.t_0, i32 0, i32 0
                     \\    store i64 1, ptr %.t_1
                     \\    store ptr %.t_0, ptr %.s_0
@@ -1557,36 +1557,36 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_print_string(ptr, i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.function.printString(ptr, i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [2 x i8] c"hi"
                     \\
-                    \\define %String @matcha.function.echo(%String %arg_0_text) {
+                    \\define %matcha.compiler_module.builtin.type.string @matcha.function.echo(%matcha.compiler_module.builtin.type.string %arg_0_text) {
                     \\entry:
-                    \\    %.s_0 = alloca %String
-                    \\    store %String %arg_0_text, ptr %.s_0
-                    \\    %.t_0 = load %String, ptr %.s_0
-                    \\    ret %String %.t_0
+                    \\    %.s_0 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    store %matcha.compiler_module.builtin.type.string %arg_0_text, ptr %.s_0
+                    \\    %.t_0 = load %matcha.compiler_module.builtin.type.string, ptr %.s_0
+                    \\    ret %matcha.compiler_module.builtin.type.string %.t_0
                     \\}
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = getelementptr inbounds [2 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
-                    \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
-                    \\    %.t_2 = insertvalue %String %.t_1, i64 2, 1
-                    \\    %.t_3 = call %String @matcha.function.echo(%String %.t_2)
-                    \\    %.t_4 = extractvalue %String %.t_3, 0
-                    \\    %.t_5 = extractvalue %String %.t_3, 1
-                    \\    call void @matcha_print_string(ptr %.t_4, i64 %.t_5)
+                    \\    %.t_1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_0, 0
+                    \\    %.t_2 = insertvalue %matcha.compiler_module.builtin.type.string %.t_1, i64 2, 1
+                    \\    %.t_3 = call %matcha.compiler_module.builtin.type.string @matcha.function.echo(%matcha.compiler_module.builtin.type.string %.t_2)
+                    \\    %.t_4 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 0
+                    \\    %.t_5 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 1
+                    \\    call void @matcha.compiler_module.builtin.function.printString(ptr %.t_4, i64 %.t_5)
                     \\    ret i32 0
                     \\}
                     \\
@@ -1608,40 +1608,40 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_read_file(ptr, ptr, i64)
-                    \\declare void @matcha_read_line(ptr)
-                    \\declare ptr @matcha_get_arguments()
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.function.readFile(ptr, ptr, i64)
+                    \\declare void @matcha.compiler_module.builtin.function.readLine(ptr)
+                    \\declare ptr @matcha.compiler_module.builtin.function.getArguments()
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [9 x i8] c"input.txt"
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    %.s_0 = alloca %String
-                    \\    %.s_1 = alloca %String
-                    \\    %.s_2 = alloca %String
-                    \\    %.s_3 = alloca %String
+                    \\    %.s_0 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_1 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_2 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_3 = alloca %matcha.compiler_module.builtin.type.string
                     \\    %.s_4 = alloca ptr
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
-                    \\    call void @matcha_read_line(ptr %.s_0)
-                    \\    %.t_0 = load %String, ptr %.s_0
-                    \\    store %String %.t_0, ptr %.s_1
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.builtin.function.readLine(ptr %.s_0)
+                    \\    %.t_0 = load %matcha.compiler_module.builtin.type.string, ptr %.s_0
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_0, ptr %.s_1
                     \\    %.t_1 = getelementptr inbounds [9 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
-                    \\    %.t_2 = insertvalue %String undef, ptr %.t_1, 0
-                    \\    %.t_3 = insertvalue %String %.t_2, i64 9, 1
-                    \\    %.t_4 = extractvalue %String %.t_3, 0
-                    \\    %.t_5 = extractvalue %String %.t_3, 1
-                    \\    call void @matcha_read_file(ptr %.s_2, ptr %.t_4, i64 %.t_5)
-                    \\    %.t_6 = load %String, ptr %.s_2
-                    \\    store %String %.t_6, ptr %.s_3
-                    \\    %.t_7 = call ptr @matcha_get_arguments()
+                    \\    %.t_2 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_1, 0
+                    \\    %.t_3 = insertvalue %matcha.compiler_module.builtin.type.string %.t_2, i64 9, 1
+                    \\    %.t_4 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 0
+                    \\    %.t_5 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 1
+                    \\    call void @matcha.compiler_module.builtin.function.readFile(ptr %.s_2, ptr %.t_4, i64 %.t_5)
+                    \\    %.t_6 = load %matcha.compiler_module.builtin.type.string, ptr %.s_2
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_6, ptr %.s_3
+                    \\    %.t_7 = call ptr @matcha.compiler_module.builtin.function.getArguments()
                     \\    store ptr %.t_7, ptr %.s_4
                     \\    ret i32 0
                     \\}
@@ -1666,61 +1666,61 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_string_trim(ptr, ptr, i64)
-                    \\declare ptr @matcha_string_split(ptr, i64, ptr, i64)
-                    \\declare i64 @matcha_string_to_int(ptr, i64)
-                    \\declare void @matcha_int_to_string(ptr, i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.builtin.type.string.method.trim(ptr, ptr, i64)
+                    \\declare ptr @matcha.compiler_module.builtin.type.string.method.split(ptr, i64, ptr, i64)
+                    \\declare i64 @matcha.compiler_module.builtin.type.string.method.toInt(ptr, i64)
+                    \\declare void @matcha.compiler_module.builtin.type.int.method.toString(ptr, i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [1 x i8] c"1"
                     \\@matcha.string_literal.1 = private unnamed_addr constant [1 x i8] c","
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    %.s_0 = alloca %String
-                    \\    %.s_1 = alloca %String
-                    \\    %.s_2 = alloca %String
+                    \\    %.s_0 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_1 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_2 = alloca %matcha.compiler_module.builtin.type.string
                     \\    %.s_3 = alloca ptr
                     \\    %.s_4 = alloca i64
-                    \\    %.s_5 = alloca %String
-                    \\    %.s_6 = alloca %String
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    %.s_5 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_6 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = getelementptr inbounds [1 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
-                    \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
-                    \\    %.t_2 = insertvalue %String %.t_1, i64 1, 1
-                    \\    store %String %.t_2, ptr %.s_0
-                    \\    %.t_3 = load %String, ptr %.s_0
-                    \\    %.t_4 = extractvalue %String %.t_3, 0
-                    \\    %.t_5 = extractvalue %String %.t_3, 1
-                    \\    call void @matcha_string_trim(ptr %.s_1, ptr %.t_4, i64 %.t_5)
-                    \\    %.t_6 = load %String, ptr %.s_1
-                    \\    store %String %.t_6, ptr %.s_2
-                    \\    %.t_7 = load %String, ptr %.s_2
+                    \\    %.t_1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_0, 0
+                    \\    %.t_2 = insertvalue %matcha.compiler_module.builtin.type.string %.t_1, i64 1, 1
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_2, ptr %.s_0
+                    \\    %.t_3 = load %matcha.compiler_module.builtin.type.string, ptr %.s_0
+                    \\    %.t_4 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 0
+                    \\    %.t_5 = extractvalue %matcha.compiler_module.builtin.type.string %.t_3, 1
+                    \\    call void @matcha.compiler_module.builtin.type.string.method.trim(ptr %.s_1, ptr %.t_4, i64 %.t_5)
+                    \\    %.t_6 = load %matcha.compiler_module.builtin.type.string, ptr %.s_1
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_6, ptr %.s_2
+                    \\    %.t_7 = load %matcha.compiler_module.builtin.type.string, ptr %.s_2
                     \\    %.t_8 = getelementptr inbounds [1 x i8], ptr @matcha.string_literal.1, i64 0, i64 0
-                    \\    %.t_9 = insertvalue %String undef, ptr %.t_8, 0
-                    \\    %.t_10 = insertvalue %String %.t_9, i64 1, 1
-                    \\    %.t_11 = extractvalue %String %.t_7, 0
-                    \\    %.t_12 = extractvalue %String %.t_7, 1
-                    \\    %.t_13 = extractvalue %String %.t_10, 0
-                    \\    %.t_14 = extractvalue %String %.t_10, 1
-                    \\    %.t_15 = call ptr @matcha_string_split(ptr %.t_11, i64 %.t_12, ptr %.t_13, i64 %.t_14)
+                    \\    %.t_9 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_8, 0
+                    \\    %.t_10 = insertvalue %matcha.compiler_module.builtin.type.string %.t_9, i64 1, 1
+                    \\    %.t_11 = extractvalue %matcha.compiler_module.builtin.type.string %.t_7, 0
+                    \\    %.t_12 = extractvalue %matcha.compiler_module.builtin.type.string %.t_7, 1
+                    \\    %.t_13 = extractvalue %matcha.compiler_module.builtin.type.string %.t_10, 0
+                    \\    %.t_14 = extractvalue %matcha.compiler_module.builtin.type.string %.t_10, 1
+                    \\    %.t_15 = call ptr @matcha.compiler_module.builtin.type.string.method.split(ptr %.t_11, i64 %.t_12, ptr %.t_13, i64 %.t_14)
                     \\    store ptr %.t_15, ptr %.s_3
-                    \\    %.t_16 = load %String, ptr %.s_2
-                    \\    %.t_17 = extractvalue %String %.t_16, 0
-                    \\    %.t_18 = extractvalue %String %.t_16, 1
-                    \\    %.t_19 = call i64 @matcha_string_to_int(ptr %.t_17, i64 %.t_18)
+                    \\    %.t_16 = load %matcha.compiler_module.builtin.type.string, ptr %.s_2
+                    \\    %.t_17 = extractvalue %matcha.compiler_module.builtin.type.string %.t_16, 0
+                    \\    %.t_18 = extractvalue %matcha.compiler_module.builtin.type.string %.t_16, 1
+                    \\    %.t_19 = call i64 @matcha.compiler_module.builtin.type.string.method.toInt(ptr %.t_17, i64 %.t_18)
                     \\    store i64 %.t_19, ptr %.s_4
                     \\    %.t_20 = load i64, ptr %.s_4
-                    \\    call void @matcha_int_to_string(ptr %.s_5, i64 %.t_20)
-                    \\    %.t_21 = load %String, ptr %.s_5
-                    \\    store %String %.t_21, ptr %.s_6
+                    \\    call void @matcha.compiler_module.builtin.type.int.method.toString(ptr %.s_5, i64 %.t_20)
+                    \\    %.t_21 = load %matcha.compiler_module.builtin.type.string, ptr %.s_5
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_21, ptr %.s_6
                     \\    ret i32 0
                     \\}
                     \\
@@ -1742,15 +1742,15 @@ pub const LlvmIrCodeGenerator = struct {
                 try expect(llvm_ir).toMatch(
                     \\target triple = "x86_64-unknown-linux-gnu"
                     \\
-                    \\declare void @matcha_initiate_garbage_collector()
-                    \\declare ptr @matcha_allocate(i64)
-                    \\declare ptr @matcha_allocate_atomic(i64)
-                    \\declare void @matcha_init_arguments(i32, ptr)
-                    \\declare void @matcha_string_concatenate(ptr, ptr, i64, ptr, i64)
-                    \\declare i1 @matcha_string_compare(ptr, i64, ptr, i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.stringConcatenate(ptr, ptr, i64, ptr, i64)
+                    \\declare i1 @matcha.compiler_module.runtime.function.stringCompare(ptr, i64, ptr, i64)
                     \\
-                    \\%String = type { ptr, i64 }
-                    \\%Array = type { i64, i64, ptr }
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [1 x i8] c"a"
                     \\@matcha.string_literal.1 = private unnamed_addr constant [1 x i8] c"b"
@@ -1759,44 +1759,44 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\define i32 @main(i32 %argc, ptr %argv) {
                     \\entry:
-                    \\    %.s_0 = alloca %String
-                    \\    %.s_1 = alloca %String
+                    \\    %.s_0 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %.s_1 = alloca %matcha.compiler_module.builtin.type.string
                     \\    %.s_2 = alloca i1
                     \\    %.s_3 = alloca i1
-                    \\    call void @matcha_initiate_garbage_collector()
-                    \\    call void @matcha_init_arguments(i32 %argc, ptr %argv)
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %argc, ptr %argv)
                     \\    %.t_0 = getelementptr inbounds [1 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
-                    \\    %.t_1 = insertvalue %String undef, ptr %.t_0, 0
-                    \\    %.t_2 = insertvalue %String %.t_1, i64 1, 1
+                    \\    %.t_1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_0, 0
+                    \\    %.t_2 = insertvalue %matcha.compiler_module.builtin.type.string %.t_1, i64 1, 1
                     \\    %.t_3 = getelementptr inbounds [1 x i8], ptr @matcha.string_literal.1, i64 0, i64 0
-                    \\    %.t_4 = insertvalue %String undef, ptr %.t_3, 0
-                    \\    %.t_5 = insertvalue %String %.t_4, i64 1, 1
-                    \\    %.t_6 = extractvalue %String %.t_2, 0
-                    \\    %.t_7 = extractvalue %String %.t_2, 1
-                    \\    %.t_8 = extractvalue %String %.t_5, 0
-                    \\    %.t_9 = extractvalue %String %.t_5, 1
-                    \\    call void @matcha_string_concatenate(ptr %.s_0, ptr %.t_6, i64 %.t_7, ptr %.t_8, i64 %.t_9)
-                    \\    %.t_10 = load %String, ptr %.s_0
-                    \\    store %String %.t_10, ptr %.s_1
-                    \\    %.t_11 = load %String, ptr %.s_1
+                    \\    %.t_4 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_3, 0
+                    \\    %.t_5 = insertvalue %matcha.compiler_module.builtin.type.string %.t_4, i64 1, 1
+                    \\    %.t_6 = extractvalue %matcha.compiler_module.builtin.type.string %.t_2, 0
+                    \\    %.t_7 = extractvalue %matcha.compiler_module.builtin.type.string %.t_2, 1
+                    \\    %.t_8 = extractvalue %matcha.compiler_module.builtin.type.string %.t_5, 0
+                    \\    %.t_9 = extractvalue %matcha.compiler_module.builtin.type.string %.t_5, 1
+                    \\    call void @matcha.compiler_module.runtime.function.stringConcatenate(ptr %.s_0, ptr %.t_6, i64 %.t_7, ptr %.t_8, i64 %.t_9)
+                    \\    %.t_10 = load %matcha.compiler_module.builtin.type.string, ptr %.s_0
+                    \\    store %matcha.compiler_module.builtin.type.string %.t_10, ptr %.s_1
+                    \\    %.t_11 = load %matcha.compiler_module.builtin.type.string, ptr %.s_1
                     \\    %.t_12 = getelementptr inbounds [2 x i8], ptr @matcha.string_literal.2, i64 0, i64 0
-                    \\    %.t_13 = insertvalue %String undef, ptr %.t_12, 0
-                    \\    %.t_14 = insertvalue %String %.t_13, i64 2, 1
-                    \\    %.t_15 = extractvalue %String %.t_11, 0
-                    \\    %.t_16 = extractvalue %String %.t_11, 1
-                    \\    %.t_17 = extractvalue %String %.t_14, 0
-                    \\    %.t_18 = extractvalue %String %.t_14, 1
-                    \\    %.t_19 = call i1 @matcha_string_compare(ptr %.t_15, i64 %.t_16, ptr %.t_17, i64 %.t_18)
+                    \\    %.t_13 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_12, 0
+                    \\    %.t_14 = insertvalue %matcha.compiler_module.builtin.type.string %.t_13, i64 2, 1
+                    \\    %.t_15 = extractvalue %matcha.compiler_module.builtin.type.string %.t_11, 0
+                    \\    %.t_16 = extractvalue %matcha.compiler_module.builtin.type.string %.t_11, 1
+                    \\    %.t_17 = extractvalue %matcha.compiler_module.builtin.type.string %.t_14, 0
+                    \\    %.t_18 = extractvalue %matcha.compiler_module.builtin.type.string %.t_14, 1
+                    \\    %.t_19 = call i1 @matcha.compiler_module.runtime.function.stringCompare(ptr %.t_15, i64 %.t_16, ptr %.t_17, i64 %.t_18)
                     \\    store i1 %.t_19, ptr %.s_2
-                    \\    %.t_20 = load %String, ptr %.s_1
+                    \\    %.t_20 = load %matcha.compiler_module.builtin.type.string, ptr %.s_1
                     \\    %.t_21 = getelementptr inbounds [2 x i8], ptr @matcha.string_literal.3, i64 0, i64 0
-                    \\    %.t_22 = insertvalue %String undef, ptr %.t_21, 0
-                    \\    %.t_23 = insertvalue %String %.t_22, i64 2, 1
-                    \\    %.t_24 = extractvalue %String %.t_20, 0
-                    \\    %.t_25 = extractvalue %String %.t_20, 1
-                    \\    %.t_26 = extractvalue %String %.t_23, 0
-                    \\    %.t_27 = extractvalue %String %.t_23, 1
-                    \\    %.t_28 = call i1 @matcha_string_compare(ptr %.t_24, i64 %.t_25, ptr %.t_26, i64 %.t_27)
+                    \\    %.t_22 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %.t_21, 0
+                    \\    %.t_23 = insertvalue %matcha.compiler_module.builtin.type.string %.t_22, i64 2, 1
+                    \\    %.t_24 = extractvalue %matcha.compiler_module.builtin.type.string %.t_20, 0
+                    \\    %.t_25 = extractvalue %matcha.compiler_module.builtin.type.string %.t_20, 1
+                    \\    %.t_26 = extractvalue %matcha.compiler_module.builtin.type.string %.t_23, 0
+                    \\    %.t_27 = extractvalue %matcha.compiler_module.builtin.type.string %.t_23, 1
+                    \\    %.t_28 = call i1 @matcha.compiler_module.runtime.function.stringCompare(ptr %.t_24, i64 %.t_25, ptr %.t_26, i64 %.t_27)
                     \\    %.t_29 = xor i1 %.t_28, 1
                     \\    store i1 %.t_29, ptr %.s_3
                     \\    ret i32 0

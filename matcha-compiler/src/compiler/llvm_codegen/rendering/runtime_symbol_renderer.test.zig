@@ -12,10 +12,10 @@ pub const RuntimeSymbolRenderer = struct {
             const rendered = runtime_symbol_renderer.renderDeclarations(.{});
 
             try expect(rendered).toMatch(
-                \\declare void @matcha_initiate_garbage_collector()
-                \\declare ptr @matcha_allocate(i64)
-                \\declare ptr @matcha_allocate_atomic(i64)
-                \\declare void @matcha_init_arguments(i32, ptr)
+                \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
             );
         }
 
@@ -27,11 +27,11 @@ pub const RuntimeSymbolRenderer = struct {
             const rendered = runtime_symbol_renderer.renderDeclarations(.{ .print_int = true });
 
             try expect(rendered).toMatch(
-                \\declare void @matcha_initiate_garbage_collector()
-                \\declare ptr @matcha_allocate(i64)
-                \\declare ptr @matcha_allocate_atomic(i64)
-                \\declare void @matcha_init_arguments(i32, ptr)
-                \\declare void @matcha_print_int(i64)
+                \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
             );
         }
 
@@ -57,23 +57,23 @@ pub const RuntimeSymbolRenderer = struct {
             });
 
             try expect(rendered).toMatch(
-                \\declare void @matcha_initiate_garbage_collector()
-                \\declare ptr @matcha_allocate(i64)
-                \\declare ptr @matcha_allocate_atomic(i64)
-                \\declare void @matcha_init_arguments(i32, ptr)
-                \\declare void @matcha_print_int(i64)
-                \\declare void @matcha_print_string(ptr, i64)
-                \\declare void @matcha_read_file(ptr, ptr, i64)
-                \\declare void @matcha_read_line(ptr)
-                \\declare ptr @matcha_get_arguments()
-                \\declare void @matcha_string_concatenate(ptr, ptr, i64, ptr, i64)
-                \\declare i1 @matcha_string_compare(ptr, i64, ptr, i64)
-                \\declare void @matcha_string_trim(ptr, ptr, i64)
-                \\declare ptr @matcha_string_split(ptr, i64, ptr, i64)
-                \\declare i64 @matcha_string_to_int(ptr, i64)
-                \\declare void @matcha_int_to_string(ptr, i64)
-                \\declare void @matcha_panic_index_out_of_bounds(i64, i64, i64, i64) noreturn
-                \\declare ptr @matcha_array_append_slot(ptr, i64)
+                \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
+                \\declare void @matcha.compiler_module.builtin.function.printString(ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.function.readFile(ptr, ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.function.readLine(ptr)
+                \\declare ptr @matcha.compiler_module.builtin.function.getArguments()
+                \\declare void @matcha.compiler_module.runtime.function.stringConcatenate(ptr, ptr, i64, ptr, i64)
+                \\declare i1 @matcha.compiler_module.runtime.function.stringCompare(ptr, i64, ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.type.string.method.trim(ptr, ptr, i64)
+                \\declare ptr @matcha.compiler_module.builtin.type.string.method.split(ptr, i64, ptr, i64)
+                \\declare i64 @matcha.compiler_module.builtin.type.string.method.toInt(ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.type.int.method.toString(ptr, i64)
+                \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64, i64, i64, i64) noreturn
+                \\declare ptr @matcha.compiler_module.runtime.function.arrayAppendSlot(ptr, i64)
             );
         }
     };

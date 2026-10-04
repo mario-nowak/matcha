@@ -105,6 +105,11 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const runtime_symbols_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/llvm_codegen/runtime_symbols.zig"),
+        .target = target,
+    });
+
     const lowering_module = b.createModule(.{
         .root_source_file = b.path("src/compiler/llvm_codegen/lowering/module.zig"),
         .target = target,
@@ -113,12 +118,8 @@ pub fn build(b: *std.Build) void {
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
         },
-    });
-
-    const runtime_symbols_module = b.createModule(.{
-        .root_source_file = b.path("src/compiler/llvm_codegen/runtime_symbols.zig"),
-        .target = target,
     });
 
     const emission_module = b.createModule(.{
@@ -308,6 +309,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("runtime/matcha_runtime.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "runtime_symbols", .module = runtime_symbols_module },
+        },
     });
     const runtime = b.addLibrary(.{
         .name = "matcha_runtime",
