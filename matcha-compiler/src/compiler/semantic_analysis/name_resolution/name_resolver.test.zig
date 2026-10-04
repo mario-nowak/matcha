@@ -946,5 +946,71 @@ pub const NameResolver = struct {
                 try expect(fixture.diagnostic_store.items()).toMatch(.{});
             }
         };
+
+        pub const builtin_functions = struct {
+            test "rejects a function with the name of a builtin function" {
+                const source =
+                    \\item printInt(value: int): unit = unit;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "function 'printInt' is already defined" },
+                });
+            }
+
+            test "rejects a structure with the name of a builtin function" {
+                const source =
+                    \\item printInt = structure { value: int; };
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "structure 'printInt' is already defined" },
+                });
+            }
+
+            test "rejects a union with the name of a builtin function" {
+                const source =
+                    \\item printInt = union { None, Some: int };
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "union 'printInt' is already defined" },
+                });
+            }
+
+            test "rejects a module-level binding with the name of a builtin function" {
+                const source =
+                    \\val printInt = 1;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "value 'printInt' is already declared in module scope" },
+                });
+            }
+        };
     };
 };
