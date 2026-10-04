@@ -1,9 +1,8 @@
 const std = @import("std");
 const ast = @import("ast");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const control_flow_types = @import("control_flow_types.zig");
-
-const ControlFlowValidationError = control_flow_types.ControlFlowValidationError;
 
 const ControlFlowValidationContext = struct {
     loop_depth: u32 = 0,
@@ -21,7 +20,7 @@ pub const StructuralValidator = struct {
     pub fn validateProgram(
         self: *@This(),
         program: *const ast.Program,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         const context = ControlFlowValidationContext{};
         for (program.statements) |*statement| {
             try self.validateNode(statement, &context);
@@ -32,7 +31,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         node: *const ast.Node,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         switch (node.kind) {
             .BindingDeclaration => |binding_declaration| try self.validateBindingDeclaration(binding_declaration, context),
             .ItemDefinition => |item_definition| try self.validateItemDefinition(item_definition, context),
@@ -71,7 +70,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         binding_declaration: ast.BindingDeclaration,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(binding_declaration.value, context);
     }
 
@@ -79,7 +78,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         item_definition: ast.ItemDefinition,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         if (context.scope_depth > 0) {
             try self.diagnostic_store.emitErrorFromToken(item_definition.item_token, "item definitions are only allowed at the top level");
             return error.DiagnosticsEmitted;
@@ -111,7 +110,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         return_statement: ast.ReturnStatement,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         if (!context.in_function) {
             try self.diagnostic_store.emitErrorFromToken(return_statement.return_token, "return statements are only allowed inside functions");
             return error.DiagnosticsEmitted;
@@ -125,7 +124,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         assignment_statement: ast.AssignmentStatement,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(assignment_statement.target, context);
         try self.validateNode(assignment_statement.value, context);
     }
@@ -134,7 +133,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         loop: ast.Loop,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         const loop_context = ControlFlowValidationContext{
             .loop_depth = context.loop_depth + 1,
             .scope_depth = context.scope_depth,
@@ -147,7 +146,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         qualified_structure_literal: ast.QualifiedStructureLiteral,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         for (qualified_structure_literal.fields) |field| {
             try self.validateNode(field.value, context);
         }
@@ -157,7 +156,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         structure_literal: ast.StructureLiteral,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         for (structure_literal.fields) |field| {
             try self.validateNode(field.value, context);
         }
@@ -167,7 +166,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         while_statement: ast.While,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(while_statement.condition, context);
         if (while_statement.update) |update| {
             try self.validateNode(update, context);
@@ -185,7 +184,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         for_in: ast.ForIn,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(for_in.iterable, context);
 
         const loop_context = ControlFlowValidationContext{
@@ -196,14 +195,14 @@ pub const StructuralValidator = struct {
         try self.validateNode(for_in.body_block, &loop_context);
     }
 
-    fn validateContinueStatement(self: *@This(), continue_statement: ast.ContinueStatement, context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
+    fn validateContinueStatement(self: *@This(), continue_statement: ast.ContinueStatement, context: *const ControlFlowValidationContext) CompileError!void {
         if (context.loop_depth == 0) {
             try self.diagnostic_store.emitErrorFromToken(continue_statement.continue_token, "continue is only allowed inside loops");
             return error.DiagnosticsEmitted;
         }
     }
 
-    fn validateLeaveStatement(self: *@This(), leave_statement: ast.LeaveStatement, context: *const ControlFlowValidationContext) ControlFlowValidationError!void {
+    fn validateLeaveStatement(self: *@This(), leave_statement: ast.LeaveStatement, context: *const ControlFlowValidationContext) CompileError!void {
         if (context.loop_depth == 0) {
             try self.diagnostic_store.emitErrorFromToken(leave_statement.leave_token, "leave is only allowed inside loops");
             return error.DiagnosticsEmitted;
@@ -214,7 +213,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         if_statement: ast.IfStatement,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(if_statement.condition, context);
         try self.validateNode(if_statement.then_branch, context);
     }
@@ -223,7 +222,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         if_expression: ast.IfExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(if_expression.condition, context);
         try self.validateNode(if_expression.then_block, context);
         try self.validateNode(if_expression.else_block, context);
@@ -233,7 +232,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         match_expression: ast.MatchExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(match_expression.subject, context);
         for (match_expression.arms) |arm| {
             try self.validateNode(arm.body_expression, context);
@@ -247,7 +246,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         subjectless_match_expression: ast.SubjectlessMatchExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         for (subjectless_match_expression.arms) |arm| {
             try self.validateNode(arm.condition, context);
             try self.validateNode(arm.body_expression, context);
@@ -261,7 +260,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         expression_statement: ast.ExpressionStatement,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(expression_statement.expression, context);
     }
 
@@ -269,7 +268,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         call_expression: ast.CallExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(call_expression.callee, context);
         for (call_expression.arguments) |*argument| {
             try self.validateNode(argument, context);
@@ -280,7 +279,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         binary_expression: ast.BinaryExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(binary_expression.left, context);
         try self.validateNode(binary_expression.right, context);
     }
@@ -289,7 +288,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         unary_expression: ast.UnaryExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(unary_expression.operand, context);
     }
 
@@ -297,7 +296,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         member_expression: ast.MemberExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(member_expression.base, context);
     }
 
@@ -305,7 +304,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         array_literal: ast.ArrayLiteral,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         for (array_literal.elements) |*element| {
             try self.validateNode(element, context);
         }
@@ -315,7 +314,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         index_expression: ast.IndexExpression,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         try self.validateNode(index_expression.base, context);
         try self.validateNode(index_expression.index, context);
     }
@@ -324,7 +323,7 @@ pub const StructuralValidator = struct {
         self: *@This(),
         block: ast.Block,
         context: *const ControlFlowValidationContext,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         const block_context = ControlFlowValidationContext{
             .loop_depth = context.loop_depth,
             .scope_depth = context.scope_depth + 1,

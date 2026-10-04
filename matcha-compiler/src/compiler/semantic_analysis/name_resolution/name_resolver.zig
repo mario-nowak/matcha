@@ -2,14 +2,10 @@ const std = @import("std");
 const ast = @import("ast");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const symbols = @import("symbols");
 const type_expressions = @import("type_expressions");
 const scope = @import("scope.zig");
-
-pub const NameResolutionError = error{
-    OutOfMemory,
-    DiagnosticsEmitted,
-};
 
 const ModuleShadowing = enum {
     Forbidden,
@@ -170,7 +166,7 @@ pub const NameResolver = struct {
         module_scope.insertSymbol("getArguments", function_id);
     }
 
-    fn buildModuleScope(self: *@This(), program: *const ast.Program) NameResolutionError!scope.ModuleScope {
+    fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.allocator, null);
         // Builtins come first, so the duplicate checks of the module items see them.
         self.addBuiltinFunctions(&module_scope);
@@ -192,7 +188,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         switch (item_definition.definition) {
             .Function => {
                 try self.registerModuleFunctionSymbol(node_id, item_definition, module_scope);
@@ -211,7 +207,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const function_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "function");
         module_scope.validateNotInScope(function_name) catch {
@@ -233,7 +229,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const structure_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, structure_name, "structure");
         module_scope.validateNotInScope(structure_name) catch {
@@ -255,7 +251,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const union_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, union_name, "union");
         module_scope.validateNotInScope(union_name) catch {
@@ -276,7 +272,7 @@ pub const NameResolver = struct {
         self: *@This(),
         node: *const ast.Node,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         switch (node.kind) {
             .BindingDeclaration => |binding_declaration| try self.resolveBindingDeclarationNode(node.id, binding_declaration, environment),
             .ItemDefinition => |item_definition| try self.resolveItemDefinitionNode(item_definition, environment.module_scope),
@@ -316,7 +312,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         binding_declaration: ast.BindingDeclaration,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const declaration_name = binding_declaration.name.kind.Identifier;
         try self.validateBindingDeclarationName(binding_declaration.name, declaration_name, "value", environment);
 
@@ -349,7 +345,7 @@ pub const NameResolver = struct {
         declaration_name: []const u8,
         kind_name: []const u8,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.validateIdentifierIsAvailable(declaration_token, declaration_name, kind_name);
         if (environment.options.module_shadowing == .Forbidden) {
             if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
@@ -367,7 +363,7 @@ pub const NameResolver = struct {
         self: *@This(),
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         switch (item_definition.definition) {
             .Function => |function_definition| {
                 const function_symbol_id = module_scope.lookupSymbol(item_definition.identifier_token.kind.Identifier) orelse unreachable;
@@ -386,7 +382,7 @@ pub const NameResolver = struct {
         self: *@This(),
         return_statement: ast.ReturnStatement,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         if (return_statement.value) |value| {
             try self.resolveNode(value, environment);
         }
@@ -396,7 +392,7 @@ pub const NameResolver = struct {
         self: *@This(),
         assignment_statement: ast.AssignmentStatement,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(assignment_statement.target, environment);
         try self.resolveNode(assignment_statement.value, environment);
     }
@@ -405,7 +401,7 @@ pub const NameResolver = struct {
         self: *@This(),
         loop_statement: ast.Loop,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
         var loop_environment = environment;
         loop_environment.node_scope = &loop_scope;
@@ -416,7 +412,7 @@ pub const NameResolver = struct {
         self: *@This(),
         while_statement: ast.While,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(while_statement.condition, environment);
         if (while_statement.update) |update| {
             try self.resolveNode(update, environment);
@@ -433,7 +429,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         for_in: ast.ForIn,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(for_in.iterable, environment);
 
         var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
@@ -456,7 +452,7 @@ pub const NameResolver = struct {
         self: *@This(),
         call_expression: ast.CallExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(call_expression.callee, environment);
 
         for (call_expression.arguments) |*argument| {
@@ -468,7 +464,7 @@ pub const NameResolver = struct {
         self: *@This(),
         binary_expression: ast.BinaryExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(binary_expression.left, environment);
         try self.resolveNode(binary_expression.right, environment);
     }
@@ -477,7 +473,7 @@ pub const NameResolver = struct {
         self: *@This(),
         unary_expression: ast.UnaryExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(unary_expression.operand, environment);
     }
 
@@ -485,7 +481,7 @@ pub const NameResolver = struct {
         self: *@This(),
         member_expression: ast.MemberExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(member_expression.base, environment);
     }
 
@@ -494,7 +490,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         identifier: lexing.Token,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const identifier_name = identifier.kind.Identifier;
         const symbol_id = try self.getSymbolIdForName(identifier, identifier_name, environment);
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
@@ -504,7 +500,7 @@ pub const NameResolver = struct {
         self: *@This(),
         block: ast.Block,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         var block_scope = scope.Scope.init(self.allocator, environment.node_scope);
         var block_environment = environment;
         block_environment.node_scope = &block_scope;
@@ -520,7 +516,7 @@ pub const NameResolver = struct {
         self: *@This(),
         if_statement: ast.IfStatement,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(if_statement.condition, environment);
         try self.resolveNode(if_statement.then_branch, environment);
     }
@@ -529,7 +525,7 @@ pub const NameResolver = struct {
         self: *@This(),
         if_expression: ast.IfExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(if_expression.condition, environment);
         try self.resolveNode(if_expression.then_block, environment);
         try self.resolveNode(if_expression.else_block, environment);
@@ -539,7 +535,7 @@ pub const NameResolver = struct {
         self: *@This(),
         match_expression: ast.MatchExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(match_expression.subject, environment);
         for (match_expression.arms) |arm| {
             var body_expression_environment = environment;
@@ -578,7 +574,7 @@ pub const NameResolver = struct {
         self: *@This(),
         subjectless_match_expression: ast.SubjectlessMatchExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         for (subjectless_match_expression.arms) |arm| {
             try self.resolveNode(arm.condition, environment);
             try self.resolveNode(arm.body_expression, environment);
@@ -592,7 +588,7 @@ pub const NameResolver = struct {
         self: *@This(),
         expression_statement: ast.ExpressionStatement,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(expression_statement.expression, environment);
     }
 
@@ -600,7 +596,7 @@ pub const NameResolver = struct {
         self: *@This(),
         structure_literal: ast.StructureLiteral,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         for (structure_literal.fields) |field| {
             try self.resolveNode(field.value, environment);
         }
@@ -610,7 +606,7 @@ pub const NameResolver = struct {
         self: *@This(),
         array_literal: ast.ArrayLiteral,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         for (array_literal.elements) |*element| {
             try self.resolveNode(element, environment);
         }
@@ -620,7 +616,7 @@ pub const NameResolver = struct {
         self: *@This(),
         index_expression: ast.IndexExpression,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         try self.resolveNode(index_expression.base, environment);
         try self.resolveNode(index_expression.index, environment);
     }
@@ -630,7 +626,7 @@ pub const NameResolver = struct {
         identifier_token: lexing.Token,
         name: []const u8,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!symbols.SymbolId {
+    ) CompileError!symbols.SymbolId {
         const symbol_id = environment.node_scope.lookupSymbol(name) orelse environment.module_scope.lookupSymbol(name) orelse {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "undefined identifier '{s}'", .{name});
             return error.DiagnosticsEmitted;
@@ -644,7 +640,7 @@ pub const NameResolver = struct {
         node_id: ast.NodeId,
         qualified_structure_literal: *const ast.QualifiedStructureLiteral,
         environment: ResolutionEnvironment,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const structure_name = qualified_structure_literal.structure_name.kind.Identifier;
         const symbol_id = environment.module_scope.lookupSymbol(structure_name) orelse {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, qualified_structure_literal.structure_name, "undefined structure '{s}'", .{structure_name});
@@ -661,7 +657,7 @@ pub const NameResolver = struct {
         function_symbol_id: symbols.SymbolId,
         function_definition: *const ast.FunctionDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         var function_scope = scope.Scope.init(self.allocator, null);
         var parameter_symbol_ids = std.ArrayList(symbols.SymbolId){};
 
@@ -707,7 +703,7 @@ pub const NameResolver = struct {
         structure_name: []const u8,
         structure_definition: *const ast.StructureDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const StructureMemberKind = enum {
             Field,
             Function,
@@ -771,7 +767,7 @@ pub const NameResolver = struct {
         union_name: []const u8,
         union_definition: *const ast.UnionDefinition,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         const UnionMemberKind = enum {
             Case,
             Function,
@@ -837,7 +833,7 @@ pub const NameResolver = struct {
         self: *@This(),
         type_expression: *const type_expressions.TypeExpression,
         module_scope: *scope.ModuleScope,
-    ) NameResolutionError!symbols.ResolvedTypeReference {
+    ) CompileError!symbols.ResolvedTypeReference {
         return switch (type_expression.*) {
             .Named => |named_type_expression| block: {
                 const type_name = named_type_expression.name_token.kind.Identifier;
@@ -871,7 +867,7 @@ pub const NameResolver = struct {
         identifier_token: lexing.Token,
         identifier_name: []const u8,
         kind_name: []const u8,
-    ) NameResolutionError!void {
+    ) CompileError!void {
         if (std.mem.eql(u8, identifier_name, "unit")) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "{s} name '{s}' is reserved", .{ kind_name, identifier_name });
             return error.DiagnosticsEmitted;

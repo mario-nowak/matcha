@@ -1,9 +1,8 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const type_expressions = @import("type_expressions");
-
-const ParseError = @import("parse_error.zig").ParseError;
 
 pub const TypeExpressionParser = struct {
     lexer: *lexing.Lexer,
@@ -22,12 +21,12 @@ pub const TypeExpressionParser = struct {
         };
     }
 
-    pub fn parse(self: *@This()) ParseError!*type_expressions.TypeExpression {
+    pub fn parse(self: *@This()) CompileError!*type_expressions.TypeExpression {
         const primary = try self.parsePrimary();
         return self.parseArraySuffixes(primary);
     }
 
-    fn parsePrimary(self: *@This()) ParseError!*type_expressions.TypeExpression {
+    fn parsePrimary(self: *@This()) CompileError!*type_expressions.TypeExpression {
         const token = try self.lexer.next();
         switch (token.kind) {
             .Identifier => return self.allocateTypeExpression(.{ .Named = .{ .name_token = token } }),
@@ -41,7 +40,7 @@ pub const TypeExpressionParser = struct {
     fn parseArraySuffixes(
         self: *@This(),
         base_type_expression: *type_expressions.TypeExpression,
-    ) ParseError!*type_expressions.TypeExpression {
+    ) CompileError!*type_expressions.TypeExpression {
         var type_expression = base_type_expression;
 
         while ((try self.lexer.peek()).kind == .LeftBracket) {

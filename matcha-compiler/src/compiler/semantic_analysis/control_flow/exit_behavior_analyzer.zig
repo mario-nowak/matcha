@@ -2,10 +2,10 @@ const std = @import("std");
 const ast = @import("ast");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const type_expressions = @import("type_expressions");
 const control_flow_types = @import("control_flow_types.zig");
 
-const ControlFlowValidationError = control_flow_types.ControlFlowValidationError;
 pub const ExitBehavior = control_flow_types.ExitBehavior;
 pub const ExitBehaviorByNodeId = control_flow_types.ExitBehaviorByNodeId;
 
@@ -25,7 +25,7 @@ pub const ExitBehaviorAnalyzer = struct {
     pub fn analyzeProgram(
         self: *@This(),
         program: *const ast.Program,
-    ) ControlFlowValidationError!ExitBehaviorByNodeId {
+    ) CompileError!ExitBehaviorByNodeId {
         self.exit_behavior_by_node_id.clearRetainingCapacity();
 
         for (program.statements) |*statement| {
@@ -38,7 +38,7 @@ pub const ExitBehaviorAnalyzer = struct {
     fn validateFunctionReturnPathsInNode(
         self: *@This(),
         node: *const ast.Node,
-    ) ControlFlowValidationError!void {
+    ) CompileError!void {
         switch (node.kind) {
             .ItemDefinition => |item_definition| switch (item_definition.definition) {
                 .Function => |function_definition| {
@@ -59,7 +59,7 @@ pub const ExitBehaviorAnalyzer = struct {
         }
     }
 
-    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: lexing.Token, function_definition: *const ast.FunctionDefinition) ControlFlowValidationError!void {
+    pub fn validateFunctionReturnsValue(self: *@This(), function_name_token: lexing.Token, function_definition: *const ast.FunctionDefinition) CompileError!void {
         const result = try self.validateTerminatesWithValue(function_definition.body_expression);
         const is_unit_function = isUnitTypeExpression(function_definition.return_type_annotation);
         if (!is_unit_function and result == .FallsThroughWithoutValue) {
@@ -71,7 +71,7 @@ pub const ExitBehaviorAnalyzer = struct {
     pub fn validateTerminatesWithValue(
         self: *@This(),
         node: *const ast.Node,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         return switch (node.kind) {
             .ReturnStatement => try self.validateReturnStatementNode(node),
             .Block => |block| try self.validateBlockNode(node, block),
@@ -114,11 +114,11 @@ pub const ExitBehaviorAnalyzer = struct {
         return behavior;
     }
 
-    fn validateReturnStatementNode(self: *@This(), node: *const ast.Node) ControlFlowValidationError!ExitBehavior {
+    fn validateReturnStatementNode(self: *@This(), node: *const ast.Node) CompileError!ExitBehavior {
         return self.markNodeExitBehavior(node, .Terminates);
     }
 
-    fn validateBlockNode(self: *@This(), node: *const ast.Node, block: ast.Block) ControlFlowValidationError!ExitBehavior {
+    fn validateBlockNode(self: *@This(), node: *const ast.Node, block: ast.Block) CompileError!ExitBehavior {
         for (block.statements) |*statement| {
             const result = try self.validateTerminatesWithValue(statement);
             if (result == .Terminates) {
@@ -140,7 +140,7 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
     }
 
-    fn validateBindingDeclarationNode(self: *@This(), binding_declaration: ast.BindingDeclaration) ControlFlowValidationError!ExitBehavior {
+    fn validateBindingDeclarationNode(self: *@This(), binding_declaration: ast.BindingDeclaration) CompileError!ExitBehavior {
         const result = try self.validateTerminatesWithValue(binding_declaration.value);
         self.exit_behavior_by_node_id.put(binding_declaration.value.id, result) catch unreachable;
         return result;
@@ -150,7 +150,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         if_statement: ast.IfStatement,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const condition_result = try self.validateTerminatesWithValue(if_statement.condition);
         if (condition_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -164,7 +164,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         qualified_structure_literal: ast.QualifiedStructureLiteral,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         for (qualified_structure_literal.fields) |field| {
             const result = try self.validateTerminatesWithValue(field.value);
             if (result == .Terminates) {
@@ -178,7 +178,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         structure_literal: ast.StructureLiteral,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         for (structure_literal.fields) |field| {
             const result = try self.validateTerminatesWithValue(field.value);
             if (result == .Terminates) {
@@ -192,7 +192,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         expression_statement: ast.ExpressionStatement,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const result = try self.validateTerminatesWithValue(expression_statement.expression);
         if (result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -204,7 +204,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         assignment_statement: ast.AssignmentStatement,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const target_result = try self.validateTerminatesWithValue(assignment_statement.target);
         if (target_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -215,7 +215,7 @@ pub const ExitBehaviorAnalyzer = struct {
         return result;
     }
 
-    fn validateLoopNode(self: *@This(), node: *const ast.Node, loop: ast.Loop) ControlFlowValidationError!ExitBehavior {
+    fn validateLoopNode(self: *@This(), node: *const ast.Node, loop: ast.Loop) CompileError!ExitBehavior {
         const result = try self.validateTerminatesWithValue(loop.body_block);
         _ = self.markNodeExitBehavior(node, result);
         return result;
@@ -225,7 +225,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         while_statement: ast.While,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const condition_result = try self.validateTerminatesWithValue(while_statement.condition);
         if (condition_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -242,7 +242,7 @@ pub const ExitBehaviorAnalyzer = struct {
         return self.markNodeExitBehavior(node, .FallsThroughWithoutValue);
     }
 
-    fn validateForInNode(self: *@This(), node: *const ast.Node, for_in: ast.ForIn) ControlFlowValidationError!ExitBehavior {
+    fn validateForInNode(self: *@This(), node: *const ast.Node, for_in: ast.ForIn) CompileError!ExitBehavior {
         const iterable_result = try self.validateTerminatesWithValue(for_in.iterable);
         if (iterable_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -256,7 +256,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         if_expression: ast.IfExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const condition_result = try self.validateTerminatesWithValue(if_expression.condition);
         if (condition_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -279,7 +279,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         match_expression: ast.MatchExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const subject_result = try self.validateTerminatesWithValue(match_expression.subject);
         if (subject_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -300,7 +300,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         subjectless_match_expression: ast.SubjectlessMatchExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         var arms_exit_behavior: ExitBehavior = .Terminates;
         for (subjectless_match_expression.arms) |arm| {
             const condition_result = try self.validateTerminatesWithValue(arm.condition);
@@ -321,7 +321,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         call_expression: ast.CallExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const callee_result = try self.validateTerminatesWithValue(call_expression.callee);
         if (callee_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -341,7 +341,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         binary_expression: ast.BinaryExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const left_result = try self.validateTerminatesWithValue(binary_expression.left);
         if (left_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -359,7 +359,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         unary_expression: ast.UnaryExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const operand_result = try self.validateTerminatesWithValue(unary_expression.operand);
         if (operand_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -372,7 +372,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         member_expression: ast.MemberExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const base_result = try self.validateTerminatesWithValue(member_expression.base);
         if (base_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);
@@ -385,7 +385,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         array_literal: ast.ArrayLiteral,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         for (array_literal.elements) |*element| {
             const element_result = try self.validateTerminatesWithValue(element);
             if (element_result == .Terminates) {
@@ -400,7 +400,7 @@ pub const ExitBehaviorAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         index_expression: ast.IndexExpression,
-    ) ControlFlowValidationError!ExitBehavior {
+    ) CompileError!ExitBehavior {
         const base_result = try self.validateTerminatesWithValue(index_expression.base);
         if (base_result == .Terminates) {
             return self.markNodeExitBehavior(node, .Terminates);

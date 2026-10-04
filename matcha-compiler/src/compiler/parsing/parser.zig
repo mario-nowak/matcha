@@ -1,6 +1,7 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const ast = @import("ast");
 const type_expressions = @import("type_expressions");
 
@@ -22,8 +23,6 @@ pub const Parser = struct {
     allocator: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     next_node_id: ast.NodeId = 0,
-
-    pub const ParserError = @import("parse_error.zig").ParseError;
 
     const ParseState = struct {
         current_binding_power: f64 = 0.0,
@@ -67,7 +66,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseStatement(self: *Parser) ParserError!ast.Node {
+    fn parseStatement(self: *Parser) CompileError!ast.Node {
         if (self.startsItemDefinition()) {
             return try self.parseItemDefinition();
         }
@@ -101,7 +100,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseIfStatement(self: *Parser) ParserError!ast.Node {
+    fn parseIfStatement(self: *Parser) CompileError!ast.Node {
         const if_token = try self.lexer.next();
         const if_form = try self.parseIfForm(if_token);
         return switch (if_form) {
@@ -117,7 +116,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseLeaveStatement(self: *Parser) ParserError!ast.Node {
+    fn parseLeaveStatement(self: *Parser) CompileError!ast.Node {
         const leave_token = try self.lexer.next();
         const semicolon = try self.lexer.next();
         if (semicolon.kind != .Semicolon) {
@@ -132,7 +131,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseContinueStatement(self: *Parser) ParserError!ast.Node {
+    fn parseContinueStatement(self: *Parser) CompileError!ast.Node {
         const continue_token = try self.lexer.next();
         const semicolon = try self.lexer.next();
         if (semicolon.kind != .Semicolon) {
@@ -147,7 +146,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseBlockStatement(self: *Parser) ParserError!ast.Node {
+    fn parseBlockStatement(self: *Parser) CompileError!ast.Node {
         const left_brace = try self.lexer.next();
         return self.parseBlock(left_brace);
     }
@@ -206,7 +205,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseBindingDeclaration(self: *Parser) ParserError!ast.Node {
+    fn parseBindingDeclaration(self: *Parser) CompileError!ast.Node {
         const val_or_var_token = try self.lexer.next(); // consume token
 
         const identifierToken = try self.lexer.next();
@@ -259,7 +258,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseItemDefinition(self: *@This()) ParserError!ast.Node {
+    fn parseItemDefinition(self: *@This()) CompileError!ast.Node {
         const item_token = contextualItemToken(try self.lexer.next()) orelse unreachable;
 
         const identifier_token = try self.lexer.next();
@@ -294,7 +293,7 @@ pub const Parser = struct {
         self: *@This(),
         item_token: lexing.Token,
         identifier_token: lexing.Token,
-    ) ParserError!ast.Node {
+    ) CompileError!ast.Node {
         const union_definition = try self.parseUnionDefinitionBody();
         const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
@@ -312,7 +311,7 @@ pub const Parser = struct {
 
     fn parseUnionDefinitionBody(
         self: *@This(),
-    ) ParserError!ast.UnionDefinition {
+    ) CompileError!ast.UnionDefinition {
         const union_token = try self.lexer.next();
         if (union_token.kind != .Union) {
             unreachable;
@@ -393,7 +392,7 @@ pub const Parser = struct {
         self: *@This(),
         item_token: lexing.Token,
         identifier_token: lexing.Token,
-    ) ParserError!ast.Node {
+    ) CompileError!ast.Node {
         const structure = try self.parseStructureDefinitionBody();
         const semicolon_token = try self.lexer.next();
         if (semicolon_token.kind != .Semicolon) {
@@ -411,7 +410,7 @@ pub const Parser = struct {
 
     fn parseStructureDefinitionBody(
         self: *@This(),
-    ) ParserError!ast.StructureDefinition {
+    ) CompileError!ast.StructureDefinition {
         const structure_token = try self.lexer.next();
         if (structure_token.kind != .Structure) {
             unreachable;
@@ -488,7 +487,7 @@ pub const Parser = struct {
         self: *@This(),
         item_token: lexing.Token,
         identifier_token: lexing.Token,
-    ) ParserError!ast.Node {
+    ) CompileError!ast.Node {
         const left_parenthesis_token = try self.lexer.next();
         if (left_parenthesis_token.kind != .LeftParenthesis) {
             try self.diagnostic_store.emitErrorFromToken(left_parenthesis_token, "expected '(' after function name");
@@ -569,12 +568,12 @@ pub const Parser = struct {
         });
     }
 
-    fn parseTypeAnnotation(self: *@This()) ParserError!*type_expressions.TypeExpression {
+    fn parseTypeAnnotation(self: *@This()) CompileError!*type_expressions.TypeExpression {
         var type_expression_parser = TypeExpressionParser.init(&self.lexer, self.allocator, self.diagnostic_store);
         return type_expression_parser.parse();
     }
 
-    fn parseReturnStatement(self: *@This()) ParserError!ast.Node {
+    fn parseReturnStatement(self: *@This()) CompileError!ast.Node {
         const return_token = try self.lexer.next();
         if (return_token.kind != .Return) {
             unreachable;
@@ -608,7 +607,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseLoopStatement(self: *@This()) ParserError!ast.Node {
+    fn parseLoopStatement(self: *@This()) CompileError!ast.Node {
         const loop_token = try self.lexer.next();
         if (loop_token.kind != .Loop) {
             unreachable;
@@ -631,7 +630,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseWhileStatement(self: *@This()) ParserError!ast.Node {
+    fn parseWhileStatement(self: *@This()) CompileError!ast.Node {
         const while_token = try self.lexer.next();
         if (while_token.kind != .While) {
             unreachable;
@@ -672,7 +671,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseForStatement(self: *@This()) ParserError!ast.Node {
+    fn parseForStatement(self: *@This()) CompileError!ast.Node {
         const for_token = try self.lexer.next();
         if (for_token.kind != .For) {
             unreachable;
@@ -716,7 +715,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) ParserError!ast.Node {
+    fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) CompileError!ast.Node {
         const target = self.allocator.create(ast.Node) catch unreachable;
         target.* = try self.parsePlaceExpression();
 
@@ -791,7 +790,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parsePlaceExpression(self: *@This()) ParserError!ast.Node {
+    fn parsePlaceExpression(self: *@This()) CompileError!ast.Node {
         const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .Identifier) {
             try self.diagnostic_store.emitErrorFromToken(identifier_token, "expected identifier");
@@ -810,7 +809,7 @@ pub const Parser = struct {
         return target;
     }
 
-    fn parseIfForm(self: *Parser, if_token: lexing.Token) ParserError!ParsedIf {
+    fn parseIfForm(self: *Parser, if_token: lexing.Token) CompileError!ParsedIf {
         if (if_token.kind != .If) {
             try self.diagnostic_store.emitErrorFromToken(if_token, "expected 'if'");
             return error.DiagnosticsEmitted;
@@ -868,7 +867,7 @@ pub const Parser = struct {
         }
     }
 
-    fn parseMatchExpression(self: *Parser, match_token: lexing.Token) ParserError!ast.Node {
+    fn parseMatchExpression(self: *Parser, match_token: lexing.Token) CompileError!ast.Node {
         if (match_token.kind != .Match) {
             try self.diagnostic_store.emitErrorFromToken(match_token, "expected 'match'");
             return error.DiagnosticsEmitted;
@@ -926,7 +925,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseSubjectlessMatchExpression(self: *Parser, match_token: lexing.Token) ParserError!ast.Node {
+    fn parseSubjectlessMatchExpression(self: *Parser, match_token: lexing.Token) CompileError!ast.Node {
         try self.expectMatchBodyStart();
 
         var arms = std.ArrayList(ast.SubjectlessMatchArm){};
@@ -970,7 +969,7 @@ pub const Parser = struct {
         });
     }
 
-    fn expectMatchBodyStart(self: *Parser) ParserError!void {
+    fn expectMatchBodyStart(self: *Parser) CompileError!void {
         const left_brace_token = try self.lexer.next();
         if (left_brace_token.kind != .LeftBrace) {
             try self.diagnostic_store.emitErrorFromToken(left_brace_token, "expected '{' to start match body");
@@ -978,14 +977,14 @@ pub const Parser = struct {
         }
     }
 
-    fn rejectArmAfterElseArm(self: *Parser, next_token: lexing.Token, else_token: ?lexing.Token) ParserError!void {
+    fn rejectArmAfterElseArm(self: *Parser, next_token: lexing.Token, else_token: ?lexing.Token) CompileError!void {
         if (else_token != null) {
             try self.diagnostic_store.emitErrorFromToken(next_token, "'else' must be the last match arm");
             return error.DiagnosticsEmitted;
         }
     }
 
-    fn expectFatArrow(self: *Parser, missing_fat_arrow_message: []const u8) ParserError!lexing.Token {
+    fn expectFatArrow(self: *Parser, missing_fat_arrow_message: []const u8) CompileError!lexing.Token {
         const fat_arrow_token = try self.lexer.next();
         if (fat_arrow_token.kind != .FatArrow) {
             try self.diagnostic_store.emitErrorFromToken(fat_arrow_token, missing_fat_arrow_message);
@@ -995,7 +994,7 @@ pub const Parser = struct {
         return fat_arrow_token;
     }
 
-    fn expectMatchArmSeparator(self: *Parser) ParserError!void {
+    fn expectMatchArmSeparator(self: *Parser) CompileError!void {
         const separator_or_end = try self.lexer.peek();
         switch (separator_or_end.kind) {
             .Comma => {
@@ -1009,12 +1008,12 @@ pub const Parser = struct {
         }
     }
 
-    fn parsePattern(self: *Parser) ParserError!ast.Pattern {
+    fn parsePattern(self: *Parser) CompileError!ast.Pattern {
         var pattern_parser = PatternParser.init(&self.lexer, self.allocator, self.diagnostic_store, &self.next_node_id);
         return pattern_parser.parse();
     }
 
-    fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) ParserError!ast.Node {
+    fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) CompileError!ast.Node {
         var statements = std.ArrayList(ast.Node){};
         var result: ?*ast.Node = null;
 
@@ -1051,7 +1050,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseBlockItem(self: *Parser) ParserError!BlockItem {
+    fn parseBlockItem(self: *Parser) CompileError!BlockItem {
         const token = try self.lexer.peek();
         if (Parser.startsStatementOnlyConstruct(token)) {
             const statement = try self.parseStatement();
@@ -1086,7 +1085,7 @@ pub const Parser = struct {
         }
     }
 
-    fn parseIfBlockItem(self: *Parser) ParserError!BlockItem {
+    fn parseIfBlockItem(self: *Parser) CompileError!BlockItem {
         const if_token = try self.lexer.next();
         const if_form = try self.parseIfForm(if_token);
         return switch (if_form) {
@@ -1108,7 +1107,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseExpressionStatement(self: *Parser) ParserError!ast.Node {
+    fn parseExpressionStatement(self: *Parser) CompileError!ast.Node {
         const expression = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const semicolonToken = try self.lexer.next();
@@ -1120,7 +1119,7 @@ pub const Parser = struct {
         return self.wrapExpressionStatement(expression);
     }
 
-    pub fn parseExpression(self: *Parser, state: ParseState) ParserError!ast.Node {
+    pub fn parseExpression(self: *Parser, state: ParseState) CompileError!ast.Node {
         const token = try self.lexer.next();
         var left_hand_side = try self.parsePrefixExpression(token, state);
 
@@ -1240,7 +1239,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parsePrefixExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
+    fn parsePrefixExpression(self: *Parser, token: lexing.Token, state: ParseState) CompileError!ast.Node {
         return switch (token.kind) {
             .IntLiteral => self.createNode(.{ .IntegerLiteral = token }),
             .BooleanLiteral => self.createNode(.{ .BooleanLiteral = token }),
@@ -1265,7 +1264,7 @@ pub const Parser = struct {
         };
     }
 
-    fn parseIdentifierExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
+    fn parseIdentifierExpression(self: *Parser, token: lexing.Token, state: ParseState) CompileError!ast.Node {
         if (isIdentifierNamed(token, "unit")) {
             return self.createNode(.{ .UnitLiteral = token });
         }
@@ -1277,7 +1276,7 @@ pub const Parser = struct {
         return self.createNode(.{ .Identifier = token });
     }
 
-    fn parseDotExpression(self: *Parser, token: lexing.Token, state: ParseState) ParserError!ast.Node {
+    fn parseDotExpression(self: *Parser, token: lexing.Token, state: ParseState) CompileError!ast.Node {
         const post_dot_token = try self.lexer.peek();
         if (post_dot_token.kind == .Identifier) {
             return self.parseImplicitMemberExpression(token);
@@ -1291,7 +1290,7 @@ pub const Parser = struct {
         return error.DiagnosticsEmitted;
     }
 
-    fn parseImplicitMemberExpression(self: *@This(), dot_token: lexing.Token) ParserError!ast.Node {
+    fn parseImplicitMemberExpression(self: *@This(), dot_token: lexing.Token) CompileError!ast.Node {
         const identifier = try self.lexer.next();
         if (identifier.kind != .Identifier) {
             try self.diagnostic_store.emitErrorFromToken(identifier, "expected identifier to start implicit member expression");
@@ -1306,7 +1305,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseIfExpression(self: *Parser, token: lexing.Token) ParserError!ast.Node {
+    fn parseIfExpression(self: *Parser, token: lexing.Token) CompileError!ast.Node {
         const if_form = try self.parseIfForm(token);
         return switch (if_form) {
             .statement => {
@@ -1322,7 +1321,7 @@ pub const Parser = struct {
         token: lexing.Token,
         operator: ast.UnaryOperator,
         state: ParseState,
-    ) ParserError!ast.Node {
+    ) CompileError!ast.Node {
         const prefix_binding_power = getPrefixOperatorBindingPower(token.kind) orelse unreachable;
 
         const operand = self.allocator.create(ast.Node) catch unreachable;
@@ -1340,7 +1339,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseQualifiedStructureLiteral(self: *@This(), structure_name: lexing.Token) ParserError!ast.Node {
+    fn parseQualifiedStructureLiteral(self: *@This(), structure_name: lexing.Token) CompileError!ast.Node {
         const parsed_fields = try self.parseStructureFieldInitializers();
 
         return self.createNode(.{
@@ -1351,7 +1350,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseStructureLiteral(self: *@This(), dot_token: lexing.Token) ParserError!ast.Node {
+    fn parseStructureLiteral(self: *@This(), dot_token: lexing.Token) CompileError!ast.Node {
         const parsed_fields = try self.parseStructureFieldInitializers();
 
         return self.createNode(.{
@@ -1363,7 +1362,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseStructureFieldInitializers(self: *@This()) ParserError!struct {
+    fn parseStructureFieldInitializers(self: *@This()) CompileError!struct {
         left_brace_token: lexing.Token,
         fields: []ast.StructureFieldInitializer,
     } {
@@ -1417,7 +1416,7 @@ pub const Parser = struct {
         };
     }
 
-    pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) ParserError!ast.Node {
+    pub fn parseCalleeExpression(self: *@This(), left_hand_size: ast.Node) CompileError!ast.Node {
         const left_parenthesis = try self.lexer.next();
         if (left_parenthesis.kind != .LeftParenthesis) {
             try self.diagnostic_store.emitErrorFromToken(left_parenthesis, "expected '(' to start argument list");
@@ -1458,7 +1457,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseArrayLiteral(self: *@This(), left_bracket_token: lexing.Token) ParserError!ast.Node {
+    fn parseArrayLiteral(self: *@This(), left_bracket_token: lexing.Token) CompileError!ast.Node {
         if (left_bracket_token.kind != .LeftBracket) {
             unreachable;
         }
@@ -1501,7 +1500,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseIndexExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
+    fn parseIndexExpression(self: *@This(), left_hand_side: ast.Node) CompileError!ast.Node {
         const left_bracket_token = try self.lexer.next();
         if (left_bracket_token.kind != .LeftBracket) {
             unreachable;
@@ -1529,7 +1528,7 @@ pub const Parser = struct {
         });
     }
 
-    fn parseMemberExpression(self: *@This(), left_hand_side: ast.Node) ParserError!ast.Node {
+    fn parseMemberExpression(self: *@This(), left_hand_side: ast.Node) CompileError!ast.Node {
         const dot_token = try self.lexer.next();
         if (dot_token.kind != .Dot) {
             unreachable;

@@ -1,9 +1,8 @@
 const std = @import("std");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const ast = @import("ast");
-
-const ParseError = @import("parse_error.zig").ParseError;
 
 pub const PatternParser = struct {
     lexer: *lexing.Lexer,
@@ -25,7 +24,7 @@ pub const PatternParser = struct {
         };
     }
 
-    pub fn parse(self: *@This()) ParseError!ast.Pattern {
+    pub fn parse(self: *@This()) CompileError!ast.Pattern {
         const token = try self.lexer.next();
         switch (token.kind) {
             .Minus => return self.parseIntegerLiteral(token),
@@ -56,7 +55,7 @@ pub const PatternParser = struct {
         }
     }
 
-    fn parseIntegerLiteral(self: *@This(), minus_token: lexing.Token) ParseError!ast.Pattern {
+    fn parseIntegerLiteral(self: *@This(), minus_token: lexing.Token) CompileError!ast.Pattern {
         const literal_token = try self.lexer.next();
         if (literal_token.kind != .IntLiteral) {
             try self.diagnostic_store.emitErrorFromToken(literal_token, "expected integer literal after '-' in pattern");
@@ -69,7 +68,7 @@ pub const PatternParser = struct {
         } });
     }
 
-    fn parseCase(self: *@This(), qualifier_token: ?lexing.Token, dot_token: lexing.Token) ParseError!ast.Pattern {
+    fn parseCase(self: *@This(), qualifier_token: ?lexing.Token, dot_token: lexing.Token) CompileError!ast.Pattern {
         const case_name_token = try self.lexer.next();
         if (case_name_token.kind != .Identifier) {
             try self.diagnostic_store.emitErrorFromToken(case_name_token, "expected case name after '.' in pattern");
@@ -84,7 +83,7 @@ pub const PatternParser = struct {
         } });
     }
 
-    fn parsePayloadBinding(self: *@This()) ParseError!?ast.PayloadBinding {
+    fn parsePayloadBinding(self: *@This()) CompileError!?ast.PayloadBinding {
         if ((try self.lexer.peek()).kind != .LeftParenthesis) {
             return null;
         }

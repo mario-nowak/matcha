@@ -2,12 +2,12 @@ const std = @import("std");
 const ast = @import("ast");
 const lexing = @import("lexing");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const symbols = @import("symbols");
 const typing = @import("typing");
 const control_flow_validation = @import("../control_flow/module.zig");
 const type_checking_types = @import("type_checking_types.zig");
 
-pub const TypeError = type_checking_types.TypeError;
 const ExhaustivenessClass = type_checking_types.ExhaustivenessClass;
 const TypeCheckEnvironment = type_checking_types.TypeCheckEnvironment;
 const PlaceInfo = type_checking_types.PlaceInfo;
@@ -65,7 +65,7 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
-    ) TypeError!TypeCheckResult {
+    ) CompileError!TypeCheckResult {
         self.resetState();
         self.resolved_program = resolved_program;
         self.exit_behavior_by_node_id = exit_behavior_by_node_id;
@@ -87,7 +87,7 @@ pub const NodeTypeAnalyzer = struct {
         };
     }
 
-    fn seedModuleLevelItemTypes(self: *@This()) TypeError!void {
+    fn seedModuleLevelItemTypes(self: *@This()) CompileError!void {
         const resolved_program = self.resolved_program;
         // First seed all user defined structures and unions as preliminary types to support forward references of these
         // types.
@@ -201,7 +201,7 @@ pub const NodeTypeAnalyzer = struct {
         node: *const ast.Node,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const type_id = switch (node.kind) {
             .BindingDeclaration => |binding_declaration| try self.checkBindingDeclarationNode(node.id, &binding_declaration, environment),
             .ItemDefinition => |item_definition| try self.checkItemDefinitionNode(node.id, &item_definition, environment),
@@ -246,7 +246,7 @@ pub const NodeTypeAnalyzer = struct {
         type_kind_to_reject: typing.TypeKind,
         message: []const u8,
         parent_node_expectation: ParentNodeExpectation,
-    ) TypeError!void {
+    ) CompileError!void {
         const node_type = self.type_store.getType(self.type_id_by_node_id.get(node.id) orelse unreachable);
 
         if (node_type == type_kind_to_reject and !parent_node_expectation.node_role.isInCalleePosition()) {
@@ -264,7 +264,7 @@ pub const NodeTypeAnalyzer = struct {
         expected_type_id: typing.TypeId,
         reason: TypeCheckReason,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const node_type_id = try self.checkNode(node, .asExpressionWithType(expected_type_id), environment);
 
         if (node_type_id != expected_type_id) {
@@ -319,7 +319,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         item_definition: *const ast.ItemDefinition,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         switch (item_definition.definition) {
             .Function => |function_definition| try self.checkFunctionDefinitionNode(
                 node_id,
@@ -356,7 +356,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         qualified_structure_literal: *const ast.QualifiedStructureLiteral,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const structure_symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const type_id = self.type_id_by_symbol_id.get(structure_symbol_id).?;
         return self.checkStructureLiteralFieldsAgainstType(
@@ -374,7 +374,7 @@ pub const NodeTypeAnalyzer = struct {
         structure_literal: *const ast.StructureLiteral,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const type_id = parent_node_expectation.type_id orelse {
             try self.diagnostic_store.emitErrorFromToken(
                 structure_literal.dot_token,
@@ -398,7 +398,7 @@ pub const NodeTypeAnalyzer = struct {
         fields: []const ast.StructureFieldInitializer,
         type_id: typing.TypeId,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const structure_type = switch (self.type_store.getType(type_id)) {
             .Structure => |structure_type| structure_type,
             else => {
@@ -469,7 +469,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         binding_declaration: *const ast.BindingDeclaration,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const binding_information = self.resolved_program.symbol_table.getSymbol(symbol_id).kind.Binding;
         const annotated_type_id_or_null = if (binding_information.declared_type_reference) |type_reference|
@@ -495,7 +495,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         return_statement: *const ast.ReturnStatement,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const function_return_type_id = environment.function_return_type_id orelse {
             // Outside a function there is nothing to check the value against. Control flow validation reports the
             // misplaced return.
@@ -530,7 +530,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         assignment_statement: *const ast.AssignmentStatement,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const place = try self.checkPlaceNode(assignment_statement.target, environment);
 
         switch (assignment_statement.operator) {
@@ -574,7 +574,7 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node: *const ast.Node,
         environment: TypeCheckEnvironment,
-    ) TypeError!PlaceInfo {
+    ) CompileError!PlaceInfo {
         switch (node.kind) {
             .Identifier => |identifier| {
                 const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node.id) orelse unreachable;
@@ -646,7 +646,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         loop: *const ast.Loop,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         _ = try self.checkNode(loop.body_block, .asStatement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
@@ -656,7 +656,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         while_statement: *const ast.While,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const while_condition_type = try self.checkNode(while_statement.condition, .asExpression, environment);
         if (while_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -681,7 +681,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         for_in: *const ast.ForIn,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const iterable_type_id = try self.checkNode(for_in.iterable, .asExpression, environment);
         const item_type_id = switch (self.type_store.getType(iterable_type_id)) {
             .Array => |element_type_id| element_type_id,
@@ -706,14 +706,14 @@ pub const NodeTypeAnalyzer = struct {
     fn checkLeaveStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
     fn checkContinueStatementNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -723,7 +723,7 @@ pub const NodeTypeAnalyzer = struct {
         call_expression: *const ast.CallExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         // The callee receives the type expected of the whole call so that an implicit member expression like `.Some`
         // can resolve against it. Callees that infer their own type ignore it.
         const callee_type_id = try self.checkNode(
@@ -787,7 +787,7 @@ pub const NodeTypeAnalyzer = struct {
         member_expression: *const ast.MemberExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const member_name = member_expression.member_name_token.kind.Identifier;
         if (member_expression.base.kind == .Identifier) {
             const base_symbol_id = self.resolved_program.symbol_id_by_node_id.get(member_expression.base.id) orelse unreachable;
@@ -854,7 +854,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         implicit_member_expression: *const ast.ImplicitMemberExpression,
         parent_node_expectation: ParentNodeExpectation,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const expected_type_id = parent_node_expectation.type_id orelse {
             try self.diagnostic_store.emitErrorFromToken(
                 implicit_member_expression.member_name_token,
@@ -890,7 +890,7 @@ pub const NodeTypeAnalyzer = struct {
         union_type_id: typing.TypeId,
         member_name_token: lexing.Token,
         parent_node_expectation: ParentNodeExpectation,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const member_name = member_name_token.kind.Identifier;
         const union_type = self.type_store.getType(union_type_id).Union;
         const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
@@ -932,7 +932,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         member_expression: *const ast.MemberExpression,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const member_name = member_expression.member_name_token.kind.Identifier;
         const base_type_id = try self.checkNode(member_expression.base, .asExpression, environment);
         switch (self.type_store.getType(base_type_id)) {
@@ -1073,7 +1073,7 @@ pub const NodeTypeAnalyzer = struct {
     fn getArrayAppendFunctionTypeId(
         self: *@This(),
         array_type_id: typing.TypeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const element_type_id = switch (self.type_store.getType(array_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => unreachable,
@@ -1106,7 +1106,7 @@ pub const NodeTypeAnalyzer = struct {
         member_name_token: lexing.Token,
         function_symbol_id: symbols.SymbolId,
         receiver_type_id: typing.TypeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const function_type_id = self.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_type = switch (self.type_store.getType(function_type_id)) {
             .Function => |function_type| function_type,
@@ -1145,7 +1145,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         binary_expression: *const ast.BinaryExpression,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const left_expression_type = try self.checkNode(binary_expression.left, .asExpression, environment);
         const operator_signature = try self.findBinaryOperatorSignature(
             binary_expression.operator_token,
@@ -1167,7 +1167,7 @@ pub const NodeTypeAnalyzer = struct {
         operator_token: lexing.Token,
         binary_operator: ast.BinaryOperator,
         left_operand_type: typing.TypeId,
-    ) TypeError!typing.BinaryOperatorSignature {
+    ) CompileError!typing.BinaryOperatorSignature {
         const rules_for_left_type = typing.getBinaryOperatorRules(&self.type_store, left_operand_type) orelse {
             try self.diagnostic_store.emitFormattedErrorFromToken(
                 self.allocator,
@@ -1194,7 +1194,7 @@ pub const NodeTypeAnalyzer = struct {
         binary_operator: ast.BinaryOperator,
         operator_signature: typing.BinaryOperatorSignature,
         right_operand_type: typing.TypeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         if (operator_signature.argument_type_id != right_operand_type) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
                 self.allocator,
@@ -1212,7 +1212,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         unary_expression: *const ast.UnaryExpression,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const operand_type = try self.checkNode(unary_expression.operand, .asExpression, environment);
         if (typing.getUnaryOperatorRules(&self.type_store, operand_type)) |rules_for_operand_type| {
             if (rules_for_operand_type.get(unary_expression.operator)) |operator_rule| {
@@ -1243,7 +1243,7 @@ pub const NodeTypeAnalyzer = struct {
         block: *const ast.Block,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         if (parent_node_expectation.node_role == .Statement and block.result != null) {
             try self.diagnostic_store.emitErrorFromToken(block.left_brace, "block cannot have a trailing expression in statement context");
             return error.DiagnosticsEmitted;
@@ -1263,28 +1263,28 @@ pub const NodeTypeAnalyzer = struct {
     fn checkIntegerLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.integer_type_id);
     }
 
     fn checkBooleanLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.boolean_type_id);
     }
 
     fn checkStringLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.string_type_id);
     }
 
     fn checkUnitLiteralNode(
         self: *@This(),
         node_id: ast.NodeId,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -1292,7 +1292,7 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node_id: ast.NodeId,
         identifier_token: lexing.Token,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const symbol = self.resolved_program.symbol_table.getSymbol(symbol_id);
         switch (symbol.kind) {
@@ -1319,7 +1319,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         if_statement: *const ast.IfStatement,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const if_condition_type = try self.checkNode(if_statement.condition, .asExpression, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, if_statement.if_token, "if condition must be boolean, found {s}", .{try self.getTypeName(if_condition_type)});
@@ -1336,7 +1336,7 @@ pub const NodeTypeAnalyzer = struct {
         if_expression: *const ast.IfExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const if_condition_type = try self.checkNode(if_expression.condition, .asExpression, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -1373,7 +1373,7 @@ pub const NodeTypeAnalyzer = struct {
         match_expression: *const ast.MatchExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const match_type = try self.checkMatchExpression(match_expression, parent_node_expectation, environment);
         return self.recordNodeType(node_id, match_type);
     }
@@ -1384,7 +1384,7 @@ pub const NodeTypeAnalyzer = struct {
         subjectless_match_expression: *const ast.SubjectlessMatchExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const match_type = try self.checkSubjectlessMatchExpression(subjectless_match_expression, parent_node_expectation, environment);
         return self.recordNodeType(node_id, match_type);
     }
@@ -1395,7 +1395,7 @@ pub const NodeTypeAnalyzer = struct {
         array_literal: *const ast.ArrayLiteral,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const expected_element_type_id: ?typing.TypeId = if (parent_node_expectation.type_id) |expected_type_id| switch (self.type_store.getType(expected_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => null,
@@ -1445,7 +1445,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         index_expression: *const ast.IndexExpression,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const base_type_id = try self.checkNode(index_expression.base, .asExpression, environment);
         const element_type_id = switch (self.type_store.getType(base_type_id)) {
             .Array => |element_type_id| element_type_id,
@@ -1469,7 +1469,7 @@ pub const NodeTypeAnalyzer = struct {
         node_id: ast.NodeId,
         expression_statement: *const ast.ExpressionStatement,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const expression_type = try self.checkNode(expression_statement.expression, .asStatement, environment);
         if (expression_type != self.type_store.unit_type_id) {
             try self.diagnostic_store.emitErrorFromToken(expression_statement.expression.primaryToken(), "expression statement must evaluate to unit");
@@ -1484,7 +1484,7 @@ pub const NodeTypeAnalyzer = struct {
         function_definition_node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
-    ) TypeError!void {
+    ) CompileError!void {
         const function_symbol_id = self.resolved_program.symbol_id_by_node_id.get(function_definition_node_id).?;
         const function_information = self.getFunctionSymbolInformation(function_symbol_id);
         for (function_information.parameter_symbol_ids) |parameter_symbol_id| {
@@ -1508,7 +1508,7 @@ pub const NodeTypeAnalyzer = struct {
         function_node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
         environment: TypeCheckEnvironment,
-    ) TypeError!void {
+    ) CompileError!void {
         const symbol_id = self.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
         const function_information = self.getFunctionSymbolInformation(symbol_id);
         const function_return_type = self.resolveTypeReference(function_information.return_type_reference);
@@ -1583,7 +1583,7 @@ pub const NodeTypeAnalyzer = struct {
         match_expression: *const ast.MatchExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         const subject_type_id = try self.checkNode(match_expression.subject, .asExpression, environment);
         const subject_type = self.getType(subject_type_id);
         const exhaustiveness_class: ExhaustivenessClass = switch (subject_type) {
@@ -1760,7 +1760,7 @@ pub const NodeTypeAnalyzer = struct {
         subjectless_match_expression: *const ast.SubjectlessMatchExpression,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         var arm_result_type: ?typing.TypeId = null;
         for (subjectless_match_expression.arms) |arm| {
             const condition_type = try self.checkNode(arm.condition, .asExpression, environment);
@@ -1791,7 +1791,7 @@ pub const NodeTypeAnalyzer = struct {
         arm_body: *ast.Node,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!void {
+    ) CompileError!void {
         const body_type = try self.checkNode(
             arm_body,
             getBranchExpectation(parent_node_expectation, arm_result_type.*),
@@ -1818,7 +1818,7 @@ pub const NodeTypeAnalyzer = struct {
         else_arm: *ast.Node,
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
-    ) TypeError!void {
+    ) CompileError!void {
         const else_type = try self.checkNode(
             else_arm,
             getBranchExpectation(parent_node_expectation, arm_result_type.*),
@@ -1844,7 +1844,7 @@ pub const NodeTypeAnalyzer = struct {
         match_token: lexing.Token,
         union_symbol_information: symbols.UnionSymbolInformation,
         is_case_matched: []const bool,
-    ) TypeError!void {
+    ) CompileError!void {
         var missing_cases = std.ArrayList(u8){};
         defer missing_cases.deinit(self.allocator);
         var missing_case_count: usize = 0;
@@ -1871,7 +1871,7 @@ pub const NodeTypeAnalyzer = struct {
         arm_result_type: ?typing.TypeId,
         is_exhaustive: bool,
         parent_node_expectation: ParentNodeExpectation,
-    ) TypeError!typing.TypeId {
+    ) CompileError!typing.TypeId {
         if (!is_exhaustive) {
             try self.diagnostic_store.emitErrorFromToken(match_token, "match expression is not exhaustive");
             return error.DiagnosticsEmitted;

@@ -29,11 +29,6 @@ pub const ExhaustivenessClass = enum {
     StringOpen,
 };
 
-pub const TypeError = error{
-    OutOfMemory,
-    DiagnosticsEmitted,
-};
-
 /// Facts about the surrounding program that every node inherits from its parent unless a node explicitly overrides
 /// them. Compare `ParentNodeExpectation`, which holds facts that only apply to a single parent-child edge.
 pub const TypeCheckEnvironment = struct {

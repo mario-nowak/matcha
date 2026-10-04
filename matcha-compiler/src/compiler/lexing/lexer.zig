@@ -1,13 +1,9 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const tokens = @import("token.zig");
 const TokenKind = tokens.TokenKind;
 const Token = tokens.Token;
-
-pub const LexError = error{
-    OutOfMemory,
-    DiagnosticsEmitted,
-};
 
 pub const Lexer = struct {
     source: []const u8,
@@ -34,7 +30,7 @@ pub const Lexer = struct {
         _ = self;
     }
 
-    pub fn next(self: *Lexer) LexError!Token {
+    pub fn next(self: *Lexer) CompileError!Token {
         self.skipTrivia();
 
         if (self.done()) {
@@ -61,7 +57,7 @@ pub const Lexer = struct {
         return self.lexOperator();
     }
 
-    pub fn peek(self: *Lexer) LexError!Token {
+    pub fn peek(self: *Lexer) CompileError!Token {
         const lineBeforeNext = self.line;
         const columnBeforeNext = self.column;
         const offsetInSourceBeforeNext = self.offsetInSource;
@@ -86,7 +82,7 @@ pub const Lexer = struct {
         offset_in_source: usize,
         len_in_source: u32,
         message: []const u8,
-    ) LexError {
+    ) CompileError {
         self.diagnostic_store.emitErrorFromSpan(.{
             .line = line,
             .column = column,
@@ -140,7 +136,7 @@ pub const Lexer = struct {
         return token;
     }
 
-    fn lexNumericLiteral(self: *Lexer) LexError!Token {
+    fn lexNumericLiteral(self: *Lexer) CompileError!Token {
         self.offsetInToken = 0;
         for (self.source[self.offsetInSource..self.source.len]) |character| {
             if (!isNumeric(character)) {
@@ -173,7 +169,7 @@ pub const Lexer = struct {
         return token;
     }
 
-    fn lexStringLiteral(self: *Lexer) LexError!Token {
+    fn lexStringLiteral(self: *Lexer) CompileError!Token {
         const start_line = self.line;
         const start_column = self.column;
         const start_offset = self.offsetInSource;
@@ -259,7 +255,7 @@ pub const Lexer = struct {
         );
     }
 
-    fn lexOperator(self: *Lexer) LexError!Token {
+    fn lexOperator(self: *Lexer) CompileError!Token {
         const character = self.source[self.offsetInSource];
         if (self.offsetInSource + 1 < self.source.len) {
             const nextCharacter = self.source[self.offsetInSource + 1];

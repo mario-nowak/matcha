@@ -1,11 +1,11 @@
 const std = @import("std");
 const ast = @import("ast");
+const CompileError = @import("diagnostics").CompileError;
 
 const control_flow_types = @import("control_flow_types.zig");
 const structural_validator = @import("structural_validator.zig");
 const exit_behavior_analyzer = @import("exit_behavior_analyzer.zig");
 
-pub const ControlFlowValidationError = control_flow_types.ControlFlowValidationError;
 pub const ExitBehavior = control_flow_types.ExitBehavior;
 pub const ExitBehaviorByNodeId = control_flow_types.ExitBehaviorByNodeId;
 
@@ -26,7 +26,7 @@ pub const ControlFlowValidator = struct {
     pub fn validateProgram(
         self: *@This(),
         program: *const ast.Program,
-    ) ControlFlowValidationError!ExitBehaviorByNodeId {
+    ) CompileError!ExitBehaviorByNodeId {
         try self.structural_validator.validateProgram(program);
         return self.exit_behavior_analyzer.analyzeProgram(program);
     }
