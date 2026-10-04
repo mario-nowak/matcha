@@ -24,7 +24,7 @@ pub const StringLiteralRenderer = struct {
             }
         }
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{globals_buffer.items});
+        return globals_buffer.toOwnedSlice(self.arena);
     }
 
     fn renderLlvmStringLiteralContent(self: *@This(), content: []const u8) ![]const u8 {
@@ -39,6 +39,6 @@ pub const StringLiteralRenderer = struct {
             try rendered_content_buffer.writer(self.arena).print("\\{X:0>2}", .{byte});
         }
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{rendered_content_buffer.items});
+        return rendered_content_buffer.toOwnedSlice(self.arena);
     }
 };

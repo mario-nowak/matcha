@@ -117,6 +117,6 @@ pub const RuntimeSymbolRenderer = struct {
             );
         }
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{runtime_symbol_declarations.items});
+        return runtime_symbol_declarations.toOwnedSlice(self.arena);
     }
 };

@@ -135,7 +135,7 @@ pub const LlvmModuleRenderer = struct {
         }
         try module_buffer.writer(self.arena).print("\n", .{});
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{module_buffer.items});
+        return module_buffer.toOwnedSlice(self.arena);
     }
 
     fn resetModuleState(self: *@This()) void {
@@ -156,7 +156,7 @@ pub const LlvmModuleRenderer = struct {
         if (string_literal_globals_ir.len > 0) {
             try module_preamble_buffer.writer(self.arena).print("\n\n{s}", .{string_literal_globals_ir});
         }
-        return std.fmt.allocPrint(self.arena, "{s}", .{module_preamble_buffer.items});
+        return module_preamble_buffer.toOwnedSlice(self.arena);
     }
 
     /// Renders the functions that a type declares in its body.

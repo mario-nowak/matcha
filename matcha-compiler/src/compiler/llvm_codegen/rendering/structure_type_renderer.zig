@@ -53,7 +53,7 @@ pub const StructureTypeRenderer = struct {
             has_structure_definition = true;
         }
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definitions_buffer.items});
+        return structure_definitions_buffer.toOwnedSlice(self.arena);
     }
 
     fn renderStructureTypeDefinition(
@@ -92,6 +92,6 @@ pub const StructureTypeRenderer = struct {
         }
         try structure_definition_buffer.writer(self.arena).print("}}", .{});
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definition_buffer.items});
+        return structure_definition_buffer.toOwnedSlice(self.arena);
     }
 };
