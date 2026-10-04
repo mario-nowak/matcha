@@ -36,8 +36,9 @@ pub fn emitBindingDeclaration(
     const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(value_declaration.value.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
-    const address = emitter.function_symbol_generator.generateAddress();
-    emitter.function_ir_builder.emitAlloca(address, llvm_ir_type);
+    const binding_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(symbol_id).name;
+    const address = emitter.function_symbol_generator.generateBindingAddressName(binding_name);
+    emitter.function_ir_builder.emitStackAllocation(address, llvm_ir_type);
     emitter.function_ir_builder.emitStore(initial_value.expectValue(), address, llvm_ir_type);
 
     environment.address_by_symbol_id.put(symbol_id, address) catch unreachable;
@@ -59,23 +60,23 @@ pub fn emitAssignmentStatement(
     switch (assignment_statement.operator) {
         .Assign => {
             const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
-            const place_value = switch (place_emission_result) {
+            const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
-                .value => |place_value| place_value,
+                .value => |place_address| place_address,
                 .statement => unreachable,
             };
-            emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_value, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_address, llvm_ir_type);
         },
         .Compound => {
             const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
-            const place_value = switch (place_emission_result) {
+            const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
-                .value => |place_value| place_value,
+                .value => |place_address| place_address,
                 .statement => unreachable,
             };
 
-            const current_value = emitter.function_symbol_generator.generateValue();
-            emitter.function_ir_builder.emitLoad(current_value, place_value, llvm_ir_type);
+            const current_value = emitter.function_symbol_generator.generateValueName();
+            emitter.function_ir_builder.emitLoad(current_value, place_address, llvm_ir_type);
 
             const result_value = values.emitLoweredBinaryOperation(
                 emitter,
@@ -85,7 +86,7 @@ pub fn emitAssignmentStatement(
                 assigned_value.expectValue(),
                 lowered_program,
             );
-            emitter.function_ir_builder.emitStore(result_value, place_value, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(result_value, place_address, llvm_ir_type);
         },
     }
     return .statement;
@@ -164,7 +165,7 @@ pub fn emitStructureFieldPointer(
         .Index => |field_layout_index| field_layout_index,
     };
 
-    const field_pointer_value = emitter.function_symbol_generator.generateValue();
+    const field_pointer_value = emitter.function_symbol_generator.generateValueName();
     emitter.function_ir_builder.emitFieldPointer(
         field_pointer_value,
         structure_layout.llvm_type_name,
@@ -192,7 +193,7 @@ pub fn emitIndexExpressionPointer(
     };
 
     // Perform bounds check
-    const length_pointer_value = emitter.function_symbol_generator.generateValue();
+    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -200,10 +201,10 @@ pub fn emitIndexExpressionPointer(
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_value = emitter.function_symbol_generator.generateValue();
+    const length_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(length_value, length_pointer_value, "i64");
 
-    const data_pointer_value = emitter.function_symbol_generator.generateValue();
+    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -211,21 +212,21 @@ pub fn emitIndexExpressionPointer(
         lowering.llvm_type.array_data_field_index,
     );
 
-    const negative_check_value = emitter.function_symbol_generator.generateValue();
+    const negative_check_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, 0",
         .{ negative_check_value, index_value },
     ) catch unreachable);
 
-    const overflow_check_value = emitter.function_symbol_generator.generateValue();
+    const overflow_check_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp sge i64 {s}, {s}",
         .{ overflow_check_value, index_value, length_value },
     ) catch unreachable);
 
-    const out_of_bounds_value = emitter.function_symbol_generator.generateValue();
+    const out_of_bounds_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = or i1 {s}, {s}",
@@ -258,9 +259,9 @@ pub fn emitIndexExpressionPointer(
     if (!element_runtime_representation.hasRuntimeRepresentation()) {
         return .zero_sized;
     }
-    const data_value = emitter.function_symbol_generator.generateValue();
+    const data_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(data_value, data_pointer_value, "ptr");
-    const element_pointer_value = emitter.function_symbol_generator.generateValue();
+    const element_pointer_value = emitter.function_symbol_generator.generateValueName();
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
     builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 

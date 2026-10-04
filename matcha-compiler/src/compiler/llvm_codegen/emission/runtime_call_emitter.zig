@@ -51,7 +51,7 @@ pub const RuntimeCallEmitter = struct {
     ) void {
         const init_instruction = std.fmt.allocPrint(
             self.allocator,
-            "call void @{s}(i32 %argc, ptr %argv)",
+            "call void @{s}(i32 %parameter.argc, ptr %parameter.argv)",
             .{runtime_symbols.runtime_init_arguments_function_name},
         ) catch unreachable;
         builder.emitInstruction(init_instruction);
@@ -122,7 +122,7 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
     ) Value {
         self.runtime_requirements.get_arguments = true;
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}()",
@@ -139,8 +139,8 @@ pub const RuntimeCallEmitter = struct {
         right_parts: RuntimeStringParts,
     ) Value {
         self.runtime_requirements.string_concatenate = true;
-        const result_address = symbol_generator.generateAddress();
-        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateSyntheticAddressName();
+        builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s}, i64 {s})",
@@ -154,7 +154,7 @@ pub const RuntimeCallEmitter = struct {
             },
         ) catch unreachable);
 
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
         return result_value;
     }
@@ -167,7 +167,7 @@ pub const RuntimeCallEmitter = struct {
         right_parts: RuntimeStringParts,
     ) Value {
         self.runtime_requirements.string_compare = true;
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call i1 @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
@@ -206,7 +206,7 @@ pub const RuntimeCallEmitter = struct {
         delimiter_parts: RuntimeStringParts,
     ) Value {
         self.runtime_requirements.string_split = true;
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
@@ -229,7 +229,7 @@ pub const RuntimeCallEmitter = struct {
         string_parts: RuntimeStringParts,
     ) Value {
         self.runtime_requirements.string_to_int = true;
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call i64 @{s}(ptr {s}, i64 {s})",
@@ -250,8 +250,8 @@ pub const RuntimeCallEmitter = struct {
         integer_value: Value,
     ) Value {
         self.runtime_requirements.int_to_string = true;
-        const result_address = symbol_generator.generateAddress();
-        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateSyntheticAddressName();
+        builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
@@ -262,7 +262,7 @@ pub const RuntimeCallEmitter = struct {
             },
         ) catch unreachable);
 
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
         return result_value;
     }
@@ -297,7 +297,7 @@ pub const RuntimeCallEmitter = struct {
         element_llvm_type: []const u8,
     ) Value {
         self.runtime_requirements.array_append_slot = true;
-        const slot_value = symbol_generator.generateValue();
+        const slot_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(ptr {s}, i64 {s})",
@@ -320,7 +320,7 @@ pub const RuntimeCallEmitter = struct {
         llvm_type: []const u8,
         count: usize,
     ) Value {
-        const memory_value = symbol_generator.generateValue();
+        const memory_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(i64 {s})",
@@ -337,7 +337,7 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         byte_count: usize,
     ) Value {
-        const memory_value = symbol_generator.generateValue();
+        const memory_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(i64 {d})",
@@ -364,8 +364,8 @@ pub const RuntimeCallEmitter = struct {
         runtime_function_name: []const u8,
         string_parts: RuntimeStringParts,
     ) Value {
-        const result_address = symbol_generator.generateAddress();
-        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateSyntheticAddressName();
+        builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s})",
@@ -377,7 +377,7 @@ pub const RuntimeCallEmitter = struct {
             },
         ) catch unreachable);
 
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
 
         return result_value;
@@ -389,15 +389,15 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         runtime_function_name: []const u8,
     ) Value {
-        const result_address = symbol_generator.generateAddress();
-        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateSyntheticAddressName();
+        builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s})",
             .{ runtime_function_name, result_address },
         ) catch unreachable);
 
-        const result_value = symbol_generator.generateValue();
+        const result_value = symbol_generator.generateValueName();
         builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
         return result_value;
     }

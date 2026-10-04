@@ -18,14 +18,14 @@ const Line = union(enum) {
 /// so callers never have to thread reachability through their control flow.
 pub const FunctionIrBuilder = struct {
     allocator: std.mem.Allocator,
-    address_allocation_instructions: std.ArrayList(Instruction),
+    stack_allocation_instructions: std.ArrayList(Instruction),
     lines: std.ArrayList(Line),
     current_label: ?Label,
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
             .allocator = allocator,
-            .address_allocation_instructions = .{},
+            .stack_allocation_instructions = .{},
             .lines = .{},
             .current_label = entry_label,
         };
@@ -33,13 +33,13 @@ pub const FunctionIrBuilder = struct {
 
     pub fn deinit(self: *@This()) void {
         self.lines.deinit(self.allocator);
-        self.address_allocation_instructions.deinit(self.allocator);
+        self.stack_allocation_instructions.deinit(self.allocator);
     }
 
     pub fn reset(self: *@This()) void {
         self.deinit();
         self.lines = .{};
-        self.address_allocation_instructions = .{};
+        self.stack_allocation_instructions = .{};
         self.current_label = entry_label;
     }
 
@@ -55,10 +55,10 @@ pub const FunctionIrBuilder = struct {
         return_llvm_ir_type: []const u8,
         parameter_list: []const u8,
     ) []const u8 {
-        var address_allocation_buffer = std.ArrayList(u8){};
-        defer address_allocation_buffer.deinit(self.allocator);
-        for (self.address_allocation_instructions.items) |instruction| {
-            address_allocation_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
+        var stack_allocation_buffer = std.ArrayList(u8){};
+        defer stack_allocation_buffer.deinit(self.allocator);
+        for (self.stack_allocation_instructions.items) |instruction| {
+            stack_allocation_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
         }
 
         var instructions_buffer = std.ArrayList(u8){};
@@ -84,7 +84,7 @@ pub const FunctionIrBuilder = struct {
                 return_llvm_ir_type,
                 function_name,
                 parameter_list,
-                address_allocation_buffer.items,
+                stack_allocation_buffer.items,
                 instructions_buffer.items,
             },
         ) catch unreachable;
@@ -110,10 +110,6 @@ pub const FunctionIrBuilder = struct {
         self.current_label = null;
     }
 
-    pub fn emitAddressAllocationInstruction(self: *@This(), instruction: Instruction) void {
-        self.address_allocation_instructions.append(self.allocator, instruction) catch unreachable;
-    }
-
     pub fn emitBranchInstruction(self: *@This(), condition_value: ?[]const u8, labels: []const Label) void {
         const instruction = switch (labels.len) {
             1 => std.fmt.allocPrint(
@@ -131,13 +127,13 @@ pub const FunctionIrBuilder = struct {
         self.emitTerminatorInstruction(instruction);
     }
 
-    pub fn emitAlloca(self: *@This(), address: Address, llvm_ir_type: []const u8) void {
+    pub fn emitStackAllocation(self: *@This(), address: Address, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = alloca {s}",
             .{ address, llvm_ir_type },
         ) catch unreachable;
-        self.emitAddressAllocationInstruction(instruction);
+        self.stack_allocation_instructions.append(self.allocator, instruction) catch unreachable;
     }
 
     pub fn emitStore(self: *@This(), stored_value: []const u8, address: Address, llvm_ir_type: []const u8) void {

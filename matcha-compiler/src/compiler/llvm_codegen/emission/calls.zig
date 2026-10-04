@@ -245,7 +245,7 @@ fn emitDirectFunctionCall(
             return .zero_sized;
         },
         .Present => {
-            const result_value = emitter.function_symbol_generator.generateValue();
+            const result_value = emitter.function_symbol_generator.generateValueName();
             const call_instruction = std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = call {s} @{s}({s})",
@@ -286,18 +286,18 @@ fn emitArrayAppendCall(
         // since the element doesn't need to be stored anywhere.
 
         // load length of the array
-        const length_pointer_value = emitter.function_symbol_generator.generateValue();
+        const length_pointer_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitFieldPointer(
             length_pointer_value,
             lowering.llvm_type.array_llvm_type_name,
             base_value,
             lowering.llvm_type.array_length_field_index,
         );
-        const length_value = emitter.function_symbol_generator.generateValue();
+        const length_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
 
         // increment length of the array
-        const new_length_value = emitter.function_symbol_generator.generateValue();
+        const new_length_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
             emitter.allocator,
             "{s} = add i64 {s}, 1",

@@ -107,7 +107,7 @@ pub const NodeEmitter = struct {
     }
 
     pub fn emitStringParts(self: *@This(), string_value: Value) RuntimeStringParts {
-        const pointer_value = self.function_symbol_generator.generateValue();
+        const pointer_value = self.function_symbol_generator.generateValueName();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = extractvalue {s} {s}, 0",
@@ -115,7 +115,7 @@ pub const NodeEmitter = struct {
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(pointer_instruction);
 
-        const length_value = self.function_symbol_generator.generateValue();
+        const length_value = self.function_symbol_generator.generateValueName();
         const length_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = extractvalue {s} {s}, 1",

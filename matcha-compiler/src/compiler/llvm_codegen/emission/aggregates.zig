@@ -53,7 +53,7 @@ pub fn emitMemberExpression(
         .ArrayLength => {
             const base_value = emitter.emitNode(member_expression.base, lowered_program, environment);
 
-            const length_pointer_value = emitter.function_symbol_generator.generateValue();
+            const length_pointer_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitFieldPointer(
                 length_pointer_value,
                 lowering.llvm_type.array_llvm_type_name,
@@ -61,7 +61,7 @@ pub fn emitMemberExpression(
                 lowering.llvm_type.array_length_field_index,
             );
 
-            const length_value = emitter.function_symbol_generator.generateValue();
+            const length_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
 
             return .{ .value = length_value };
@@ -86,7 +86,7 @@ pub fn emitMemberExpression(
                 .statement => unreachable,
             };
 
-            const member_value = emitter.function_symbol_generator.generateValue();
+            const member_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitLoad(
                 member_value,
                 member_pointer_value,
@@ -142,7 +142,7 @@ pub fn emitUnionConstruction(
     );
 
     // Store the case index in union
-    const case_index_pointer_value = emitter.function_symbol_generator.generateValue();
+    const case_index_pointer_value = emitter.function_symbol_generator.generateValueName();
     emitter.function_ir_builder.emitFieldPointer(
         case_index_pointer_value,
         union_case_layout.llvm_type_name,
@@ -157,7 +157,7 @@ pub fn emitUnionConstruction(
 
     // Store the payload in union
     if (optional_payload_value) |payload_value| {
-        const payload_pointer_value = emitter.function_symbol_generator.generateValue();
+        const payload_pointer_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitFieldPointer(
             payload_pointer_value,
             union_case_layout.llvm_type_name,
@@ -222,7 +222,7 @@ pub fn emitStructureLiteral(
             .Index => |layout_field_index| layout_field_index,
         };
 
-        const field_pointer_value = emitter.function_symbol_generator.generateValue();
+        const field_pointer_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitFieldPointer(
             field_pointer_value,
             structure_layout.llvm_type_name,
@@ -283,7 +283,7 @@ pub fn emitArrayLiteral(
 
     for (element_emission_results, 0..) |element_value, index| {
         if (element_runtime_representation.hasRuntimeRepresentation()) {
-            const element_pointer_value = emitter.function_symbol_generator.generateValue();
+            const element_pointer_value = emitter.function_symbol_generator.generateValueName();
             const index_value = std.fmt.allocPrint(emitter.allocator, "{d}", .{index}) catch unreachable;
             builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 
@@ -291,7 +291,7 @@ pub fn emitArrayLiteral(
         }
     }
 
-    const length_pointer_value = emitter.function_symbol_generator.generateValue();
+    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -302,7 +302,7 @@ pub fn emitArrayLiteral(
     const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
     builder.emitStore(length_number_string, length_pointer_value, "i64");
 
-    const capacity_pointer_value = emitter.function_symbol_generator.generateValue();
+    const capacity_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         capacity_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -311,7 +311,7 @@ pub fn emitArrayLiteral(
     );
     builder.emitStore(length_number_string, capacity_pointer_value, "i64");
 
-    const data_pointer_value = emitter.function_symbol_generator.generateValue();
+    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
         data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
@@ -348,7 +348,7 @@ pub fn emitIndexExpression(
     }
 
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    const result_value = emitter.function_symbol_generator.generateValue();
+    const result_value = emitter.function_symbol_generator.generateValueName();
     emitter.function_ir_builder.emitLoad(result_value, pointer_value.expectValue(), element_llvm_type);
 
     return .{ .value = result_value };

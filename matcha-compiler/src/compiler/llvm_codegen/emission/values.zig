@@ -31,7 +31,7 @@ pub fn emitIdentifier(
     const llvm_ir_type = lowered_program.getLlvmIrType(
         lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?,
     );
-    const value = emitter.function_symbol_generator.generateValue();
+    const value = emitter.function_symbol_generator.generateValueName();
     emitter.function_ir_builder.emitLoad(value, address, llvm_ir_type);
 
     return .{ .value = value };
@@ -103,7 +103,7 @@ fn emitShortCircuitOperation(
     builder.emitBranchInstruction(null, &.{end_label});
 
     builder.emitLabel(end_label);
-    const result_value = emitter.function_symbol_generator.generateValue();
+    const result_value = emitter.function_symbol_generator.generateValueName();
     const phi_instruction = std.fmt.allocPrint(
         emitter.allocator,
         "{s} = phi i1 [{s}, %{s}], [{s}, %{s}]",
@@ -122,7 +122,7 @@ pub fn emitUnaryExpression(
     environment: *Environment,
 ) EmissionResult {
     const operand_value = emitter.emitNode(unary_expression.operand, lowered_program, environment).expectValue();
-    const result_value = emitter.function_symbol_generator.generateValue();
+    const result_value = emitter.function_symbol_generator.generateValueName();
     const operation_type = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
     const instruction_type = lowered_program.getLlvmIrType(operation_type);
     const instruction = switch (unary_expression.operator) {
@@ -166,7 +166,7 @@ pub fn emitLoweredBinaryOperation(
                 .GreaterThanOrEqual => "icmp sge",
             };
 
-            const result_value = emitter.function_symbol_generator.generateValue();
+            const result_value = emitter.function_symbol_generator.generateValueName();
             const instruction = std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = {s} {s} {s}, {s}",
@@ -181,10 +181,10 @@ pub fn emitLoweredBinaryOperation(
             const operator_instruction = "icmp eq";
 
             // The case index is the first field of every case, so it can be loaded from the union pointer directly
-            const union_case_value = emitter.function_symbol_generator.generateValue();
+            const union_case_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitLoad(union_case_value, left_value, union_case_index_type);
 
-            const result_value = emitter.function_symbol_generator.generateValue();
+            const result_value = emitter.function_symbol_generator.generateValueName();
             const instruction = std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = {s} {s} {s}, {s}",
@@ -213,7 +213,7 @@ pub fn emitLoweredBinaryOperation(
                 emitter.emitStringParts(left_value),
                 emitter.emitStringParts(right_value),
             );
-            const result_value = emitter.function_symbol_generator.generateValue();
+            const result_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = xor i1 {s}, 1",

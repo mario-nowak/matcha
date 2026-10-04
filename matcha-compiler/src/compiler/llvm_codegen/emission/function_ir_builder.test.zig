@@ -9,7 +9,7 @@ pub const FunctionIrBuilder = struct {
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             function_ir_builder.emitStore("1", "%value", "i64");
-            function_ir_builder.emitAlloca("%value", "i64");
+            function_ir_builder.emitStackAllocation("%value", "i64");
             function_ir_builder.emitTerminatorInstruction("ret void");
 
             const rendered = function_ir_builder.render("example", "void", "");
@@ -50,7 +50,7 @@ pub const FunctionIrBuilder = struct {
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
             function_ir_builder.emitTerminatorInstruction("ret void");
-            function_ir_builder.emitAlloca("%value", "i64");
+            function_ir_builder.emitStackAllocation("%value", "i64");
 
             const rendered = function_ir_builder.render("example", "void", "");
 
@@ -83,7 +83,7 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitAlloca("%previous", "i64");
+            function_ir_builder.emitStackAllocation("%previous", "i64");
             function_ir_builder.emitLabel("previous_block");
             function_ir_builder.emitTerminatorInstruction("ret void");
             function_ir_builder.reset();
