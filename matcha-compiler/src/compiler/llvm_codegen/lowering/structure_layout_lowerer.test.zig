@@ -26,7 +26,7 @@ pub const StructureLayoutLowerer = struct {
             } } });
         }
 
-        test "names the llvm type after the structure symbol id and name" {
+        test "names the llvm type after the structure name" {
             const source =
                 \\item Point = structure { x: int; };
             ;
@@ -38,7 +38,7 @@ pub const StructureLayoutLowerer = struct {
 
             const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .llvm_type_name = "matcha_structure_0__Point" } });
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .llvm_type_name = "matcha.structure.Point" } });
         }
 
         test "keeps a field of a structure with only unit fields" {

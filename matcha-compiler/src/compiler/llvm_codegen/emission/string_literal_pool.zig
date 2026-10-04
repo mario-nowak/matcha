@@ -64,7 +64,7 @@ pub const StringLiteralPool = struct {
     fn generateStringLiteralGlobalName(self: *@This()) []const u8 {
         const global_name = std.fmt.allocPrint(
             self.allocator,
-            "@.string_literal_{d}",
+            "@matcha.string_literal.{d}",
             .{self.string_literal_global_counter},
         ) catch unreachable;
         self.string_literal_global_counter += 1;
