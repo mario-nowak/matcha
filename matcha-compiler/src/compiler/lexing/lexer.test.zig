@@ -382,3 +382,37 @@ test "Lexer > next: skips consecutive line comments" {
         .{ .kind = .EndOfFile },
     });
 }
+
+pub const Lexer = struct {
+    pub const next = struct {
+        pub const integer_literals = struct {
+            test "captures the largest integer literal that fits into an int" {
+                const source = "9223372036854775807";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+                const tokens = try collectTokens(lexer_pipeline.lexer);
+
+                try expect(tokens).toMatch(.{
+                    .{ .kind = .{ .IntLiteral = 9223372036854775807 } },
+                    .{ .kind = .EndOfFile },
+                });
+            }
+
+            test "emits a diagnostic when an integer literal does not fit into an int" {
+                const source = "9223372036854775808";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const lexer_pipeline = try setupLexerPipeline(&arena, source);
+
+                const result = lexer_pipeline.lexer.next();
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(lexer_pipeline.diagnostic_store.items()).toMatch(.{
+                    .{ .severity = .@"error", .message = "integer literal is too large for int, the maximum is 9223372036854775807" },
+                });
+            }
+        };
+    };
+};

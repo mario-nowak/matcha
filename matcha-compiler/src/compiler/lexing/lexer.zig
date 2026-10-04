@@ -140,7 +140,7 @@ pub const Lexer = struct {
         return token;
     }
 
-    fn lexNumericLiteral(self: *Lexer) Token {
+    fn lexNumericLiteral(self: *Lexer) LexError!Token {
         self.offsetInToken = 0;
         for (self.source[self.offsetInSource..self.source.len]) |character| {
             if (!isNumeric(character)) {
@@ -150,13 +150,21 @@ pub const Lexer = struct {
         }
 
         const numeric = self.source[self.offsetInSource .. self.offsetInSource + self.offsetInToken];
+        // The lexer only accepts digits, so overflow is the only way parsing can fail.
+        const value = std.fmt.parseInt(i64, numeric, 10) catch return self.emitError(
+            self.line,
+            self.column,
+            self.offsetInSource,
+            self.offsetInToken,
+            "integer literal is too large for int, the maximum is 9223372036854775807",
+        );
 
         const token = Token{
             .line = self.line,
             .column = self.column,
             .offsetInSource = self.offsetInSource,
             .lenInSource = self.offsetInToken,
-            .kind = .{ .IntLiteral = std.fmt.parseInt(i64, numeric, 10) catch 0 },
+            .kind = .{ .IntLiteral = value },
         };
 
         self.column += self.offsetInToken;
