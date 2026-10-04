@@ -56,6 +56,28 @@ val offset: Point = .{ x = 3, y = 6 };
 val other_point = origin.movedBy(offset);
 other_point.invert();
 other_point.print();
+
+item Size = structure {
+    width: int;
+    height: int;
+};
+
+item Shape = union {
+    Empty,
+    Square: int,
+    Rectangle: Size,
+
+    item area(self: Shape): int = match self {
+        .Empty => 0,
+        .Square(side) => side * side,
+        .Rectangle(size) => size.width * size.height,
+    };
+};
+
+val shapes: Shape[] = [.Square(2), .Rectangle(.{ width = 3, height = 4 }), .Empty];
+for shape in shapes {
+    printInt(shape.area());
+}
 ```
 
 ## Start here
@@ -103,7 +125,9 @@ Today, the compiler can already handle a meaningful core language, including:
 - `int`, `boolean`, and `string`
 - arrays with indexing, `append`, and `length`
 - structures with fields, methods, and type functions
-- `if`, `while`, `for`, `loop`, and `match`
+- tagged unions with payloads, methods, and type functions
+- `if`, `while`, `for`, `loop`, and `match`, including exhaustive pattern matching on unions
+- short-circuiting `and` and `or`
 - built-ins such as `printInt`, `printString`, `readFile`, `readLine`, and `getArguments`
 - LLVM IR emission and native binary generation
 
@@ -132,5 +156,5 @@ This repository is a monorepo with two main parts:
 - [`docs/compiler-releases.md`](./docs/compiler-releases.md) for compiler release setup and operation
 - [`matcha-compiler/examples/learning-matcha.mt`](./matcha-compiler/examples/learning-matcha.mt) for a guided tour of the currently implemented language
 - [`matcha-compiler/examples/aoc-2024-01.mt`](./matcha-compiler/examples/aoc-2024-01.mt) for Advent of Code-style parsing and array processing
-- [`matcha-compiler/examples/customer-import-audit.mt`](./matcha-compiler/examples/customer-import-audit.mt) for a more domain-shaped example using structures and `match`
+- [`matcha-compiler/examples/customer-import-audit.mt`](./matcha-compiler/examples/customer-import-audit.mt) for a more domain-shaped example using structures, unions, and `match`
 - [`tooling/ide-extensions/vs-code-extension/README.md`](./tooling/ide-extensions/vs-code-extension/README.md) for VS Code extension documentation

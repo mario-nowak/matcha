@@ -7,6 +7,7 @@
 // 2. control flow and loops
 // 3. functions
 // 4. structures and methods
+// 5. unions and pattern matching
 
 // # Basics
 
@@ -302,3 +303,55 @@ val other_point = origin.movedBy(offset);
 other_point.invert();
 
 other_point.print();
+
+
+// # Unions
+// A union value is exactly one of several named cases.
+// A case can carry a payload of any type, declared after `:`. A case without a payload carries `unit`.
+item Size = structure {
+    width: int;
+    height: int;
+};
+
+item Shape = union {
+    Empty,
+    Square: int,
+    Rectangle: Size,
+
+    // Like structures, unions can define functions inside the type body.
+    item square(side: int): Shape = .Square(side);
+
+    // `match` on a union picks the arm of the current case and binds its payload.
+    // The match must be exhaustive. Leaving out the `.Rectangle` arm would be a compile-time error.
+    item area(self: Shape): int = match self {
+        .Empty => 0,
+        .Square(side) => side * side,
+        .Rectangle(size) => size.width * size.height,
+    };
+};
+
+// Construct a case through the union name.
+val small_square = Shape.Square(2);
+// When the type is already known, the union name can be left out.
+val rectangle: Shape = .Rectangle(.{
+    width = 3,
+    height = 4,
+});
+val shapes: Shape[] = [small_square, rectangle, .Empty, Shape.square(5)];
+
+var total_area = 0;
+for shape in shapes {
+    total_area += shape.area();
+}
+printInt(total_area); // Prints 41.
+
+// A pattern can ignore the payload, and an `else` arm covers all remaining cases.
+val rectangle_kind = match rectangle {
+    .Square => "square",
+    .Rectangle(size) => match {
+        size.width == size.height => "square-shaped rectangle",
+        else => "rectangle",
+    },
+    else => "no shape",
+};
+printString(rectangle_kind); // Prints "rectangle".
