@@ -1163,6 +1163,36 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
             }
 
+            test "types array equality as a boolean" {
+                const source =
+                    \\val same = [1] == [1];
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const binary_expression = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
+            }
+
+            test "rejects array equality when the element types differ" {
+                const source =
+                    \\val same = [1] == ["a"];
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "binary operator '==' expects right operand of type int[], found string[]" },
+                });
+            }
+
             test "resolves an anonymous structure literal against the left operand type when it is the right operand of an equality" {
                 const source =
                     \\item Point = structure { x: int; };
