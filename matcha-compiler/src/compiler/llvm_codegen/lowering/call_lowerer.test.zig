@@ -19,7 +19,7 @@ pub const CallLowerer = struct {
                 const identity_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = identity_symbol_id,
@@ -43,7 +43,7 @@ pub const CallLowerer = struct {
                 const origin_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = origin_symbol_id,
@@ -69,7 +69,7 @@ pub const CallLowerer = struct {
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
                 const receiver_node_id = call_expression.kind.CallExpression.callee.kind.MemberExpression.base.id;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = moved_symbol_id,
@@ -93,7 +93,7 @@ pub const CallLowerer = struct {
                 const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = from_number_symbol_id,
@@ -117,7 +117,7 @@ pub const CallLowerer = struct {
                 const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = from_number_symbol_id,
@@ -144,7 +144,7 @@ pub const CallLowerer = struct {
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
                 const receiver_node_id = call_expression.kind.CallExpression.callee.kind.MemberExpression.base.id;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .UserFunction = .{
                     .function_symbol_id = get_self_symbol_id,
@@ -163,7 +163,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.ExpressionStatement.expression;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .PrintInt });
             }
@@ -177,7 +177,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.ExpressionStatement.expression;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .PrintString });
             }
@@ -191,7 +191,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .ReadFile });
             }
@@ -205,7 +205,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .ReadLine });
             }
@@ -219,7 +219,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .Builtin = .GetArguments });
             }
@@ -236,7 +236,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .Trim });
             }
@@ -251,7 +251,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .Split });
             }
@@ -266,7 +266,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .StringMethod = .ToInt });
             }
@@ -281,7 +281,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .IntegerMethod = .ToString });
             }
@@ -296,7 +296,7 @@ pub const CallLowerer = struct {
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
                 const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.ExpressionStatement.expression;
 
-                const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .ArrayMethod = .Append });
             }

@@ -32,7 +32,7 @@ pub const StringLiteralPool = struct {
         self: *@This(),
         node_id: ast.NodeId,
         content: []const u8,
-    ) StringLiteralGlobal {
+    ) !StringLiteralGlobal {
         if (self.string_literal_global_name_by_node_id.get(node_id)) |existing_global_name| {
             return .{
                 .name = existing_global_name,
@@ -42,12 +42,12 @@ pub const StringLiteralPool = struct {
         }
 
         const string_literal_global = StringLiteralGlobal{
-            .name = self.generateStringLiteralGlobalName(),
+            .name = try self.generateStringLiteralGlobalName(),
             .content = content,
             .len = content.len,
         };
-        self.string_literal_globals.append(self.arena, string_literal_global) catch unreachable;
-        self.string_literal_global_name_by_node_id.put(node_id, string_literal_global.name) catch unreachable;
+        try self.string_literal_globals.append(self.arena, string_literal_global);
+        try self.string_literal_global_name_by_node_id.put(node_id, string_literal_global.name);
 
         return string_literal_global;
     }
@@ -56,12 +56,12 @@ pub const StringLiteralPool = struct {
         return self.string_literal_globals.items;
     }
 
-    fn generateStringLiteralGlobalName(self: *@This()) []const u8 {
-        const global_name = std.fmt.allocPrint(
+    fn generateStringLiteralGlobalName(self: *@This()) ![]const u8 {
+        const global_name = try std.fmt.allocPrint(
             self.arena,
             "@matcha.string_literal.{d}",
             .{self.string_literal_global_counter},
-        ) catch unreachable;
+        );
         self.string_literal_global_counter += 1;
 
         return global_name;

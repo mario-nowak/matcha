@@ -18,7 +18,7 @@ pub const PlaceLowerer = struct {
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
             const assignment_target = fixture.analyzed_program.resolved_program.program.statements[2].kind.AssignmentStatement.target;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(assignment_target.id).?).toMatch(.{ .StructureField = .{ .field_index = 1 } });
         }
@@ -33,7 +33,7 @@ pub const PlaceLowerer = struct {
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
             const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.AssignmentStatement.target;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(assignment_target.id).?).toMatch(.ArrayElement);
         }
@@ -49,7 +49,7 @@ pub const PlaceLowerer = struct {
             const counter_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.AssignmentStatement.target;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(assignment_target.id).?).toMatch(.{ .IdentifierBinding = .{ .symbol_id = counter_symbol_id } });
         }

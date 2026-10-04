@@ -18,8 +18,8 @@ pub const Scope = struct {
         };
     }
 
-    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) void {
-        self.bindings.put(name, symbol_id) catch unreachable;
+    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) !void {
+        try self.bindings.put(name, symbol_id);
     }
 
     pub fn lookupSymbol(self: *const @This(), name: []const u8) ?symbols.SymbolId {

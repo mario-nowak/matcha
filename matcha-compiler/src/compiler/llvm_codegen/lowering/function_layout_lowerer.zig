@@ -14,7 +14,7 @@ pub const FunctionLayoutLowerer = struct {
         };
     }
 
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.FunctionLayoutBySymbolId {
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.FunctionLayoutBySymbolId {
         var function_layout_by_symbol_id = lowering_types.FunctionLayoutBySymbolId.init(self.arena);
 
         var owner_symbol_by_function_symbol_id = std.AutoHashMap(symbols.SymbolId, symbols.Symbol).init(self.arena);
@@ -25,7 +25,7 @@ pub const FunctionLayoutLowerer = struct {
                 else => continue,
             };
             for (owned_function_symbol_ids) |function_symbol_id| {
-                owner_symbol_by_function_symbol_id.put(function_symbol_id, symbol) catch unreachable;
+                try owner_symbol_by_function_symbol_id.put(function_symbol_id, symbol);
             }
         }
 
@@ -57,7 +57,7 @@ pub const FunctionLayoutLowerer = struct {
                     break :block present_parameter_index_kind;
                 } else .Absent;
 
-                parameter_index_kind_by_definition_index.append(self.arena, parameter_index_kind) catch unreachable;
+                try parameter_index_kind_by_definition_index.append(self.arena, parameter_index_kind);
             }
 
             const function_type_id = analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
@@ -75,12 +75,12 @@ pub const FunctionLayoutLowerer = struct {
                 .Absent;
 
             const function_layout = lowering_types.FunctionLayout{
-                .llvm_function_name = self.generateLlvmFunctionName(symbol, owner_symbol_by_function_symbol_id.get(function_symbol_id)),
-                .parameter_index_kind_by_definition_index = parameter_index_kind_by_definition_index.toOwnedSlice(self.arena) catch unreachable,
+                .llvm_function_name = try self.generateLlvmFunctionName(symbol, owner_symbol_by_function_symbol_id.get(function_symbol_id)),
+                .parameter_index_kind_by_definition_index = try parameter_index_kind_by_definition_index.toOwnedSlice(self.arena),
                 .return_type_value_kind = return_type_value_kind,
             };
 
-            function_layout_by_symbol_id.put(function_symbol_id, function_layout) catch unreachable;
+            try function_layout_by_symbol_id.put(function_symbol_id, function_layout);
         }
 
         return function_layout_by_symbol_id;
@@ -90,7 +90,7 @@ pub const FunctionLayoutLowerer = struct {
         self: *@This(),
         function_symbol: symbols.Symbol,
         owner_symbol: ?symbols.Symbol,
-    ) []const u8 {
+    ) ![]const u8 {
         if (owner_symbol) |owner| {
             const owner_kind_name = switch (owner.kind) {
                 .Structure => "structure",
@@ -101,13 +101,13 @@ pub const FunctionLayoutLowerer = struct {
                 self.arena,
                 "matcha.{s}.{s}.function.{s}",
                 .{ owner_kind_name, owner.name, function_symbol.name },
-            ) catch unreachable;
+            );
         }
 
         return std.fmt.allocPrint(
             self.arena,
             "matcha.function.{s}",
             .{function_symbol.name},
-        ) catch unreachable;
+        );
     }
 };

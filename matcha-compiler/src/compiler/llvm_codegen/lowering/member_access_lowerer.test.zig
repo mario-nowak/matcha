@@ -18,7 +18,7 @@ pub const MemberAccessLowerer = struct {
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
             const member_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(member_expression.id).?).toMatch(.{ .StructureField = .{ .field_index = 1 } });
         }
@@ -33,7 +33,7 @@ pub const MemberAccessLowerer = struct {
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
             const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(member_expression.id).?).toMatch(.StringLength);
         }
@@ -48,7 +48,7 @@ pub const MemberAccessLowerer = struct {
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
             const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(member_expression.id).?).toMatch(.ArrayLength);
         }

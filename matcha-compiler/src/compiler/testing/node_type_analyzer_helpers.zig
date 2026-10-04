@@ -32,7 +32,7 @@ pub fn setupNodeTypeAnalyzerFixture(
     const exit_behavior_by_node_id = try control_flow_validator.validateProgram(&name_resolver_fixture.program);
 
     const node_type_analyzer = try arena_state.allocator().create(NodeTypeAnalyzer);
-    node_type_analyzer.* = NodeTypeAnalyzer.init(arena_state.allocator(), name_resolver_fixture.diagnostic_store);
+    node_type_analyzer.* = try NodeTypeAnalyzer.init(arena_state.allocator(), name_resolver_fixture.diagnostic_store);
 
     return .{
         .resolved_program = resolved_program,

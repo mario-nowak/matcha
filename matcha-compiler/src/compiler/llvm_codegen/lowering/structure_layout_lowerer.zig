@@ -12,7 +12,7 @@ pub const StructureLayoutLowerer = struct {
         };
     }
 
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.StructureLayoutKindByTypeId {
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.StructureLayoutKindByTypeId {
         var structure_layout_kind_by_type_id = lowering_types.StructureLayoutKindByTypeId.init(self.arena);
 
         var types_iterator = analyzed_program.type_store.iterator();
@@ -49,24 +49,24 @@ pub const StructureLayoutLowerer = struct {
                             .None => .Absent,
                         };
 
-                        field_index_kind_by_definition_index.append(
+                        try field_index_kind_by_definition_index.append(
                             self.arena,
                             field_index_kind,
-                        ) catch unreachable;
+                        );
                     }
 
                     const structure_layout: lowering_types.StructureLayoutKind = if (has_field_with_runtime_representation) .{
                         .Present = .{
-                            .llvm_type_name = self.generateLlvmTypeName(analyzed_program, structure_type),
-                            .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.arena) catch unreachable,
+                            .llvm_type_name = try self.generateLlvmTypeName(analyzed_program, structure_type),
+                            .field_index_kind_by_definition_index = try field_index_kind_by_definition_index.toOwnedSlice(self.arena),
                         },
                         // Structures without any runtime fields don't have a layout.
                     } else .Absent;
 
-                    structure_layout_kind_by_type_id.put(
+                    try structure_layout_kind_by_type_id.put(
                         structure_type_id,
                         structure_layout,
-                    ) catch unreachable;
+                    );
                 },
             }
         }
@@ -78,12 +78,12 @@ pub const StructureLayoutLowerer = struct {
         self: *@This(),
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         structure_type: typing.StructureType,
-    ) []const u8 {
+    ) ![]const u8 {
         const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
         return std.fmt.allocPrint(
             self.arena,
             "matcha.structure.{s}",
             .{structure_symbol.name},
-        ) catch unreachable;
+        );
     }
 };

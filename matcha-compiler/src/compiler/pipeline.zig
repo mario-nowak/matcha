@@ -22,7 +22,7 @@ pub fn generateLlvmIrFromFile(
     const program = try parser.parse();
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(arena, diagnostic_store);
-    const node_type_analyzer = semantic_analysis.type_checking.NodeTypeAnalyzer.init(arena, diagnostic_store);
+    const node_type_analyzer = try semantic_analysis.type_checking.NodeTypeAnalyzer.init(arena, diagnostic_store);
     const structural_validator = semantic_analysis.control_flow_validation.StructuralValidator.init(diagnostic_store);
     const exit_behavior_analyzer = semantic_analysis.control_flow_validation.ExitBehaviorAnalyzer.init(
         arena,

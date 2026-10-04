@@ -183,7 +183,7 @@ pub const Lexer = struct {
                 self.column += 1;
 
                 const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-                const decoded_content = content.toOwnedSlice(self.arena) catch unreachable;
+                const decoded_content = try content.toOwnedSlice(self.arena);
 
                 return Token{
                     .line = start_line,
@@ -229,13 +229,13 @@ pub const Lexer = struct {
                         );
                     },
                 };
-                content.append(self.arena, decoded_character) catch unreachable;
+                try content.append(self.arena, decoded_character);
                 self.offsetInSource += 1;
                 self.column += 1;
                 continue;
             }
 
-            content.append(self.arena, character) catch unreachable;
+            try content.append(self.arena, character);
             self.offsetInSource += 1;
             self.column += 1;
         }

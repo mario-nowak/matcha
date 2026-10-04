@@ -88,8 +88,8 @@ pub const ExitBehaviorAnalyzer = struct {
             .Loop => |loop| try self.validateLoopNode(node, loop),
             .While => |while_statement| try self.validateWhileNode(node, while_statement),
             .ForIn => |for_in| try self.validateForInNode(node, for_in),
-            .LeaveStatement => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
-            .ContinueStatement => self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
+            .LeaveStatement => try self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
+            .ContinueStatement => try self.markNodeExitBehavior(node, .FallsThroughWithoutValue),
             .IfExpression => |if_expression| try self.validateIfExpressionNode(node, if_expression),
             .MatchExpression => |match_expression| try self.validateMatchExpressionNode(node, match_expression),
             .SubjectlessMatchExpression => |subjectless_match_expression| try self.validateSubjectlessMatchExpressionNode(node, subjectless_match_expression),
@@ -105,12 +105,12 @@ pub const ExitBehaviorAnalyzer = struct {
             .BooleanLiteral,
             .StringLiteral,
             .UnitLiteral,
-            => self.markNodeExitBehavior(node, .FallsThroughWithValue),
+            => try self.markNodeExitBehavior(node, .FallsThroughWithValue),
         };
     }
 
-    fn markNodeExitBehavior(self: *@This(), node: *const ast.Node, behavior: ExitBehavior) ExitBehavior {
-        self.exit_behavior_by_node_id.put(node.id, behavior) catch unreachable;
+    fn markNodeExitBehavior(self: *@This(), node: *const ast.Node, behavior: ExitBehavior) !ExitBehavior {
+        try self.exit_behavior_by_node_id.put(node.id, behavior);
         return behavior;
     }
 
@@ -133,7 +133,7 @@ pub const ExitBehaviorAnalyzer = struct {
             if (result_behavior == .Terminates) {
                 return self.markNodeExitBehavior(node, .Terminates);
             }
-            _ = self.markNodeExitBehavior(node, .FallsThroughWithValue);
+            _ = try self.markNodeExitBehavior(node, .FallsThroughWithValue);
             return result_behavior;
         }
 
@@ -142,7 +142,7 @@ pub const ExitBehaviorAnalyzer = struct {
 
     fn validateBindingDeclarationNode(self: *@This(), binding_declaration: ast.BindingDeclaration) CompileError!ExitBehavior {
         const result = try self.validateTerminatesWithValue(binding_declaration.value);
-        self.exit_behavior_by_node_id.put(binding_declaration.value.id, result) catch unreachable;
+        try self.exit_behavior_by_node_id.put(binding_declaration.value.id, result);
         return result;
     }
 
@@ -211,13 +211,13 @@ pub const ExitBehaviorAnalyzer = struct {
         }
 
         const result = try self.validateTerminatesWithValue(assignment_statement.value);
-        self.exit_behavior_by_node_id.put(assignment_statement.value.id, result) catch unreachable;
+        try self.exit_behavior_by_node_id.put(assignment_statement.value.id, result);
         return result;
     }
 
     fn validateLoopNode(self: *@This(), node: *const ast.Node, loop: ast.Loop) CompileError!ExitBehavior {
         const result = try self.validateTerminatesWithValue(loop.body_block);
-        _ = self.markNodeExitBehavior(node, result);
+        _ = try self.markNodeExitBehavior(node, result);
         return result;
     }
 

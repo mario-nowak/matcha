@@ -16,7 +16,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Add });
         }
@@ -30,7 +30,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.CheckedDivide);
         }
@@ -44,7 +44,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
         }
@@ -58,7 +58,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.StringConcatenate);
         }
@@ -72,7 +72,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareEqual);
         }
@@ -86,7 +86,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareNotEqual);
         }
@@ -100,7 +100,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareEqual);
         }
@@ -114,7 +114,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareNotEqual);
         }
@@ -128,7 +128,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
         }
@@ -142,7 +142,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitAnd);
         }
@@ -156,7 +156,7 @@ pub const BinaryOperationLowerer = struct {
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
             const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitOr);
         }

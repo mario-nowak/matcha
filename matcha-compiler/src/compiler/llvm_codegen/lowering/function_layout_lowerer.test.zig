@@ -16,7 +16,7 @@ pub const FunctionLayoutLowerer = struct {
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
             const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.function.identity" });
         }
@@ -35,7 +35,7 @@ pub const FunctionLayoutLowerer = struct {
             const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const origin_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.structure.Point.function.origin" });
         }
@@ -54,7 +54,7 @@ pub const FunctionLayoutLowerer = struct {
             const result_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(result_symbol_id).kind.Union.function_symbol_ids[0];
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.union.Result.function.fromNumber" });
         }
@@ -68,7 +68,7 @@ pub const FunctionLayoutLowerer = struct {
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
             const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(function_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{
                 .Absent,
@@ -86,7 +86,7 @@ pub const FunctionLayoutLowerer = struct {
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
             const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(function_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{.{ .Index = 0 }} });
         }
@@ -105,7 +105,7 @@ pub const FunctionLayoutLowerer = struct {
             const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const method_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(method_symbol_id).?).toMatch(.{ .parameter_index_kind_by_definition_index = .{
                 .{ .Index = 0 },
@@ -123,7 +123,7 @@ pub const FunctionLayoutLowerer = struct {
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
             const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(function_symbol_id).?).toMatch(.{ .return_type_value_kind = .Absent });
         }
@@ -138,7 +138,7 @@ pub const FunctionLayoutLowerer = struct {
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
             const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(function_symbol_id).?).toMatch(.{ .return_type_value_kind = .Present });
         }

@@ -11,7 +11,7 @@ pub const MemberAccessLowerer = struct {
         };
     }
 
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.MemberAccessDecisionByNodeId {
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.MemberAccessDecisionByNodeId {
         var decision_by_node_id = lowering_types.MemberAccessDecisionByNodeId.init(self.arena);
 
         var member_access_iterator = analyzed_program.member_access_by_node_id.iterator();
@@ -37,7 +37,7 @@ pub const MemberAccessLowerer = struct {
                 .StringInstanceFieldAccess => .StringLength,
                 .IntegerInstanceMethodAccess => .IntegerMethod,
             };
-            decision_by_node_id.put(node_id, decision) catch unreachable;
+            try decision_by_node_id.put(node_id, decision);
         }
 
         return decision_by_node_id;

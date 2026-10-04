@@ -8,11 +8,11 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitStore("1", "%value", "i64");
-            function_ir_builder.emitStackAllocation("%value", "i64");
-            function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitStore("1", "%value", "i64");
+            try function_ir_builder.emitStackAllocation("%value", "i64");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
 
-            const rendered = function_ir_builder.render("example", "void", "");
+            const rendered = try function_ir_builder.render("example", "void", "");
 
             try expect(rendered).toMatch(
                 \\define void @example() {
@@ -28,12 +28,12 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitTerminatorInstruction("br label %next");
-            function_ir_builder.emitInstruction("%dropped = add i64 1, 2");
-            function_ir_builder.emitLabel("next");
-            function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitTerminatorInstruction("br label %next");
+            try function_ir_builder.emitInstruction("%dropped = add i64 1, 2");
+            try function_ir_builder.emitLabel("next");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
 
-            const rendered = function_ir_builder.render("example", "void", "");
+            const rendered = try function_ir_builder.render("example", "void", "");
 
             try expect(rendered).toMatch(
                 \\define void @example() {
@@ -49,10 +49,10 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitTerminatorInstruction("ret void");
-            function_ir_builder.emitStackAllocation("%value", "i64");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitStackAllocation("%value", "i64");
 
-            const rendered = function_ir_builder.render("example", "void", "");
+            const rendered = try function_ir_builder.render("example", "void", "");
 
             try expect(rendered).toMatch(
                 \\define void @example() {
@@ -67,9 +67,9 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitTerminatorInstruction("ret i64 %value");
+            try function_ir_builder.emitTerminatorInstruction("ret i64 %value");
 
-            const rendered = function_ir_builder.render("example", "i64", "i64 %value");
+            const rendered = try function_ir_builder.render("example", "i64", "i64 %value");
 
             try expect(rendered).toMatch(
                 \\define i64 @example(i64 %value) {
@@ -83,13 +83,13 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitStackAllocation("%previous", "i64");
-            function_ir_builder.emitLabel("previous_block");
-            function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitStackAllocation("%previous", "i64");
+            try function_ir_builder.emitLabel("previous_block");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
             function_ir_builder.reset();
-            function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
 
-            const rendered = function_ir_builder.render("example", "void", "");
+            const rendered = try function_ir_builder.render("example", "void", "");
 
             try expect(rendered).toMatch(
                 \\define void @example() {
@@ -105,7 +105,7 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitLabel("next");
+            try function_ir_builder.emitLabel("next");
 
             const current_label = function_ir_builder.currentLabel();
 
@@ -116,7 +116,7 @@ pub const FunctionIrBuilder = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
-            function_ir_builder.emitTerminatorInstruction("ret void");
+            try function_ir_builder.emitTerminatorInstruction("ret void");
 
             const current_label = function_ir_builder.currentLabel();
 

@@ -17,7 +17,7 @@ pub const StructureLayoutLowerer = struct {
             const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{
                 .{ .Index = 0 },
@@ -36,7 +36,7 @@ pub const StructureLayoutLowerer = struct {
             const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .llvm_type_name = "matcha.structure.Point" } });
         }
@@ -52,7 +52,7 @@ pub const StructureLayoutLowerer = struct {
             const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
             const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{.{ .Index = 0 }} } });
         }
@@ -67,7 +67,7 @@ pub const StructureLayoutLowerer = struct {
             const structure_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
             const structure_type_id = fixture.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id).?;
 
-            const layouts = fixture.lowerer.lower(fixture.analyzed_program);
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
             try expect(layouts.get(structure_type_id).?).toMatch(.Absent);
         }

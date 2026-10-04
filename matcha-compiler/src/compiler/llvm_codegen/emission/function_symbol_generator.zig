@@ -30,47 +30,47 @@ pub const FunctionSymbolGenerator = struct {
         self.construct_counter_by_name.clearRetainingCapacity();
     }
 
-    pub fn generateValueName(self: *@This()) Value {
-        const value = std.fmt.allocPrint(self.arena, "%value.{d}", .{self.value_counter}) catch unreachable;
+    pub fn generateValueName(self: *@This()) !Value {
+        const value = try std.fmt.allocPrint(self.arena, "%value.{d}", .{self.value_counter});
         self.value_counter += 1;
 
         return value;
     }
 
     /// Names the address of a binding: a `val`, a `var`, a parameter, a `for` item or a payload binding.
-    pub fn generateBindingAddressName(self: *@This(), binding_name: []const u8) Address {
-        const binding_number = nextNumber(&self.binding_address_counter_by_name, binding_name);
-        return std.fmt.allocPrint(self.arena, "%address.binding.{s}.{d}", .{ binding_name, binding_number }) catch unreachable;
+    pub fn generateBindingAddressName(self: *@This(), binding_name: []const u8) !Address {
+        const binding_number = try nextNumber(&self.binding_address_counter_by_name, binding_name);
+        return std.fmt.allocPrint(self.arena, "%address.binding.{s}.{d}", .{ binding_name, binding_number });
     }
 
     /// Names an address that no binding owns, for example the index of a `for` loop or the result of a runtime call.
-    pub fn generateSyntheticAddressName(self: *@This()) Address {
-        const address = std.fmt.allocPrint(
+    pub fn generateSyntheticAddressName(self: *@This()) !Address {
+        const address = try std.fmt.allocPrint(
             self.arena,
             "%address.synthetic.{d}",
             .{self.synthetic_address_counter},
-        ) catch unreachable;
+        );
         self.synthetic_address_counter += 1;
 
         return address;
     }
 
     /// Parameter names are unique within a function, so they need no counter.
-    pub fn parameterName(self: *@This(), parameter_name: []const u8) Value {
-        return std.fmt.allocPrint(self.arena, "%parameter.{s}", .{parameter_name}) catch unreachable;
+    pub fn parameterName(self: *@This(), parameter_name: []const u8) !Value {
+        return std.fmt.allocPrint(self.arena, "%parameter.{s}", .{parameter_name});
     }
 
     /// Starts the labels of one control-flow construct, for example the third `match` of the function.
-    pub fn generateConstructLabels(self: *@This(), construct_name: []const u8) ConstructLabels {
+    pub fn generateConstructLabels(self: *@This(), construct_name: []const u8) !ConstructLabels {
         return .{
             .arena = self.arena,
             .construct_name = construct_name,
-            .construct_number = nextNumber(&self.construct_counter_by_name, construct_name),
+            .construct_number = try nextNumber(&self.construct_counter_by_name, construct_name),
         };
     }
 
-    fn nextNumber(counter_by_name: *std.StringHashMap(usize), name: []const u8) usize {
-        const counter = counter_by_name.getOrPut(name) catch unreachable;
+    fn nextNumber(counter_by_name: *std.StringHashMap(usize), name: []const u8) !usize {
+        const counter = try counter_by_name.getOrPut(name);
         if (!counter.found_existing) {
             counter.value_ptr.* = 0;
         }
@@ -87,16 +87,16 @@ pub const ConstructLabels = struct {
     construct_name: []const u8,
     construct_number: usize,
 
-    pub fn role(self: @This(), role_name: []const u8) Label {
-        return std.fmt.allocPrint(self.arena, "{s}.{d}.{s}", .{ self.construct_name, self.construct_number, role_name }) catch unreachable;
+    pub fn role(self: @This(), role_name: []const u8) !Label {
+        return std.fmt.allocPrint(self.arena, "{s}.{d}.{s}", .{ self.construct_name, self.construct_number, role_name });
     }
 
-    pub fn arm(self: @This(), arm_index: usize) Label {
-        return std.fmt.allocPrint(self.arena, "{s}.{d}.arm.{d}", .{ self.construct_name, self.construct_number, arm_index }) catch unreachable;
+    pub fn arm(self: @This(), arm_index: usize) !Label {
+        return std.fmt.allocPrint(self.arena, "{s}.{d}.arm.{d}", .{ self.construct_name, self.construct_number, arm_index });
     }
 
     /// Names the block that checks whether an arm matches.
-    pub fn armCondition(self: @This(), arm_index: usize) Label {
-        return std.fmt.allocPrint(self.arena, "{s}.{d}.arm.{d}.condition", .{ self.construct_name, self.construct_number, arm_index }) catch unreachable;
+    pub fn armCondition(self: @This(), arm_index: usize) !Label {
+        return std.fmt.allocPrint(self.arena, "{s}.{d}.arm.{d}.condition", .{ self.construct_name, self.construct_number, arm_index });
     }
 };

@@ -9,7 +9,7 @@ pub const FunctionSymbolGenerator = struct {
             defer arena.deinit();
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
 
-            const names = .{ function_symbol_generator.generateValueName(), function_symbol_generator.generateValueName() };
+            const names = .{ try function_symbol_generator.generateValueName(), try function_symbol_generator.generateValueName() };
 
             try expect(names).toMatch(.{ "%value.0", "%value.1" });
         }
@@ -22,9 +22,9 @@ pub const FunctionSymbolGenerator = struct {
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
 
             const names = .{
-                function_symbol_generator.generateBindingAddressName("count"),
-                function_symbol_generator.generateBindingAddressName("total"),
-                function_symbol_generator.generateBindingAddressName("count"),
+                try function_symbol_generator.generateBindingAddressName("count"),
+                try function_symbol_generator.generateBindingAddressName("total"),
+                try function_symbol_generator.generateBindingAddressName("count"),
             };
 
             try expect(names).toMatch(.{ "%address.binding.count.0", "%address.binding.total.0", "%address.binding.count.1" });
@@ -36,9 +36,9 @@ pub const FunctionSymbolGenerator = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            _ = function_symbol_generator.generateBindingAddressName("count");
+            _ = try function_symbol_generator.generateBindingAddressName("count");
 
-            const names = .{ function_symbol_generator.generateSyntheticAddressName(), function_symbol_generator.generateSyntheticAddressName() };
+            const names = .{ try function_symbol_generator.generateSyntheticAddressName(), try function_symbol_generator.generateSyntheticAddressName() };
 
             try expect(names).toMatch(.{ "%address.synthetic.0", "%address.synthetic.1" });
         }
@@ -50,7 +50,7 @@ pub const FunctionSymbolGenerator = struct {
             defer arena.deinit();
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
 
-            const name = function_symbol_generator.parameterName("count");
+            const name = try function_symbol_generator.parameterName("count");
 
             try expect(name).toMatch("%parameter.count");
         }
@@ -63,9 +63,9 @@ pub const FunctionSymbolGenerator = struct {
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
 
             const labels = .{
-                function_symbol_generator.generateConstructLabels("if").role("end"),
-                function_symbol_generator.generateConstructLabels("match").role("end"),
-                function_symbol_generator.generateConstructLabels("if").role("end"),
+                try (try function_symbol_generator.generateConstructLabels("if")).role("end"),
+                try (try function_symbol_generator.generateConstructLabels("match")).role("end"),
+                try (try function_symbol_generator.generateConstructLabels("if")).role("end"),
             };
 
             try expect(labels).toMatch(.{ "if.0.end", "match.0.end", "if.1.end" });
@@ -75,9 +75,9 @@ pub const FunctionSymbolGenerator = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            const construct_labels = function_symbol_generator.generateConstructLabels("match");
+            const construct_labels = try function_symbol_generator.generateConstructLabels("match");
 
-            const labels = .{ construct_labels.arm(1), construct_labels.armCondition(2) };
+            const labels = .{ try construct_labels.arm(1), try construct_labels.armCondition(2) };
 
             try expect(labels).toMatch(.{ "match.0.arm.1", "match.0.arm.2.condition" });
         }
@@ -88,18 +88,18 @@ pub const FunctionSymbolGenerator = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
-            _ = function_symbol_generator.generateValueName();
-            _ = function_symbol_generator.generateBindingAddressName("count");
-            _ = function_symbol_generator.generateSyntheticAddressName();
-            _ = function_symbol_generator.generateConstructLabels("if");
+            _ = try function_symbol_generator.generateValueName();
+            _ = try function_symbol_generator.generateBindingAddressName("count");
+            _ = try function_symbol_generator.generateSyntheticAddressName();
+            _ = try function_symbol_generator.generateConstructLabels("if");
 
             function_symbol_generator.reset();
 
             const names = .{
-                function_symbol_generator.generateValueName(),
-                function_symbol_generator.generateBindingAddressName("count"),
-                function_symbol_generator.generateSyntheticAddressName(),
-                function_symbol_generator.generateConstructLabels("if").role("end"),
+                try function_symbol_generator.generateValueName(),
+                try function_symbol_generator.generateBindingAddressName("count"),
+                try function_symbol_generator.generateSyntheticAddressName(),
+                try (try function_symbol_generator.generateConstructLabels("if")).role("end"),
             };
             try expect(names).toMatch(.{ "%value.0", "%address.binding.count.0", "%address.synthetic.0", "if.0.end" });
         }

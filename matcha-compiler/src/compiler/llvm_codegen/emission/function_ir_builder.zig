@@ -48,20 +48,20 @@ pub const FunctionIrBuilder = struct {
         function_name: []const u8,
         return_llvm_ir_type: []const u8,
         parameter_list: []const u8,
-    ) []const u8 {
+    ) ![]const u8 {
         var stack_allocation_buffer = std.ArrayList(u8){};
         for (self.stack_allocation_instructions.items) |instruction| {
-            stack_allocation_buffer.writer(self.arena).print("    {s}\n", .{instruction}) catch unreachable;
+            try stack_allocation_buffer.writer(self.arena).print("    {s}\n", .{instruction});
         }
 
         var instructions_buffer = std.ArrayList(u8){};
         for (self.lines.items) |line| {
             switch (line) {
                 .instruction => |instruction| {
-                    instructions_buffer.writer(self.arena).print("    {s}\n", .{instruction}) catch unreachable;
+                    try instructions_buffer.writer(self.arena).print("    {s}\n", .{instruction});
                 },
                 .label => |label| {
-                    instructions_buffer.writer(self.arena).print("{s}:\n", .{label}) catch unreachable;
+                    try instructions_buffer.writer(self.arena).print("{s}:\n", .{label});
                 },
             }
         }
@@ -79,62 +79,62 @@ pub const FunctionIrBuilder = struct {
                 stack_allocation_buffer.items,
                 instructions_buffer.items,
             },
-        ) catch unreachable;
+        );
     }
 
-    pub fn emitLabel(self: *@This(), label: Label) void {
-        self.lines.append(self.arena, .{ .label = label }) catch unreachable;
+    pub fn emitLabel(self: *@This(), label: Label) !void {
+        try self.lines.append(self.arena, .{ .label = label });
         self.current_label = label;
     }
 
-    pub fn emitInstruction(self: *@This(), instruction: Instruction) void {
+    pub fn emitInstruction(self: *@This(), instruction: Instruction) !void {
         if (self.current_label == null) {
             return;
         }
-        self.lines.append(self.arena, .{ .instruction = instruction }) catch unreachable;
+        try self.lines.append(self.arena, .{ .instruction = instruction });
     }
 
     /// Emits an instruction that ends the current basic block (ret, br,
     /// unreachable). Everything emitted afterwards is dropped until the next
     /// label opens a new block.
-    pub fn emitTerminatorInstruction(self: *@This(), instruction: Instruction) void {
-        self.emitInstruction(instruction);
+    pub fn emitTerminatorInstruction(self: *@This(), instruction: Instruction) !void {
+        try self.emitInstruction(instruction);
         self.current_label = null;
     }
 
-    pub fn emitBranchInstruction(self: *@This(), condition_value: ?[]const u8, labels: []const Label) void {
+    pub fn emitBranchInstruction(self: *@This(), condition_value: ?[]const u8, labels: []const Label) !void {
         const instruction = switch (labels.len) {
-            1 => std.fmt.allocPrint(
+            1 => try std.fmt.allocPrint(
                 self.arena,
                 "br label %{s}",
                 .{labels[0]},
-            ) catch unreachable,
-            2 => std.fmt.allocPrint(
+            ),
+            2 => try std.fmt.allocPrint(
                 self.arena,
                 "br i1 {s}, label %{s}, label %{s}",
                 .{ condition_value orelse unreachable, labels[0], labels[1] },
-            ) catch unreachable,
+            ),
             else => unreachable,
         };
-        self.emitTerminatorInstruction(instruction);
+        try self.emitTerminatorInstruction(instruction);
     }
 
-    pub fn emitStackAllocation(self: *@This(), address: Address, llvm_ir_type: []const u8) void {
-        const instruction = std.fmt.allocPrint(
+    pub fn emitStackAllocation(self: *@This(), address: Address, llvm_ir_type: []const u8) !void {
+        const instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = alloca {s}",
             .{ address, llvm_ir_type },
-        ) catch unreachable;
-        self.stack_allocation_instructions.append(self.arena, instruction) catch unreachable;
+        );
+        try self.stack_allocation_instructions.append(self.arena, instruction);
     }
 
-    pub fn emitStore(self: *@This(), stored_value: []const u8, address: Address, llvm_ir_type: []const u8) void {
-        const instruction = std.fmt.allocPrint(
+    pub fn emitStore(self: *@This(), stored_value: []const u8, address: Address, llvm_ir_type: []const u8) !void {
+        const instruction = try std.fmt.allocPrint(
             self.arena,
             "store {s} {s}, ptr {s}",
             .{ llvm_ir_type, stored_value, address },
-        ) catch unreachable;
-        self.emitInstruction(instruction);
+        );
+        try self.emitInstruction(instruction);
     }
 
     /// Emits a pointer to the field at `field_index` of the structure type `%<llvm_type_name>` that `base_value` points to.
@@ -144,13 +144,13 @@ pub const FunctionIrBuilder = struct {
         llvm_type_name: []const u8,
         base_value: []const u8,
         field_index: u32,
-    ) void {
-        const instruction = std.fmt.allocPrint(
+    ) !void {
+        const instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
             .{ result_value, llvm_type_name, base_value, field_index },
-        ) catch unreachable;
-        self.emitInstruction(instruction);
+        );
+        try self.emitInstruction(instruction);
     }
 
     /// Emits a pointer to the element at `index` of the `element_llvm_type` values that `base_value` points to.
@@ -160,21 +160,21 @@ pub const FunctionIrBuilder = struct {
         element_llvm_type: []const u8,
         base_value: []const u8,
         index: []const u8,
-    ) void {
-        const instruction = std.fmt.allocPrint(
+    ) !void {
+        const instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
             .{ result_value, element_llvm_type, base_value, index },
-        ) catch unreachable;
-        self.emitInstruction(instruction);
+        );
+        try self.emitInstruction(instruction);
     }
 
-    pub fn emitLoad(self: *@This(), result_value: []const u8, address: Address, llvm_ir_type: []const u8) void {
-        const instruction = std.fmt.allocPrint(
+    pub fn emitLoad(self: *@This(), result_value: []const u8, address: Address, llvm_ir_type: []const u8) !void {
+        const instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = load {s}, ptr {s}",
             .{ result_value, llvm_ir_type, address },
-        ) catch unreachable;
-        self.emitInstruction(instruction);
+        );
+        try self.emitInstruction(instruction);
     }
 };

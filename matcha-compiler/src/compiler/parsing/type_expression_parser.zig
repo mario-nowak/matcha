@@ -51,7 +51,7 @@ pub const TypeExpressionParser = struct {
                 return error.DiagnosticsEmitted;
             }
 
-            type_expression = self.allocateTypeExpression(.{
+            type_expression = try self.allocateTypeExpression(.{
                 .Array = .{
                     .element_type = type_expression,
                     .left_bracket_token = left_bracket_token,
@@ -66,8 +66,8 @@ pub const TypeExpressionParser = struct {
     fn allocateTypeExpression(
         self: *@This(),
         type_expression: type_expressions.TypeExpression,
-    ) *type_expressions.TypeExpression {
-        const allocated_type_expression = self.arena.create(type_expressions.TypeExpression) catch unreachable;
+    ) !*type_expressions.TypeExpression {
+        const allocated_type_expression = try self.arena.create(type_expressions.TypeExpression);
         allocated_type_expression.* = type_expression;
 
         return allocated_type_expression;

@@ -15,7 +15,7 @@ pub const StructureTypeRenderer = struct {
     pub fn renderStructureTypeDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
-    ) []const u8 {
+    ) ![]const u8 {
         var structure_definitions_buffer = std.ArrayList(u8){};
         const resolved_program = lowered_program.analyzed_program.resolved_program;
 
@@ -38,22 +38,22 @@ pub const StructureTypeRenderer = struct {
             };
 
             if (has_structure_definition) {
-                structure_definitions_buffer.writer(self.arena).print("\n", .{}) catch unreachable;
+                try structure_definitions_buffer.writer(self.arena).print("\n", .{});
             }
-            structure_definitions_buffer.writer(self.arena).print(
+            try structure_definitions_buffer.writer(self.arena).print(
                 "{s}",
                 .{
-                    self.renderStructureTypeDefinition(
+                    try self.renderStructureTypeDefinition(
                         lowered_program.analyzed_program.type_store.getType(structure_type_id).Structure,
                         structure_layout,
                         lowered_program,
                     ),
                 },
-            ) catch unreachable;
+            );
             has_structure_definition = true;
         }
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definitions_buffer.items}) catch unreachable;
+        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definitions_buffer.items});
     }
 
     fn renderStructureTypeDefinition(
@@ -61,15 +61,15 @@ pub const StructureTypeRenderer = struct {
         structure_type: typing.StructureType,
         structure_layout: lowering_types.StructureLayout,
         lowered_program: *const lowering.LoweredProgram,
-    ) []const u8 {
+    ) ![]const u8 {
         const structure_llvm_type_name = structure_layout.llvm_type_name;
 
         var structure_definition_buffer = std.ArrayList(u8){};
 
-        structure_definition_buffer.writer(self.arena).print(
+        try structure_definition_buffer.writer(self.arena).print(
             "%{s} = type {{",
             .{structure_llvm_type_name},
-        ) catch unreachable;
+        );
         for (structure_type.fields, 0..) |field, field_index_in_structure_definition| {
             const field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index_in_structure_definition]) {
                 .Absent => continue,
@@ -77,21 +77,21 @@ pub const StructureTypeRenderer = struct {
             };
 
             if (field_index == 0) {
-                structure_definition_buffer.writer(self.arena).print(" ", .{}) catch unreachable;
+                try structure_definition_buffer.writer(self.arena).print(" ", .{});
             } else {
-                structure_definition_buffer.writer(self.arena).print(", ", .{}) catch unreachable;
+                try structure_definition_buffer.writer(self.arena).print(", ", .{});
             }
 
-            structure_definition_buffer.writer(self.arena).print(
+            try structure_definition_buffer.writer(self.arena).print(
                 "{s}",
                 .{lowered_program.getLlvmIrType(field.type_id)},
-            ) catch unreachable;
+            );
         }
         if (structure_type.fields.len > 0) {
-            structure_definition_buffer.writer(self.arena).print(" ", .{}) catch unreachable;
+            try structure_definition_buffer.writer(self.arena).print(" ", .{});
         }
-        structure_definition_buffer.writer(self.arena).print("}}", .{}) catch unreachable;
+        try structure_definition_buffer.writer(self.arena).print("}}", .{});
 
-        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definition_buffer.items}) catch unreachable;
+        return std.fmt.allocPrint(self.arena, "{s}", .{structure_definition_buffer.items});
     }
 };

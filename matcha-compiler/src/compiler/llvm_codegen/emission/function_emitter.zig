@@ -39,14 +39,14 @@ pub const FunctionEmitter = struct {
         };
     }
 
-    pub fn emitMainFunction(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
+    pub fn emitMainFunction(self: *@This(), lowered_program: *const lowering.LoweredProgram) ![]const u8 {
         self.resetCurrentFunctionState();
 
         var environment = Environment.init(self.arena, null, lowered_program.analyzed_program.type_store.integer_type_id);
 
         // Boehm GC asks portable programs to initialize it at start-up, before the first allocation.
-        self.runtime_call_emitter.emitInitiateGarbageCollectorCall(self.function_ir_builder);
-        self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
+        try self.runtime_call_emitter.emitInitiateGarbageCollectorCall(self.function_ir_builder);
+        try self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
@@ -54,10 +54,10 @@ pub const FunctionEmitter = struct {
                 else => {},
             }
 
-            _ = self.node_emitter.emitNode(statement, lowered_program, &environment);
+            _ = try self.node_emitter.emitNode(statement, lowered_program, &environment);
         }
 
-        self.function_ir_builder.emitTerminatorInstruction("ret i32 0");
+        try self.function_ir_builder.emitTerminatorInstruction("ret i32 0");
 
         return self.renderCurrentFunction("main", "i32", "i32 %parameter.argc, ptr %parameter.argv");
     }
@@ -67,7 +67,7 @@ pub const FunctionEmitter = struct {
         function_node_id: ast.NodeId,
         function_definition: *const ast.FunctionDefinition,
         lowered_program: *const lowering.LoweredProgram,
-    ) []const u8 {
+    ) ![]const u8 {
         self.resetCurrentFunctionState();
 
         const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
@@ -95,23 +95,23 @@ pub const FunctionEmitter = struct {
             const parameter_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
             const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
-            const parameter_value = self.function_symbol_generator.parameterName(parameter_symbol.name);
+            const parameter_value = try self.function_symbol_generator.parameterName(parameter_symbol.name);
 
             if (parameter_index > 0) {
-                parameter_list_buffer.writer(self.arena).print(", ", .{}) catch unreachable;
+                try parameter_list_buffer.writer(self.arena).print(", ", .{});
             }
-            parameter_list_buffer.writer(self.arena).print(
+            try parameter_list_buffer.writer(self.arena).print(
                 "{s} {s}",
                 .{ parameter_llvm_ir_type, parameter_value },
-            ) catch unreachable;
+            );
 
-            const address = self.function_symbol_generator.generateBindingAddressName(parameter_symbol.name);
-            self.function_ir_builder.emitStackAllocation(address, parameter_llvm_ir_type);
-            self.function_ir_builder.emitStore(parameter_value, address, parameter_llvm_ir_type);
-            environment.address_by_symbol_id.put(parameter_symbol_id, address) catch unreachable;
+            const address = try self.function_symbol_generator.generateBindingAddressName(parameter_symbol.name);
+            try self.function_ir_builder.emitStackAllocation(address, parameter_llvm_ir_type);
+            try self.function_ir_builder.emitStore(parameter_value, address, parameter_llvm_ir_type);
+            try environment.address_by_symbol_id.put(parameter_symbol_id, address);
         }
 
-        const body_value = self.node_emitter.emitNode(
+        const body_value = try self.node_emitter.emitNode(
             function_definition.body_expression,
             lowered_program,
             &environment,
@@ -124,14 +124,14 @@ pub const FunctionEmitter = struct {
 
         if (self.function_ir_builder.currentLabel() != null) {
             switch (function_layout.return_type_value_kind) {
-                .Absent => self.function_ir_builder.emitTerminatorInstruction("ret void"),
+                .Absent => try self.function_ir_builder.emitTerminatorInstruction("ret void"),
                 .Present => {
-                    const return_instruction = std.fmt.allocPrint(
+                    const return_instruction = try std.fmt.allocPrint(
                         self.arena,
                         "ret {s} {s}",
                         .{ function_return_llvm_ir_type, body_value.expectValue() },
-                    ) catch unreachable;
-                    self.function_ir_builder.emitTerminatorInstruction(return_instruction);
+                    );
+                    try self.function_ir_builder.emitTerminatorInstruction(return_instruction);
                 },
             }
         }
@@ -153,7 +153,7 @@ pub const FunctionEmitter = struct {
         function_name: []const u8,
         return_llvm_ir_type: []const u8,
         parameter_list: []const u8,
-    ) []const u8 {
+    ) ![]const u8 {
         return self.function_ir_builder.render(function_name, return_llvm_ir_type, parameter_list);
     }
 };

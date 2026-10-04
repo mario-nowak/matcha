@@ -17,10 +17,10 @@ pub fn emitBindingDeclaration(
     value_declaration: *const ast.BindingDeclaration,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     // Regardless of the runtime representation of the value node, we still must emit it because it may have side
     // effects. For example, a function call that returns unit may still have side effects.
-    const initial_value = emitter.emitNode(value_declaration.value, lowered_program, environment);
+    const initial_value = try emitter.emitNode(value_declaration.value, lowered_program, environment);
 
     const runtime_representation = lowered_program
         .analyzed_program
@@ -37,11 +37,11 @@ pub fn emitBindingDeclaration(
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
     const binding_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(symbol_id).name;
-    const address = emitter.function_symbol_generator.generateBindingAddressName(binding_name);
-    emitter.function_ir_builder.emitStackAllocation(address, llvm_ir_type);
-    emitter.function_ir_builder.emitStore(initial_value.expectValue(), address, llvm_ir_type);
+    const address = try emitter.function_symbol_generator.generateBindingAddressName(binding_name);
+    try emitter.function_ir_builder.emitStackAllocation(address, llvm_ir_type);
+    try emitter.function_ir_builder.emitStore(initial_value.expectValue(), address, llvm_ir_type);
 
-    environment.address_by_symbol_id.put(symbol_id, address) catch unreachable;
+    try environment.address_by_symbol_id.put(symbol_id, address);
 
     return .statement;
 }
@@ -52,33 +52,33 @@ pub fn emitAssignmentStatement(
     assignment_statement: *const ast.AssignmentStatement,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
-    const place_emission_result = emitPlace(emitter, assignment_statement.target, lowered_program, environment);
+) !EmissionResult {
+    const place_emission_result = try emitPlace(emitter, assignment_statement.target, lowered_program, environment);
 
     const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(assignment_statement.target.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
     switch (assignment_statement.operator) {
         .Assign => {
-            const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
+            const assigned_value = try emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
                 .value => |place_address| place_address,
                 .statement => unreachable,
             };
-            emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_address, llvm_ir_type);
+            try emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_address, llvm_ir_type);
         },
         .Compound => {
-            const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
+            const assigned_value = try emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
                 .value => |place_address| place_address,
                 .statement => unreachable,
             };
 
-            const current_value = emitter.function_symbol_generator.generateValueName();
-            emitter.function_ir_builder.emitLoad(current_value, place_address, llvm_ir_type);
+            const current_value = try emitter.function_symbol_generator.generateValueName();
+            try emitter.function_ir_builder.emitLoad(current_value, place_address, llvm_ir_type);
 
-            const result_value = values.emitLoweredBinaryOperation(
+            const result_value = try values.emitLoweredBinaryOperation(
                 emitter,
                 lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                 value_type_id,
@@ -86,7 +86,7 @@ pub fn emitAssignmentStatement(
                 assigned_value.expectValue(),
                 lowered_program,
             );
-            emitter.function_ir_builder.emitStore(result_value, place_address, llvm_ir_type);
+            try emitter.function_ir_builder.emitStore(result_value, place_address, llvm_ir_type);
         },
     }
     return .statement;
@@ -97,7 +97,7 @@ pub fn emitPlace(
     target: *const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
 
     switch (place_decision) {
@@ -141,9 +141,9 @@ pub fn emitStructureFieldPointer(
     field_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     // First check if the base expression of the member access has a runtime representation and exit early if not
-    const base_emission_result = emitter.emitNode(member_expression.base, lowered_program, environment);
+    const base_emission_result = try emitter.emitNode(member_expression.base, lowered_program, environment);
     const base_value = switch (base_emission_result) {
         .value => |value| value,
         .zero_sized => return .zero_sized,
@@ -165,8 +165,8 @@ pub fn emitStructureFieldPointer(
         .Index => |field_layout_index| field_layout_index,
     };
 
-    const field_pointer_value = emitter.function_symbol_generator.generateValueName();
-    emitter.function_ir_builder.emitFieldPointer(
+    const field_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try emitter.function_ir_builder.emitFieldPointer(
         field_pointer_value,
         structure_layout.llvm_type_name,
         base_value,
@@ -181,10 +181,10 @@ pub fn emitIndexExpressionPointer(
     index_expression: *const ast.IndexExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const builder = emitter.function_ir_builder;
-    const base_value = emitter.emitNode(index_expression.base, lowered_program, environment).expectValue();
-    const index_value = emitter.emitNode(index_expression.index, lowered_program, environment).expectValue();
+    const base_value = (try emitter.emitNode(index_expression.base, lowered_program, environment)).expectValue();
+    const index_value = (try emitter.emitNode(index_expression.index, lowered_program, environment)).expectValue();
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
@@ -193,64 +193,64 @@ pub fn emitIndexExpressionPointer(
     };
 
     // Perform bounds check
-    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitFieldPointer(
+    const length_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitFieldPointer(
         length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
         base_value,
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitLoad(length_value, length_pointer_value, "i64");
+    const length_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitLoad(length_value, length_pointer_value, "i64");
 
-    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitFieldPointer(
+    const data_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitFieldPointer(
         data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
         base_value,
         lowering.llvm_type.array_data_field_index,
     );
 
-    const negative_check_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(
+    const negative_check_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
         emitter.arena,
         "{s} = icmp slt i64 {s}, 0",
         .{ negative_check_value, index_value },
-    ) catch unreachable);
+    ));
 
-    const overflow_check_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(
+    const overflow_check_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
         emitter.arena,
         "{s} = icmp sge i64 {s}, {s}",
         .{ overflow_check_value, index_value, length_value },
-    ) catch unreachable);
+    ));
 
-    const out_of_bounds_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(
+    const out_of_bounds_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
         emitter.arena,
         "{s} = or i1 {s}, {s}",
         .{ out_of_bounds_value, negative_check_value, overflow_check_value },
-    ) catch unreachable);
+    ));
 
-    const labels = emitter.function_symbol_generator.generateConstructLabels("index");
-    const out_of_bounds_label = labels.role("out_of_bounds");
-    const in_bounds_label = labels.role("in_bounds");
-    builder.emitBranchInstruction(out_of_bounds_value, &.{ out_of_bounds_label, in_bounds_label });
+    const labels = try emitter.function_symbol_generator.generateConstructLabels("index");
+    const out_of_bounds_label = try labels.role("out_of_bounds");
+    const in_bounds_label = try labels.role("in_bounds");
+    try builder.emitBranchInstruction(out_of_bounds_value, &.{ out_of_bounds_label, in_bounds_label });
 
-    builder.emitLabel(out_of_bounds_label);
+    try builder.emitLabel(out_of_bounds_label);
     const line = index_expression.left_bracket.line;
     const column = index_expression.left_bracket.column;
-    emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
+    try emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
         builder,
         line,
         column,
         index_value,
         length_value,
     );
-    builder.emitTerminatorInstruction("unreachable");
+    try builder.emitTerminatorInstruction("unreachable");
 
-    builder.emitLabel(in_bounds_label);
+    try builder.emitLabel(in_bounds_label);
     const element_runtime_representation = lowered_program
         .analyzed_program
         .runtime_representation_result
@@ -260,11 +260,11 @@ pub fn emitIndexExpressionPointer(
     if (!element_runtime_representation.hasRuntimeRepresentation()) {
         return .zero_sized;
     }
-    const data_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitLoad(data_value, data_pointer_value, "ptr");
-    const element_pointer_value = emitter.function_symbol_generator.generateValueName();
+    const data_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitLoad(data_value, data_pointer_value, "ptr");
+    const element_pointer_value = try emitter.function_symbol_generator.generateValueName();
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
+    try builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 
     return .{ .value = element_pointer_value };
 }

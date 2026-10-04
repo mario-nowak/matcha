@@ -39,11 +39,11 @@ pub const NodeTypeAnalyzer = struct {
     resolved_program: *const symbols.ResolvedProgram,
     exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
 
-    pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
+    pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) !@This() {
         return .{
             .arena = arena,
             .diagnostic_store = diagnostic_store,
-            .type_store = typing.TypeStore.init(arena),
+            .type_store = try typing.TypeStore.init(arena),
             .type_id_by_symbol_id = typing.TypeIdBySymbolId.init(arena),
             .type_id_by_node_id = typing.TypeIdByNodeId.init(arena),
             .member_access_by_node_id = typing.MemberAccessByNodeId.init(arena),
@@ -53,8 +53,8 @@ pub const NodeTypeAnalyzer = struct {
         };
     }
 
-    fn resetState(self: *@This()) void {
-        self.type_store = typing.TypeStore.init(self.arena);
+    fn resetState(self: *@This()) !void {
+        self.type_store = try typing.TypeStore.init(self.arena);
         self.type_id_by_symbol_id = typing.TypeIdBySymbolId.init(self.arena);
         self.type_id_by_node_id = typing.TypeIdByNodeId.init(self.arena);
         self.member_access_by_node_id = typing.MemberAccessByNodeId.init(self.arena);
@@ -66,7 +66,7 @@ pub const NodeTypeAnalyzer = struct {
         resolved_program: *const symbols.ResolvedProgram,
         exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     ) CompileError!TypeCheckResult {
-        self.resetState();
+        try self.resetState();
         self.resolved_program = resolved_program;
         self.exit_behavior_by_node_id = exit_behavior_by_node_id;
         try self.seedModuleLevelItemTypes();
@@ -98,15 +98,15 @@ pub const NodeTypeAnalyzer = struct {
                 .Union => .Union,
                 else => continue,
             };
-            const type_id = self.type_store.addPreliminaryType(type_kind);
-            self.type_id_by_symbol_id.put(symbol.id, type_id) catch unreachable;
+            const type_id = try self.type_store.addPreliminaryType(type_kind);
+            try self.type_id_by_symbol_id.put(symbol.id, type_id);
         }
 
         // Once we seeded all of those preliminary types, we can seeding all function types.
         symbol_iterator = resolved_program.symbol_table.iterator();
         while (symbol_iterator.next()) |symbol| {
             switch (symbol.kind) {
-                .Function => self.seedFunctionTypes(symbol),
+                .Function => try self.seedFunctionTypes(symbol),
                 else => {},
             }
         }
@@ -121,16 +121,16 @@ pub const NodeTypeAnalyzer = struct {
                 .Structure => |structure_information| block: {
                     var fields = std.ArrayList(typing.StructureTypeField){};
                     for (structure_information.fields) |field| {
-                        fields.append(self.arena, .{
+                        try fields.append(self.arena, .{
                             .name = field.name,
-                            .type_id = self.resolveTypeReference(field.type_reference),
-                        }) catch unreachable;
+                            .type_id = try self.resolveTypeReference(field.type_reference),
+                        });
                     }
 
                     break :block .{
                         .Structure = .{
                             .symbol_id = symbol.id,
-                            .fields = fields.toOwnedSlice(self.arena) catch unreachable,
+                            .fields = try fields.toOwnedSlice(self.arena),
                             .function_symbol_ids = structure_information.function_symbol_ids,
                         },
                     };
@@ -138,33 +138,33 @@ pub const NodeTypeAnalyzer = struct {
                 .Union => |union_information| block: {
                     var cases = std.ArrayList(typing.UnionTypeCase){};
                     for (union_information.cases, 0..) |case, case_index| {
-                        const union_constructor_type_id = self.type_store.addType(.{ .UnionConstructor = .{
+                        const union_constructor_type_id = try self.type_store.addType(.{ .UnionConstructor = .{
                             .case_index = @intCast(case_index),
                             .union_type_id = type_id,
                         } });
-                        cases.append(
+                        try cases.append(
                             self.arena,
                             .{
-                                .type_id = self.resolveTypeReference(case.type_reference),
+                                .type_id = try self.resolveTypeReference(case.type_reference),
                                 .constructor_type_id = union_constructor_type_id,
                             },
-                        ) catch unreachable;
+                        );
                     }
                     break :block .{
                         .Union = .{
                             .symbol_id = symbol.id,
-                            .cases = cases.toOwnedSlice(self.arena) catch unreachable,
+                            .cases = try cases.toOwnedSlice(self.arena),
                         },
                     };
                 },
                 else => continue,
             };
 
-            self.type_store.finalizeType(type_id, finalized_type);
+            try self.type_store.finalizeType(type_id, finalized_type);
         }
     }
 
-    fn seedFunctionTypes(self: *@This(), function_symbol: symbols.Symbol) void {
+    fn seedFunctionTypes(self: *@This(), function_symbol: symbols.Symbol) !void {
         const resolved_program = self.resolved_program;
         const function_information = switch (function_symbol.kind) {
             .Function => |function_information| function_information,
@@ -177,18 +177,18 @@ pub const NodeTypeAnalyzer = struct {
                 .Binding => |binding_information| binding_information.declared_type_reference orelse unreachable,
                 else => unreachable,
             };
-            parameter_types.append(self.arena, self.resolveTypeReference(parameter_type_reference)) catch unreachable;
+            try parameter_types.append(self.arena, try self.resolveTypeReference(parameter_type_reference));
         }
 
-        const owned_parameter_types = parameter_types.toOwnedSlice(self.arena) catch unreachable;
-        const function_return_type = self.resolveTypeReference(function_information.return_type_reference);
-        const function_type_id = self.type_store.addType(.{ .Function = .{
+        const owned_parameter_types = try parameter_types.toOwnedSlice(self.arena);
+        const function_return_type = try self.resolveTypeReference(function_information.return_type_reference);
+        const function_type_id = try self.type_store.addType(.{ .Function = .{
             .parameter_type_ids = owned_parameter_types,
             .return_type_id = function_return_type,
         } });
-        self.type_id_by_symbol_id.put(function_symbol.id, function_type_id) catch unreachable;
+        try self.type_id_by_symbol_id.put(function_symbol.id, function_type_id);
         for (function_information.parameter_symbol_ids, owned_parameter_types) |parameter_symbol_id, parameter_type| {
-            self.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
+            try self.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type);
         }
     }
 
@@ -427,7 +427,7 @@ pub const NodeTypeAnalyzer = struct {
                 );
                 return error.DiagnosticsEmitted;
             }
-            unique_field_names.put(field_name, true) catch unreachable;
+            try unique_field_names.put(field_name, true);
 
             const field_index = structure_type.getFieldIndex(field_name) orelse {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -472,7 +472,7 @@ pub const NodeTypeAnalyzer = struct {
         const symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         const binding_information = self.resolved_program.symbol_table.getSymbol(symbol_id).kind.Binding;
         const annotated_type_id_or_null = if (binding_information.declared_type_reference) |type_reference|
-            self.resolveTypeReference(type_reference)
+            try self.resolveTypeReference(type_reference)
         else
             null;
         const value_type_id = if (annotated_type_id_or_null) |annotated_type_id|
@@ -485,7 +485,7 @@ pub const NodeTypeAnalyzer = struct {
         else
             try self.checkNode(binding_declaration.value, .asExpression, environment);
 
-        self.type_id_by_symbol_id.put(symbol_id, value_type_id) catch unreachable;
+        try self.type_id_by_symbol_id.put(symbol_id, value_type_id);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -696,7 +696,7 @@ pub const NodeTypeAnalyzer = struct {
         };
 
         const item_symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
-        self.type_id_by_symbol_id.put(item_symbol_id, item_type_id) catch unreachable;
+        try self.type_id_by_symbol_id.put(item_symbol_id, item_type_id);
 
         _ = try self.checkNode(for_in.body_block, .asStatement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
@@ -808,7 +808,7 @@ pub const NodeTypeAnalyzer = struct {
                         return error.DiagnosticsEmitted;
                     };
 
-                    self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
+                    try self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
                         .owner_symbol_id = base_symbol_id,
                         .function_symbol_id = function_symbol_id,
                     } });
@@ -909,7 +909,7 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         if (findFunctionSymbolId(&self.resolved_program.symbol_table, union_symbol_information.function_symbol_ids, member_name)) |function_symbol_id| {
-            self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
+            try self.recordMemberAccess(node_id, .{ .TypeFunctionAccess = .{
                 .owner_symbol_id = union_type.symbol_id,
                 .function_symbol_id = function_symbol_id,
             } });
@@ -938,7 +938,7 @@ pub const NodeTypeAnalyzer = struct {
             .Structure => |structure_type| {
                 const field_index = structure_type.getFieldIndex(member_name);
                 if (field_index) |structure_field_index| {
-                    self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = structure_field_index } });
+                    try self.recordMemberAccess(node_id, .{ .StructureInstanceFieldAccess = .{ .field_index = structure_field_index } });
                     return self.recordNodeType(node_id, structure_type.fields[@intCast(structure_field_index)].type_id);
                 }
 
@@ -950,7 +950,7 @@ pub const NodeTypeAnalyzer = struct {
                         structure_function_symbol_id,
                         base_type_id,
                     );
-                    self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
+                    try self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
                         .owner_symbol_id = structure_type.symbol_id,
                         .function_symbol_id = structure_function_symbol_id,
                     } });
@@ -969,11 +969,11 @@ pub const NodeTypeAnalyzer = struct {
                 if (std.mem.eql(u8, member_name, "append")) {
                     // Array append mutates the shared array header and only needs the appended element explicitly.
                     const append_function_type_id = try self.getArrayAppendFunctionTypeId(base_type_id);
-                    self.recordMemberAccess(node_id, .{ .ArrayInstanceMethodAccess = .Append });
+                    try self.recordMemberAccess(node_id, .{ .ArrayInstanceMethodAccess = .Append });
                     return self.recordNodeType(node_id, append_function_type_id);
                 }
                 if (std.mem.eql(u8, member_name, "length")) {
-                    self.recordMemberAccess(node_id, .{ .ArrayInstanceFieldAccess = .Length });
+                    try self.recordMemberAccess(node_id, .{ .ArrayInstanceFieldAccess = .Length });
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
 
@@ -987,25 +987,25 @@ pub const NodeTypeAnalyzer = struct {
             },
             .String => {
                 if (std.mem.eql(u8, member_name, "length")) {
-                    self.recordMemberAccess(node_id, .{ .StringInstanceFieldAccess = .Length });
+                    try self.recordMemberAccess(node_id, .{ .StringInstanceFieldAccess = .Length });
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
                 }
                 if (std.mem.eql(u8, member_name, "trim")) {
-                    const trim_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
-                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Trim });
+                    const trim_function_type_id = try self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
+                    try self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Trim });
                     return self.recordNodeType(node_id, trim_function_type_id);
                 }
                 if (std.mem.eql(u8, member_name, "split")) {
-                    const split_function_type_id = self.getStringMethodFunctionTypeId(
+                    const split_function_type_id = try self.getStringMethodFunctionTypeId(
                         &.{self.type_store.string_type_id},
-                        self.type_store.getOrCreateArrayType(self.type_store.string_type_id),
+                        try self.type_store.getOrCreateArrayType(self.type_store.string_type_id),
                     );
-                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Split });
+                    try self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .Split });
                     return self.recordNodeType(node_id, split_function_type_id);
                 }
                 if (std.mem.eql(u8, member_name, "toInt")) {
-                    const to_int_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.integer_type_id);
-                    self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .ToInt });
+                    const to_int_function_type_id = try self.getStringMethodFunctionTypeId(&.{}, self.type_store.integer_type_id);
+                    try self.recordMemberAccess(node_id, .{ .StringInstanceMethodAccess = .ToInt });
                     return self.recordNodeType(node_id, to_int_function_type_id);
                 }
 
@@ -1019,8 +1019,8 @@ pub const NodeTypeAnalyzer = struct {
             },
             .Integer => {
                 if (std.mem.eql(u8, member_name, "toString")) {
-                    const to_string_function_type_id = self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
-                    self.recordMemberAccess(node_id, .{ .IntegerInstanceMethodAccess = .ToString });
+                    const to_string_function_type_id = try self.getStringMethodFunctionTypeId(&.{}, self.type_store.string_type_id);
+                    try self.recordMemberAccess(node_id, .{ .IntegerInstanceMethodAccess = .ToString });
                     return self.recordNodeType(node_id, to_string_function_type_id);
                 }
 
@@ -1042,7 +1042,7 @@ pub const NodeTypeAnalyzer = struct {
                         function_symbol_id,
                         base_type_id,
                     );
-                    self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
+                    try self.recordMemberAccess(node_id, .{ .InstanceMethodAccess = .{
                         .owner_symbol_id = union_type.symbol_id,
                         .function_symbol_id = function_symbol_id,
                     } });
@@ -1078,7 +1078,7 @@ pub const NodeTypeAnalyzer = struct {
             else => unreachable,
         };
 
-        const parameter_types = self.arena.alloc(typing.TypeId, 1) catch unreachable;
+        const parameter_types = try self.arena.alloc(typing.TypeId, 1);
         parameter_types[0] = element_type_id;
         return self.type_store.addType(.{ .Function = .{
             .parameter_type_ids = parameter_types,
@@ -1090,8 +1090,8 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         parameter_type_ids: []const typing.TypeId,
         return_type_id: typing.TypeId,
-    ) typing.TypeId {
-        const parameter_types = self.arena.alloc(typing.TypeId, parameter_type_ids.len) catch unreachable;
+    ) !typing.TypeId {
+        const parameter_types = try self.arena.alloc(typing.TypeId, parameter_type_ids.len);
         @memcpy(parameter_types, parameter_type_ids);
 
         return self.type_store.addType(.{ .Function = .{
@@ -1129,11 +1129,11 @@ pub const NodeTypeAnalyzer = struct {
 
         var remaining_parameter_types = std.ArrayList(typing.TypeId){};
         for (function_type.parameter_type_ids[1..]) |parameter_type_id| {
-            remaining_parameter_types.append(self.arena, parameter_type_id) catch unreachable;
+            try remaining_parameter_types.append(self.arena, parameter_type_id);
         }
 
         return self.type_store.addType(.{ .Function = .{
-            .parameter_type_ids = remaining_parameter_types.toOwnedSlice(self.arena) catch unreachable,
+            .parameter_type_ids = try remaining_parameter_types.toOwnedSlice(self.arena),
             .return_type_id = function_type.return_type_id,
         } });
     }
@@ -1434,7 +1434,7 @@ pub const NodeTypeAnalyzer = struct {
             }
         }
 
-        const array_type_id = self.type_store.getOrCreateArrayType(first_element_type);
+        const array_type_id = try self.type_store.getOrCreateArrayType(first_element_type);
         return self.recordNodeType(node_id, array_type_id);
     }
 
@@ -1490,8 +1490,8 @@ pub const NodeTypeAnalyzer = struct {
                 .Binding => |binding_information| binding_information.declared_type_reference orelse unreachable,
                 else => unreachable,
             };
-            const parameter_type = self.resolveTypeReference(declared_type_reference);
-            self.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type) catch unreachable;
+            const parameter_type = try self.resolveTypeReference(declared_type_reference);
+            try self.type_id_by_symbol_id.put(parameter_symbol_id, parameter_type);
         }
 
         try self.checkFunctionDefinitionReturnValue(
@@ -1509,7 +1509,7 @@ pub const NodeTypeAnalyzer = struct {
     ) CompileError!void {
         const symbol_id = self.resolved_program.symbol_id_by_node_id.get(function_node_id).?;
         const function_information = self.getFunctionSymbolInformation(symbol_id);
-        const function_return_type = self.resolveTypeReference(function_information.return_type_reference);
+        const function_return_type = try self.resolveTypeReference(function_information.return_type_reference);
 
         const body_expression_type = try self.checkNode(
             function_definition.body_expression,
@@ -1551,7 +1551,7 @@ pub const NodeTypeAnalyzer = struct {
     pub fn resolveTypeReference(
         self: *@This(),
         type_reference: symbols.ResolvedTypeReference,
-    ) typing.TypeId {
+    ) !typing.TypeId {
         return switch (type_reference) {
             .Builtin => |builtin| switch (builtin) {
                 .Unit => self.type_store.unit_type_id,
@@ -1560,8 +1560,8 @@ pub const NodeTypeAnalyzer = struct {
                 .String => self.type_store.string_type_id,
             },
             .Symbol => |symbol_id| self.type_id_by_symbol_id.get(symbol_id) orelse unreachable,
-            .Array => |element_type_reference| self.type_store.getOrCreateArrayType(
-                self.resolveTypeReference(element_type_reference.*),
+            .Array => |element_type_reference| try self.type_store.getOrCreateArrayType(
+                try self.resolveTypeReference(element_type_reference.*),
             ),
         };
     }
@@ -1638,7 +1638,7 @@ pub const NodeTypeAnalyzer = struct {
                 const union_symbol = self.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
                 const union_symbol_information = union_symbol.kind.Union;
 
-                const is_case_matched = self.arena.alloc(bool, union_type.cases.len) catch unreachable;
+                const is_case_matched = try self.arena.alloc(bool, union_type.cases.len);
                 @memset(is_case_matched, false);
 
                 for (match_expression.arms) |arm| {
@@ -1677,11 +1677,11 @@ pub const NodeTypeAnalyzer = struct {
                                 return error.DiagnosticsEmitted;
                             }
                             is_case_matched[case_index] = true;
-                            self.union_case_index_by_pattern_id.put(arm.pattern.id, case_index) catch unreachable;
+                            try self.union_case_index_by_pattern_id.put(arm.pattern.id, case_index);
 
                             if (case_pattern.binding) |payload_binding| {
                                 const binding_symbol_id = self.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
-                                self.type_id_by_symbol_id.put(binding_symbol_id, union_type.cases[case_index].type_id) catch unreachable;
+                                try self.type_id_by_symbol_id.put(binding_symbol_id, union_type.cases[case_index].type_id);
                             }
                         },
                         .IntegerLiteral, .BooleanLiteral, .StringLiteral => {
@@ -1712,7 +1712,7 @@ pub const NodeTypeAnalyzer = struct {
                                 );
                                 return error.DiagnosticsEmitted;
                             }
-                            integer_patterns.put(value, {}) catch unreachable;
+                            try integer_patterns.put(value, {});
                         },
                         else => {
                             try self.diagnostic_store.emitErrorFromToken(arm.pattern.primaryToken(), "integer match arms must use integer literals");
@@ -1846,9 +1846,9 @@ pub const NodeTypeAnalyzer = struct {
         for (union_symbol_information.cases, is_case_matched) |union_case, is_matched| {
             if (is_matched) continue;
             if (missing_case_count > 0) {
-                missing_cases.appendSlice(self.arena, ", ") catch unreachable;
+                try missing_cases.appendSlice(self.arena, ", ");
             }
-            missing_cases.writer(self.arena).print("'{s}'", .{union_case.name}) catch unreachable;
+            try missing_cases.writer(self.arena).print("'{s}'", .{union_case.name});
             missing_case_count += 1;
         }
 
@@ -1885,8 +1885,8 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node_id: ast.NodeId,
         node_type: typing.TypeId,
-    ) typing.TypeId {
-        self.type_id_by_node_id.put(node_id, node_type) catch unreachable;
+    ) !typing.TypeId {
+        try self.type_id_by_node_id.put(node_id, node_type);
         return node_type;
     }
 
@@ -1894,8 +1894,8 @@ pub const NodeTypeAnalyzer = struct {
         self: *@This(),
         node_id: ast.NodeId,
         member_access: typing.MemberAccess,
-    ) void {
-        self.member_access_by_node_id.put(node_id, member_access) catch unreachable;
+    ) !void {
+        try self.member_access_by_node_id.put(node_id, member_access);
     }
 
     fn getType(self: *const @This(), type_id: typing.TypeId) typing.Type {

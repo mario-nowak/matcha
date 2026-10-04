@@ -98,22 +98,22 @@ pub const NodeEmitter = struct {
         };
     }
 
-    pub fn emitStringParts(self: *@This(), string_value: Value) RuntimeStringParts {
-        const pointer_value = self.function_symbol_generator.generateValueName();
-        const pointer_instruction = std.fmt.allocPrint(
+    pub fn emitStringParts(self: *@This(), string_value: Value) !RuntimeStringParts {
+        const pointer_value = try self.function_symbol_generator.generateValueName();
+        const pointer_instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = extractvalue {s} {s}, 0",
             .{ pointer_value, lowering.llvm_type.string_llvm_type, string_value },
-        ) catch unreachable;
-        self.function_ir_builder.emitInstruction(pointer_instruction);
+        );
+        try self.function_ir_builder.emitInstruction(pointer_instruction);
 
-        const length_value = self.function_symbol_generator.generateValueName();
-        const length_instruction = std.fmt.allocPrint(
+        const length_value = try self.function_symbol_generator.generateValueName();
+        const length_instruction = try std.fmt.allocPrint(
             self.arena,
             "{s} = extractvalue {s} {s}, 1",
             .{ length_value, lowering.llvm_type.string_llvm_type, string_value },
-        ) catch unreachable;
-        self.function_ir_builder.emitInstruction(length_instruction);
+        );
+        try self.function_ir_builder.emitInstruction(length_instruction);
 
         return .{
             .pointer_value = pointer_value,
@@ -126,7 +126,7 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
-    ) EmissionResult {
+    ) std.mem.Allocator.Error!EmissionResult {
         switch (node.kind) {
             .ReturnStatement => |return_statement| return control_flow.emitReturnStatement(
                 self,
@@ -134,13 +134,13 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .IntegerLiteral => |token| return .{ .value = std.fmt.allocPrint(
+            .IntegerLiteral => |token| return .{ .value = try std.fmt.allocPrint(
                 self.arena,
                 "{d}",
                 .{token.kind.IntLiteral},
-            ) catch unreachable },
+            ) },
             .BooleanLiteral => |token| return .{ .value = if (token.kind.BooleanLiteral) "1" else "0" },
-            .StringLiteral => |token| return .{ .value = self.string_literal_emitter.emitStringLiteralValue(
+            .StringLiteral => |token| return .{ .value = try self.string_literal_emitter.emitStringLiteralValue(
                 self.string_literal_pool,
                 node.id,
                 token.kind.StringLiteral,
@@ -164,11 +164,11 @@ pub const NodeEmitter = struct {
                 environment,
             ),
             .LeaveStatement => {
-                self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
+                try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
                 return .statement;
             },
             .ContinueStatement => {
-                self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
+                try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
                 return .statement;
             },
             .CallExpression => |call_expression| return calls.emitCallExpression(
@@ -249,7 +249,7 @@ pub const NodeEmitter = struct {
                 environment,
             ),
             .ExpressionStatement => |expression_statement| {
-                _ = self.emitNode(expression_statement.expression, lowered_program, environment);
+                _ = try self.emitNode(expression_statement.expression, lowered_program, environment);
                 return .statement;
             },
             .ItemDefinition => return .statement,

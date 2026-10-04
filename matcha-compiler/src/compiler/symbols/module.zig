@@ -126,33 +126,33 @@ pub const SymbolTable = struct {
         };
     }
 
-    pub fn insertSymbol(self: *@This(), payload: SymbolCreationPayload) SymbolId {
+    pub fn insertSymbol(self: *@This(), payload: SymbolCreationPayload) !SymbolId {
         const symbol_id = self.next_symbol_id;
         self.next_symbol_id += 1;
-        self.entries.put(symbol_id, .{
+        try self.entries.put(symbol_id, .{
             .id = symbol_id,
             .name = payload.name,
             .declared_at = payload.declared_at,
             .kind = payload.kind,
-        }) catch unreachable;
+        });
 
         return symbol_id;
     }
 
-    pub fn insertPreliminarySymbol(self: *@This(), payload: PreliminarySymbolCreationPayload) SymbolId {
+    pub fn insertPreliminarySymbol(self: *@This(), payload: PreliminarySymbolCreationPayload) !SymbolId {
         const symbol_id = self.next_symbol_id;
         self.next_symbol_id += 1;
-        self.preliminary_entries.put(symbol_id, .{
+        try self.preliminary_entries.put(symbol_id, .{
             .id = symbol_id,
             .name = payload.name,
             .declared_at = payload.declared_at,
             .kind = payload.kind,
-        }) catch unreachable;
+        });
 
         return symbol_id;
     }
 
-    pub fn finalizePreliminarySymbol(self: *@This(), symbol_id: SymbolId, kind: SymbolKind) void {
+    pub fn finalizePreliminarySymbol(self: *@This(), symbol_id: SymbolId, kind: SymbolKind) !void {
         const removed_entry = self.preliminary_entries.fetchRemove(symbol_id) orelse {
             if (self.entries.contains(symbol_id)) {
                 std.debug.panic("Internal Compiler Error: Symbol {d} is already finalized", .{symbol_id});
@@ -163,12 +163,12 @@ pub const SymbolTable = struct {
         if (preliminary.kind != std.meta.activeTag(kind)) {
             std.debug.panic("Internal Compiler Error: Cannot change kind of symbol {d} during finalization", .{symbol_id});
         }
-        self.entries.put(symbol_id, .{
+        try self.entries.put(symbol_id, .{
             .id = preliminary.id,
             .name = preliminary.name,
             .declared_at = preliminary.declared_at,
             .kind = kind,
-        }) catch unreachable;
+        });
     }
 
     pub fn getSymbol(self: *const @This(), symbol_id: SymbolId) Symbol {

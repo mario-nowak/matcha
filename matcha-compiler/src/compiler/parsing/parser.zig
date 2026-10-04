@@ -90,8 +90,8 @@ pub const Parser = struct {
         };
     }
 
-    fn wrapExpressionStatement(self: *Parser, expression: ast.Node) ast.Node {
-        const expression_node = self.arena.create(ast.Node) catch unreachable;
+    fn wrapExpressionStatement(self: *Parser, expression: ast.Node) !ast.Node {
+        const expression_node = try self.arena.create(ast.Node);
         expression_node.* = expression;
         return self.createNode(.{
             .ExpressionStatement = .{
@@ -234,7 +234,7 @@ pub const Parser = struct {
             },
         };
 
-        const value = self.arena.create(ast.Node) catch unreachable;
+        const value = try self.arena.create(ast.Node);
         value.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const semicolon_token = try self.lexer.next();
@@ -337,7 +337,7 @@ pub const Parser = struct {
                 switch (item.kind) {
                     .ItemDefinition => |item_definition| {
                         switch (item_definition.definition) {
-                            .Function => function_definitions.append(self.arena, item) catch unreachable,
+                            .Function => try function_definitions.append(self.arena, item),
                             else => {
                                 try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside union body");
                                 return error.DiagnosticsEmitted;
@@ -362,10 +362,10 @@ pub const Parser = struct {
                 type_annotation = try self.parseTypeAnnotation();
             }
 
-            union_cases.append(self.arena, .{
+            try union_cases.append(self.arena, .{
                 .name = case_name_token,
                 .type_annotation = type_annotation,
-            }) catch unreachable;
+            });
 
             const post_case_token = try self.lexer.peek();
             if (post_case_token.kind == .Comma) {
@@ -383,8 +383,8 @@ pub const Parser = struct {
 
         return .{
             .union_token = union_token,
-            .cases = union_cases.toOwnedSlice(self.arena) catch unreachable,
-            .function_definitions = function_definitions.toOwnedSlice(self.arena) catch unreachable,
+            .cases = try union_cases.toOwnedSlice(self.arena),
+            .function_definitions = try function_definitions.toOwnedSlice(self.arena),
         };
     }
 
@@ -436,7 +436,7 @@ pub const Parser = struct {
                 switch (item.kind) {
                     .ItemDefinition => |item_definition| {
                         switch (item_definition.definition) {
-                            .Function => function_definitions.append(self.arena, item) catch unreachable,
+                            .Function => try function_definitions.append(self.arena, item),
                             else => {
                                 try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside structure body");
                                 return error.DiagnosticsEmitted;
@@ -462,10 +462,10 @@ pub const Parser = struct {
 
             const type_annotation = try self.parseTypeAnnotation();
 
-            fields.append(self.arena, .{
+            try fields.append(self.arena, .{
                 .name = field_name_token,
                 .type_annotation = type_annotation,
-            }) catch unreachable;
+            });
 
             const post_field_token = try self.lexer.peek();
             if (post_field_token.kind == .Semicolon) {
@@ -478,8 +478,8 @@ pub const Parser = struct {
 
         return .{
             .structure_token = structure_token,
-            .fields = fields.toOwnedSlice(self.arena) catch unreachable,
-            .function_definitions = function_definitions.toOwnedSlice(self.arena) catch unreachable,
+            .fields = try fields.toOwnedSlice(self.arena),
+            .function_definitions = try function_definitions.toOwnedSlice(self.arena),
         };
     }
 
@@ -511,10 +511,10 @@ pub const Parser = struct {
 
             const type_annotation = try self.parseTypeAnnotation();
 
-            parameters.append(self.arena, .{
+            try parameters.append(self.arena, .{
                 .name = parameter_name_token,
                 .type_annotation = type_annotation,
-            }) catch unreachable;
+            });
 
             const post_parameter_token = try self.lexer.peek();
             if (post_parameter_token.kind == .Comma) {
@@ -544,7 +544,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const body_expression = self.arena.create(ast.Node) catch unreachable;
+        const body_expression = try self.arena.create(ast.Node);
         body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const semicolon_token = try self.lexer.next();
@@ -559,7 +559,7 @@ pub const Parser = struct {
                 .identifier_token = identifier_token,
                 .definition = .{
                     .Function = .{
-                        .parameters = parameters.toOwnedSlice(self.arena) catch unreachable,
+                        .parameters = try parameters.toOwnedSlice(self.arena),
                         .return_type_annotation = return_type_annotation,
                         .body_expression = body_expression,
                     },
@@ -590,7 +590,7 @@ pub const Parser = struct {
             });
         }
 
-        const expression = self.arena.create(ast.Node) catch unreachable;
+        const expression = try self.arena.create(ast.Node);
         expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const semicolon_token = try self.lexer.next();
@@ -619,7 +619,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const body_block = self.arena.create(ast.Node) catch unreachable;
+        const body_block = try self.arena.create(ast.Node);
         body_block.* = try self.parseBlock(left_brace);
 
         return self.createNode(.{
@@ -636,7 +636,7 @@ pub const Parser = struct {
             unreachable;
         }
 
-        const condition = self.arena.create(ast.Node) catch unreachable;
+        const condition = try self.arena.create(ast.Node);
         condition.* = try self.parseExpression(.{
             .current_binding_power = 0.0,
             .allow_structure_literal = false,
@@ -646,7 +646,7 @@ pub const Parser = struct {
         var post_condition_token = try self.lexer.peek();
         if (post_condition_token.kind == .Colon) {
             _ = try self.lexer.next();
-            const assignment_statement = self.arena.create(ast.Node) catch unreachable;
+            const assignment_statement = try self.arena.create(ast.Node);
             assignment_statement.* = try self.parseAssignmentStatement(.{ .require_semicolon = false });
             update = assignment_statement;
             post_condition_token = try self.lexer.peek();
@@ -658,7 +658,7 @@ pub const Parser = struct {
         }
         const left_brace_token = try self.lexer.next();
 
-        const body = self.arena.create(ast.Node) catch unreachable;
+        const body = try self.arena.create(ast.Node);
         body.* = try self.parseBlock(left_brace_token);
 
         return self.createNode(.{
@@ -689,7 +689,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const iterable = self.arena.create(ast.Node) catch unreachable;
+        const iterable = try self.arena.create(ast.Node);
         iterable.* = try self.parseExpression(.{
             .current_binding_power = 0.0,
             .allow_structure_literal = false,
@@ -701,7 +701,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const body = self.arena.create(ast.Node) catch unreachable;
+        const body = try self.arena.create(ast.Node);
         body.* = try self.parseBlock(left_brace_token);
 
         return self.createNode(.{
@@ -716,7 +716,7 @@ pub const Parser = struct {
     }
 
     fn parseAssignmentStatement(self: *@This(), options: struct { require_semicolon: bool }) CompileError!ast.Node {
-        const target = self.arena.create(ast.Node) catch unreachable;
+        const target = try self.arena.create(ast.Node);
         target.* = try self.parsePlaceExpression();
 
         const assignment_token = try self.lexer.next();
@@ -732,7 +732,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const value = self.arena.create(ast.Node) catch unreachable;
+        const value = try self.arena.create(ast.Node);
         value.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         if (options.require_semicolon) {
@@ -815,7 +815,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const condition = self.arena.create(ast.Node) catch unreachable;
+        const condition = try self.arena.create(ast.Node);
         condition.* = try self.parseExpression(.{
             .current_binding_power = 0,
             .allow_structure_literal = false,
@@ -827,7 +827,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const then_branch = self.arena.create(ast.Node) catch unreachable;
+        const then_branch = try self.arena.create(ast.Node);
 
         then_branch.* = try self.parseBlock(then_branch_left_brace_token);
 
@@ -840,7 +840,7 @@ pub const Parser = struct {
                 try self.diagnostic_store.emitErrorFromToken(else_branch_left_brace_token, "expected '{' after 'else'");
                 return error.DiagnosticsEmitted;
             }
-            const else_block = self.arena.create(ast.Node) catch unreachable;
+            const else_block = try self.arena.create(ast.Node);
             else_block.* = try self.parseBlock(else_branch_left_brace_token);
 
             return .{
@@ -877,7 +877,7 @@ pub const Parser = struct {
             return self.parseSubjectlessMatchExpression(match_token);
         }
 
-        const subject = self.arena.create(ast.Node) catch unreachable;
+        const subject = try self.arena.create(ast.Node);
         subject.* = try self.parseExpression(.{
             .current_binding_power = 0,
             .allow_structure_literal = false,
@@ -898,18 +898,18 @@ pub const Parser = struct {
             if (next_token.kind == .Else) {
                 else_token = try self.lexer.next();
                 _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
-                else_arm_expression = self.arena.create(ast.Node) catch unreachable;
+                else_arm_expression = try self.arena.create(ast.Node);
                 else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
             } else {
                 const pattern = try self.parsePattern();
                 const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
-                const body_expression = self.arena.create(ast.Node) catch unreachable;
+                const body_expression = try self.arena.create(ast.Node);
                 body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
-                arms.append(self.arena, .{
+                try arms.append(self.arena, .{
                     .pattern = pattern,
                     .fat_arrow_token = fat_arrow_token,
                     .body_expression = body_expression,
-                }) catch unreachable;
+                });
             }
             try self.expectMatchArmSeparator();
         }
@@ -918,7 +918,7 @@ pub const Parser = struct {
             .MatchExpression = .{
                 .match_token = match_token,
                 .subject = subject,
-                .arms = arms.toOwnedSlice(self.arena) catch unreachable,
+                .arms = try arms.toOwnedSlice(self.arena),
                 .else_token = else_token,
                 .else_arm_expression = else_arm_expression,
             },
@@ -942,19 +942,19 @@ pub const Parser = struct {
             if (next_token.kind == .Else) {
                 else_token = try self.lexer.next();
                 _ = try self.expectFatArrow("expected '=>' after 'else' in match expression");
-                else_arm_expression = self.arena.create(ast.Node) catch unreachable;
+                else_arm_expression = try self.arena.create(ast.Node);
                 else_arm_expression.?.* = try self.parseExpression(.{ .current_binding_power = 0 });
             } else {
-                const condition = self.arena.create(ast.Node) catch unreachable;
+                const condition = try self.arena.create(ast.Node);
                 condition.* = try self.parseExpression(.{ .current_binding_power = 0 });
                 const fat_arrow_token = try self.expectFatArrow("expected '=>' in match arm");
-                const body_expression = self.arena.create(ast.Node) catch unreachable;
+                const body_expression = try self.arena.create(ast.Node);
                 body_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
-                arms.append(self.arena, .{
+                try arms.append(self.arena, .{
                     .condition = condition,
                     .body_expression = body_expression,
                     .fat_arrow_token = fat_arrow_token,
-                }) catch unreachable;
+                });
             }
             try self.expectMatchArmSeparator();
         }
@@ -962,7 +962,7 @@ pub const Parser = struct {
         return self.createNode(.{
             .SubjectlessMatchExpression = .{
                 .match_token = match_token,
-                .arms = arms.toOwnedSlice(self.arena) catch unreachable,
+                .arms = try arms.toOwnedSlice(self.arena),
                 .else_token = else_token,
                 .else_arm_expression = else_arm_expression,
             },
@@ -1021,7 +1021,7 @@ pub const Parser = struct {
             const block_item = try self.parseBlockItem();
             switch (block_item) {
                 .statement => |statement| {
-                    statements.append(self.arena, statement) catch unreachable;
+                    try statements.append(self.arena, statement);
                     const post_statement_token = try self.lexer.peek();
                     if (post_statement_token.kind == .RightBrace) {
                         // Done parsing the block. It finished with a statement, so there is no result expression.
@@ -1029,7 +1029,7 @@ pub const Parser = struct {
                     }
                 },
                 .expression => |expression| {
-                    const expression_node = self.arena.create(ast.Node) catch unreachable;
+                    const expression_node = try self.arena.create(ast.Node);
                     expression_node.* = expression;
                     result = expression_node;
                     // Done parsing the block. It finished with an expression, so we set the result and break out of the loop.
@@ -1043,7 +1043,7 @@ pub const Parser = struct {
         return self.createNode(.{
             .Block = .{
                 .left_brace = leftBraceToken,
-                .statements = statements.toOwnedSlice(self.arena) catch unreachable,
+                .statements = try statements.toOwnedSlice(self.arena),
                 .result = result,
                 .right_brace = right_brace_token,
             },
@@ -1073,7 +1073,7 @@ pub const Parser = struct {
         switch (post_expression_token.kind) {
             .Semicolon => {
                 _ = try self.lexer.next(); // consume semicolon
-                return .{ .statement = self.wrapExpressionStatement(expression) };
+                return .{ .statement = try self.wrapExpressionStatement(expression) };
             },
             .RightBrace => return .{
                 .expression = expression,
@@ -1095,7 +1095,7 @@ pub const Parser = struct {
                 switch (post_if_expression_token.kind) {
                     .Semicolon => {
                         _ = try self.lexer.next();
-                        return .{ .statement = self.wrapExpressionStatement(if_expression) };
+                        return .{ .statement = try self.wrapExpressionStatement(if_expression) };
                     },
                     .RightBrace => return .{ .expression = if_expression },
                     else => {
@@ -1163,13 +1163,13 @@ pub const Parser = struct {
                 // Therefore, we consume the currently peeked operator and parse whatever is to the right hand side of
                 // our current operator.
                 _ = try self.lexer.next();
-                const right_hand_side = self.arena.create(ast.Node) catch unreachable;
+                const right_hand_side = try self.arena.create(ast.Node);
                 right_hand_side.* = try self.parseExpression(.{
                     .current_binding_power = operator.right_binding_power,
                     .allow_structure_literal = state.allow_structure_literal,
                 });
 
-                const left_hand_side_pointer = self.arena.create(ast.Node) catch unreachable;
+                const left_hand_side_pointer = try self.arena.create(ast.Node);
                 left_hand_side_pointer.* = left_hand_side;
 
                 left_hand_side = self.createNode(.{
@@ -1324,7 +1324,7 @@ pub const Parser = struct {
     ) CompileError!ast.Node {
         const prefix_binding_power = getPrefixOperatorBindingPower(token.kind) orelse unreachable;
 
-        const operand = self.arena.create(ast.Node) catch unreachable;
+        const operand = try self.arena.create(ast.Node);
         operand.* = try self.parseExpression(.{
             .current_binding_power = prefix_binding_power,
             .allow_structure_literal = state.allow_structure_literal,
@@ -1392,14 +1392,14 @@ pub const Parser = struct {
                 return error.DiagnosticsEmitted;
             }
 
-            const value_expression = self.arena.create(ast.Node) catch unreachable;
+            const value_expression = try self.arena.create(ast.Node);
             value_expression.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
-            fields.append(self.arena, .{
+            try fields.append(self.arena, .{
                 .name = field_name_token,
                 .assign_token = assign_token,
                 .value = value_expression,
-            }) catch unreachable;
+            });
 
             const post_field_token = try self.lexer.peek();
             if (post_field_token.kind == .Comma) {
@@ -1412,7 +1412,7 @@ pub const Parser = struct {
 
         return .{
             .left_brace_token = left_brace_token,
-            .fields = fields.toOwnedSlice(self.arena) catch unreachable,
+            .fields = try fields.toOwnedSlice(self.arena),
         };
     }
 
@@ -1429,7 +1429,7 @@ pub const Parser = struct {
                 break;
             }
             const argument = try self.parseExpression(.{ .current_binding_power = 0.0 });
-            arguments.append(self.arena, argument) catch unreachable;
+            try arguments.append(self.arena, argument);
 
             const post_argument_token = try self.lexer.peek();
             if (post_argument_token.kind == .Comma) {
@@ -1444,14 +1444,14 @@ pub const Parser = struct {
         }
 
         const right_parenthesis = try self.lexer.next();
-        const callee = self.arena.create(ast.Node) catch unreachable;
+        const callee = try self.arena.create(ast.Node);
         callee.* = left_hand_size;
 
         return self.createNode(.{
             .CallExpression = .{
                 .callee = callee,
                 .left_parenthesis = left_parenthesis,
-                .arguments = arguments.toOwnedSlice(self.arena) catch unreachable,
+                .arguments = try arguments.toOwnedSlice(self.arena),
                 .right_parenthesis = right_parenthesis,
             },
         });
@@ -1468,7 +1468,7 @@ pub const Parser = struct {
                 break;
             }
             const element = try self.parseExpression(.{ .current_binding_power = 0 });
-            elements.append(self.arena, element) catch unreachable;
+            try elements.append(self.arena, element);
 
             const post_element_token = try self.lexer.peek();
             if (post_element_token.kind == .Comma) {
@@ -1494,7 +1494,7 @@ pub const Parser = struct {
         return self.createNode(.{
             .ArrayLiteral = .{
                 .left_bracket = left_bracket_token,
-                .elements = elements.toOwnedSlice(self.arena) catch unreachable,
+                .elements = try elements.toOwnedSlice(self.arena),
                 .right_bracket = right_bracket_token,
             },
         });
@@ -1506,7 +1506,7 @@ pub const Parser = struct {
             unreachable;
         }
 
-        const index = self.arena.create(ast.Node) catch unreachable;
+        const index = try self.arena.create(ast.Node);
         index.* = try self.parseExpression(.{ .current_binding_power = 0 });
 
         const right_bracket_token = try self.lexer.next();
@@ -1515,7 +1515,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const base = self.arena.create(ast.Node) catch unreachable;
+        const base = try self.arena.create(ast.Node);
         base.* = left_hand_side;
 
         return self.createNode(.{
@@ -1540,7 +1540,7 @@ pub const Parser = struct {
             return error.DiagnosticsEmitted;
         }
 
-        const base = self.arena.create(ast.Node) catch unreachable;
+        const base = try self.arena.create(ast.Node);
         base.* = left_hand_side;
 
         return self.createNode(.{

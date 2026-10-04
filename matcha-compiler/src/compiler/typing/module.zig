@@ -91,7 +91,7 @@ pub const TypeStore = struct {
         }
     };
 
-    pub fn init(arena: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) !@This() {
         var store = @This(){
             .arena = arena,
             .preliminary_entries = std.AutoHashMap(TypeId, PreliminaryType).init(arena),
@@ -104,31 +104,31 @@ pub const TypeStore = struct {
             .string_type_id = undefined,
         };
 
-        store.unit_type_id = store.addType(.Unit);
-        store.boolean_type_id = store.addType(.Boolean);
-        store.integer_type_id = store.addType(.Integer);
-        store.string_type_id = store.addType(.String);
+        store.unit_type_id = try store.addType(.Unit);
+        store.boolean_type_id = try store.addType(.Boolean);
+        store.integer_type_id = try store.addType(.Integer);
+        store.string_type_id = try store.addType(.String);
 
         return store;
     }
 
-    pub fn addType(self: *@This(), matcha_type: Type) TypeId {
+    pub fn addType(self: *@This(), matcha_type: Type) !TypeId {
         const type_id = self.next_type_id;
         self.next_type_id += 1;
-        self.entries.put(type_id, matcha_type) catch unreachable;
+        try self.entries.put(type_id, matcha_type);
 
         return type_id;
     }
 
-    pub fn addPreliminaryType(self: *@This(), kind: TypeKind) TypeId {
+    pub fn addPreliminaryType(self: *@This(), kind: TypeKind) !TypeId {
         const type_id = self.next_type_id;
         self.next_type_id += 1;
-        self.preliminary_entries.put(type_id, .{ .kind = kind }) catch unreachable;
+        try self.preliminary_entries.put(type_id, .{ .kind = kind });
 
         return type_id;
     }
 
-    pub fn finalizeType(self: *@This(), type_id: TypeId, matcha_type: Type) void {
+    pub fn finalizeType(self: *@This(), type_id: TypeId, matcha_type: Type) !void {
         const removed_entry = self.preliminary_entries.fetchRemove(type_id) orelse {
             if (self.entries.contains(type_id)) {
                 std.debug.panic("Internal Compiler Error: Type {d} is already finalized", .{type_id});
@@ -138,7 +138,7 @@ pub const TypeStore = struct {
         if (removed_entry.value.kind != std.meta.activeTag(matcha_type)) {
             std.debug.panic("Internal Compiler Error: Cannot change kind of type {d} during finalization", .{type_id});
         }
-        self.entries.put(type_id, matcha_type) catch unreachable;
+        try self.entries.put(type_id, matcha_type);
     }
 
     pub fn getType(self: *const @This(), type_id: TypeId) Type {
@@ -154,13 +154,13 @@ pub const TypeStore = struct {
         return self.array_type_id_by_element_type_id.get(element_type_id);
     }
 
-    pub fn getOrCreateArrayType(self: *@This(), element_type_id: TypeId) TypeId {
+    pub fn getOrCreateArrayType(self: *@This(), element_type_id: TypeId) !TypeId {
         if (self.array_type_id_by_element_type_id.get(element_type_id)) |existing_type_id| {
             return existing_type_id;
         }
 
-        const type_id = self.addType(.{ .Array = element_type_id });
-        self.array_type_id_by_element_type_id.put(element_type_id, type_id) catch unreachable;
+        const type_id = try self.addType(.{ .Array = element_type_id });
+        try self.array_type_id_by_element_type_id.put(element_type_id, type_id);
         return type_id;
     }
 

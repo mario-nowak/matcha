@@ -51,15 +51,15 @@ pub const UnionTypeRenderer = struct {
                 const type_runtime_representation = analyzed_program.runtime_representation_result.runtime_representation_by_type_id.get(payload_type_id).?;
                 if (type_runtime_representation == .Present) {
                     const llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-                    union_definitions_buffer.writer(self.arena).print(", {s} }}", .{llvm_type}) catch unreachable;
+                    try union_definitions_buffer.writer(self.arena).print(", {s} }}", .{llvm_type});
                 } else {
-                    union_definitions_buffer.writer(self.arena).print(" }}", .{}) catch unreachable;
+                    try union_definitions_buffer.writer(self.arena).print(" }}", .{});
                 }
             }
 
             union_index += 1;
         }
 
-        return union_definitions_buffer.toOwnedSlice(self.arena) catch unreachable;
+        return union_definitions_buffer.toOwnedSlice(self.arena);
     }
 };
