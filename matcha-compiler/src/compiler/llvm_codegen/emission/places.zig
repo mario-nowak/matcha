@@ -58,7 +58,7 @@ pub fn emitAssignmentStatement(
     const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(assignment_statement.target.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
     switch (assignment_statement.operator) {
-        .Assign => {
+        .assign => {
             const assigned_value = try emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
@@ -67,7 +67,7 @@ pub fn emitAssignmentStatement(
             };
             try emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_address, llvm_ir_type);
         },
-        .Compound => {
+        .compound => {
             const assigned_value = try emitter.emitNode(assignment_statement.value, lowered_program, environment);
             const place_address = switch (place_emission_result) {
                 .zero_sized => return .statement,
@@ -101,7 +101,7 @@ pub fn emitPlace(
     const place_decision = lowered_program.place_decision_by_node_id.get(target.id) orelse unreachable;
 
     switch (place_decision) {
-        .IdentifierBinding => |identifier_binding| {
+        .identifier_binding => |identifier_binding| {
             const target_runtime_representation = lowered_program
                 .analyzed_program
                 .runtime_representation_result
@@ -112,9 +112,9 @@ pub fn emitPlace(
             }
             return .{ .value = environment.address_by_symbol_id.get(identifier_binding.symbol_id).? };
         },
-        .StructureField => |structure_field| {
+        .structure_field => |structure_field| {
             const member_expression = switch (target.kind) {
-                .MemberExpression => |resolved_member_expression| resolved_member_expression,
+                .member_expression => |resolved_member_expression| resolved_member_expression,
                 else => unreachable,
             };
             return emitStructureFieldPointer(
@@ -125,9 +125,9 @@ pub fn emitPlace(
                 environment,
             );
         },
-        .ArrayElement => {
+        .array_element => {
             const index_expression = switch (target.kind) {
-                .IndexExpression => |resolved_index_expression| resolved_index_expression,
+                .index_expression => |resolved_index_expression| resolved_index_expression,
                 else => unreachable,
             };
             return emitIndexExpressionPointer(emitter, &index_expression, lowered_program, environment);
@@ -152,17 +152,17 @@ pub fn emitStructureFieldPointer(
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(member_expression.base.id) orelse unreachable;
     switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
-        .Structure => {},
+        .structure => {},
         else => unreachable,
     }
 
     const structure_layout = switch (lowered_program.structure_layout_kind_by_type_id.get(base_type_id) orelse unreachable) {
-        .Absent => return .zero_sized,
-        .Present => |structure_layout| structure_layout,
+        .absent => return .zero_sized,
+        .present => |structure_layout| structure_layout,
     };
     const field_layout_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
-        .Absent => return .zero_sized,
-        .Index => |field_layout_index| field_layout_index,
+        .absent => return .zero_sized,
+        .index => |field_layout_index| field_layout_index,
     };
 
     const field_pointer_value = try emitter.function_symbol_generator.generateValueName();
@@ -188,7 +188,7 @@ pub fn emitIndexExpressionPointer(
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
 

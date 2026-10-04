@@ -35,7 +35,7 @@ pub const Lexer = struct {
                 .column = self.column,
                 .offset_in_source = self.offset_in_source,
                 .length_in_source = 0,
-                .kind = .EndOfFile,
+                .kind = .end_of_file,
             };
         }
 
@@ -115,7 +115,7 @@ pub const Lexer = struct {
             token_kind = asKeyword(alphanumeric);
         }
         if (token_kind == null) {
-            token_kind = .{ .Identifier = alphanumeric };
+            token_kind = .{ .identifier = alphanumeric };
         }
 
         const token = Token{
@@ -156,7 +156,7 @@ pub const Lexer = struct {
             .column = self.column,
             .offset_in_source = self.offset_in_source,
             .length_in_source = self.offset_in_token,
-            .kind = .{ .IntLiteral = value },
+            .kind = .{ .int_literal = value },
         };
 
         self.column += self.offset_in_token;
@@ -190,7 +190,7 @@ pub const Lexer = struct {
                     .column = start_column,
                     .offset_in_source = start_offset,
                     .length_in_source = total_length,
-                    .kind = .{ .StringLiteral = decoded_content },
+                    .kind = .{ .string_literal = decoded_content },
                 };
             }
 
@@ -255,13 +255,13 @@ pub const Lexer = struct {
         if (self.offset_in_source + 1 < self.source.len) {
             const next_character = self.source[self.offset_in_source + 1];
             const multi_character_kind: ?TokenKind = switch (character) {
-                '=' => if (next_character == '=') .EqualEqual else if (next_character == '>') .FatArrow else null,
-                '+' => if (next_character == '=') .PlusAssign else null,
-                '-' => if (next_character == '=') .MinusAssign else null,
-                '*' => if (next_character == '=') .AsteriskAssign else null,
-                '!' => if (next_character == '=') .NotEqual else null,
-                '<' => if (next_character == '=') .LessThanOrEqual else null,
-                '>' => if (next_character == '=') .GreaterThanOrEqual else null,
+                '=' => if (next_character == '=') .equal_equal else if (next_character == '>') .fat_arrow else null,
+                '+' => if (next_character == '=') .plus_assign else null,
+                '-' => if (next_character == '=') .minus_assign else null,
+                '*' => if (next_character == '=') .asterisk_assign else null,
+                '!' => if (next_character == '=') .not_equal else null,
+                '<' => if (next_character == '=') .less_than_or_equal else null,
+                '>' => if (next_character == '=') .greater_than_or_equal else null,
                 else => null,
             };
 
@@ -286,23 +286,23 @@ pub const Lexer = struct {
         const offset_in_source = self.offset_in_source;
 
         const kind: ?TokenKind = switch (character) {
-            '=' => .Assign,
-            '(' => .LeftParenthesis,
-            ')' => .RightParenthesis,
-            '{' => .LeftBrace,
-            '}' => .RightBrace,
-            '[' => .LeftBracket,
-            ']' => .RightBracket,
-            ':' => .Colon,
-            ';' => .Semicolon,
-            '+' => .Plus,
-            '-' => .Minus,
-            '*' => .Asterisk,
-            '/' => .Slash,
-            '<' => .LessThan,
-            '>' => .GreaterThan,
-            ',' => .Comma,
-            '.' => .Dot,
+            '=' => .assign,
+            '(' => .left_parenthesis,
+            ')' => .right_parenthesis,
+            '{' => .left_brace,
+            '}' => .right_brace,
+            '[' => .left_bracket,
+            ']' => .right_bracket,
+            ':' => .colon,
+            ';' => .semicolon,
+            '+' => .plus,
+            '-' => .minus,
+            '*' => .asterisk,
+            '/' => .slash,
+            '<' => .less_than,
+            '>' => .greater_than,
+            ',' => .comma,
+            '.' => .dot,
             else => null,
         };
 
@@ -323,29 +323,29 @@ pub const Lexer = struct {
     }
 
     fn asBooleanLiteral(alphanumeric: []const u8) ?TokenKind {
-        if (std.mem.eql(u8, alphanumeric, "true")) return .{ .BooleanLiteral = true };
-        if (std.mem.eql(u8, alphanumeric, "false")) return .{ .BooleanLiteral = false };
+        if (std.mem.eql(u8, alphanumeric, "true")) return .{ .boolean_literal = true };
+        if (std.mem.eql(u8, alphanumeric, "false")) return .{ .boolean_literal = false };
         return null;
     }
 
     fn asKeyword(alphanumeric: []const u8) ?TokenKind {
-        if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
-        if (std.mem.eql(u8, alphanumeric, "var")) return .Var;
-        if (std.mem.eql(u8, alphanumeric, "if")) return .If;
-        if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
-        if (std.mem.eql(u8, alphanumeric, "match")) return .Match;
-        if (std.mem.eql(u8, alphanumeric, "not")) return .Not;
-        if (std.mem.eql(u8, alphanumeric, "and")) return .And;
-        if (std.mem.eql(u8, alphanumeric, "or")) return .Or;
-        if (std.mem.eql(u8, alphanumeric, "loop")) return .Loop;
-        if (std.mem.eql(u8, alphanumeric, "leave")) return .Leave;
-        if (std.mem.eql(u8, alphanumeric, "continue")) return .Continue;
-        if (std.mem.eql(u8, alphanumeric, "while")) return .While;
-        if (std.mem.eql(u8, alphanumeric, "for")) return .For;
-        if (std.mem.eql(u8, alphanumeric, "in")) return .In;
-        if (std.mem.eql(u8, alphanumeric, "return")) return .Return;
-        if (std.mem.eql(u8, alphanumeric, "structure")) return .Structure;
-        if (std.mem.eql(u8, alphanumeric, "union")) return .Union;
+        if (std.mem.eql(u8, alphanumeric, "val")) return .val;
+        if (std.mem.eql(u8, alphanumeric, "var")) return .@"var";
+        if (std.mem.eql(u8, alphanumeric, "if")) return .@"if";
+        if (std.mem.eql(u8, alphanumeric, "else")) return .@"else";
+        if (std.mem.eql(u8, alphanumeric, "match")) return .match;
+        if (std.mem.eql(u8, alphanumeric, "not")) return .not;
+        if (std.mem.eql(u8, alphanumeric, "and")) return .@"and";
+        if (std.mem.eql(u8, alphanumeric, "or")) return .@"or";
+        if (std.mem.eql(u8, alphanumeric, "loop")) return .loop;
+        if (std.mem.eql(u8, alphanumeric, "leave")) return .leave;
+        if (std.mem.eql(u8, alphanumeric, "continue")) return .@"continue";
+        if (std.mem.eql(u8, alphanumeric, "while")) return .@"while";
+        if (std.mem.eql(u8, alphanumeric, "for")) return .@"for";
+        if (std.mem.eql(u8, alphanumeric, "in")) return .in;
+        if (std.mem.eql(u8, alphanumeric, "return")) return .@"return";
+        if (std.mem.eql(u8, alphanumeric, "structure")) return .structure;
+        if (std.mem.eql(u8, alphanumeric, "union")) return .@"union";
         return null;
     }
 

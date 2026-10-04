@@ -56,7 +56,7 @@ test "type expression parser parses named types" {
     defer parsed.deinit();
 
     switch (parsed.type_expression.*) {
-        .Named => |named_type_expression| try std.testing.expectEqualStrings("int", named_type_expression.name_token.kind.Identifier),
+        .named => |named_type_expression| try std.testing.expectEqualStrings("int", named_type_expression.name_token.kind.identifier),
         else => return error.UnexpectedTypeExpressionKind,
     }
 }
@@ -68,9 +68,9 @@ test "type expression parser parses array suffixes" {
     defer parsed.deinit();
 
     switch (parsed.type_expression.*) {
-        .Array => |outer_array| switch (outer_array.element_type.*) {
-            .Array => |inner_array| switch (inner_array.element_type.*) {
-                .Named => |named_type_expression| try std.testing.expectEqualStrings("string", named_type_expression.name_token.kind.Identifier),
+        .array => |outer_array| switch (outer_array.element_type.*) {
+            .array => |inner_array| switch (inner_array.element_type.*) {
+                .named => |named_type_expression| try std.testing.expectEqualStrings("string", named_type_expression.name_token.kind.identifier),
                 else => return error.UnexpectedTypeExpressionKind,
             },
             else => return error.UnexpectedTypeExpressionKind,

@@ -22,8 +22,8 @@ pub const StructureTypeRenderer = struct {
         var has_structure_definition = false;
         for (resolved_program.program.statements) |*statement| {
             _ = switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Structure => |structure| structure,
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .structure => |structure| structure,
                     else => continue,
                 },
                 else => continue,
@@ -33,8 +33,8 @@ pub const StructureTypeRenderer = struct {
             const structure_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(structure_symbol_id) orelse unreachable;
             const structure_layout_kind = lowered_program.structure_layout_kind_by_type_id.get(structure_type_id) orelse unreachable;
             const structure_layout = switch (structure_layout_kind) {
-                .Absent => continue,
-                .Present => |structure_layout| structure_layout,
+                .absent => continue,
+                .present => |structure_layout| structure_layout,
             };
 
             if (has_structure_definition) {
@@ -44,7 +44,7 @@ pub const StructureTypeRenderer = struct {
                 "{s}",
                 .{
                     try self.renderStructureTypeDefinition(
-                        lowered_program.analyzed_program.type_store.getType(structure_type_id).Structure,
+                        lowered_program.analyzed_program.type_store.getType(structure_type_id).structure,
                         structure_layout,
                         lowered_program,
                     ),
@@ -72,8 +72,8 @@ pub const StructureTypeRenderer = struct {
         );
         for (structure_type.fields, 0..) |field, field_index_in_structure_definition| {
             const field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index_in_structure_definition]) {
-                .Absent => continue,
-                .Index => |field_index| field_index,
+                .absent => continue,
+                .index => |field_index| field_index,
             };
 
             if (field_index == 0) {

@@ -33,35 +33,35 @@ pub const StructuralValidator = struct {
         context: *const ControlFlowValidationContext,
     ) CompileError!void {
         switch (node.kind) {
-            .BindingDeclaration => |binding_declaration| try self.validateBindingDeclaration(binding_declaration, context),
-            .ItemDefinition => |item_definition| try self.validateItemDefinition(item_definition, context),
-            .ReturnStatement => |return_statement| try self.validateReturnStatement(return_statement, context),
-            .AssignmentStatement => |assignment_statement| try self.validateAssignmentStatement(assignment_statement, context),
-            .Loop => |loop| try self.validateLoop(loop, context),
-            .QualifiedStructureLiteral => |qualified_structure_literal| try self.validateQualifiedStructureLiteral(qualified_structure_literal, context),
-            .StructureLiteral => |structure_literal| try self.validateStructureLiteral(structure_literal, context),
-            .While => |while_statement| try self.validateWhile(while_statement, context),
-            .ForIn => |for_in| try self.validateForIn(for_in, context),
-            .ContinueStatement => |continue_statement| try self.validateContinueStatement(continue_statement, context),
-            .LeaveStatement => |leave_statement| try self.validateLeaveStatement(leave_statement, context),
-            .IfStatement => |if_statement| try self.validateIfStatement(if_statement, context),
-            .IfExpression => |if_expression| try self.validateIfExpression(if_expression, context),
-            .MatchExpression => |match_expression| try self.validateMatchExpression(match_expression, context),
-            .SubjectlessMatchExpression => |subjectless_match_expression| try self.validateSubjectlessMatchExpression(subjectless_match_expression, context),
-            .ExpressionStatement => |expression_statement| try self.validateExpressionStatement(expression_statement, context),
-            .CallExpression => |call_expression| try self.validateCallExpression(call_expression, context),
-            .BinaryExpression => |binary_expression| try self.validateBinaryExpression(binary_expression, context),
-            .UnaryExpression => |unary_expression| try self.validateUnaryExpression(unary_expression, context),
-            .MemberExpression => |member_expression| try self.validateMemberExpression(member_expression, context),
-            .ArrayLiteral => |array_literal| try self.validateArrayLiteral(array_literal, context),
-            .IndexExpression => |index_expression| try self.validateIndexExpression(index_expression, context),
-            .Block => |block| try self.validateBlock(block, context),
-            .ImplicitMemberExpression,
-            .Identifier,
-            .IntegerLiteral,
-            .BooleanLiteral,
-            .StringLiteral,
-            .UnitLiteral,
+            .binding_declaration => |binding_declaration| try self.validateBindingDeclaration(binding_declaration, context),
+            .item_definition => |item_definition| try self.validateItemDefinition(item_definition, context),
+            .return_statement => |return_statement| try self.validateReturnStatement(return_statement, context),
+            .assignment_statement => |assignment_statement| try self.validateAssignmentStatement(assignment_statement, context),
+            .loop => |loop| try self.validateLoop(loop, context),
+            .qualified_structure_literal => |qualified_structure_literal| try self.validateQualifiedStructureLiteral(qualified_structure_literal, context),
+            .structure_literal => |structure_literal| try self.validateStructureLiteral(structure_literal, context),
+            .@"while" => |while_statement| try self.validateWhile(while_statement, context),
+            .for_in => |for_in| try self.validateForIn(for_in, context),
+            .continue_statement => |continue_statement| try self.validateContinueStatement(continue_statement, context),
+            .leave_statement => |leave_statement| try self.validateLeaveStatement(leave_statement, context),
+            .if_statement => |if_statement| try self.validateIfStatement(if_statement, context),
+            .if_expression => |if_expression| try self.validateIfExpression(if_expression, context),
+            .match_expression => |match_expression| try self.validateMatchExpression(match_expression, context),
+            .subjectless_match_expression => |subjectless_match_expression| try self.validateSubjectlessMatchExpression(subjectless_match_expression, context),
+            .expression_statement => |expression_statement| try self.validateExpressionStatement(expression_statement, context),
+            .call_expression => |call_expression| try self.validateCallExpression(call_expression, context),
+            .binary_expression => |binary_expression| try self.validateBinaryExpression(binary_expression, context),
+            .unary_expression => |unary_expression| try self.validateUnaryExpression(unary_expression, context),
+            .member_expression => |member_expression| try self.validateMemberExpression(member_expression, context),
+            .array_literal => |array_literal| try self.validateArrayLiteral(array_literal, context),
+            .index_expression => |index_expression| try self.validateIndexExpression(index_expression, context),
+            .block => |block| try self.validateBlock(block, context),
+            .implicit_member_expression,
+            .identifier,
+            .integer_literal,
+            .boolean_literal,
+            .string_literal,
+            .unit_literal,
             => {},
         }
     }
@@ -85,7 +85,7 @@ pub const StructuralValidator = struct {
         }
 
         switch (item_definition.definition) {
-            .Function => |function_definition| {
+            .function => |function_definition| {
                 const function_context = ControlFlowValidationContext{
                     .loop_depth = 0,
                     .scope_depth = 0,
@@ -93,12 +93,12 @@ pub const StructuralValidator = struct {
                 };
                 try self.validateNode(function_definition.body_expression, &function_context);
             },
-            .Structure => |structure_definition| {
+            .structure => |structure_definition| {
                 for (structure_definition.function_definitions) |*function_definition_node| {
                     try self.validateNode(function_definition_node, context);
                 }
             },
-            .Union => |union_definition| {
+            .@"union" => |union_definition| {
                 for (union_definition.function_definitions) |*function_definition_node| {
                     try self.validateNode(function_definition_node, context);
                 }

@@ -11,14 +11,14 @@ test "Parser > parse: binds multiplication tighter than addition" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .BinaryExpression = .{
-                .operator = .Add,
-                .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
-                .right = .{ .kind = .{ .BinaryExpression = .{
-                    .operator = .Multiply,
-                    .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
-                    .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .binary_expression = .{
+                .operator = .add,
+                .left = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
+                .right = .{ .kind = .{ .binary_expression = .{
+                    .operator = .multiply,
+                    .left = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
+                    .right = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 3 } } } },
                 } } },
             } } },
         } } },
@@ -34,23 +34,23 @@ test "Parser > parse: orders arithmetic, comparison, and boolean operators by pr
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .BinaryExpression = .{
-                .operator = .Or,
-                .left = .{ .kind = .{ .BinaryExpression = .{
-                    .operator = .And,
-                    .left = .{ .kind = .{ .BinaryExpression = .{
-                        .operator = .GreaterThanOrEqual,
-                        .left = .{ .kind = .{ .BinaryExpression = .{
-                            .operator = .Add,
-                            .left = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
-                            .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .binary_expression = .{
+                .operator = .@"or",
+                .left = .{ .kind = .{ .binary_expression = .{
+                    .operator = .@"and",
+                    .left = .{ .kind = .{ .binary_expression = .{
+                        .operator = .greater_than_or_equal,
+                        .left = .{ .kind = .{ .binary_expression = .{
+                            .operator = .add,
+                            .left = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
+                            .right = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
                         } } },
-                        .right = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+                        .right = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 3 } } } },
                     } } },
-                    .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = false } } } },
+                    .right = .{ .kind = .{ .boolean_literal = .{ .kind = .{ .boolean_literal = false } } } },
                 } } },
-                .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = true } } } },
+                .right = .{ .kind = .{ .boolean_literal = .{ .kind = .{ .boolean_literal = true } } } },
             } } },
         } } },
     } });
@@ -65,14 +65,14 @@ test "Parser > parse: binds unary not tighter than and" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .BinaryExpression = .{
-                .operator = .And,
-                .left = .{ .kind = .{ .UnaryExpression = .{
-                    .operator = .Not,
-                    .operand = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = false } } } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .binary_expression = .{
+                .operator = .@"and",
+                .left = .{ .kind = .{ .unary_expression = .{
+                    .operator = .not,
+                    .operand = .{ .kind = .{ .boolean_literal = .{ .kind = .{ .boolean_literal = false } } } },
                 } } },
-                .right = .{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = true } } } },
+                .right = .{ .kind = .{ .boolean_literal = .{ .kind = .{ .boolean_literal = true } } } },
             } } },
         } } },
     } });
@@ -92,15 +92,15 @@ test "Parser > parse: allows an identifier-led block result after statements" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .Block = .{
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .block = .{
                 .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{} } },
+                    .{ .kind = .{ .binding_declaration = .{} } },
                 },
-                .result = .{ .kind = .{ .BinaryExpression = .{
-                    .operator = .Add,
-                    .left = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "left" } } } },
-                    .right = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "right" } } } },
+                .result = .{ .kind = .{ .binary_expression = .{
+                    .operator = .add,
+                    .left = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "left" } } } },
+                    .right = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "right" } } } },
                 } } },
             } } },
         } } },
@@ -120,9 +120,9 @@ test "Parser > parse: keeps a block statement-only when it ends with an if state
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .Block = .{
+        .{ .kind = .{ .block = .{
             .statements = .{
-                .{ .kind = .{ .IfStatement = .{} } },
+                .{ .kind = .{ .if_statement = .{} } },
             },
             .result = null,
         } } },
@@ -138,8 +138,8 @@ test "Parser > parse: treats a bare identifier before a while body as the condit
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .While = .{
-            .condition = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "is_ready" } } } },
+        .{ .kind = .{ .@"while" = .{
+            .condition = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "is_ready" } } } },
         } } },
     } });
 }
@@ -153,8 +153,8 @@ test "Parser > parse: treats unit as a literal when used as an expression" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .UnitLiteral = .{} } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .unit_literal = .{} } },
         } } },
     } });
 }
@@ -168,8 +168,8 @@ test "Parser > parse: allows item as a binding name" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .name = .{ .kind = .{ .Identifier = "item" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .name = .{ .kind = .{ .identifier = "item" } },
         } } },
     } });
 }
@@ -183,8 +183,8 @@ test "Parser > parse: allows item as a for-in binding name" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ForIn = .{
-            .item_name = .{ .kind = .{ .Identifier = "item" } },
+        .{ .kind = .{ .for_in = .{
+            .item_name = .{ .kind = .{ .identifier = "item" } },
         } } },
     } });
 }
@@ -198,8 +198,8 @@ test "Parser > parse: allows item as an identifier expression" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "item" } } } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "item" } } } },
         } } },
     } });
 }
@@ -213,10 +213,10 @@ test "Parser > parse: allows item as a structure field name" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .definition = .{ .Structure = .{
+        .{ .kind = .{ .item_definition = .{
+            .definition = .{ .structure = .{
                 .fields = .{
-                    .{ .name = .{ .kind = .{ .Identifier = "item" } } },
+                    .{ .name = .{ .kind = .{ .identifier = "item" } } },
                 },
             } },
         } } },
@@ -232,9 +232,9 @@ test "Parser > parse: allows item as a member name" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .MemberExpression = .{
-                .member_name_token = .{ .kind = .{ .Identifier = "item" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .member_expression = .{
+                .member_name_token = .{ .kind = .{ .identifier = "item" } },
             } } },
         } } },
     } });
@@ -249,9 +249,9 @@ test "Parser > parse: recognizes item as a structure definition keyword" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .identifier_token = .{ .kind = .{ .Identifier = "Point" } },
-            .definition = .{ .Structure = .{} },
+        .{ .kind = .{ .item_definition = .{
+            .identifier_token = .{ .kind = .{ .identifier = "Point" } },
+            .definition = .{ .structure = .{} },
         } } },
     } });
 }
@@ -269,12 +269,12 @@ test "Parser > parse: recognizes item as a function definition keyword inside a 
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .definition = .{ .Structure = .{
+        .{ .kind = .{ .item_definition = .{
+            .definition = .{ .structure = .{
                 .function_definitions = .{
-                    .{ .kind = .{ .ItemDefinition = .{
-                        .identifier_token = .{ .kind = .{ .Identifier = "get" } },
-                        .definition = .{ .Function = .{} },
+                    .{ .kind = .{ .item_definition = .{
+                        .identifier_token = .{ .kind = .{ .identifier = "get" } },
+                        .definition = .{ .function = .{} },
                     } } },
                 },
             } },
@@ -291,10 +291,10 @@ test "Parser > parse: parses member access on an identifier" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "point" } } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "point" } } } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
         } } },
     } });
@@ -309,13 +309,13 @@ test "Parser > parse: parses nested member access" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .MemberExpression = .{
-                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
-                    .member_name_token = .{ .kind = .{ .Identifier = "location" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .member_expression = .{
+                    .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "user" } } } },
+                    .member_name_token = .{ .kind = .{ .identifier = "location" } },
                 } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
         } } },
     } });
@@ -330,12 +330,12 @@ test "Parser > parse: parses member access on a parenthesized structure literal"
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .QualifiedStructureLiteral = .{
-                    .structure_name = .{ .kind = .{ .Identifier = "Point" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .qualified_structure_literal = .{
+                    .structure_name = .{ .kind = .{ .identifier = "Point" } },
                 } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
         } } },
     } });
@@ -350,11 +350,11 @@ test "Parser > parse: parses fields of an anonymous structure literal" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .StructureLiteral = .{
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .structure_literal = .{
                 .fields = .{
-                    .{ .name = .{ .kind = .{ .Identifier = "x" } }, .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } } },
-                    .{ .name = .{ .kind = .{ .Identifier = "y" } }, .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } } },
+                    .{ .name = .{ .kind = .{ .identifier = "x" } }, .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } } },
+                    .{ .name = .{ .kind = .{ .identifier = "y" } }, .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } } },
                 },
             } } },
         } } },
@@ -370,13 +370,13 @@ test "Parser > parse: parses assignment to a member" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .Assign,
-            .target = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "point" } } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .assign,
+            .target = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "point" } } } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 3 } } } },
         } } },
     } });
 }
@@ -390,16 +390,16 @@ test "Parser > parse: parses assignment to a nested member" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .Assign,
-            .target = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .MemberExpression = .{
-                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
-                    .member_name_token = .{ .kind = .{ .Identifier = "location" } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .assign,
+            .target = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .member_expression = .{
+                    .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "user" } } } },
+                    .member_name_token = .{ .kind = .{ .identifier = "location" } },
                 } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 4 } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 4 } } } },
         } } },
     } });
 }
@@ -413,13 +413,13 @@ test "Parser > parse: parses assignment to an indexed element" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .Assign,
-            .target = .{ .kind = .{ .IndexExpression = .{
-                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "numbers" } } } },
-                .index = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 0 } } } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .assign,
+            .target = .{ .kind = .{ .index_expression = .{
+                .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "numbers" } } } },
+                .index = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 0 } } } },
             } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 4 } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 4 } } } },
         } } },
     } });
 }
@@ -433,19 +433,19 @@ test "Parser > parse: parses assignment through mixed member and index access" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .Assign,
-            .target = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .IndexExpression = .{
-                    .base = .{ .kind = .{ .MemberExpression = .{
-                        .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "user" } } } },
-                        .member_name_token = .{ .kind = .{ .Identifier = "points" } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .assign,
+            .target = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .index_expression = .{
+                    .base = .{ .kind = .{ .member_expression = .{
+                        .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "user" } } } },
+                        .member_name_token = .{ .kind = .{ .identifier = "points" } },
                     } } },
-                    .index = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "i" } } } },
+                    .index = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "i" } } } },
                 } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "x" } },
+                .member_name_token = .{ .kind = .{ .identifier = "x" } },
             } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
         } } },
     } });
 }
@@ -463,20 +463,20 @@ test "Parser > parse: parses compound assignment to identifiers" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .{ .Compound = .Add },
-            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "counter" } } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .{ .compound = .add },
+            .target = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "counter" } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
         } } },
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .{ .Compound = .Subtract },
-            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "balance" } } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 3 } } } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .{ .compound = .subtract },
+            .target = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "balance" } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 3 } } } },
         } } },
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .{ .Compound = .Multiply },
-            .target = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "total" } } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .{ .compound = .multiply },
+            .target = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "total" } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
         } } },
     } });
 }
@@ -490,13 +490,13 @@ test "Parser > parse: parses compound assignment to an indexed element" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .AssignmentStatement = .{
-            .operator = .{ .Compound = .Multiply },
-            .target = .{ .kind = .{ .IndexExpression = .{
-                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "numbers" } } } },
-                .index = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "i" } } } },
+        .{ .kind = .{ .assignment_statement = .{
+            .operator = .{ .compound = .multiply },
+            .target = .{ .kind = .{ .index_expression = .{
+                .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "numbers" } } } },
+                .index = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "i" } } } },
             } } },
-            .value = .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+            .value = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
         } } },
     } });
 }
@@ -515,11 +515,11 @@ test "Parser > parse: parses union cases without payload types" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .definition = .{ .Union = .{
+        .{ .kind = .{ .item_definition = .{
+            .definition = .{ .@"union" = .{
                 .cases = .{
-                    .{ .name = .{ .kind = .{ .Identifier = "North" } }, .type_annotation = null },
-                    .{ .name = .{ .kind = .{ .Identifier = "South" } }, .type_annotation = null },
+                    .{ .name = .{ .kind = .{ .identifier = "North" } }, .type_annotation = null },
+                    .{ .name = .{ .kind = .{ .identifier = "South" } }, .type_annotation = null },
                 },
             } },
         } } },
@@ -542,24 +542,24 @@ test "Parser > parse: parses union cases with and without named payload types" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .definition = .{ .Union = .{
+        .{ .kind = .{ .item_definition = .{
+            .definition = .{ .@"union" = .{
                 .cases = .{
                     .{
-                        .name = .{ .kind = .{ .Identifier = "PageLoad" } },
+                        .name = .{ .kind = .{ .identifier = "PageLoad" } },
                         .type_annotation = null,
                     },
                     .{
-                        .name = .{ .kind = .{ .Identifier = "PageUnload" } },
-                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "unit" } } } },
+                        .name = .{ .kind = .{ .identifier = "PageUnload" } },
+                        .type_annotation = .{ .named = .{ .name_token = .{ .kind = .{ .identifier = "unit" } } } },
                     },
                     .{
-                        .name = .{ .kind = .{ .Identifier = "KeyPress" } },
-                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "string" } } } },
+                        .name = .{ .kind = .{ .identifier = "KeyPress" } },
+                        .type_annotation = .{ .named = .{ .name_token = .{ .kind = .{ .identifier = "string" } } } },
                     },
                     .{
-                        .name = .{ .kind = .{ .Identifier = "Click" } },
-                        .type_annotation = .{ .Named = .{ .name_token = .{ .kind = .{ .Identifier = "Vector2D" } } } },
+                        .name = .{ .kind = .{ .identifier = "Click" } },
+                        .type_annotation = .{ .named = .{ .name_token = .{ .kind = .{ .identifier = "Vector2D" } } } },
                     },
                 },
             } },
@@ -581,12 +581,12 @@ test "Parser > parse: parses function definitions inside a union" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .ItemDefinition = .{
-            .definition = .{ .Union = .{
+        .{ .kind = .{ .item_definition = .{
+            .definition = .{ .@"union" = .{
                 .function_definitions = .{
-                    .{ .kind = .{ .ItemDefinition = .{
-                        .identifier_token = .{ .kind = .{ .Identifier = "asString" } },
-                        .definition = .{ .Function = .{} },
+                    .{ .kind = .{ .item_definition = .{
+                        .identifier_token = .{ .kind = .{ .identifier = "asString" } },
+                        .definition = .{ .function = .{} },
                     } } },
                 },
             } },
@@ -603,14 +603,14 @@ test "Parser > parse: parses qualified union construction as a call when given a
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .CallExpression = .{
-                .callee = .{ .kind = .{ .MemberExpression = .{
-                    .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
-                    .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .call_expression = .{
+                .callee = .{ .kind = .{ .member_expression = .{
+                    .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "WebEvent" } } } },
+                    .member_name_token = .{ .kind = .{ .identifier = "KeyPress" } },
                 } } },
                 .arguments = .{
-                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                    .{ .kind = .{ .string_literal = .{ .kind = .{ .string_literal = "A" } } } },
                 },
             } } },
         } } },
@@ -626,10 +626,10 @@ test "Parser > parse: parses qualified union construction as member access when 
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .MemberExpression = .{
-                .base = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "WebEvent" } } } },
-                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .member_expression = .{
+                .base = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "WebEvent" } } } },
+                .member_name_token = .{ .kind = .{ .identifier = "PageLoad" } },
             } } },
         } } },
     } });
@@ -644,13 +644,13 @@ test "Parser > parse: parses an implicit member call when given a payload" {
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .CallExpression = .{
-                .callee = .{ .kind = .{ .ImplicitMemberExpression = .{
-                    .member_name_token = .{ .kind = .{ .Identifier = "KeyPress" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .call_expression = .{
+                .callee = .{ .kind = .{ .implicit_member_expression = .{
+                    .member_name_token = .{ .kind = .{ .identifier = "KeyPress" } },
                 } } },
                 .arguments = .{
-                    .{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "A" } } } },
+                    .{ .kind = .{ .string_literal = .{ .kind = .{ .string_literal = "A" } } } },
                 },
             } } },
         } } },
@@ -666,9 +666,9 @@ test "Parser > parse: parses an implicit member expression when given no payload
     const program = try parser_pipeline.parser.parse();
 
     try expect(program).toMatch(.{ .statements = .{
-        .{ .kind = .{ .BindingDeclaration = .{
-            .value = .{ .kind = .{ .ImplicitMemberExpression = .{
-                .member_name_token = .{ .kind = .{ .Identifier = "PageLoad" } },
+        .{ .kind = .{ .binding_declaration = .{
+            .value = .{ .kind = .{ .implicit_member_expression = .{
+                .member_name_token = .{ .kind = .{ .identifier = "PageLoad" } },
             } } },
         } } },
     } });
@@ -700,9 +700,9 @@ pub const Parser = struct {
                 const program = try parser_pipeline.parser.parse();
 
                 try expect(program).toMatch(.{ .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{
-                        .value = .{ .kind = .{ .MatchExpression = .{
-                            .subject = .{ .kind = .{ .Identifier = .{ .kind = .{ .Identifier = "is_happy" } } } },
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .match_expression = .{
+                            .subject = .{ .kind = .{ .identifier = .{ .kind = .{ .identifier = "is_happy" } } } },
                         } } },
                     } } },
                 } });
@@ -717,10 +717,10 @@ pub const Parser = struct {
                 const program = try parser_pipeline.parser.parse();
 
                 try expect(program).toMatch(.{ .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{
-                        .value = .{ .kind = .{ .MatchExpression = .{
-                            .subject = .{ .kind = .{ .QualifiedStructureLiteral = .{
-                                .structure_name = .{ .kind = .{ .Identifier = "Point" } },
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .match_expression = .{
+                            .subject = .{ .kind = .{ .qualified_structure_literal = .{
+                                .structure_name = .{ .kind = .{ .identifier = "Point" } },
                             } } },
                         } } },
                     } } },
@@ -736,12 +736,12 @@ pub const Parser = struct {
                 const program = try parser_pipeline.parser.parse();
 
                 try expect(program).toMatch(.{ .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{
-                        .value = .{ .kind = .{ .MatchExpression = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .match_expression = .{
                             .arms = .{
-                                .{ .pattern = .{ .kind = .{ .IntegerLiteral = .{
-                                    .minus_token = .{ .kind = .Minus },
-                                    .literal_token = .{ .kind = .{ .IntLiteral = 1 } },
+                                .{ .pattern = .{ .kind = .{ .integer_literal = .{
+                                    .minus_token = .{ .kind = .minus },
+                                    .literal_token = .{ .kind = .{ .int_literal = 1 } },
                                 } } } },
                             },
                         } } },
@@ -788,10 +788,10 @@ pub const Parser = struct {
                 const program = try parser_pipeline.parser.parse();
 
                 try expect(program).toMatch(.{ .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{
-                        .value = .{ .kind = .{ .SubjectlessMatchExpression = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .subjectless_match_expression = .{
                             .arms = .{
-                                .{ .condition = .{ .kind = .{ .BinaryExpression = .{ .operator = .GreaterThan } } } },
+                                .{ .condition = .{ .kind = .{ .binary_expression = .{ .operator = .greater_than } } } },
                             },
                         } } },
                     } } },
@@ -879,11 +879,11 @@ pub const Parser = struct {
                 const program = try parser_pipeline.parser.parse();
 
                 try expect(program).toMatch(.{ .statements = .{
-                    .{ .kind = .{ .BindingDeclaration = .{
-                        .value = .{ .kind = .{ .CallExpression = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .call_expression = .{
                             .arguments = .{
-                                .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
-                                .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+                                .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
+                                .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
                             },
                         } } },
                     } } },

@@ -12,7 +12,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(type_store.unit_type_id).?).toMatch(.None);
+            try expect(result.runtime_representation_by_type_id.get(type_store.unit_type_id).?).toMatch(.none);
         }
 
         test "gives scalar types a runtime representation" {
@@ -23,9 +23,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(type_store.boolean_type_id).?).toMatch(.Present);
-            try expect(result.runtime_representation_by_type_id.get(type_store.integer_type_id).?).toMatch(.Present);
-            try expect(result.runtime_representation_by_type_id.get(type_store.string_type_id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_type_id.get(type_store.boolean_type_id).?).toMatch(.present);
+            try expect(result.runtime_representation_by_type_id.get(type_store.integer_type_id).?).toMatch(.present);
+            try expect(result.runtime_representation_by_type_id.get(type_store.string_type_id).?).toMatch(.present);
         }
 
         test "gives a structure a runtime representation when all its fields are unit" {
@@ -40,7 +40,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(structure_type_id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_type_id.get(structure_type_id).?).toMatch(.present);
         }
 
         test "gives a self-recursive structure a runtime representation" {
@@ -55,7 +55,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(structure_type_id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_type_id.get(structure_type_id).?).toMatch(.present);
         }
 
         test "gives an array of unit elements a runtime representation" {
@@ -65,12 +65,12 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const array_node = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const array_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
             const array_type_id = fixture.type_check_result.type_id_by_node_id.get(array_node.id).?;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(array_type_id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_type_id.get(array_type_id).?).toMatch(.present);
         }
 
         test "gives a union a runtime representation when all its cases are unit" {
@@ -85,7 +85,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_type_id.get(union_type_id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_type_id.get(union_type_id).?).toMatch(.present);
         }
 
         test "takes the runtime representation of the node's type" {
@@ -97,13 +97,13 @@ pub const RuntimeRepresentationAnalyzer = struct {
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
             const statements = fixture.resolved_program.program.statements;
-            const unit_node = statements[0].kind.BindingDeclaration.value;
-            const integer_node = statements[1].kind.BindingDeclaration.value;
+            const unit_node = statements[0].kind.binding_declaration.value;
+            const integer_node = statements[1].kind.binding_declaration.value;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_node_id.get(unit_node.id).?).toMatch(.None);
-            try expect(result.runtime_representation_by_node_id.get(integer_node.id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_node_id.get(unit_node.id).?).toMatch(.none);
+            try expect(result.runtime_representation_by_node_id.get(integer_node.id).?).toMatch(.present);
         }
 
         test "records a runtime representation for an implicit member expression" {
@@ -114,11 +114,11 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const implicit_member_node = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+            const implicit_member_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 
-            try expect(result.runtime_representation_by_node_id.get(implicit_member_node.id).?).toMatch(.Present);
+            try expect(result.runtime_representation_by_node_id.get(implicit_member_node.id).?).toMatch(.present);
         }
     };
 };

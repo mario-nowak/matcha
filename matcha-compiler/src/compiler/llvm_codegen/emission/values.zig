@@ -46,8 +46,8 @@ pub fn emitBinaryExpression(
 ) !EmissionResult {
     const decision = lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable;
     switch (decision) {
-        .ShortCircuitAnd => return emitShortCircuitOperation(emitter, binary_expression, .And, lowered_program, environment),
-        .ShortCircuitOr => return emitShortCircuitOperation(emitter, binary_expression, .Or, lowered_program, environment),
+        .short_circuit_and => return emitShortCircuitOperation(emitter, binary_expression, .@"and", lowered_program, environment),
+        .short_circuit_or => return emitShortCircuitOperation(emitter, binary_expression, .@"or", lowered_program, environment),
         else => {},
     }
 
@@ -57,9 +57,9 @@ pub fn emitBinaryExpression(
 
     // Unit operands have no runtime value. Their side effects already ran above, so the result is a constant.
     switch (decision) {
-        .ZeroSizedCompareEqual => return .{ .value = "1" },
-        .ZeroSizedCompareNotEqual => return .{ .value = "0" },
-        .CheckedDivide => return .{ .value = try emitCheckedDivision(
+        .zero_sized_compare_equal => return .{ .value = "1" },
+        .zero_sized_compare_not_equal => return .{ .value = "0" },
+        .checked_divide => return .{ .value = try emitCheckedDivision(
             emitter,
             binary_expression.operator_token.line,
             binary_expression.operator_token.column,
@@ -128,14 +128,14 @@ fn emitCheckedDivision(
 fn emitShortCircuitOperation(
     emitter: *NodeEmitter,
     binary_expression: *const ast.BinaryExpression,
-    operator: enum { And, Or },
+    operator: enum { @"and", @"or" },
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) !EmissionResult {
     const builder = emitter.function_ir_builder;
     const construct_name, const deciding_value = switch (operator) {
-        .And => .{ "and", "0" },
-        .Or => .{ "or", "1" },
+        .@"and" => .{ "and", "0" },
+        .@"or" => .{ "or", "1" },
     };
     const labels = try emitter.function_symbol_generator.generateConstructLabels(construct_name);
     const end_label = try labels.role("end");
@@ -145,8 +145,8 @@ fn emitShortCircuitOperation(
     // The phi needs the block where the left operand ended, which is not the start block when the operand branches.
     const left_exit_label = builder.currentLabel() orelse unreachable;
     switch (operator) {
-        .And => try builder.emitBranchInstruction(left_value, &.{ right_label, end_label }),
-        .Or => try builder.emitBranchInstruction(left_value, &.{ end_label, right_label }),
+        .@"and" => try builder.emitBranchInstruction(left_value, &.{ right_label, end_label }),
+        .@"or" => try builder.emitBranchInstruction(left_value, &.{ end_label, right_label }),
     }
 
     try builder.emitLabel(right_label);
@@ -178,12 +178,12 @@ pub fn emitUnaryExpression(
     const operation_type = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
     const instruction_type = lowered_program.getLlvmIrType(operation_type);
     const instruction = switch (unary_expression.operator) {
-        .Negate => try std.fmt.allocPrint(
+        .negate => try std.fmt.allocPrint(
             emitter.arena,
             "{s} = sub {s} 0, {s}",
             .{ result_value, instruction_type, operand_value },
         ),
-        .Not => try std.fmt.allocPrint(
+        .not => try std.fmt.allocPrint(
             emitter.arena,
             "{s} = xor {s} {s}, 1",
             .{ result_value, instruction_type, operand_value },
@@ -203,18 +203,18 @@ pub fn emitLoweredBinaryOperation(
     lowered_program: *const lowering.LoweredProgram,
 ) !Value {
     return switch (decision) {
-        .PrimitiveOperation => |primitive_operation| {
+        .primitive_operation => |primitive_operation| {
             const llvm_ir_type = lowered_program.getLlvmIrType(operand_type_id);
             const operator_instruction = switch (primitive_operation) {
-                .Add => "add",
-                .Subtract => "sub",
-                .Multiply => "mul",
-                .Equal => "icmp eq",
-                .NotEqual => "icmp ne",
-                .LessThan => "icmp slt",
-                .LessThanOrEqual => "icmp sle",
-                .GreaterThan => "icmp sgt",
-                .GreaterThanOrEqual => "icmp sge",
+                .add => "add",
+                .subtract => "sub",
+                .multiply => "mul",
+                .equal => "icmp eq",
+                .not_equal => "icmp ne",
+                .less_than => "icmp slt",
+                .less_than_or_equal => "icmp sle",
+                .greater_than => "icmp sgt",
+                .greater_than_or_equal => "icmp sge",
             };
 
             const result_value = try emitter.function_symbol_generator.generateValueName();
@@ -227,7 +227,7 @@ pub fn emitLoweredBinaryOperation(
 
             return result_value;
         },
-        .UnionCaseIndexComparison => {
+        .union_case_index_comparison => {
             const union_case_index_type = lowering.lowering_types.union_case_index_llvm_type;
             const operator_instruction = "icmp eq";
 
@@ -245,19 +245,19 @@ pub fn emitLoweredBinaryOperation(
 
             return result_value;
         },
-        .StringConcatenate => try emitter.runtime_call_emitter.emitStringConcatenateCall(
+        .string_concatenate => try emitter.runtime_call_emitter.emitStringConcatenateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
             try emitter.emitStringParts(left_value),
             try emitter.emitStringParts(right_value),
         ),
-        .StringCompareEqual => try emitter.runtime_call_emitter.emitStringCompareCall(
+        .string_compare_equal => try emitter.runtime_call_emitter.emitStringCompareCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
             try emitter.emitStringParts(left_value),
             try emitter.emitStringParts(right_value),
         ),
-        .StringCompareNotEqual => compare_not_equal: {
+        .string_compare_not_equal => compare_not_equal: {
             const equal_value = try emitter.runtime_call_emitter.emitStringCompareCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
@@ -272,11 +272,11 @@ pub fn emitLoweredBinaryOperation(
             ));
             break :compare_not_equal result_value;
         },
-        .ZeroSizedCompareEqual,
-        .ZeroSizedCompareNotEqual,
-        .ShortCircuitAnd,
-        .ShortCircuitOr,
-        .CheckedDivide,
+        .zero_sized_compare_equal,
+        .zero_sized_compare_not_equal,
+        .short_circuit_and,
+        .short_circuit_or,
+        .checked_divide,
         => unreachable,
     };
 }

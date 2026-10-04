@@ -83,8 +83,8 @@ pub const LlvmModuleRenderer = struct {
         var user_defined_functions = std.ArrayList([]const u8){};
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Function => |function_definition| {
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .function => |function_definition| {
                         const function_ir = try self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
@@ -92,8 +92,8 @@ pub const LlvmModuleRenderer = struct {
                         );
                         try user_defined_functions.append(self.arena, function_ir);
                     },
-                    .Structure => {},
-                    .Union => {},
+                    .structure => {},
+                    .@"union" => {},
                 },
                 else => {},
             }
@@ -168,8 +168,8 @@ pub const LlvmModuleRenderer = struct {
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             const function_definitions = switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    inline .Structure, .Union => |type_definition| type_definition.function_definitions,
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    inline .structure, .@"union" => |type_definition| type_definition.function_definitions,
                     else => continue,
                 },
                 else => continue,
@@ -192,8 +192,8 @@ pub const LlvmModuleRenderer = struct {
     ) !void {
         for (function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Function => |function| function,
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .function => |function| function,
                     else => unreachable,
                 },
                 else => unreachable,

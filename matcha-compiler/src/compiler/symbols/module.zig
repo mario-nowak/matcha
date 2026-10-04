@@ -31,10 +31,10 @@ pub const Symbol = struct {
 };
 
 pub const SymbolKind = union(enum) {
-    Binding: BindingSymbolInformation,
-    Function: FunctionSymbolInformation,
-    Structure: StructureSymbolInformation,
-    Union: UnionSymbolInformation,
+    binding: BindingSymbolInformation,
+    function: FunctionSymbolInformation,
+    structure: StructureSymbolInformation,
+    @"union": UnionSymbolInformation,
 };
 
 pub const SymbolKindTag = std.meta.Tag(SymbolKind);
@@ -90,17 +90,17 @@ pub const ResolvedUnionCase = struct {
 };
 
 pub const FunctionImplementationKind = union(enum) {
-    UserDefined,
-    BuiltinPrintInt,
-    BuiltinPrintString,
-    BuiltinReadFile,
-    BuiltinReadLine,
-    BuiltinGetArguments,
+    user_defined,
+    builtin_print_int,
+    builtin_print_string,
+    builtin_read_file,
+    builtin_read_line,
+    builtin_get_arguments,
 };
 
 pub const BindingMutability = enum {
-    Mutable,
-    Immutable,
+    mutable,
+    immutable,
 };
 
 /// Table for storing symbols by their ID.
@@ -206,16 +206,16 @@ pub const SymbolTable = struct {
 };
 
 pub const ResolvedTypeReference = union(enum) {
-    Builtin: BuiltinType,
-    Symbol: SymbolId,
-    Array: *ResolvedTypeReference,
+    builtin: BuiltinType,
+    symbol: SymbolId,
+    array: *ResolvedTypeReference,
 };
 
 pub const BuiltinType = enum {
-    Unit,
-    Boolean,
-    Integer,
-    String,
+    unit,
+    boolean,
+    integer,
+    string,
 };
 
 pub const SymbolIdByNodeId = std.AutoHashMap(ast.NodeId, SymbolId);

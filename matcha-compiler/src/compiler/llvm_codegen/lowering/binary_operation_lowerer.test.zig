@@ -14,11 +14,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Add });
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .primitive_operation = .add });
         }
 
         test "lowers integer division to a checked division" {
@@ -28,11 +28,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.CheckedDivide);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.checked_divide);
         }
 
         test "lowers integer equality to a primitive operation" {
@@ -42,11 +42,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .primitive_operation = .equal });
         }
 
         test "lowers string addition to a runtime concatenation" {
@@ -56,11 +56,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.StringConcatenate);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.string_concatenate);
         }
 
         test "lowers string equality to a runtime equality comparison" {
@@ -70,11 +70,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareEqual);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.string_compare_equal);
         }
 
         test "lowers string inequality to a runtime inequality comparison" {
@@ -84,11 +84,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.StringCompareNotEqual);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.string_compare_not_equal);
         }
 
         test "lowers unit equality to a zero-sized equality comparison" {
@@ -98,11 +98,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareEqual);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.zero_sized_compare_equal);
         }
 
         test "lowers unit inequality to a zero-sized inequality comparison" {
@@ -112,11 +112,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.ZeroSizedCompareNotEqual);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.zero_sized_compare_not_equal);
         }
 
         test "lowers array equality to a primitive equality comparison" {
@@ -126,11 +126,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .primitive_operation = .equal });
         }
 
         test "lowers and to a short-circuit operation" {
@@ -140,11 +140,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitAnd);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.short_circuit_and);
         }
 
         test "lowers or to a short-circuit operation" {
@@ -154,11 +154,11 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitOr);
+            try expect(decisions.get(binary_expression.id).?).toMatch(.short_circuit_or);
         }
     };
 };

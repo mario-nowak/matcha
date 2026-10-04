@@ -128,153 +128,153 @@ pub const NodeEmitter = struct {
         environment: *Environment,
     ) std.mem.Allocator.Error!EmissionResult {
         switch (node.kind) {
-            .ReturnStatement => |return_statement| return control_flow.emitReturnStatement(
+            .return_statement => |return_statement| return control_flow.emitReturnStatement(
                 self,
                 &return_statement,
                 lowered_program,
                 environment,
             ),
-            .IntegerLiteral => |token| return .{ .value = try std.fmt.allocPrint(
+            .integer_literal => |token| return .{ .value = try std.fmt.allocPrint(
                 self.arena,
                 "{d}",
-                .{token.kind.IntLiteral},
+                .{token.kind.int_literal},
             ) },
-            .BooleanLiteral => |token| return .{ .value = if (token.kind.BooleanLiteral) "1" else "0" },
-            .StringLiteral => |token| return .{ .value = try self.string_literal_emitter.emitStringLiteralValue(
+            .boolean_literal => |token| return .{ .value = if (token.kind.boolean_literal) "1" else "0" },
+            .string_literal => |token| return .{ .value = try self.string_literal_emitter.emitStringLiteralValue(
                 self.string_literal_pool,
                 node.id,
-                token.kind.StringLiteral,
+                token.kind.string_literal,
                 self.function_symbol_generator,
                 self.function_ir_builder,
             ) },
-            .UnitLiteral => return .zero_sized,
-            .Identifier => return values.emitIdentifier(self, node, lowered_program, environment),
-            .Loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
-            .While => |while_statement| return control_flow.emitWhile(
+            .unit_literal => return .zero_sized,
+            .identifier => return values.emitIdentifier(self, node, lowered_program, environment),
+            .loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
+            .@"while" => |while_statement| return control_flow.emitWhile(
                 self,
                 &while_statement,
                 lowered_program,
                 environment,
             ),
-            .ForIn => |for_in| return control_flow.emitForInArrayLoop(
+            .for_in => |for_in| return control_flow.emitForInArrayLoop(
                 self,
                 node,
                 &for_in,
                 lowered_program,
                 environment,
             ),
-            .LeaveStatement => {
+            .leave_statement => {
                 try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
                 return .statement;
             },
-            .ContinueStatement => {
+            .continue_statement => {
                 try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
                 return .statement;
             },
-            .CallExpression => |call_expression| return calls.emitCallExpression(
+            .call_expression => |call_expression| return calls.emitCallExpression(
                 self,
                 node,
                 &call_expression,
                 lowered_program,
                 environment,
             ),
-            .ImplicitMemberExpression => return aggregates.emitImplicitMemberExpression(
+            .implicit_member_expression => return aggregates.emitImplicitMemberExpression(
                 self,
                 node,
                 lowered_program,
                 environment,
             ),
-            .MemberExpression => |member_expression| return aggregates.emitMemberExpression(
+            .member_expression => |member_expression| return aggregates.emitMemberExpression(
                 self,
                 node,
                 &member_expression,
                 lowered_program,
                 environment,
             ),
-            .BinaryExpression => |binary_expression| return values.emitBinaryExpression(
+            .binary_expression => |binary_expression| return values.emitBinaryExpression(
                 self,
                 node,
                 &binary_expression,
                 lowered_program,
                 environment,
             ),
-            .UnaryExpression => |unary_expression| return values.emitUnaryExpression(
+            .unary_expression => |unary_expression| return values.emitUnaryExpression(
                 self,
                 node,
                 &unary_expression,
                 lowered_program,
                 environment,
             ),
-            .BindingDeclaration => |value_declaration| return places.emitBindingDeclaration(
+            .binding_declaration => |value_declaration| return places.emitBindingDeclaration(
                 self,
                 node,
                 &value_declaration,
                 lowered_program,
                 environment,
             ),
-            .AssignmentStatement => |assignment_statement| return places.emitAssignmentStatement(
+            .assignment_statement => |assignment_statement| return places.emitAssignmentStatement(
                 self,
                 node,
                 &assignment_statement,
                 lowered_program,
                 environment,
             ),
-            .Block => |block| return control_flow.emitBlock(self, block, lowered_program, environment),
-            .IfStatement => |if_statement| return control_flow.emitIfStatement(
+            .block => |block| return control_flow.emitBlock(self, block, lowered_program, environment),
+            .if_statement => |if_statement| return control_flow.emitIfStatement(
                 self,
                 node,
                 &if_statement,
                 lowered_program,
                 environment,
             ),
-            .IfExpression => |if_expression| return control_flow.emitIfExpression(
+            .if_expression => |if_expression| return control_flow.emitIfExpression(
                 self,
                 node,
                 &if_expression,
                 lowered_program,
                 environment,
             ),
-            .MatchExpression => |match_expression| return control_flow.emitMatchExpression(
+            .match_expression => |match_expression| return control_flow.emitMatchExpression(
                 self,
                 node,
                 &match_expression,
                 lowered_program,
                 environment,
             ),
-            .SubjectlessMatchExpression => |subjectless_match_expression| return control_flow.emitSubjectlessMatchExpression(
+            .subjectless_match_expression => |subjectless_match_expression| return control_flow.emitSubjectlessMatchExpression(
                 self,
                 node,
                 &subjectless_match_expression,
                 lowered_program,
                 environment,
             ),
-            .ExpressionStatement => |expression_statement| {
+            .expression_statement => |expression_statement| {
                 _ = try self.emitNode(expression_statement.expression, lowered_program, environment);
                 return .statement;
             },
-            .ItemDefinition => return .statement,
-            .QualifiedStructureLiteral => |qualified_structure_literal| return aggregates.emitStructureLiteral(
+            .item_definition => return .statement,
+            .qualified_structure_literal => |qualified_structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
                 qualified_structure_literal.fields,
                 lowered_program,
                 environment,
             ),
-            .StructureLiteral => |structure_literal| return aggregates.emitStructureLiteral(
+            .structure_literal => |structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
                 structure_literal.fields,
                 lowered_program,
                 environment,
             ),
-            .ArrayLiteral => |array_literal| return aggregates.emitArrayLiteral(
+            .array_literal => |array_literal| return aggregates.emitArrayLiteral(
                 self,
                 node,
                 &array_literal,
                 lowered_program,
                 environment,
             ),
-            .IndexExpression => |index_expression| return aggregates.emitIndexExpression(
+            .index_expression => |index_expression| return aggregates.emitIndexExpression(
                 self,
                 node,
                 &index_expression,

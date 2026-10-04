@@ -50,7 +50,7 @@ pub const FunctionEmitter = struct {
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .ItemDefinition => continue,
+                .item_definition => continue,
                 else => {},
             }
 
@@ -73,12 +73,12 @@ pub const FunctionEmitter = struct {
         const function_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(function_node_id) orelse unreachable;
         const function_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(function_symbol_id);
         const function_symbol_information = switch (function_symbol.kind) {
-            .Function => |function_symbol_information| function_symbol_information,
+            .function => |function_symbol_information| function_symbol_information,
             else => unreachable,
         };
         const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
         const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
-            .Function => |function_type| function_type.return_type_id,
+            .function => |function_type| function_type.return_type_id,
             else => unreachable,
         };
         const function_layout = lowered_program.function_layout_by_symbol_id.get(function_symbol_id) orelse unreachable;
@@ -88,8 +88,8 @@ pub const FunctionEmitter = struct {
 
         for (function_symbol_information.parameter_symbol_ids, 0..) |parameter_symbol_id, index| {
             const parameter_index = switch (function_layout.parameter_index_kind_by_definition_index[index]) {
-                .Absent => continue,
-                .Index => |parameter_index| parameter_index,
+                .absent => continue,
+                .index => |parameter_index| parameter_index,
             };
 
             const parameter_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
@@ -118,14 +118,14 @@ pub const FunctionEmitter = struct {
         );
 
         const function_return_llvm_ir_type = switch (function_layout.return_type_value_kind) {
-            .Present => lowered_program.getLlvmIrType(function_return_type_id),
-            .Absent => "void",
+            .present => lowered_program.getLlvmIrType(function_return_type_id),
+            .absent => "void",
         };
 
         if (self.function_ir_builder.currentLabel() != null) {
             switch (function_layout.return_type_value_kind) {
-                .Absent => try self.function_ir_builder.emitTerminatorInstruction("ret void"),
-                .Present => {
+                .absent => try self.function_ir_builder.emitTerminatorInstruction("ret void"),
+                .present => {
                     const return_instruction = try std.fmt.allocPrint(
                         self.arena,
                         "ret {s} {s}",

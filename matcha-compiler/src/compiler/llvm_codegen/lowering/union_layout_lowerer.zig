@@ -18,7 +18,7 @@ pub const UnionLayoutLowerer = struct {
         var types_iterator = analyzed_program.type_store.iterator();
         while (types_iterator.next()) |entry| {
             const union_type = switch (entry.matcha_type) {
-                .Union => |union_type| union_type,
+                .@"union" => |union_type| union_type,
                 else => continue,
             };
 
@@ -49,7 +49,7 @@ pub const UnionLayoutLowerer = struct {
         case_index: usize,
     ) ![]const u8 {
         const union_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
-        const union_symbol_information = union_symbol.kind.Union;
+        const union_symbol_information = union_symbol.kind.@"union";
         const union_case = union_symbol_information.cases[case_index];
 
         return std.fmt.allocPrint(

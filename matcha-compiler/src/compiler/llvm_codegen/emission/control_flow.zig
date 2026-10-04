@@ -15,7 +15,7 @@ const Environment = node_emitter_module.Environment;
 const LoopContext = node_emitter_module.LoopContext;
 
 const LoopConstruct = struct {
-    kind: enum { While, Loop },
+    kind: enum { @"while", loop },
     condition: ?*ast.Node,
     update: ?*ast.Node,
     body_block: *const ast.Block,
@@ -34,21 +34,21 @@ const DecisionArm = struct {
 };
 
 const DecisionArmCondition = union(enum) {
-    Expression: *const ast.Node,
-    Pattern: *const ast.Pattern,
+    expression: *const ast.Node,
+    pattern: *const ast.Pattern,
 };
 
 /// Names the labels of a decision construct. An `if` has one arm, called `then`. The arms of a `match` are numbered.
 const DecisionKind = enum {
-    If,
-    Match,
-    SubjectlessMatch,
+    @"if",
+    match,
+    subjectless_match,
 
     fn constructName(self: @This()) []const u8 {
         return switch (self) {
-            .If => "if",
-            .Match => "match",
-            .SubjectlessMatch => "subjectless_match",
+            .@"if" => "if",
+            .match => "match",
+            .subjectless_match => "subjectless_match",
         };
     }
 };
@@ -120,7 +120,7 @@ pub fn emitIfStatement(
     environment: *Environment,
 ) !EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .condition = .{ .Expression = if_statement.condition },
+        .condition = .{ .expression = if_statement.condition },
         .body = if_statement.then_branch,
     }};
     return emitDecisionConstruct(
@@ -131,7 +131,7 @@ pub fn emitIfStatement(
             .arms = &decision_arms,
             .else_arm = null,
         },
-        .If,
+        .@"if",
         lowered_program,
         environment,
     );
@@ -145,7 +145,7 @@ pub fn emitIfExpression(
     environment: *Environment,
 ) !EmissionResult {
     const decision_arms = [_]DecisionArm{.{
-        .condition = .{ .Expression = if_expression.condition },
+        .condition = .{ .expression = if_expression.condition },
         .body = if_expression.then_block,
     }};
     return emitDecisionConstruct(
@@ -156,7 +156,7 @@ pub fn emitIfExpression(
             .arms = &decision_arms,
             .else_arm = if_expression.else_block,
         },
-        .If,
+        .@"if",
         lowered_program,
         environment,
     );
@@ -172,7 +172,7 @@ pub fn emitMatchExpression(
     var decision_arms = std.ArrayList(DecisionArm){};
     for (match_expression.arms) |*arm| {
         try decision_arms.append(emitter.arena, .{
-            .condition = .{ .Pattern = &arm.pattern },
+            .condition = .{ .pattern = &arm.pattern },
             .body = arm.body_expression,
         });
     }
@@ -188,7 +188,7 @@ pub fn emitMatchExpression(
             .else_arm = match_expression.else_arm_expression,
             .exhaustive_without_else = exhaustive_without_else,
         },
-        .Match,
+        .match,
         lowered_program,
         environment,
     );
@@ -204,7 +204,7 @@ pub fn emitSubjectlessMatchExpression(
     var decision_arms = std.ArrayList(DecisionArm){};
     for (subjectless_match_expression.arms) |arm| {
         try decision_arms.append(emitter.arena, .{
-            .condition = .{ .Expression = arm.condition },
+            .condition = .{ .expression = arm.condition },
             .body = arm.body_expression,
         });
     }
@@ -217,7 +217,7 @@ pub fn emitSubjectlessMatchExpression(
             .arms = decision_arms.items,
             .else_arm = subjectless_match_expression.else_arm_expression,
         },
-        .SubjectlessMatch,
+        .subjectless_match,
         lowered_program,
         environment,
     );
@@ -230,14 +230,14 @@ pub fn emitLoop(
     environment: *Environment,
 ) !EmissionResult {
     const body_block = switch (loop.body_block.kind) {
-        .Block => |*block| block,
+        .block => |*block| block,
         else => unreachable,
     };
 
     return emitLoopConstruct(
         emitter,
         .{
-            .kind = .Loop,
+            .kind = .loop,
             .condition = null,
             .body_block = body_block,
             .update = null,
@@ -254,14 +254,14 @@ pub fn emitWhile(
     environment: *Environment,
 ) !EmissionResult {
     const body_block = switch (while_statement.body_block.kind) {
-        .Block => |*block| block,
+        .block => |*block| block,
         else => unreachable,
     };
 
     return emitLoopConstruct(
         emitter,
         .{
-            .kind = .While,
+            .kind = .@"while",
             .condition = while_statement.condition,
             .body_block = body_block,
             .update = while_statement.update,
@@ -285,7 +285,7 @@ pub fn emitForInArrayLoop(
 
     const iterable_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(for_in.iterable.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(iterable_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
@@ -365,7 +365,7 @@ pub fn emitForInArrayLoop(
     }
 
     const body_block = switch (for_in.body_block.kind) {
-        .Block => |block| block,
+        .block => |block| block,
         else => unreachable,
     };
     _ = try emitBlock(emitter, body_block, lowered_program, environment);
@@ -398,8 +398,8 @@ fn emitLoopConstruct(
 ) !EmissionResult {
     const builder = emitter.function_ir_builder;
     const labels = try emitter.function_symbol_generator.generateConstructLabels(switch (loop_construct.kind) {
-        .While => "while",
-        .Loop => "loop",
+        .@"while" => "while",
+        .loop => "loop",
     });
     const loop_header_label = try labels.role("header");
     const loop_body_label = try labels.role("body");
@@ -489,8 +489,8 @@ fn emitDecisionConstruct(
     } else {
         for (decision_construct.arms, 0..) |arm, index| {
             const arm_label = switch (decision_kind) {
-                .If => try labels.role("then"),
-                .Match, .SubjectlessMatch => try labels.arm(index),
+                .@"if" => try labels.role("then"),
+                .match, .subjectless_match => try labels.arm(index),
             };
             const is_last_arm = index + 1 == decision_construct.arms.len;
             const false_branches_to_continue = is_last_arm and
@@ -510,9 +510,9 @@ fn emitDecisionConstruct(
             }
 
             const optional_union_case_index: ?u32 = switch (arm.condition) {
-                .Expression => null,
-                .Pattern => |pattern| switch (pattern.kind) {
-                    .Case => lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
+                .expression => null,
+                .pattern => |pattern| switch (pattern.kind) {
+                    .case => lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
                     else => null,
                 },
             };
@@ -520,8 +520,8 @@ fn emitDecisionConstruct(
                 try builder.emitBranchInstruction(null, &.{arm_label});
             } else {
                 const condition_value = switch (arm.condition) {
-                    .Expression => |expression| (try emitter.emitNode(expression, lowered_program, environment)).expectValue(),
-                    .Pattern => |pattern| try values.emitLoweredBinaryOperation(
+                    .expression => |expression| (try emitter.emitNode(expression, lowered_program, environment)).expectValue(),
+                    .pattern => |pattern| try values.emitLoweredBinaryOperation(
                         emitter,
                         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                         subject_type_id.?,
@@ -535,7 +535,7 @@ fn emitDecisionConstruct(
 
             try builder.emitLabel(arm_label);
             if (optional_union_case_index) |union_case_index| {
-                if (arm.condition.Pattern.kind.Case.binding) |payload_binding| {
+                if (arm.condition.pattern.kind.case.binding) |payload_binding| {
                     try emitCasePatternBinding(
                         emitter,
                         payload_binding,
@@ -676,22 +676,22 @@ fn emitPatternValue(
     lowered_program: *const lowering.LoweredProgram,
 ) !Value {
     return switch (pattern.kind) {
-        .IntegerLiteral => |integer_literal| try std.fmt.allocPrint(
+        .integer_literal => |integer_literal| try std.fmt.allocPrint(
             emitter.arena,
             "{d}",
             .{integer_literal.value()},
         ),
-        .BooleanLiteral => |token| if (token.kind.BooleanLiteral) "1" else "0",
-        .StringLiteral => |token| try emitter.string_literal_emitter.emitStringLiteralValue(
+        .boolean_literal => |token| if (token.kind.boolean_literal) "1" else "0",
+        .string_literal => |token| try emitter.string_literal_emitter.emitStringLiteralValue(
             emitter.string_literal_pool,
             pattern.id,
-            token.kind.StringLiteral,
+            token.kind.string_literal,
             emitter.function_symbol_generator,
             emitter.function_ir_builder,
         ),
         // A case pattern matches when the subject stores the case index of the pattern, so the case index is the value
-        // that `UnionCaseIndexComparison` compares the loaded case index with.
-        .Case => try std.fmt.allocPrint(emitter.arena, "{d}", .{
+        // that `union_case_index_comparison` compares the loaded case index with.
+        .case => try std.fmt.allocPrint(emitter.arena, "{d}", .{
             lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
         }),
     };

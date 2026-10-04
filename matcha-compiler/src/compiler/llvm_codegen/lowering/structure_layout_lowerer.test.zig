@@ -19,10 +19,10 @@ pub const StructureLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{
-                .{ .Index = 0 },
-                .Absent,
-                .{ .Index = 1 },
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .present = .{ .field_index_kind_by_definition_index = .{
+                .{ .index = 0 },
+                .absent,
+                .{ .index = 1 },
             } } });
         }
 
@@ -38,7 +38,7 @@ pub const StructureLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .llvm_type_name = "matcha.structure.Point" } });
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .present = .{ .llvm_type_name = "matcha.structure.Point" } });
         }
 
         test "keeps a field of a structure with only unit fields" {
@@ -54,7 +54,7 @@ pub const StructureLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(structure_type_id).?).toMatch(.{ .Present = .{ .field_index_kind_by_definition_index = .{.{ .Index = 0 }} } });
+            try expect(layouts.get(structure_type_id).?).toMatch(.{ .present = .{ .field_index_kind_by_definition_index = .{.{ .index = 0 }} } });
         }
 
         test "gives a structure with only unit fields no layout" {
@@ -69,7 +69,7 @@ pub const StructureLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(structure_type_id).?).toMatch(.Absent);
+            try expect(layouts.get(structure_type_id).?).toMatch(.absent);
         }
     };
 };

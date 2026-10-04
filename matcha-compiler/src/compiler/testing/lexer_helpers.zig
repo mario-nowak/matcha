@@ -27,7 +27,7 @@ pub fn collectTokens(lexer: *lexing.Lexer) ![]lexing.Token {
     while (true) {
         const token = try lexer.next();
         try tokens.append(arena, token);
-        if (token.kind == .EndOfFile) break;
+        if (token.kind == .end_of_file) break;
     }
     return tokens.toOwnedSlice(arena);
 }

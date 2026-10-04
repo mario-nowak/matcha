@@ -21,7 +21,7 @@ pub fn emitImplicitMemberExpression(
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
         // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
-        .UnionConstruction => |union_construction| return emitUnionConstruction(
+        .union_construction => |union_construction| return emitUnionConstruction(
             emitter,
             union_construction.union_type_id,
             union_construction.case_index,
@@ -29,14 +29,14 @@ pub fn emitImplicitMemberExpression(
             lowered_program,
             environment,
         ),
-        .ArrayLength,
-        .ArrayMethod,
-        .IntegerMethod,
-        .StringLength,
-        .StringMethod,
-        .StructureField,
-        .InstanceMethod,
-        .TypeFunction,
+        .array_length,
+        .array_method,
+        .integer_method,
+        .string_length,
+        .string_method,
+        .structure_field,
+        .instance_method,
+        .type_function,
         => unreachable,
     }
 }
@@ -50,7 +50,7 @@ pub fn emitMemberExpression(
 ) !EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
-        .ArrayLength => {
+        .array_length => {
             const base_value = try emitter.emitNode(member_expression.base, lowered_program, environment);
 
             const length_pointer_value = try emitter.function_symbol_generator.generateValueName();
@@ -66,13 +66,13 @@ pub fn emitMemberExpression(
 
             return .{ .value = length_value };
         },
-        .StringLength => {
+        .string_length => {
             const base_value = try emitter.emitNode(member_expression.base, lowered_program, environment);
             const string_parts = try emitter.emitStringParts(base_value.expectValue());
 
             return .{ .value = string_parts.length_value };
         },
-        .StructureField => |structure_field| {
+        .structure_field => |structure_field| {
             const member_pointer_emission_result = try places.emitStructureFieldPointer(
                 emitter,
                 member_expression,
@@ -96,7 +96,7 @@ pub fn emitMemberExpression(
             return .{ .value = member_value };
         },
         // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
-        .UnionConstruction => |union_construction| return emitUnionConstruction(
+        .union_construction => |union_construction| return emitUnionConstruction(
             emitter,
             union_construction.union_type_id,
             union_construction.case_index,
@@ -104,11 +104,11 @@ pub fn emitMemberExpression(
             lowered_program,
             environment,
         ),
-        .InstanceMethod => unreachable,
-        .TypeFunction => unreachable,
-        .ArrayMethod => unreachable,
-        .StringMethod => unreachable,
-        .IntegerMethod => unreachable,
+        .instance_method => unreachable,
+        .type_function => unreachable,
+        .array_method => unreachable,
+        .string_method => unreachable,
+        .integer_method => unreachable,
     }
 }
 
@@ -182,7 +182,7 @@ pub fn emitStructureLiteral(
 ) !EmissionResult {
     const node_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const structure_type = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
-        .Structure => |structure_type| structure_type,
+        .structure => |structure_type| structure_type,
         else => unreachable,
     };
     const structure_layout_kind = lowered_program
@@ -196,14 +196,14 @@ pub fn emitStructureLiteral(
     }
 
     const structure_header_value = switch (structure_layout_kind) {
-        .Present => |structure_layout| try emitter.runtime_call_emitter.emitAllocateCall(
+        .present => |structure_layout| try emitter.runtime_call_emitter.emitAllocateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
             try std.fmt.allocPrint(emitter.arena, "%{s}", .{structure_layout.llvm_type_name}),
             1,
         ),
         // Structures without a layout only allocate a single byte for identity comparison
-        .Absent => try emitter.runtime_call_emitter.emitAllocateAtomicCall(
+        .absent => try emitter.runtime_call_emitter.emitAllocateAtomicCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
             1,
@@ -211,15 +211,15 @@ pub fn emitStructureLiteral(
     };
 
     for (fields, field_value_emission_results) |field, field_value_emission_result| {
-        const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
+        const field_index = structure_type.getFieldIndex(field.name.kind.identifier) orelse unreachable;
         const structure_field = structure_type.fields[@intCast(field_index)];
         const structure_layout = switch (structure_layout_kind) {
-            .Absent => continue,
-            .Present => |structure_layout| structure_layout,
+            .absent => continue,
+            .present => |structure_layout| structure_layout,
         };
         const layout_field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
-            .Absent => continue,
-            .Index => |layout_field_index| layout_field_index,
+            .absent => continue,
+            .index => |layout_field_index| layout_field_index,
         };
 
         const field_pointer_value = try emitter.function_symbol_generator.generateValueName();
@@ -251,7 +251,7 @@ pub fn emitArrayLiteral(
     const builder = emitter.function_ir_builder;
     const array_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
@@ -335,7 +335,7 @@ pub fn emitIndexExpression(
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
     const element_runtime_representation = lowered_program

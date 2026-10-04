@@ -21,7 +21,7 @@ pub const FunctionLayoutLowerer = struct {
         var owner_symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
         while (owner_symbols_iterator.next()) |symbol| {
             const owned_function_symbol_ids = switch (symbol.kind) {
-                inline .Structure, .Union => |owner_information| owner_information.function_symbol_ids,
+                inline .structure, .@"union" => |owner_information| owner_information.function_symbol_ids,
                 else => continue,
             };
             for (owned_function_symbol_ids) |function_symbol_id| {
@@ -32,11 +32,11 @@ pub const FunctionLayoutLowerer = struct {
         var symbols_iterator = analyzed_program.resolved_program.symbol_table.iterator();
         while (symbols_iterator.next()) |symbol| {
             const function_information = switch (symbol.kind) {
-                .Function => |function_information| function_information,
+                .function => |function_information| function_information,
                 else => continue,
             };
             switch (function_information.implementation_kind) {
-                .UserDefined => {},
+                .user_defined => {},
                 else => continue,
             }
 
@@ -52,17 +52,17 @@ pub const FunctionLayoutLowerer = struct {
                     .get(parameter_type_id) orelse unreachable;
 
                 const parameter_index_kind: lowering_types.FunctionLayoutParameterIndexKind = if (runtime_representation.hasRuntimeRepresentation()) block: {
-                    const present_parameter_index_kind: lowering_types.FunctionLayoutParameterIndexKind = .{ .Index = parameter_layout_index };
+                    const present_parameter_index_kind: lowering_types.FunctionLayoutParameterIndexKind = .{ .index = parameter_layout_index };
                     parameter_layout_index += 1;
                     break :block present_parameter_index_kind;
-                } else .Absent;
+                } else .absent;
 
                 try parameter_index_kind_by_definition_index.append(self.arena, parameter_index_kind);
             }
 
             const function_type_id = analyzed_program.type_id_by_symbol_id.get(function_symbol_id) orelse unreachable;
             const return_type_id = switch (analyzed_program.type_store.getType(function_type_id)) {
-                .Function => |function_type| function_type.return_type_id,
+                .function => |function_type| function_type.return_type_id,
                 else => unreachable,
             };
             const return_runtime_representation = analyzed_program
@@ -70,9 +70,9 @@ pub const FunctionLayoutLowerer = struct {
                 .runtime_representation_by_type_id
                 .get(return_type_id) orelse unreachable;
             const return_type_value_kind: lowering_types.FunctionLayoutReturnTypeValueKind = if (return_runtime_representation.hasRuntimeRepresentation())
-                .Present
+                .present
             else
-                .Absent;
+                .absent;
 
             const function_layout = lowering_types.FunctionLayout{
                 .llvm_function_name = try self.generateLlvmFunctionName(symbol, owner_symbol_by_function_symbol_id.get(function_symbol_id)),
@@ -93,8 +93,8 @@ pub const FunctionLayoutLowerer = struct {
     ) ![]const u8 {
         if (owner_symbol) |owner| {
             const owner_kind_name = switch (owner.kind) {
-                .Structure => "structure",
-                .Union => "union",
+                .structure => "structure",
+                .@"union" => "union",
                 else => unreachable,
             };
             return std.fmt.allocPrint(

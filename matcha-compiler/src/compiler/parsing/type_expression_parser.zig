@@ -29,7 +29,7 @@ pub const TypeExpressionParser = struct {
     fn parsePrimary(self: *@This()) CompileError!*type_expressions.TypeExpression {
         const token = try self.lexer.next();
         switch (token.kind) {
-            .Identifier => return self.allocateTypeExpression(.{ .Named = .{ .name_token = token } }),
+            .identifier => return self.allocateTypeExpression(.{ .named = .{ .name_token = token } }),
             else => {
                 try self.diagnostic_store.emitErrorFromToken(token, "expected type annotation");
                 return error.DiagnosticsEmitted;
@@ -43,16 +43,16 @@ pub const TypeExpressionParser = struct {
     ) CompileError!*type_expressions.TypeExpression {
         var type_expression = base_type_expression;
 
-        while ((try self.lexer.peek()).kind == .LeftBracket) {
+        while ((try self.lexer.peek()).kind == .left_bracket) {
             const left_bracket_token = try self.lexer.next();
             const right_bracket_token = try self.lexer.next();
-            if (right_bracket_token.kind != .RightBracket) {
+            if (right_bracket_token.kind != .right_bracket) {
                 try self.diagnostic_store.emitErrorFromToken(right_bracket_token, "expected ']' after array type suffix");
                 return error.DiagnosticsEmitted;
             }
 
             type_expression = try self.allocateTypeExpression(.{
-                .Array = .{
+                .array = .{
                     .element_type = type_expression,
                     .left_bracket_token = left_bracket_token,
                     .right_bracket_token = right_bracket_token,

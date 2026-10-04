@@ -16,11 +16,11 @@ pub const PlaceLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[2].kind.AssignmentStatement.target;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[2].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(assignment_target.id).?).toMatch(.{ .StructureField = .{ .field_index = 1 } });
+            try expect(decisions.get(assignment_target.id).?).toMatch(.{ .structure_field = .{ .field_index = 1 } });
         }
 
         test "lowers an indexed target to an array element" {
@@ -31,11 +31,11 @@ pub const PlaceLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.AssignmentStatement.target;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(assignment_target.id).?).toMatch(.ArrayElement);
+            try expect(decisions.get(assignment_target.id).?).toMatch(.array_element);
         }
 
         test "lowers a variable target to its binding" {
@@ -47,11 +47,11 @@ pub const PlaceLowerer = struct {
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
             const counter_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.AssignmentStatement.target;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(assignment_target.id).?).toMatch(.{ .IdentifierBinding = .{ .symbol_id = counter_symbol_id } });
+            try expect(decisions.get(assignment_target.id).?).toMatch(.{ .identifier_binding = .{ .symbol_id = counter_symbol_id } });
         }
     };
 };

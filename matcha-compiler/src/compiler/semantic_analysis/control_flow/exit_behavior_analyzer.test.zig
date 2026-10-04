@@ -10,12 +10,12 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const body = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression;
+                const body = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
                 try expect(result).toMatchMap(.{
-                    .{ .key = body.id, .value = .FallsThroughWithValue },
+                    .{ .key = body.id, .value = .falls_through_with_value },
                 });
                 try expect(fixture.diagnostic_store.items()).toMatch(.{});
             }
@@ -25,15 +25,15 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const body = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression;
-                const call = body.kind.CallExpression;
+                const body = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
+                const call = body.kind.call_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
                 try expect(result).toMatchMap(.{
-                    .{ .key = call.callee.id, .value = .FallsThroughWithValue },
-                    .{ .key = call.arguments[0].id, .value = .FallsThroughWithValue },
-                    .{ .key = body.id, .value = .FallsThroughWithValue },
+                    .{ .key = call.callee.id, .value = .falls_through_with_value },
+                    .{ .key = call.arguments[0].id, .value = .falls_through_with_value },
+                    .{ .key = body.id, .value = .falls_through_with_value },
                 });
                 try expect(fixture.diagnostic_store.items()).toMatch(.{});
             }
@@ -50,15 +50,15 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const function = fixture.program.statements[0].kind.ItemDefinition.definition.Union.function_definitions[0];
-                const body = function.kind.ItemDefinition.definition.Function.body_expression;
-                const return_statement = body.kind.Block.statements[0];
+                const function = fixture.program.statements[0].kind.item_definition.definition.@"union".function_definitions[0];
+                const body = function.kind.item_definition.definition.function.body_expression;
+                const return_statement = body.kind.block.statements[0];
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
                 try expect(result).toMatchMap(.{
-                    .{ .key = body.id, .value = .Terminates },
-                    .{ .key = return_statement.id, .value = .Terminates },
+                    .{ .key = body.id, .value = .terminates },
+                    .{ .key = return_statement.id, .value = .terminates },
                 });
                 try expect(fixture.diagnostic_store.items()).toMatch(.{});
             }
@@ -100,11 +100,11 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression.kind.Block.statements[0].kind.Loop.body_block.kind.Block.statements[0].kind.BindingDeclaration.value;
+                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
-                try expect(result.get(match_expression.id).?).toMatch(.FallsThroughWithoutValue);
+                try expect(result.get(match_expression.id).?).toMatch(.falls_through_without_value);
             }
         };
 
@@ -123,11 +123,11 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression.kind.Block.statements[0].kind.Loop.body_block.kind.Block.statements[0].kind.BindingDeclaration.value;
+                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
-                try expect(result.get(match_expression.id).?).toMatch(.FallsThroughWithoutValue);
+                try expect(result.get(match_expression.id).?).toMatch(.falls_through_without_value);
             }
 
             test "marks a match as terminating when an arm condition terminates" {
@@ -140,11 +140,11 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.ItemDefinition.definition.Function.body_expression;
+                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
-                try expect(result.get(match_expression.id).?).toMatch(.Terminates);
+                try expect(result.get(match_expression.id).?).toMatch(.terminates);
             }
         };
     };
