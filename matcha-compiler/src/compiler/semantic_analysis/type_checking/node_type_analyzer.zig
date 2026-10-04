@@ -1848,7 +1848,7 @@ pub const NodeTypeAnalyzer = struct {
             if (missing_case_count > 0) {
                 try missing_cases.appendSlice(self.arena, ", ");
             }
-            try missing_cases.writer(self.arena).print("'{s}'", .{union_case.name});
+            try missing_cases.print(self.arena, "'{s}'", .{union_case.name});
             missing_case_count += 1;
         }
 

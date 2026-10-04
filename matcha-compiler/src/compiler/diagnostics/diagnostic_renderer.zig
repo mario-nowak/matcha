@@ -2,13 +2,13 @@ const std = @import("std");
 const Diagnostic = @import("diagnostic.zig").Diagnostic;
 
 pub const DiagnosticRenderer = struct {
-    pub fn render(writer: anytype, input_path: []const u8, source: []const u8, diagnostics: []const Diagnostic) !void {
+    pub fn render(writer: *std.Io.Writer, input_path: []const u8, source: []const u8, diagnostics: []const Diagnostic) !void {
         for (diagnostics) |diagnostic| {
             try renderOne(writer, input_path, source, diagnostic);
         }
     }
 
-    fn renderOne(writer: anytype, input_path: []const u8, source: []const u8, diagnostic: Diagnostic) !void {
+    fn renderOne(writer: *std.Io.Writer, input_path: []const u8, source: []const u8, diagnostic: Diagnostic) !void {
         const severity_text = switch (diagnostic.severity) {
             .@"error" => "error",
         };
@@ -34,11 +34,13 @@ pub const DiagnosticRenderer = struct {
 };
 
 pub fn renderStderr(input_path: []const u8, source: []const u8, diagnostics: []const Diagnostic) !void {
-    const stderr = std.fs.File.stderr();
-    try DiagnosticRenderer.render(stderr.deprecatedWriter(), input_path, source, diagnostics);
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&stderr_buffer);
+    try DiagnosticRenderer.render(&stderr_writer.interface, input_path, source, diagnostics);
+    try stderr_writer.interface.flush();
 }
 
-fn writeGutter(writer: anytype, gutter_width: usize, line_number: ?usize) !void {
+fn writeGutter(writer: *std.Io.Writer, gutter_width: usize, line_number: ?usize) !void {
     if (line_number) |value| {
         try writer.print(" {d: >[1]} |", .{ value, gutter_width });
         return;
@@ -47,7 +49,7 @@ fn writeGutter(writer: anytype, gutter_width: usize, line_number: ?usize) !void 
     try writer.print(" {s: >[1]} |", .{ "", gutter_width });
 }
 
-fn writeRepeated(writer: anytype, byte: u8, count: usize) !void {
+fn writeRepeated(writer: *std.Io.Writer, byte: u8, count: usize) !void {
     for (0..count) |_| {
         try writer.writeByte(byte);
     }

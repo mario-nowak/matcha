@@ -38,9 +38,10 @@ pub const StructureTypeRenderer = struct {
             };
 
             if (has_structure_definition) {
-                try structure_definitions_buffer.writer(self.arena).print("\n", .{});
+                try structure_definitions_buffer.print(self.arena, "\n", .{});
             }
-            try structure_definitions_buffer.writer(self.arena).print(
+            try structure_definitions_buffer.print(
+                self.arena,
                 "{s}",
                 .{
                     try self.renderStructureTypeDefinition(
@@ -66,7 +67,8 @@ pub const StructureTypeRenderer = struct {
 
         var structure_definition_buffer = std.ArrayList(u8){};
 
-        try structure_definition_buffer.writer(self.arena).print(
+        try structure_definition_buffer.print(
+            self.arena,
             "%{s} = type {{",
             .{structure_llvm_type_name},
         );
@@ -77,20 +79,21 @@ pub const StructureTypeRenderer = struct {
             };
 
             if (field_index == 0) {
-                try structure_definition_buffer.writer(self.arena).print(" ", .{});
+                try structure_definition_buffer.print(self.arena, " ", .{});
             } else {
-                try structure_definition_buffer.writer(self.arena).print(", ", .{});
+                try structure_definition_buffer.print(self.arena, ", ", .{});
             }
 
-            try structure_definition_buffer.writer(self.arena).print(
+            try structure_definition_buffer.print(
+                self.arena,
                 "{s}",
                 .{lowered_program.getLlvmIrType(field.type_id)},
             );
         }
         if (structure_type.fields.len > 0) {
-            try structure_definition_buffer.writer(self.arena).print(" ", .{});
+            try structure_definition_buffer.print(self.arena, " ", .{});
         }
-        try structure_definition_buffer.writer(self.arena).print("}}", .{});
+        try structure_definition_buffer.print(self.arena, "}}", .{});
 
         return structure_definition_buffer.toOwnedSlice(self.arena);
     }

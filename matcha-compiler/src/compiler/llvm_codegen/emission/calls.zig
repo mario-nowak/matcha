@@ -210,14 +210,15 @@ fn emitDirectFunctionCall(
             .index => |index| index,
         };
         if (parameter_layout_index > 0) {
-            try argument_list_buffer.writer(emitter.arena).print(", ", .{});
+            try argument_list_buffer.print(emitter.arena, ", ", .{});
         }
         const parameter_symbol_id = function_symbol_information.parameter_symbol_ids[parameter_definition_index];
         const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
         const parameter_llvm_type = lowered_program.getLlvmIrType(parameter_type_id);
         const argument_value = argument_values[parameter_layout_index];
 
-        try argument_list_buffer.writer(emitter.arena).print(
+        try argument_list_buffer.print(
+            emitter.arena,
             "{s} {s}",
             .{ parameter_llvm_type, argument_value },
         );

@@ -51,17 +51,17 @@ pub const FunctionIrBuilder = struct {
     ) ![]const u8 {
         var stack_allocation_buffer = std.ArrayList(u8){};
         for (self.stack_allocation_instructions.items) |instruction| {
-            try stack_allocation_buffer.writer(self.arena).print("    {s}\n", .{instruction});
+            try stack_allocation_buffer.print(self.arena, "    {s}\n", .{instruction});
         }
 
         var instructions_buffer = std.ArrayList(u8){};
         for (self.lines.items) |line| {
             switch (line) {
                 .instruction => |instruction| {
-                    try instructions_buffer.writer(self.arena).print("    {s}\n", .{instruction});
+                    try instructions_buffer.print(self.arena, "    {s}\n", .{instruction});
                 },
                 .label => |label| {
-                    try instructions_buffer.writer(self.arena).print("{s}:\n", .{label});
+                    try instructions_buffer.print(self.arena, "{s}:\n", .{label});
                 },
             }
         }

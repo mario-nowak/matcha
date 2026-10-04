@@ -98,9 +98,10 @@ pub const FunctionEmitter = struct {
             const parameter_value = try self.function_symbol_generator.parameterName(parameter_symbol.name);
 
             if (parameter_index > 0) {
-                try parameter_list_buffer.writer(self.arena).print(", ", .{});
+                try parameter_list_buffer.print(self.arena, ", ", .{});
             }
-            try parameter_list_buffer.writer(self.arena).print(
+            try parameter_list_buffer.print(
+                self.arena,
                 "{s} {s}",
                 .{ parameter_llvm_ir_type, parameter_value },
             );

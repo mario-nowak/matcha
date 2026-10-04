@@ -12,7 +12,8 @@ pub fn generateLlvmIrFromFile(
     diagnostic_store: *diagnostics.DiagnosticStore,
 ) ![]const u8 {
     const file_contents = readInputFile(arena, input_path) catch |read_error| {
-        try std.fs.File.stderr().deprecatedWriter().print("error: cannot read input file '{s}': {s}\n", .{ input_path, @errorName(read_error) });
+        var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+        try stderr_writer.interface.print("error: cannot read input file '{s}': {s}\n", .{ input_path, @errorName(read_error) });
         return error.InputFileUnreadable;
     };
 
@@ -118,10 +119,12 @@ pub fn emitFile(
     const llvm_ir = try generateLlvmIrFromFile(arena, input_path, diagnostic_store);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(arena, input_path);
     writeFile(resolved_output_path, llvm_ir) catch |write_error| {
-        try std.fs.File.stderr().deprecatedWriter().print("error: cannot write output file '{s}': {s}\n", .{ resolved_output_path, @errorName(write_error) });
+        var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+        try stderr_writer.interface.print("error: cannot write output file '{s}': {s}\n", .{ resolved_output_path, @errorName(write_error) });
         return error.OutputFileUnwritable;
     };
-    try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
+    var stdout_writer = std.fs.File.stdout().writerStreaming(&.{});
+    try stdout_writer.interface.print("wrote {s}\n", .{resolved_output_path});
 }
 
 pub fn getDefaultLlvmOutputPath(arena: std.mem.Allocator, input_path: []const u8) ![]const u8 {

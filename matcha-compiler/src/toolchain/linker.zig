@@ -20,7 +20,8 @@ pub fn buildFile(
     try compiler.pipeline.writeFile(llvm_ir_path, llvm_ir);
 
     try linkNativeBinary(arena, llvm_ir_path, binary_output_path);
-    try std.fs.File.stdout().deprecatedWriter().print("built {s}\n", .{binary_output_path});
+    var stdout_writer = std.fs.File.stdout().writerStreaming(&.{});
+    try stdout_writer.interface.print("built {s}\n", .{binary_output_path});
     return binary_output_path;
 }
 
@@ -116,12 +117,14 @@ fn brewPrefix(arena: std.mem.Allocator, package_name: []const u8) ![]const u8 {
         .argv = &.{ "brew", "--prefix", package_name },
         .max_output_bytes = 1024,
     }) catch |spawn_error| {
-        try std.fs.File.stderr().deprecatedWriter().print("error: cannot start 'brew': {s}\n", .{@errorName(spawn_error)});
+        var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+        try stderr_writer.interface.print("error: cannot start 'brew': {s}\n", .{@errorName(spawn_error)});
         return error.DependencyLookupFailed;
     };
 
     if (result.term != .Exited or result.term.Exited != 0) {
-        try std.fs.File.stderr().deprecatedWriter().print("error: failed to resolve Homebrew prefix for {s}\n", .{package_name});
+        var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+        try stderr_writer.interface.print("error: failed to resolve Homebrew prefix for {s}\n", .{package_name});
         return error.DependencyLookupFailed;
     }
 
@@ -149,7 +152,8 @@ fn runChildProcess(arena: std.mem.Allocator, argv: []const []const u8, stdio: Ch
         },
     }
 
-    const stderr = std.fs.File.stderr().deprecatedWriter();
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    const stderr = &stderr_writer.interface;
     const term = child.spawnAndWait() catch |spawn_error| {
         try stderr.print("error: cannot start '{s}': {s}\n", .{ argv[0], @errorName(spawn_error) });
         return error.ChildProcessFailed;

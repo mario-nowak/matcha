@@ -15,7 +15,8 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
             return 0;
         },
         .version => {
-            try std.fs.File.stdout().deprecatedWriter().print("{s}\n", .{build_options.version});
+            var stdout_writer = std.fs.File.stdout().writerStreaming(&.{});
+            try stdout_writer.interface.print("{s}\n", .{build_options.version});
             return 0;
         },
         .emit => |emit_command| {
@@ -86,7 +87,10 @@ pub fn reportUnreportedError(run_error: anyerror) void {
         error.ChildProcessFailed,
         error.DependencyLookupFailed,
         => {},
-        else => std.fs.File.stderr().deprecatedWriter().print("error: unexpected failure: {s}\n", .{@errorName(run_error)}) catch {},
+        else => {
+            var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+            stderr_writer.interface.print("error: unexpected failure: {s}\n", .{@errorName(run_error)}) catch {};
+        },
     }
 }
 

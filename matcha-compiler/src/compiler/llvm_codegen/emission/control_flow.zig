@@ -605,9 +605,10 @@ fn emitDecisionConstruct(
     var phi_incoming_buffer = std.ArrayList(u8){};
     for (incoming_values.items, 0..) |incoming, index| {
         if (index > 0) {
-            try phi_incoming_buffer.writer(emitter.arena).print(", ", .{});
+            try phi_incoming_buffer.print(emitter.arena, ", ", .{});
         }
-        try phi_incoming_buffer.writer(emitter.arena).print(
+        try phi_incoming_buffer.print(
+            emitter.arena,
             "[{s}, %{s}]",
             .{ incoming.value, incoming.label },
         );

@@ -15,12 +15,13 @@ pub const StringLiteralRenderer = struct {
 
         for (string_literal_pool.globals(), 0..) |string_literal_global, index| {
             const rendered_content = try self.renderLlvmStringLiteralContent(string_literal_global.content);
-            try globals_buffer.writer(self.arena).print(
+            try globals_buffer.print(
+                self.arena,
                 "{s} = private unnamed_addr constant [{d} x i8] c\"{s}\"",
                 .{ string_literal_global.name, string_literal_global.len, rendered_content },
             );
             if (index + 1 < string_literal_pool.globals().len) {
-                try globals_buffer.writer(self.arena).print("\n", .{});
+                try globals_buffer.print(self.arena, "\n", .{});
             }
         }
 
@@ -36,7 +37,7 @@ pub const StringLiteralRenderer = struct {
                 continue;
             }
 
-            try rendered_content_buffer.writer(self.arena).print("\\{X:0>2}", .{byte});
+            try rendered_content_buffer.print(self.arena, "\\{X:0>2}", .{byte});
         }
 
         return rendered_content_buffer.toOwnedSlice(self.arena);

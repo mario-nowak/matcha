@@ -68,7 +68,8 @@ pub fn parse(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
 }
 
 pub fn writeHelp(topic: ?HelpTopic) !void {
-    const stdout = std.fs.File.stdout().deprecatedWriter();
+    var stdout_writer = std.fs.File.stdout().writerStreaming(&.{});
+    const stdout = &stdout_writer.interface;
     if (topic == null) {
         try stdout.writeAll(
             "Usage:\n" ++
@@ -126,7 +127,8 @@ fn parseHelpCommand(arena: std.mem.Allocator, argument_iterator: anytype) !Comma
 }
 
 fn reportMissingInputPath() error{MissingInputPath} {
-    std.fs.File.stderr().deprecatedWriter().print("error: missing input file\n", .{}) catch {};
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    stderr_writer.interface.print("error: missing input file\n", .{}) catch {};
     return error.MissingInputPath;
 }
 
@@ -135,7 +137,8 @@ fn validateInputPath(input_path: []const u8) !void {
     if (std.mem.eql(u8, std.fs.path.extension(input_path), ".mt")) {
         return;
     }
-    try std.fs.File.stderr().deprecatedWriter().print("error: input file must have the .mt extension: {s}\n", .{input_path});
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    try stderr_writer.interface.print("error: input file must have the .mt extension: {s}\n", .{input_path});
     return error.InputPathWithoutMatchaExtension;
 }
 

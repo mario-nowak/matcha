@@ -128,12 +128,12 @@ pub const LlvmModuleRenderer = struct {
 
         var module_buffer = std.ArrayList(u8){};
         for (sections.items, 0..) |section, index| {
-            try module_buffer.writer(self.arena).print("{s}", .{section});
+            try module_buffer.print(self.arena, "{s}", .{section});
             if (index + 1 < sections.items.len) {
-                try module_buffer.writer(self.arena).print("\n\n", .{});
+                try module_buffer.print(self.arena, "\n\n", .{});
             }
         }
-        try module_buffer.writer(self.arena).print("\n", .{});
+        try module_buffer.print(self.arena, "\n", .{});
 
         return module_buffer.toOwnedSlice(self.arena);
     }
@@ -147,14 +147,15 @@ pub const LlvmModuleRenderer = struct {
         var module_preamble_buffer = std.ArrayList(u8){};
 
         const runtime_symbol_declarations = try self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
-        try module_preamble_buffer.writer(self.arena).print(
+        try module_preamble_buffer.print(
+            self.arena,
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, lowering.llvm_type.string_llvm_type_definition, lowering.llvm_type.array_llvm_type_definition },
         );
 
         const string_literal_globals_ir = try self.string_literal_renderer.renderGlobals(self.string_literal_pool);
         if (string_literal_globals_ir.len > 0) {
-            try module_preamble_buffer.writer(self.arena).print("\n\n{s}", .{string_literal_globals_ir});
+            try module_preamble_buffer.print(self.arena, "\n\n{s}", .{string_literal_globals_ir});
         }
         return module_preamble_buffer.toOwnedSlice(self.arena);
     }

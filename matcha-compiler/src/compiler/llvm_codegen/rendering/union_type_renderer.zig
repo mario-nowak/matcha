@@ -39,10 +39,11 @@ pub const UnionTypeRenderer = struct {
 
             for (0..union_layout.cases.len) |case_index| {
                 if (case_index > 0 or union_index > 0) {
-                    try union_definitions_buffer.writer(self.arena).print("\n", .{});
+                    try union_definitions_buffer.print(self.arena, "\n", .{});
                 }
 
-                try union_definitions_buffer.writer(self.arena).print(
+                try union_definitions_buffer.print(
+                    self.arena,
                     "%{s} = type {{ {s}",
                     .{ union_layout.cases[case_index].llvm_type_name, lowering_types.union_case_index_llvm_type },
                 );
@@ -51,9 +52,9 @@ pub const UnionTypeRenderer = struct {
                 const type_runtime_representation = analyzed_program.runtime_representation_result.runtime_representation_by_type_id.get(payload_type_id).?;
                 if (type_runtime_representation == .present) {
                     const llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-                    try union_definitions_buffer.writer(self.arena).print(", {s} }}", .{llvm_type});
+                    try union_definitions_buffer.print(self.arena, ", {s} }}", .{llvm_type});
                 } else {
-                    try union_definitions_buffer.writer(self.arena).print(" }}", .{});
+                    try union_definitions_buffer.print(self.arena, " }}", .{});
                 }
             }
 
