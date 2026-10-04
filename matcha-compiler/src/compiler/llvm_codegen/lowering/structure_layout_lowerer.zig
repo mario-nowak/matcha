@@ -104,8 +104,8 @@ pub const StructureLayoutLowerer = struct {
         const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
         return std.fmt.allocPrint(
             self.allocator,
-            "matcha_structure_{d}__{s}",
-            .{ structure_symbol.id, structure_symbol.name },
+            "matcha.structure.{s}",
+            .{structure_symbol.name},
         ) catch unreachable;
     }
 };

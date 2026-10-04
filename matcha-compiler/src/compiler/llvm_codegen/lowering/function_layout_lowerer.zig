@@ -116,15 +116,15 @@ pub const FunctionLayoutLowerer = struct {
             };
             return std.fmt.allocPrint(
                 self.allocator,
-                "matcha_{s}_{d}__{s}__function_{d}__{s}",
-                .{ owner_kind_name, owner.id, owner.name, function_symbol.id, function_symbol.name },
+                "matcha.{s}.{s}.function.{s}",
+                .{ owner_kind_name, owner.name, function_symbol.name },
             ) catch unreachable;
         }
 
         return std.fmt.allocPrint(
             self.allocator,
-            "matcha_function_{d}__{s}",
-            .{ function_symbol.id, function_symbol.name },
+            "matcha.function.{s}",
+            .{function_symbol.name},
         ) catch unreachable;
     }
 };

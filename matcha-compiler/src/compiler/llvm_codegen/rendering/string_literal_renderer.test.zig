@@ -16,7 +16,7 @@ pub const StringLiteralRenderer = struct {
             const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
-                \\@.string_literal_0 = private unnamed_addr constant [5 x i8] c"hello"
+                \\@matcha.string_literal.0 = private unnamed_addr constant [5 x i8] c"hello"
             );
         }
 
@@ -30,7 +30,7 @@ pub const StringLiteralRenderer = struct {
             const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
-                \\@.string_literal_0 = private unnamed_addr constant [6 x i8] c"a\22b\5Cc\0A"
+                \\@matcha.string_literal.0 = private unnamed_addr constant [6 x i8] c"a\22b\5Cc\0A"
             );
         }
 
@@ -44,7 +44,7 @@ pub const StringLiteralRenderer = struct {
             const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
-                \\@.string_literal_0 = private unnamed_addr constant [2 x i8] c"\C3\A9"
+                \\@matcha.string_literal.0 = private unnamed_addr constant [2 x i8] c"\C3\A9"
             );
         }
 
@@ -59,8 +59,8 @@ pub const StringLiteralRenderer = struct {
             const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
-                \\@.string_literal_0 = private unnamed_addr constant [5 x i8] c"first"
-                \\@.string_literal_1 = private unnamed_addr constant [6 x i8] c"second"
+                \\@matcha.string_literal.0 = private unnamed_addr constant [5 x i8] c"first"
+                \\@matcha.string_literal.1 = private unnamed_addr constant [6 x i8] c"second"
             );
         }
     };

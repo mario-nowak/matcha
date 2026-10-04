@@ -311,14 +311,17 @@ now not all of them are real issues. But a lot of them are.
 | union function | `@matcha.union.Result.function.fromNumber` |
 | compiler-generated function | `@matcha.union.Maybe.synthetic_function.equal` |
 | string literal | `@matcha.string_literal.<n>` |
-| builtin function | `@matcha.builtin.function.printInt` |
-| builtin method | `@matcha.builtin.string.method.trim`, `@matcha.builtin.int.method.toString` |
-| builtin type | `%matcha.builtin.string`, `%matcha.builtin.array` |
-| runtime internal | `@matcha.runtime.function.allocate` |
+| builtin function | `@matcha.compiler_module.builtin.function.printInt` |
+| builtin method | `@matcha.compiler_module.builtin.type.string.method.trim`, `@matcha.compiler_module.builtin.type.int.method.toString` |
+| builtin type | `%matcha.compiler_module.builtin.type.string`, `%matcha.compiler_module.builtin.type.array` |
+| runtime internal | `@matcha.compiler_module.runtime.function.allocate` |
 
 - `function` marks a user-defined function, `synthetic_function` a compiler-generated one, so a user function `equal` cannot clash with the generated one.
 - No case index in case type names: case names are unique within a union.
-- The runtime exports its functions with `@export(&f, .{ .name = "matcha.builtin.function.printInt" })` instead of `export fn matcha_print_int`.
+- Builtins and runtime internals live in compiler-provided modules. The kind `compiler_module` cannot clash with a user module, because user modules use the kind `module`. So a user file `builtin.mt` stays allowed and no name is reserved.
+    - Not `internal_module`: `internal` is an LLVM linkage and a common visibility keyword, and builtins are public.
+    - Not `$builtin` or `module..builtin`: `$` is unwanted, and an empty name breaks the pairs.
+- The runtime exports its functions with `@export(&f, .{ .name = "matcha.compiler_module.builtin.function.printInt" })` instead of `export fn matcha_print_int`.
 - `@main` stays. Its parameters become `%parameter.argc` and `%parameter.argv`.
 
 ## Modules

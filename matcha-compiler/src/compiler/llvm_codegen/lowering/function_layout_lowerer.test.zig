@@ -7,7 +7,7 @@ const lowering = llvm_codegen.lowering;
 
 pub const FunctionLayoutLowerer = struct {
     pub const lower = struct {
-        test "names a top-level function after its symbol id and name" {
+        test "names a top-level function after its name" {
             const source =
                 \\item identity(value: int): int = value;
             ;
@@ -18,10 +18,10 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_function_0__identity" });
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.function.identity" });
         }
 
-        test "names a structure function after its structure and its own symbol id and name" {
+        test "names a structure function after its structure and its own name" {
             const source =
                 \\item Point = structure {
                 \\    x: int;
@@ -37,10 +37,10 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_structure_0__Point__function_9__origin" });
+            try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.structure.Point.function.origin" });
         }
 
-        test "names a union function after its union and its own symbol id and name" {
+        test "names a union function after its union and its own name" {
             const source =
                 \\item Result = union {
                 \\    None,
@@ -56,7 +56,7 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha_union_0__Result__function_9__fromNumber" });
+            try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.union.Result.function.fromNumber" });
         }
 
         test "omits unit parameters from the parameter indices" {

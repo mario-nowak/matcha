@@ -14,7 +14,7 @@ pub const StructureTypeRenderer = struct {
 
             const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
-            try expect(rendered).toMatch("%matcha_structure_0__Node = type { i64, %String, ptr }");
+            try expect(rendered).toMatch("%matcha.structure.Node = type { i64, %String, ptr }");
         }
 
         test "omits fields without a runtime representation" {
@@ -27,7 +27,7 @@ pub const StructureTypeRenderer = struct {
 
             const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
-            try expect(rendered).toMatch("%matcha_structure_0__Record = type { i64, %String }");
+            try expect(rendered).toMatch("%matcha.structure.Record = type { i64, %String }");
         }
 
         test "renders nothing for a structure without runtime fields" {
@@ -56,8 +56,8 @@ pub const StructureTypeRenderer = struct {
             const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha_structure_0__First = type { i64 }
-                \\%matcha_structure_2__Second = type { i64 }
+                \\%matcha.structure.First = type { i64 }
+                \\%matcha.structure.Second = type { i64 }
             );
         }
     };

@@ -54,13 +54,8 @@ pub const UnionLayoutLowerer = struct {
 
         return std.fmt.allocPrint(
             self.arena,
-            "matcha_union_{d}__{s}__case_{d}__{s}",
-            .{
-                union_symbol.id,
-                union_symbol.name,
-                case_index,
-                union_case.name,
-            },
+            "matcha.union.{s}.case.{s}",
+            .{ union_symbol.name, union_case.name },
         ) catch unreachable;
     }
 };
