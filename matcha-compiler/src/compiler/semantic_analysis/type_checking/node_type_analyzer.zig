@@ -73,7 +73,7 @@ pub const NodeTypeAnalyzer = struct {
 
         const root_environment = TypeCheckEnvironment{ .function_return_type_id = null };
         for (resolved_program.program.statements) |*statement| {
-            _ = try self.checkNode(statement, .asStatement, root_environment);
+            _ = try self.checkNode(statement, .as_statement, root_environment);
         }
 
         self.type_store.assertAllFinalized();
@@ -483,7 +483,7 @@ pub const NodeTypeAnalyzer = struct {
                 environment,
             )
         else
-            try self.checkNode(binding_declaration.value, .asExpression, environment);
+            try self.checkNode(binding_declaration.value, .as_expression, environment);
 
         try self.type_id_by_symbol_id.put(symbol_id, value_type_id);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
@@ -499,7 +499,7 @@ pub const NodeTypeAnalyzer = struct {
             // Outside a function there is nothing to check the value against. Control flow validation reports the
             // misplaced return.
             if (return_statement.value) |return_value| {
-                _ = try self.checkNode(return_value, .asExpression, environment);
+                _ = try self.checkNode(return_value, .as_expression, environment);
             }
             return self.recordNodeType(node_id, self.type_store.unit_type_id);
         };
@@ -591,7 +591,7 @@ pub const NodeTypeAnalyzer = struct {
                     },
                 }
 
-                const type_id = try self.checkNode(node, .asExpression, environment);
+                const type_id = try self.checkNode(node, .as_expression, environment);
                 return .{ .type_id = type_id };
             },
             .ImplicitMemberExpression => {
@@ -599,7 +599,7 @@ pub const NodeTypeAnalyzer = struct {
                 return error.DiagnosticsEmitted;
             },
             .MemberExpression => {
-                const type_id = try self.checkNode(node, .asExpression, environment);
+                const type_id = try self.checkNode(node, .as_expression, environment);
                 const member_expression = self.member_access_by_node_id.get(node.id) orelse unreachable;
                 return switch (member_expression) {
                     .StructureInstanceFieldAccess => .{ .type_id = type_id },
@@ -630,7 +630,7 @@ pub const NodeTypeAnalyzer = struct {
                 };
             },
             .IndexExpression => {
-                const type_id = try self.checkNode(node, .asExpression, environment);
+                const type_id = try self.checkNode(node, .as_expression, environment);
                 return .{ .type_id = type_id };
             },
             else => {
@@ -646,7 +646,7 @@ pub const NodeTypeAnalyzer = struct {
         loop: *const ast.Loop,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        _ = try self.checkNode(loop.body_block, .asStatement, environment);
+        _ = try self.checkNode(loop.body_block, .as_statement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -656,7 +656,7 @@ pub const NodeTypeAnalyzer = struct {
         while_statement: *const ast.While,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const while_condition_type = try self.checkNode(while_statement.condition, .asExpression, environment);
+        const while_condition_type = try self.checkNode(while_statement.condition, .as_expression, environment);
         if (while_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
                 self.arena,
@@ -668,10 +668,10 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         if (while_statement.update) |update| {
-            _ = try self.checkNode(update, .asStatement, environment);
+            _ = try self.checkNode(update, .as_statement, environment);
         }
 
-        _ = try self.checkNode(while_statement.body_block, .asStatement, environment);
+        _ = try self.checkNode(while_statement.body_block, .as_statement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -681,7 +681,7 @@ pub const NodeTypeAnalyzer = struct {
         for_in: *const ast.ForIn,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const iterable_type_id = try self.checkNode(for_in.iterable, .asExpression, environment);
+        const iterable_type_id = try self.checkNode(for_in.iterable, .as_expression, environment);
         const item_type_id = switch (self.type_store.getType(iterable_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
@@ -698,7 +698,7 @@ pub const NodeTypeAnalyzer = struct {
         const item_symbol_id = self.resolved_program.symbol_id_by_node_id.get(node_id).?;
         try self.type_id_by_symbol_id.put(item_symbol_id, item_type_id);
 
-        _ = try self.checkNode(for_in.body_block, .asStatement, environment);
+        _ = try self.checkNode(for_in.body_block, .as_statement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -933,7 +933,7 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
         const member_name = member_expression.member_name_token.kind.Identifier;
-        const base_type_id = try self.checkNode(member_expression.base, .asExpression, environment);
+        const base_type_id = try self.checkNode(member_expression.base, .as_expression, environment);
         switch (self.type_store.getType(base_type_id)) {
             .Structure => |structure_type| {
                 const field_index = structure_type.getFieldIndex(member_name);
@@ -1144,7 +1144,7 @@ pub const NodeTypeAnalyzer = struct {
         binary_expression: *const ast.BinaryExpression,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const left_expression_type = try self.checkNode(binary_expression.left, .asExpression, environment);
+        const left_expression_type = try self.checkNode(binary_expression.left, .as_expression, environment);
         const operator_signature = try self.findBinaryOperatorSignature(
             binary_expression.operator_token,
             binary_expression.operator,
@@ -1211,7 +1211,7 @@ pub const NodeTypeAnalyzer = struct {
         unary_expression: *const ast.UnaryExpression,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const operand_type = try self.checkNode(unary_expression.operand, .asExpression, environment);
+        const operand_type = try self.checkNode(unary_expression.operand, .as_expression, environment);
         if (typing.getUnaryOperatorRules(&self.type_store, operand_type)) |rules_for_operand_type| {
             if (rules_for_operand_type.get(unary_expression.operator)) |operator_rule| {
                 return self.recordNodeType(node_id, operator_rule.return_type_id);
@@ -1248,7 +1248,7 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         for (block.statements) |*statement| {
-            _ = try self.checkNode(statement, .asStatement, environment);
+            _ = try self.checkNode(statement, .as_statement, environment);
         }
         if (block.result) |result_node| {
             const result_type = try self.checkNode(result_node, parent_node_expectation.forwarded(), environment);
@@ -1318,13 +1318,13 @@ pub const NodeTypeAnalyzer = struct {
         if_statement: *const ast.IfStatement,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const if_condition_type = try self.checkNode(if_statement.condition, .asExpression, environment);
+        const if_condition_type = try self.checkNode(if_statement.condition, .as_expression, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, if_statement.if_token, "if condition must be boolean, found {s}", .{try self.getTypeName(if_condition_type)});
             return error.DiagnosticsEmitted;
         }
 
-        _ = try self.checkNode(if_statement.then_branch, .asStatement, environment);
+        _ = try self.checkNode(if_statement.then_branch, .as_statement, environment);
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
     }
 
@@ -1335,7 +1335,7 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const if_condition_type = try self.checkNode(if_expression.condition, .asExpression, environment);
+        const if_condition_type = try self.checkNode(if_expression.condition, .as_expression, environment);
         if (if_condition_type != self.type_store.boolean_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
                 self.arena,
@@ -1444,7 +1444,7 @@ pub const NodeTypeAnalyzer = struct {
         index_expression: *const ast.IndexExpression,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const base_type_id = try self.checkNode(index_expression.base, .asExpression, environment);
+        const base_type_id = try self.checkNode(index_expression.base, .as_expression, environment);
         const element_type_id = switch (self.type_store.getType(base_type_id)) {
             .Array => |element_type_id| element_type_id,
             else => {
@@ -1453,7 +1453,7 @@ pub const NodeTypeAnalyzer = struct {
             },
         };
 
-        const index_type_id = try self.checkNode(index_expression.index, .asExpression, environment);
+        const index_type_id = try self.checkNode(index_expression.index, .as_expression, environment);
         if (index_type_id != self.type_store.integer_type_id) {
             try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, index_expression.index.primaryToken(), "array index must be int, found {s}", .{try self.getTypeName(index_type_id)});
             return error.DiagnosticsEmitted;
@@ -1468,7 +1468,7 @@ pub const NodeTypeAnalyzer = struct {
         expression_statement: *const ast.ExpressionStatement,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const expression_type = try self.checkNode(expression_statement.expression, .asStatement, environment);
+        const expression_type = try self.checkNode(expression_statement.expression, .as_statement, environment);
         if (expression_type != self.type_store.unit_type_id) {
             try self.diagnostic_store.emitErrorFromToken(expression_statement.expression.primaryToken(), "expression statement must evaluate to unit");
             return error.DiagnosticsEmitted;
@@ -1582,7 +1582,7 @@ pub const NodeTypeAnalyzer = struct {
         parent_node_expectation: ParentNodeExpectation,
         environment: TypeCheckEnvironment,
     ) CompileError!typing.TypeId {
-        const subject_type_id = try self.checkNode(match_expression.subject, .asExpression, environment);
+        const subject_type_id = try self.checkNode(match_expression.subject, .as_expression, environment);
         const subject_type = self.getType(subject_type_id);
         const exhaustiveness_class: ExhaustivenessClass = switch (subject_type) {
             .Boolean => .Boolean,
@@ -1759,7 +1759,7 @@ pub const NodeTypeAnalyzer = struct {
     ) CompileError!typing.TypeId {
         var arm_result_type: ?typing.TypeId = null;
         for (subjectless_match_expression.arms) |arm| {
-            const condition_type = try self.checkNode(arm.condition, .asExpression, environment);
+            const condition_type = try self.checkNode(arm.condition, .as_expression, environment);
             if (condition_type != self.type_store.boolean_type_id) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
                     self.arena,

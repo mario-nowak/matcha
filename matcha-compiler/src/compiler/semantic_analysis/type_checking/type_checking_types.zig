@@ -51,8 +51,8 @@ pub const ParentNodeExpectation = struct {
     node_role: NodeRole,
     type_id: ?typing.TypeId,
 
-    pub const asStatement: @This() = .{ .node_role = .Statement, .type_id = null };
-    pub const asExpression: @This() = .{ .node_role = .{ .Expression = .Value }, .type_id = null };
+    pub const as_statement: @This() = .{ .node_role = .Statement, .type_id = null };
+    pub const as_expression: @This() = .{ .node_role = .{ .Expression = .Value }, .type_id = null };
 
     pub fn asExpressionWithType(type_id: ?typing.TypeId) @This() {
         return .{ .node_role = .{ .Expression = .Value }, .type_id = type_id };

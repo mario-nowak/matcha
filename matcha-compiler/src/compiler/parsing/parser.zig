@@ -181,8 +181,8 @@ pub const Parser = struct {
         return .{
             .line = token.line,
             .column = token.column,
-            .offsetInSource = token.offsetInSource,
-            .lenInSource = token.lenInSource,
+            .offset_in_source = token.offset_in_source,
+            .length_in_source = token.length_in_source,
             .kind = .Item,
         };
     }
@@ -208,9 +208,9 @@ pub const Parser = struct {
     fn parseBindingDeclaration(self: *Parser) CompileError!ast.Node {
         const val_or_var_token = try self.lexer.next(); // consume token
 
-        const identifierToken = try self.lexer.next();
-        if (identifierToken.kind != .Identifier) {
-            try self.diagnostic_store.emitErrorFromToken(identifierToken, "expected identifier after 'val' or 'var'");
+        const identifier_token = try self.lexer.next();
+        if (identifier_token.kind != .Identifier) {
+            try self.diagnostic_store.emitErrorFromToken(identifier_token, "expected identifier after 'val' or 'var'");
             return error.DiagnosticsEmitted;
         }
 
@@ -219,9 +219,9 @@ pub const Parser = struct {
             .Colon => block: {
                 const parsed_type_annotation = try self.parseTypeAnnotation();
 
-                const equalToken = try self.lexer.next();
-                if (equalToken.kind != .Assign) {
-                    try self.diagnostic_store.emitErrorFromToken(equalToken, "expected '=' after type annotation in declaration");
+                const equal_token = try self.lexer.next();
+                if (equal_token.kind != .Assign) {
+                    try self.diagnostic_store.emitErrorFromToken(equal_token, "expected '=' after type annotation in declaration");
                     return error.DiagnosticsEmitted;
                 }
 
@@ -246,7 +246,7 @@ pub const Parser = struct {
         return self.createNode(.{
             .BindingDeclaration = .{
                 .val_token = val_or_var_token,
-                .name = identifierToken,
+                .name = identifier_token,
                 .type_annotation = type_annotation,
                 .value = value,
                 .binding_mutability = switch (val_or_var_token.kind) {
@@ -1013,7 +1013,7 @@ pub const Parser = struct {
         return pattern_parser.parse();
     }
 
-    fn parseBlock(self: *Parser, leftBraceToken: lexing.Token) CompileError!ast.Node {
+    fn parseBlock(self: *Parser, left_brace_token: lexing.Token) CompileError!ast.Node {
         var statements = std.ArrayList(ast.Node){};
         var result: ?*ast.Node = null;
 
@@ -1042,7 +1042,7 @@ pub const Parser = struct {
 
         return self.createNode(.{
             .Block = .{
-                .left_brace = leftBraceToken,
+                .left_brace = left_brace_token,
                 .statements = try statements.toOwnedSlice(self.arena),
                 .result = result,
                 .right_brace = right_brace_token,
@@ -1110,9 +1110,9 @@ pub const Parser = struct {
     fn parseExpressionStatement(self: *Parser) CompileError!ast.Node {
         const expression = try self.parseExpression(.{ .current_binding_power = 0 });
 
-        const semicolonToken = try self.lexer.next();
-        if (semicolonToken.kind != .Semicolon) {
-            try self.diagnostic_store.emitErrorFromToken(semicolonToken, "expected ';' after expression");
+        const semicolon_token = try self.lexer.next();
+        if (semicolon_token.kind != .Semicolon) {
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after expression");
             return error.DiagnosticsEmitted;
         }
 

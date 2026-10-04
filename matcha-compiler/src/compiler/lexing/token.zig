@@ -57,7 +57,7 @@ pub const TokenKind = union(enum) {
 pub const Token = struct {
     line: usize,
     column: usize,
-    offsetInSource: usize,
-    lenInSource: u32,
+    offset_in_source: usize,
+    length_in_source: u32,
     kind: TokenKind,
 };

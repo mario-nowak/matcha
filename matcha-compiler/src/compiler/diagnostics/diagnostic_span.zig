@@ -8,8 +8,8 @@ pub const DiagnosticSpan = struct {
         return .{
             .line = token.line,
             .column = token.column,
-            .byte_offset = token.offsetInSource,
-            .byte_len = token.lenInSource,
+            .byte_offset = token.offset_in_source,
+            .byte_len = token.length_in_source,
         };
     }
 };
