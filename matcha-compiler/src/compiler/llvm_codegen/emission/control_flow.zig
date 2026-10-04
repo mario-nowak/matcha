@@ -15,6 +15,7 @@ const Environment = node_emitter_module.Environment;
 const LoopContext = node_emitter_module.LoopContext;
 
 const LoopConstruct = struct {
+    kind: enum { While, Loop },
     condition: ?*ast.Node,
     update: ?*ast.Node,
     body_block: *const ast.Block,
@@ -37,11 +38,19 @@ const DecisionArmCondition = union(enum) {
     Pattern: *const ast.Pattern,
 };
 
-const DecisionLabelNames = struct {
-    arm: []const u8,
-    else_arm: []const u8,
-    next: []const u8,
-    continue_label: []const u8,
+/// Names the labels of a decision construct. An `if` has one arm, called `then`. The arms of a `match` are numbered.
+const DecisionKind = enum {
+    If,
+    Match,
+    SubjectlessMatch,
+
+    fn constructName(self: @This()) []const u8 {
+        return switch (self) {
+            .If => "if",
+            .Match => "match",
+            .SubjectlessMatch => "subjectless_match",
+        };
+    }
 };
 
 const PhiIncoming = struct {
@@ -122,12 +131,7 @@ pub fn emitIfStatement(
             .arms = &decision_arms,
             .else_arm = null,
         },
-        .{
-            .arm = "then",
-            .else_arm = "else",
-            .next = "next",
-            .continue_label = "continue",
-        },
+        .If,
         lowered_program,
         environment,
     );
@@ -152,12 +156,7 @@ pub fn emitIfExpression(
             .arms = &decision_arms,
             .else_arm = if_expression.else_block,
         },
-        .{
-            .arm = "then",
-            .else_arm = "else",
-            .next = "next",
-            .continue_label = "continue",
-        },
+        .If,
         lowered_program,
         environment,
     );
@@ -190,12 +189,7 @@ pub fn emitMatchExpression(
             .else_arm = match_expression.else_arm_expression,
             .exhaustive_without_else = exhaustive_without_else,
         },
-        .{
-            .arm = "match_arm",
-            .else_arm = "match_else",
-            .next = "match_next",
-            .continue_label = "match_continue",
-        },
+        .Match,
         lowered_program,
         environment,
     );
@@ -225,12 +219,7 @@ pub fn emitSubjectlessMatchExpression(
             .arms = decision_arms.items,
             .else_arm = subjectless_match_expression.else_arm_expression,
         },
-        .{
-            .arm = "match_arm",
-            .else_arm = "match_else",
-            .next = "match_next",
-            .continue_label = "match_continue",
-        },
+        .SubjectlessMatch,
         lowered_program,
         environment,
     );
@@ -250,6 +239,7 @@ pub fn emitLoop(
     return emitLoopConstruct(
         emitter,
         .{
+            .kind = .Loop,
             .condition = null,
             .body_block = body_block,
             .update = null,
@@ -273,6 +263,7 @@ pub fn emitWhile(
     return emitLoopConstruct(
         emitter,
         .{
+            .kind = .While,
             .condition = while_statement.condition,
             .body_block = body_block,
             .update = while_statement.update,
@@ -290,6 +281,8 @@ pub fn emitForInArrayLoop(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
+    // Created before the iterable, so an outer construct gets a lower number than the constructs nested in it.
+    const labels = emitter.function_symbol_generator.generateConstructLabels("for_in");
     const iterable_value = emitter.emitNode(for_in.iterable, lowered_program, environment).expectValue();
 
     const iterable_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(for_in.iterable.id) orelse unreachable;
@@ -339,10 +332,10 @@ pub fn emitForInArrayLoop(
     const data_value = emitter.function_symbol_generator.generateValueName();
     builder.emitLoad(data_value, data_pointer_value, "ptr");
 
-    const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
-    const loop_body_label = emitter.function_symbol_generator.generateLabel("loop_body");
-    const loop_continue_label = emitter.function_symbol_generator.generateLabel("loop_continue");
-    const loop_exit_label = emitter.function_symbol_generator.generateLabel("loop_exit");
+    const loop_header_label = labels.role("header");
+    const loop_body_label = labels.role("body");
+    const loop_continue_label = labels.role("continue");
+    const loop_exit_label = labels.role("exit");
     const previous_loop_context = environment.loop_context;
     environment.loop_context = LoopContext{
         .continue_label = loop_continue_label,
@@ -406,10 +399,14 @@ fn emitLoopConstruct(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
-    const loop_body_label = emitter.function_symbol_generator.generateLabel("loop_body");
-    const loop_continue_label = emitter.function_symbol_generator.generateLabel("loop_continue");
-    const loop_exit_label = emitter.function_symbol_generator.generateLabel("loop_exit");
+    const labels = emitter.function_symbol_generator.generateConstructLabels(switch (loop_construct.kind) {
+        .While => "while",
+        .Loop => "loop",
+    });
+    const loop_header_label = labels.role("header");
+    const loop_body_label = labels.role("body");
+    const loop_continue_label = labels.role("continue");
+    const loop_exit_label = labels.role("exit");
     const previous_loop_context = environment.loop_context;
     environment.loop_context = LoopContext{
         .continue_label = loop_continue_label,
@@ -448,11 +445,13 @@ fn emitDecisionConstruct(
     emitter: *NodeEmitter,
     node: *const ast.Node,
     decision_construct: DecisionConstruct,
-    label_names: DecisionLabelNames,
+    decision_kind: DecisionKind,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
+    // Created before the subject, so an outer construct gets a lower number than the constructs nested in it.
+    const labels = emitter.function_symbol_generator.generateConstructLabels(decision_kind.constructName());
     var subject_value: ?Value = null;
     var subject_type_id: ?typing.TypeId = null;
 
@@ -468,13 +467,13 @@ fn emitDecisionConstruct(
         .runtime_representation_by_type_id
         .get(result_type_id).?;
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
-    const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
+    const continue_label = labels.role("end");
     var incoming_values = std.ArrayList(PhiIncoming){};
     defer incoming_values.deinit(emitter.allocator);
     var continue_reachable = false;
 
     const else_label = if (decision_construct.else_arm != null)
-        emitter.function_symbol_generator.generateLabel(label_names.else_arm)
+        labels.role("else")
     else
         null;
 
@@ -492,13 +491,16 @@ fn emitDecisionConstruct(
         }
     } else {
         for (decision_construct.arms, 0..) |arm, index| {
-            const arm_label = emitter.function_symbol_generator.generateLabel(label_names.arm);
+            const arm_label = switch (decision_kind) {
+                .If => labels.role("then"),
+                .Match, .SubjectlessMatch => labels.arm(index),
+            };
             const is_last_arm = index + 1 == decision_construct.arms.len;
             const false_branches_to_continue = is_last_arm and
                 else_label == null and
                 !decision_construct.exhaustive_without_else;
             const false_label = if (!is_last_arm)
-                emitter.function_symbol_generator.generateLabel(label_names.next)
+                labels.armCondition(index + 1)
             else if (else_label) |label|
                 label
             else if (decision_construct.exhaustive_without_else)

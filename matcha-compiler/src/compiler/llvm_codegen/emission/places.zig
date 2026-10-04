@@ -233,11 +233,12 @@ pub fn emitIndexExpressionPointer(
         .{ out_of_bounds_value, negative_check_value, overflow_check_value },
     ) catch unreachable);
 
-    const panic_label = emitter.function_symbol_generator.generateLabel("index_panic");
-    const ok_label = emitter.function_symbol_generator.generateLabel("index_ok");
-    builder.emitBranchInstruction(out_of_bounds_value, &.{ panic_label, ok_label });
+    const labels = emitter.function_symbol_generator.generateConstructLabels("index");
+    const out_of_bounds_label = labels.role("out_of_bounds");
+    const in_bounds_label = labels.role("in_bounds");
+    builder.emitBranchInstruction(out_of_bounds_value, &.{ out_of_bounds_label, in_bounds_label });
 
-    builder.emitLabel(panic_label);
+    builder.emitLabel(out_of_bounds_label);
     const line = index_expression.left_bracket.line;
     const column = index_expression.left_bracket.column;
     emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
@@ -249,7 +250,7 @@ pub fn emitIndexExpressionPointer(
     );
     builder.emitTerminatorInstruction("unreachable");
 
-    builder.emitLabel(ok_label);
+    builder.emitLabel(in_bounds_label);
     const element_runtime_representation = lowered_program
         .analyzed_program
         .runtime_representation_result

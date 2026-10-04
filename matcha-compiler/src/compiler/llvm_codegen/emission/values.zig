@@ -82,12 +82,13 @@ fn emitShortCircuitOperation(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const end_label_name, const right_label_name, const deciding_value = switch (operator) {
-        .And => .{ "and_end", "and_right", "0" },
-        .Or => .{ "or_end", "or_right", "1" },
+    const construct_name, const deciding_value = switch (operator) {
+        .And => .{ "and", "0" },
+        .Or => .{ "or", "1" },
     };
-    const end_label = emitter.function_symbol_generator.generateLabel(end_label_name);
-    const right_label = emitter.function_symbol_generator.generateLabel(right_label_name);
+    const labels = emitter.function_symbol_generator.generateConstructLabels(construct_name);
+    const end_label = labels.role("end");
+    const right_label = labels.role("right");
 
     const left_value = emitter.emitNode(binary_expression.left, lowered_program, environment).expectValue();
     // The phi needs the block where the left operand ended, which is not the start block when the operand branches.

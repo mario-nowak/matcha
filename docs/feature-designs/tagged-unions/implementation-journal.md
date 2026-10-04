@@ -355,15 +355,19 @@ now not all of them are real issues. But a lot of them are.
 | Construct | Labels |
 |---|---|
 | `if` | `if.0.then`, `if.0.else`, `if.0.end` |
-| `match` | `match.0.arm.1`, `match.0.arm.1.condition`, `match.0.else`, `match.0.end` |
+| `match` | `match.0.arm.0`, `match.0.arm.1.condition`, `match.0.arm.1`, `match.0.else`, `match.0.end` |
 | subjectless `match` | the same roles with `subjectless_match` |
 | `while` | `while.0.header`, `while.0.body`, `while.0.continue`, `while.0.exit` |
-| `loop` | `loop.0.body`, `loop.0.exit` |
+| `loop` | `loop.0.header`, `loop.0.body`, `loop.0.continue`, `loop.0.exit` |
 | `for in` | `for_in.0.header`, `for_in.0.body`, `for_in.0.continue`, `for_in.0.exit` |
 | `and`, `or` | `and.0.right`, `and.0.end` |
-| index bounds check | `index.0.ok`, `index.0.panic` |
+| index bounds check | `index.0.in_bounds`, `index.0.out_of_bounds` |
 
-- The role names still need a pass over `control_flow.zig`. Some differ today, for example `next` and `continue` versus `end`.
+- `arm.<i>.condition` is the block that checks arm `i`. Arm 0 is checked in the block before it, so it has no condition label.
+- A decision construct ends in `end`, its join point. A loop keeps `continue` (the target of `continue`) and `exit` (the target of `leave`).
+- `loop` keeps `header` and `continue`, although it has no condition and no update: removing the blocks would change the IR structure, so it is not part of the rename.
+- A construct gets its number before its subexpressions are emitted, so an outer construct has a lower number than the constructs nested in it.
+- `FunctionSymbolGenerator.generateConstructLabels(name)` returns the labels of one construct: `role(name)`, `arm(index)` and `armCondition(index)`.
 
 ## Order
 
