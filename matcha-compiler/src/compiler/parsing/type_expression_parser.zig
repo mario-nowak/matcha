@@ -6,17 +6,17 @@ const type_expressions = @import("type_expressions");
 
 pub const TypeExpressionParser = struct {
     lexer: *lexing.Lexer,
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
 
     pub fn init(
         lexer: *lexing.Lexer,
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         diagnostic_store: *diagnostics.DiagnosticStore,
     ) @This() {
         return .{
             .lexer = lexer,
-            .allocator = allocator,
+            .arena = arena,
             .diagnostic_store = diagnostic_store,
         };
     }
@@ -67,7 +67,7 @@ pub const TypeExpressionParser = struct {
         self: *@This(),
         type_expression: type_expressions.TypeExpression,
     ) *type_expressions.TypeExpression {
-        const allocated_type_expression = self.allocator.create(type_expressions.TypeExpression) catch unreachable;
+        const allocated_type_expression = self.arena.create(type_expressions.TypeExpression) catch unreachable;
         allocated_type_expression.* = type_expression;
 
         return allocated_type_expression;

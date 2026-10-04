@@ -17,27 +17,21 @@ const Line = union(enum) {
 /// follows as unreachable. Instructions emitted while unreachable are dropped,
 /// so callers never have to thread reachability through their control flow.
 pub const FunctionIrBuilder = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     stack_allocation_instructions: std.ArrayList(Instruction),
     lines: std.ArrayList(Line),
     current_label: ?Label,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .stack_allocation_instructions = .{},
             .lines = .{},
             .current_label = entry_label,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.lines.deinit(self.allocator);
-        self.stack_allocation_instructions.deinit(self.allocator);
-    }
-
     pub fn reset(self: *@This()) void {
-        self.deinit();
         self.lines = .{};
         self.stack_allocation_instructions = .{};
         self.current_label = entry_label;
@@ -56,26 +50,24 @@ pub const FunctionIrBuilder = struct {
         parameter_list: []const u8,
     ) []const u8 {
         var stack_allocation_buffer = std.ArrayList(u8){};
-        defer stack_allocation_buffer.deinit(self.allocator);
         for (self.stack_allocation_instructions.items) |instruction| {
-            stack_allocation_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
+            stack_allocation_buffer.writer(self.arena).print("    {s}\n", .{instruction}) catch unreachable;
         }
 
         var instructions_buffer = std.ArrayList(u8){};
-        defer instructions_buffer.deinit(self.allocator);
         for (self.lines.items) |line| {
             switch (line) {
                 .instruction => |instruction| {
-                    instructions_buffer.writer(self.allocator).print("    {s}\n", .{instruction}) catch unreachable;
+                    instructions_buffer.writer(self.arena).print("    {s}\n", .{instruction}) catch unreachable;
                 },
                 .label => |label| {
-                    instructions_buffer.writer(self.allocator).print("{s}:\n", .{label}) catch unreachable;
+                    instructions_buffer.writer(self.arena).print("{s}:\n", .{label}) catch unreachable;
                 },
             }
         }
 
         return std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             \\define {s} @{s}({s}) {{
             \\entry:
             \\{s}{s}}}
@@ -91,7 +83,7 @@ pub const FunctionIrBuilder = struct {
     }
 
     pub fn emitLabel(self: *@This(), label: Label) void {
-        self.lines.append(self.allocator, .{ .label = label }) catch unreachable;
+        self.lines.append(self.arena, .{ .label = label }) catch unreachable;
         self.current_label = label;
     }
 
@@ -99,7 +91,7 @@ pub const FunctionIrBuilder = struct {
         if (self.current_label == null) {
             return;
         }
-        self.lines.append(self.allocator, .{ .instruction = instruction }) catch unreachable;
+        self.lines.append(self.arena, .{ .instruction = instruction }) catch unreachable;
     }
 
     /// Emits an instruction that ends the current basic block (ret, br,
@@ -113,12 +105,12 @@ pub const FunctionIrBuilder = struct {
     pub fn emitBranchInstruction(self: *@This(), condition_value: ?[]const u8, labels: []const Label) void {
         const instruction = switch (labels.len) {
             1 => std.fmt.allocPrint(
-                self.allocator,
+                self.arena,
                 "br label %{s}",
                 .{labels[0]},
             ) catch unreachable,
             2 => std.fmt.allocPrint(
-                self.allocator,
+                self.arena,
                 "br i1 {s}, label %{s}, label %{s}",
                 .{ condition_value orelse unreachable, labels[0], labels[1] },
             ) catch unreachable,
@@ -129,16 +121,16 @@ pub const FunctionIrBuilder = struct {
 
     pub fn emitStackAllocation(self: *@This(), address: Address, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = alloca {s}",
             .{ address, llvm_ir_type },
         ) catch unreachable;
-        self.stack_allocation_instructions.append(self.allocator, instruction) catch unreachable;
+        self.stack_allocation_instructions.append(self.arena, instruction) catch unreachable;
     }
 
     pub fn emitStore(self: *@This(), stored_value: []const u8, address: Address, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "store {s} {s}, ptr {s}",
             .{ llvm_ir_type, stored_value, address },
         ) catch unreachable;
@@ -154,7 +146,7 @@ pub const FunctionIrBuilder = struct {
         field_index: u32,
     ) void {
         const instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = getelementptr inbounds %{s}, ptr {s}, i32 0, i32 {d}",
             .{ result_value, llvm_type_name, base_value, field_index },
         ) catch unreachable;
@@ -170,7 +162,7 @@ pub const FunctionIrBuilder = struct {
         index: []const u8,
     ) void {
         const instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = getelementptr inbounds {s}, ptr {s}, i64 {s}",
             .{ result_value, element_llvm_type, base_value, index },
         ) catch unreachable;
@@ -179,7 +171,7 @@ pub const FunctionIrBuilder = struct {
 
     pub fn emitLoad(self: *@This(), result_value: []const u8, address: Address, llvm_ir_type: []const u8) void {
         const instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = load {s}, ptr {s}",
             .{ result_value, llvm_ir_type, address },
         ) catch unreachable;

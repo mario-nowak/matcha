@@ -98,7 +98,7 @@ pub fn emitReturnStatement(
         }
 
         const return_instruction = std.fmt.allocPrint(
-            emitter.allocator,
+            emitter.arena,
             "ret {s} {s}",
             .{
                 lowered_program.getLlvmIrType(environment.function_return_type_id),
@@ -170,9 +170,8 @@ pub fn emitMatchExpression(
     environment: *Environment,
 ) EmissionResult {
     var decision_arms = std.ArrayList(DecisionArm){};
-    defer decision_arms.deinit(emitter.allocator);
     for (match_expression.arms) |*arm| {
-        decision_arms.append(emitter.allocator, .{
+        decision_arms.append(emitter.arena, .{
             .condition = .{ .Pattern = &arm.pattern },
             .body = arm.body_expression,
         }) catch unreachable;
@@ -203,9 +202,8 @@ pub fn emitSubjectlessMatchExpression(
     environment: *Environment,
 ) EmissionResult {
     var decision_arms = std.ArrayList(DecisionArm){};
-    defer decision_arms.deinit(emitter.allocator);
     for (subjectless_match_expression.arms) |arm| {
-        decision_arms.append(emitter.allocator, .{
+        decision_arms.append(emitter.arena, .{
             .condition = .{ .Expression = arm.condition },
             .body = arm.body_expression,
         }) catch unreachable;
@@ -350,7 +348,7 @@ pub fn emitForInArrayLoop(
 
     const within_bounds_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = icmp slt i64 {s}, {s}",
         .{ within_bounds_value, current_index_value, length_value },
     ) catch unreachable);
@@ -379,7 +377,7 @@ pub fn emitForInArrayLoop(
     builder.emitLoad(loop_index_value, index_address, "i64");
     const next_index_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = add i64 {s}, 1",
         .{ next_index_value, loop_index_value },
     ) catch unreachable);
@@ -469,7 +467,6 @@ fn emitDecisionConstruct(
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
     const continue_label = labels.role("end");
     var incoming_values = std.ArrayList(PhiIncoming){};
-    defer incoming_values.deinit(emitter.allocator);
     var continue_reachable = false;
 
     const else_label = if (decision_construct.else_arm != null)
@@ -482,7 +479,7 @@ fn emitDecisionConstruct(
         if (builder.currentLabel()) |exit_label| {
             continue_reachable = true;
             if (produces_value) {
-                incoming_values.append(emitter.allocator, .{
+                incoming_values.append(emitter.arena, .{
                     .label = exit_label,
                     .value = else_value.expectValue(),
                 }) catch unreachable;
@@ -555,7 +552,7 @@ fn emitDecisionConstruct(
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;
                 if (produces_value) {
-                    incoming_values.append(emitter.allocator, .{
+                    incoming_values.append(emitter.arena, .{
                         .label = exit_label,
                         .value = arm_value.expectValue(),
                     }) catch unreachable;
@@ -575,7 +572,7 @@ fn emitDecisionConstruct(
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;
                 if (produces_value) {
-                    incoming_values.append(emitter.allocator, .{
+                    incoming_values.append(emitter.arena, .{
                         .label = exit_label,
                         .value = else_value.expectValue(),
                     }) catch unreachable;
@@ -606,12 +603,11 @@ fn emitDecisionConstruct(
     }
 
     var phi_incoming_buffer = std.ArrayList(u8){};
-    defer phi_incoming_buffer.deinit(emitter.allocator);
     for (incoming_values.items, 0..) |incoming, index| {
         if (index > 0) {
-            phi_incoming_buffer.writer(emitter.allocator).print(", ", .{}) catch unreachable;
+            phi_incoming_buffer.writer(emitter.arena).print(", ", .{}) catch unreachable;
         }
-        phi_incoming_buffer.writer(emitter.allocator).print(
+        phi_incoming_buffer.writer(emitter.arena).print(
             "[{s}, %{s}]",
             .{ incoming.value, incoming.label },
         ) catch unreachable;
@@ -619,7 +615,7 @@ fn emitDecisionConstruct(
 
     const result_value = emitter.function_symbol_generator.generateValueName();
     const phi_instruction = std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = phi {s} {s}",
         .{
             result_value,
@@ -681,7 +677,7 @@ fn emitPatternValue(
 ) Value {
     return switch (pattern.kind) {
         .IntegerLiteral => |integer_literal| std.fmt.allocPrint(
-            emitter.allocator,
+            emitter.arena,
             "{d}",
             .{integer_literal.value()},
         ) catch unreachable,
@@ -695,7 +691,7 @@ fn emitPatternValue(
         ),
         // A case pattern matches when the subject stores the case index of the pattern, so the case index is the value
         // that `UnionCaseIndexComparison` compares the loaded case index with.
-        .Case => std.fmt.allocPrint(emitter.allocator, "{d}", .{
+        .Case => std.fmt.allocPrint(emitter.arena, "{d}", .{
             lowered_program.analyzed_program.union_case_index_by_pattern_id.get(pattern.id).?,
         }) catch unreachable,
     };

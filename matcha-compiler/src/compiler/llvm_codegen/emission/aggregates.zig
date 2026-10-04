@@ -133,7 +133,7 @@ pub fn emitUnionConstruction(
     // Allocate the structure of the constructed case
     const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
     const union_case_layout = union_layout.cases[case_index];
-    const union_case_llvm_type = std.fmt.allocPrint(emitter.allocator, "%{s}", .{union_case_layout.llvm_type_name}) catch unreachable;
+    const union_case_llvm_type = std.fmt.allocPrint(emitter.arena, "%{s}", .{union_case_layout.llvm_type_name}) catch unreachable;
     const union_header_value = emitter.runtime_call_emitter.emitAllocateCall(
         emitter.function_ir_builder,
         emitter.function_symbol_generator,
@@ -150,7 +150,7 @@ pub fn emitUnionConstruction(
         lowering.lowering_types.union_case_index_field_index,
     );
     emitter.function_ir_builder.emitStore(
-        std.fmt.allocPrint(emitter.allocator, "{d}", .{case_index}) catch unreachable,
+        std.fmt.allocPrint(emitter.arena, "{d}", .{case_index}) catch unreachable,
         case_index_pointer_value,
         lowering.lowering_types.union_case_index_llvm_type,
     );
@@ -190,7 +190,7 @@ pub fn emitStructureLiteral(
 
     // Emit the field values before the allocation, so that an early exit in a field value leaves no wasted
     // allocation behind.
-    const field_value_emission_results = emitter.allocator.alloc(EmissionResult, fields.len) catch unreachable;
+    const field_value_emission_results = emitter.arena.alloc(EmissionResult, fields.len) catch unreachable;
     for (fields, field_value_emission_results) |field, *field_value_emission_result| {
         field_value_emission_result.* = emitter.emitNode(field.value, lowered_program, environment);
     }
@@ -199,7 +199,7 @@ pub fn emitStructureLiteral(
         .Present => |structure_layout| emitter.runtime_call_emitter.emitAllocateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
-            std.fmt.allocPrint(emitter.allocator, "%{s}", .{structure_layout.llvm_type_name}) catch unreachable,
+            std.fmt.allocPrint(emitter.arena, "%{s}", .{structure_layout.llvm_type_name}) catch unreachable,
             1,
         ),
         // Structures without a layout only allocate a single byte for identity comparison
@@ -264,7 +264,7 @@ pub fn emitArrayLiteral(
 
     // Emit the elements before the allocations, so that an early exit in an element leaves no wasted allocation
     // behind.
-    const element_emission_results = emitter.allocator.alloc(EmissionResult, length) catch unreachable;
+    const element_emission_results = emitter.arena.alloc(EmissionResult, length) catch unreachable;
     for (array_literal.elements, element_emission_results) |*element, *element_emission_result| {
         element_emission_result.* = emitter.emitNode(element, lowered_program, environment);
     }
@@ -284,7 +284,7 @@ pub fn emitArrayLiteral(
     for (element_emission_results, 0..) |element_value, index| {
         if (element_runtime_representation.hasRuntimeRepresentation()) {
             const element_pointer_value = emitter.function_symbol_generator.generateValueName();
-            const index_value = std.fmt.allocPrint(emitter.allocator, "{d}", .{index}) catch unreachable;
+            const index_value = std.fmt.allocPrint(emitter.arena, "{d}", .{index}) catch unreachable;
             builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 
             builder.emitStore(element_value.expectValue(), element_pointer_value, element_llvm_type);
@@ -299,7 +299,7 @@ pub fn emitArrayLiteral(
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
+    const length_number_string = std.fmt.allocPrint(emitter.arena, "{d}", .{length}) catch unreachable;
     builder.emitStore(length_number_string, length_pointer_value, "i64");
 
     const capacity_pointer_value = emitter.function_symbol_generator.generateValueName();

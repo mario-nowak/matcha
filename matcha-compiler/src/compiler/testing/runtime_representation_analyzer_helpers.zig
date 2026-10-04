@@ -15,17 +15,17 @@ const RuntimeRepresentationAnalyzerFixture = struct {
 };
 
 pub fn setupRuntimeRepresentationAnalyzerFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !RuntimeRepresentationAnalyzerFixture {
-    const node_type_analyzer_fixture = try setupNodeTypeAnalyzerFixture(arena, source);
+    const node_type_analyzer_fixture = try setupNodeTypeAnalyzerFixture(arena_state, source);
     const type_check_result = try node_type_analyzer_fixture.node_type_analyzer.analyzeProgram(
         &node_type_analyzer_fixture.resolved_program,
         node_type_analyzer_fixture.exit_behavior_by_node_id,
     );
 
-    const runtime_representation_analyzer = try arena.allocator().create(RuntimeRepresentationAnalyzer);
-    runtime_representation_analyzer.* = RuntimeRepresentationAnalyzer.init(arena.allocator());
+    const runtime_representation_analyzer = try arena_state.allocator().create(RuntimeRepresentationAnalyzer);
+    runtime_representation_analyzer.* = RuntimeRepresentationAnalyzer.init(arena_state.allocator());
 
     return .{
         .resolved_program = node_type_analyzer_fixture.resolved_program,

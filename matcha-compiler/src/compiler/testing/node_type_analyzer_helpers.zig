@@ -19,20 +19,20 @@ const NodeTypeAnalyzerFixture = struct {
 };
 
 pub fn setupNodeTypeAnalyzerFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !NodeTypeAnalyzerFixture {
-    const name_resolver_fixture = try setupNameResolverFixture(arena, source);
+    const name_resolver_fixture = try setupNameResolverFixture(arena_state, source);
     const resolved_program = try name_resolver_fixture.resolver.resolveProgram(&name_resolver_fixture.program);
 
     var control_flow_validator = ControlFlowValidator.init(
         StructuralValidator.init(name_resolver_fixture.diagnostic_store),
-        ExitBehaviorAnalyzer.init(arena.allocator(), name_resolver_fixture.diagnostic_store),
+        ExitBehaviorAnalyzer.init(arena_state.allocator(), name_resolver_fixture.diagnostic_store),
     );
     const exit_behavior_by_node_id = try control_flow_validator.validateProgram(&name_resolver_fixture.program);
 
-    const node_type_analyzer = try arena.allocator().create(NodeTypeAnalyzer);
-    node_type_analyzer.* = NodeTypeAnalyzer.init(arena.allocator(), name_resolver_fixture.diagnostic_store);
+    const node_type_analyzer = try arena_state.allocator().create(NodeTypeAnalyzer);
+    node_type_analyzer.* = NodeTypeAnalyzer.init(arena_state.allocator(), name_resolver_fixture.diagnostic_store);
 
     return .{
         .resolved_program = resolved_program,

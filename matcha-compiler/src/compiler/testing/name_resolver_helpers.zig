@@ -11,14 +11,14 @@ const NameResolverFixture = struct {
 };
 
 pub fn setupNameResolverFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !NameResolverFixture {
-    const allocator = arena.allocator();
-    const parser_pipeline = try setupParserPipeline(arena, source);
+    const arena = arena_state.allocator();
+    const parser_pipeline = try setupParserPipeline(arena_state, source);
     const program = try parser_pipeline.parser.parse();
-    const resolver = try allocator.create(NameResolver);
-    resolver.* = NameResolver.init(allocator, parser_pipeline.diagnostic_store);
+    const resolver = try arena.create(NameResolver);
+    resolver.* = NameResolver.init(arena, parser_pipeline.diagnostic_store);
 
     return .{
         .program = program,

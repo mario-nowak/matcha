@@ -10,12 +10,12 @@ const ParserPipeline = struct {
     parser: *parsing.Parser,
 };
 
-pub fn setupParserPipeline(arena: *std.heap.ArenaAllocator, source: []const u8) !ParserPipeline {
-    const allocator = arena.allocator();
-    const lexer_pipeline = try setupLexerPipeline(arena, source);
+pub fn setupParserPipeline(arena_state: *std.heap.ArenaAllocator, source: []const u8) !ParserPipeline {
+    const arena = arena_state.allocator();
+    const lexer_pipeline = try setupLexerPipeline(arena_state, source);
 
-    const parser = try allocator.create(parsing.Parser);
-    parser.* = parsing.Parser.init(lexer_pipeline.lexer.*, allocator, lexer_pipeline.diagnostic_store);
+    const parser = try arena.create(parsing.Parser);
+    parser.* = parsing.Parser.init(lexer_pipeline.lexer.*, arena, lexer_pipeline.diagnostic_store);
 
     return .{
         .diagnostic_store = lexer_pipeline.diagnostic_store,

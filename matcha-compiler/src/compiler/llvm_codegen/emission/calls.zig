@@ -99,7 +99,6 @@ fn emitUserFunctionCall(
     environment: *Environment,
 ) EmissionResult {
     var argument_values = std.ArrayList(Value){};
-    defer argument_values.deinit(emitter.allocator);
 
     if (user_function.receiver_node_id) |receiver_node_id| {
         const callee_member_expression = switch (call_expression.callee.kind) {
@@ -111,7 +110,7 @@ fn emitUserFunctionCall(
         const receiver_emission_result = emitter.emitNode(callee_member_expression.base, lowered_program, environment);
         switch (receiver_emission_result) {
             .value => |receiver_value| argument_values.append(
-                emitter.allocator,
+                emitter.arena,
                 receiver_value,
             ) catch unreachable,
             else => {},
@@ -125,7 +124,7 @@ fn emitUserFunctionCall(
             else => continue,
         };
         argument_values.append(
-            emitter.allocator,
+            emitter.arena,
             argument_value,
         ) catch unreachable;
     }
@@ -204,7 +203,6 @@ fn emitDirectFunctionCall(
     const function_layout = lowered_program.function_layout_by_symbol_id.get(callee_symbol_id) orelse unreachable;
 
     var argument_list_buffer = std.ArrayList(u8){};
-    defer argument_list_buffer.deinit(emitter.allocator);
 
     for (function_layout.parameter_index_kind_by_definition_index, 0..) |parameter_layout_index_kind, parameter_definition_index| {
         const parameter_layout_index = switch (parameter_layout_index_kind) {
@@ -212,14 +210,14 @@ fn emitDirectFunctionCall(
             .Index => |index| index,
         };
         if (parameter_layout_index > 0) {
-            argument_list_buffer.writer(emitter.allocator).print(", ", .{}) catch unreachable;
+            argument_list_buffer.writer(emitter.arena).print(", ", .{}) catch unreachable;
         }
         const parameter_symbol_id = function_symbol_information.parameter_symbol_ids[parameter_definition_index];
         const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
         const parameter_llvm_type = lowered_program.getLlvmIrType(parameter_type_id);
         const argument_value = argument_values[parameter_layout_index];
 
-        argument_list_buffer.writer(emitter.allocator).print(
+        argument_list_buffer.writer(emitter.arena).print(
             "{s} {s}",
             .{ parameter_llvm_type, argument_value },
         ) catch unreachable;
@@ -236,7 +234,7 @@ fn emitDirectFunctionCall(
     switch (function_layout.return_type_value_kind) {
         .Absent => {
             const call_instruction = std.fmt.allocPrint(
-                emitter.allocator,
+                emitter.arena,
                 "call void @{s}({s})",
                 .{ function_name, argument_list_buffer.items },
             ) catch unreachable;
@@ -247,7 +245,7 @@ fn emitDirectFunctionCall(
         .Present => {
             const result_value = emitter.function_symbol_generator.generateValueName();
             const call_instruction = std.fmt.allocPrint(
-                emitter.allocator,
+                emitter.arena,
                 "{s} = call {s} @{s}({s})",
                 .{ result_value, function_return_llvm_ir_type, function_name, argument_list_buffer.items },
             ) catch unreachable;
@@ -299,7 +297,7 @@ fn emitArrayAppendCall(
         // increment length of the array
         const new_length_value = emitter.function_symbol_generator.generateValueName();
         emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
+            emitter.arena,
             "{s} = add i64 {s}, 1",
             .{ new_length_value, length_value },
         ) catch unreachable);

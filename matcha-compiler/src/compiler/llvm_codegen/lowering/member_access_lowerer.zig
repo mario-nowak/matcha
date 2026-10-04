@@ -3,22 +3,16 @@ const semantic_analysis = @import("semantic_analysis");
 const lowering_types = @import("lowering_types.zig");
 
 pub const MemberAccessLowerer = struct {
-    allocator: std.mem.Allocator,
-    decision_by_node_id: lowering_types.MemberAccessDecisionByNodeId,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .decision_by_node_id = lowering_types.MemberAccessDecisionByNodeId.init(allocator),
+            .arena = arena,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.decision_by_node_id.deinit();
-    }
-
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.MemberAccessDecisionByNodeId {
-        self.decision_by_node_id.clearRetainingCapacity();
+        var decision_by_node_id = lowering_types.MemberAccessDecisionByNodeId.init(self.arena);
 
         var member_access_iterator = analyzed_program.member_access_by_node_id.iterator();
         while (member_access_iterator.next()) |entry| {
@@ -43,9 +37,9 @@ pub const MemberAccessLowerer = struct {
                 .StringInstanceFieldAccess => .StringLength,
                 .IntegerInstanceMethodAccess => .IntegerMethod,
             };
-            self.decision_by_node_id.put(node_id, decision) catch unreachable;
+            decision_by_node_id.put(node_id, decision) catch unreachable;
         }
 
-        return self.decision_by_node_id;
+        return decision_by_node_id;
     }
 };

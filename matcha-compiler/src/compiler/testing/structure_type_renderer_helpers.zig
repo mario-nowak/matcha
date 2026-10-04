@@ -11,14 +11,14 @@ const StructureTypeRendererFixture = struct {
 };
 
 pub fn setupStructureTypeRendererFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !StructureTypeRendererFixture {
-    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
+    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena_state, source);
     const lowered_program = try lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
 
-    const structure_type_renderer = try arena.allocator().create(StructureTypeRenderer);
-    structure_type_renderer.* = StructureTypeRenderer.init(arena.allocator());
+    const structure_type_renderer = try arena_state.allocator().create(StructureTypeRenderer);
+    structure_type_renderer.* = StructureTypeRenderer.init(arena_state.allocator());
 
     return .{
         .lowered_program = lowered_program,

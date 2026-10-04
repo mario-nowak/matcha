@@ -6,19 +6,19 @@ const ast = @import("ast");
 
 pub const PatternParser = struct {
     lexer: *lexing.Lexer,
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     next_node_id: *ast.NodeId,
 
     pub fn init(
         lexer: *lexing.Lexer,
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         diagnostic_store: *diagnostics.DiagnosticStore,
         next_node_id: *ast.NodeId,
     ) @This() {
         return .{
             .lexer = lexer,
-            .allocator = allocator,
+            .arena = arena,
             .diagnostic_store = diagnostic_store,
             .next_node_id = next_node_id,
         };
@@ -38,7 +38,7 @@ pub const PatternParser = struct {
             .Identifier => {
                 if ((try self.lexer.peek()).kind != .Dot) {
                     try self.diagnostic_store.emitFormattedErrorFromToken(
-                        self.allocator,
+                        self.arena,
                         token,
                         "a pattern must be a literal or a case, use a subjectless match to compare against '{s}'",
                         .{token.kind.Identifier},

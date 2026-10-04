@@ -57,19 +57,15 @@ pub const Environment = struct {
     function_return_type_id: typing.TypeId,
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         loop_context: ?LoopContext,
         function_return_type_id: typing.TypeId,
     ) @This() {
         return .{
-            .address_by_symbol_id = AddressBySymbolId.init(allocator),
+            .address_by_symbol_id = AddressBySymbolId.init(arena),
             .loop_context = loop_context,
             .function_return_type_id = function_return_type_id,
         };
-    }
-
-    pub fn deinit(self: *@This()) void {
-        self.address_by_symbol_id.deinit();
     }
 };
 
@@ -77,7 +73,7 @@ pub const Environment = struct {
 /// Reachability is not threaded through calls: it lives in the
 /// FunctionIrBuilder cursor (see its doc comment).
 pub const NodeEmitter = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     runtime_call_emitter: *RuntimeCallEmitter,
@@ -85,7 +81,7 @@ pub const NodeEmitter = struct {
     string_literal_emitter: *StringLiteralEmitter,
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
         runtime_call_emitter: *RuntimeCallEmitter,
@@ -93,7 +89,7 @@ pub const NodeEmitter = struct {
         string_literal_emitter: *StringLiteralEmitter,
     ) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = function_ir_builder,
             .runtime_call_emitter = runtime_call_emitter,
@@ -102,14 +98,10 @@ pub const NodeEmitter = struct {
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
     pub fn emitStringParts(self: *@This(), string_value: Value) RuntimeStringParts {
         const pointer_value = self.function_symbol_generator.generateValueName();
         const pointer_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = extractvalue {s} {s}, 0",
             .{ pointer_value, lowering.llvm_type.string_llvm_type, string_value },
         ) catch unreachable;
@@ -117,7 +109,7 @@ pub const NodeEmitter = struct {
 
         const length_value = self.function_symbol_generator.generateValueName();
         const length_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = extractvalue {s} {s}, 1",
             .{ length_value, lowering.llvm_type.string_llvm_type, string_value },
         ) catch unreachable;
@@ -143,7 +135,7 @@ pub const NodeEmitter = struct {
                 environment,
             ),
             .IntegerLiteral => |token| return .{ .value = std.fmt.allocPrint(
-                self.allocator,
+                self.arena,
                 "{d}",
                 .{token.kind.IntLiteral},
             ) catch unreachable },

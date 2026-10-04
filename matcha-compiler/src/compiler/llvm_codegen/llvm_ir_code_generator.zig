@@ -17,10 +17,6 @@ pub const LlvmIrCodeGenerator = struct {
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
     pub fn generateLlvmIr(
         self: *@This(),
         analyzed_program: *const semantic_analysis.AnalyzedProgram,

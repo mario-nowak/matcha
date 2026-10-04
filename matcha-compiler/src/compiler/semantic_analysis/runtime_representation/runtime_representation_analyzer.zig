@@ -15,17 +15,17 @@ const RuntimeRepresentationAnalysisState = union(enum) {
 const RuntimeRepresentationAnalysisStateByTypeId = std.AutoHashMap(typing.TypeId, RuntimeRepresentationAnalysisState);
 
 pub const RuntimeRepresentationAnalyzer = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     runtime_representation_by_node_id: RuntimeRepresentationByNodeId,
     runtime_representation_by_type_id: RuntimeRepresentationByTypeId,
     analysis_state_by_type_id: RuntimeRepresentationAnalysisStateByTypeId,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(allocator),
-            .runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(allocator),
-            .analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(allocator),
+            .arena = arena,
+            .runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(arena),
+            .runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(arena),
+            .analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(arena),
         };
     }
 
@@ -33,9 +33,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self: *@This(),
         type_check_result: *const type_checking.TypeCheckResult,
     ) anyerror!runtime_representation_types.RuntimeRepresentationResult {
-        self.runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(self.allocator);
-        self.runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(self.allocator);
-        self.analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(self.allocator);
+        self.runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(self.arena);
+        self.runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(self.arena);
+        self.analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(self.arena);
 
         // First we need to seed the runtime representation of every type that we encountered during the type analysis.
         try self.seedRuntimeRepresentationByTypeId(&type_check_result.type_store);

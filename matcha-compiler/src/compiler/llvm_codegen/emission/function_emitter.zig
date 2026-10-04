@@ -17,21 +17,21 @@ const NodeEmitter = node_emitter_module.NodeEmitter;
 const Environment = node_emitter_module.Environment;
 
 pub const FunctionEmitter = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     runtime_call_emitter: *RuntimeCallEmitter,
     node_emitter: *NodeEmitter,
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
         runtime_call_emitter: *RuntimeCallEmitter,
         node_emitter: *NodeEmitter,
     ) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = function_ir_builder,
             .runtime_call_emitter = runtime_call_emitter,
@@ -39,15 +39,10 @@ pub const FunctionEmitter = struct {
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
     pub fn emitMainFunction(self: *@This(), lowered_program: *const lowering.LoweredProgram) []const u8 {
         self.resetCurrentFunctionState();
 
-        var environment = Environment.init(self.allocator, null, lowered_program.analyzed_program.type_store.integer_type_id);
-        defer environment.deinit();
+        var environment = Environment.init(self.arena, null, lowered_program.analyzed_program.type_store.integer_type_id);
 
         // Boehm GC asks portable programs to initialize it at start-up, before the first allocation.
         self.runtime_call_emitter.emitInitiateGarbageCollectorCall(self.function_ir_builder);
@@ -89,9 +84,7 @@ pub const FunctionEmitter = struct {
         const function_layout = lowered_program.function_layout_by_symbol_id.get(function_symbol_id) orelse unreachable;
 
         var parameter_list_buffer = std.ArrayList(u8){};
-        defer parameter_list_buffer.deinit(self.allocator);
-        var environment = Environment.init(self.allocator, null, function_return_type_id);
-        defer environment.deinit();
+        var environment = Environment.init(self.arena, null, function_return_type_id);
 
         for (function_symbol_information.parameter_symbol_ids, 0..) |parameter_symbol_id, index| {
             const parameter_index = switch (function_layout.parameter_index_kind_by_definition_index[index]) {
@@ -105,9 +98,9 @@ pub const FunctionEmitter = struct {
             const parameter_value = self.function_symbol_generator.parameterName(parameter_symbol.name);
 
             if (parameter_index > 0) {
-                parameter_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
+                parameter_list_buffer.writer(self.arena).print(", ", .{}) catch unreachable;
             }
-            parameter_list_buffer.writer(self.allocator).print(
+            parameter_list_buffer.writer(self.arena).print(
                 "{s} {s}",
                 .{ parameter_llvm_ir_type, parameter_value },
             ) catch unreachable;
@@ -134,7 +127,7 @@ pub const FunctionEmitter = struct {
                 .Absent => self.function_ir_builder.emitTerminatorInstruction("ret void"),
                 .Present => {
                     const return_instruction = std.fmt.allocPrint(
-                        self.allocator,
+                        self.arena,
                         "ret {s} {s}",
                         .{ function_return_llvm_ir_type, body_value.expectValue() },
                     ) catch unreachable;

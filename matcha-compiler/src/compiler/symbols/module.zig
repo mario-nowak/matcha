@@ -118,10 +118,10 @@ pub const SymbolTable = struct {
         }
     };
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .preliminary_entries = std.AutoHashMap(SymbolId, PreliminarySymbol).init(allocator),
-            .entries = std.AutoHashMap(SymbolId, Symbol).init(allocator),
+            .preliminary_entries = std.AutoHashMap(SymbolId, PreliminarySymbol).init(arena),
+            .entries = std.AutoHashMap(SymbolId, Symbol).init(arena),
             .next_symbol_id = 0,
         };
     }

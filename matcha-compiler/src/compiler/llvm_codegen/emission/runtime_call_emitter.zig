@@ -15,18 +15,14 @@ pub const RuntimeStringParts = struct {
 /// Emits calls into the Matcha runtime. It records every runtime function it emits a call to, so the module
 /// declares exactly the functions it calls.
 pub const RuntimeCallEmitter = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     runtime_requirements: runtime_symbols.RuntimeRequirements,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .runtime_requirements = .{},
         };
-    }
-
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
     }
 
     pub fn reset(self: *@This()) void {
@@ -38,7 +34,7 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
     ) void {
         const init_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}()",
             .{runtime_symbols.runtime_initiate_garbage_collector_function_name},
         ) catch unreachable;
@@ -50,7 +46,7 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
     ) void {
         const init_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(i32 %parameter.argc, ptr %parameter.argv)",
             .{runtime_symbols.runtime_init_arguments_function_name},
         ) catch unreachable;
@@ -64,7 +60,7 @@ pub const RuntimeCallEmitter = struct {
     ) void {
         self.runtime_requirements.print_int = true;
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(i64 {s})",
             .{ runtime_symbols.builtin_print_int_function_name, integer_value },
         ) catch unreachable);
@@ -77,7 +73,7 @@ pub const RuntimeCallEmitter = struct {
     ) void {
         self.runtime_requirements.print_string = true;
         const print_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(ptr {s}, i64 {s})",
             .{
                 runtime_symbols.builtin_print_string_function_name,
@@ -124,7 +120,7 @@ pub const RuntimeCallEmitter = struct {
         self.runtime_requirements.get_arguments = true;
         const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call ptr @{s}()",
             .{ result_value, runtime_symbols.builtin_get_arguments_function_name },
         ) catch unreachable);
@@ -142,7 +138,7 @@ pub const RuntimeCallEmitter = struct {
         const result_address = symbol_generator.generateSyntheticAddressName();
         builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
                 runtime_symbols.runtime_string_concatenate_function_name,
@@ -169,7 +165,7 @@ pub const RuntimeCallEmitter = struct {
         self.runtime_requirements.string_compare = true;
         const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call i1 @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
                 result_value,
@@ -208,7 +204,7 @@ pub const RuntimeCallEmitter = struct {
         self.runtime_requirements.string_split = true;
         const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call ptr @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
                 result_value,
@@ -231,7 +227,7 @@ pub const RuntimeCallEmitter = struct {
         self.runtime_requirements.string_to_int = true;
         const result_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call i64 @{s}(ptr {s}, i64 {s})",
             .{
                 result_value,
@@ -253,7 +249,7 @@ pub const RuntimeCallEmitter = struct {
         const result_address = symbol_generator.generateSyntheticAddressName();
         builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(ptr {s}, i64 {s})",
             .{
                 runtime_symbols.builtin_int_to_string_method_name,
@@ -277,7 +273,7 @@ pub const RuntimeCallEmitter = struct {
     ) void {
         self.runtime_requirements.panic_index_out_of_bounds = true;
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(i64 {d}, i64 {d}, i64 {s}, i64 {s})",
             .{
                 runtime_symbols.runtime_panic_index_out_of_bounds_function_name,
@@ -292,7 +288,7 @@ pub const RuntimeCallEmitter = struct {
     pub fn emitPanicDivisionByZeroCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) void {
         self.runtime_requirements.panic_division_by_zero = true;
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(i64 {d}, i64 {d})",
             .{ runtime_symbols.runtime_panic_division_by_zero_function_name, line, column },
         ) catch unreachable);
@@ -301,7 +297,7 @@ pub const RuntimeCallEmitter = struct {
     pub fn emitPanicDivisionOverflowCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) void {
         self.runtime_requirements.panic_division_overflow = true;
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(i64 {d}, i64 {d})",
             .{ runtime_symbols.runtime_panic_division_overflow_function_name, line, column },
         ) catch unreachable);
@@ -317,7 +313,7 @@ pub const RuntimeCallEmitter = struct {
         self.runtime_requirements.array_append_slot = true;
         const slot_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call ptr @{s}(ptr {s}, i64 {s})",
             .{
                 slot_value,
@@ -340,7 +336,7 @@ pub const RuntimeCallEmitter = struct {
     ) Value {
         const memory_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call ptr @{s}(i64 {s})",
             .{ memory_value, runtime_symbols.runtime_allocate_function_name, self.sizeOf(llvm_type, count) },
         ) catch unreachable);
@@ -357,7 +353,7 @@ pub const RuntimeCallEmitter = struct {
     ) Value {
         const memory_value = symbol_generator.generateValueName();
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = call ptr @{s}(i64 {d})",
             .{ memory_value, runtime_symbols.runtime_allocate_atomic_function_name, byte_count },
         ) catch unreachable);
@@ -369,7 +365,7 @@ pub const RuntimeCallEmitter = struct {
     /// this computes the address of the element after the last one, starting from a null pointer.
     fn sizeOf(self: *const @This(), llvm_type: []const u8, count: usize) []const u8 {
         return std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "ptrtoint (ptr getelementptr ({s}, ptr null, i64 {d}) to i64)",
             .{ llvm_type, count },
         ) catch unreachable;
@@ -385,7 +381,7 @@ pub const RuntimeCallEmitter = struct {
         const result_address = symbol_generator.generateSyntheticAddressName();
         builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s})",
             .{
                 runtime_function_name,
@@ -410,7 +406,7 @@ pub const RuntimeCallEmitter = struct {
         const result_address = symbol_generator.generateSyntheticAddressName();
         builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "call void @{s}(ptr {s})",
             .{ runtime_function_name, result_address },
         ) catch unreachable);

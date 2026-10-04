@@ -11,10 +11,10 @@ pub const Scope = struct {
     parent: ?*const Scope,
     bindings: ScopeBindings,
 
-    pub fn init(allocator: std.mem.Allocator, parent: ?*const Scope) @This() {
+    pub fn init(arena: std.mem.Allocator, parent: ?*const Scope) @This() {
         return .{
             .parent = parent,
-            .bindings = ScopeBindings.init(allocator),
+            .bindings = ScopeBindings.init(arena),
         };
     }
 

@@ -214,21 +214,21 @@ pub fn emitIndexExpressionPointer(
 
     const negative_check_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = icmp slt i64 {s}, 0",
         .{ negative_check_value, index_value },
     ) catch unreachable);
 
     const overflow_check_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = icmp sge i64 {s}, {s}",
         .{ overflow_check_value, index_value, length_value },
     ) catch unreachable);
 
     const out_of_bounds_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = or i1 {s}, {s}",
         .{ out_of_bounds_value, negative_check_value, overflow_check_value },
     ) catch unreachable);

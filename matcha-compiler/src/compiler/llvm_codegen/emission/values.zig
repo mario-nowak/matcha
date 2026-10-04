@@ -96,7 +96,7 @@ fn emitCheckedDivision(
     const no_overflow_label = labels.role("no_overflow");
 
     const zero_divisor_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, 0", .{ zero_divisor_value, divisor_value }) catch unreachable);
+    builder.emitInstruction(std.fmt.allocPrint(emitter.arena, "{s} = icmp eq i64 {s}, 0", .{ zero_divisor_value, divisor_value }) catch unreachable);
     builder.emitBranchInstruction(zero_divisor_value, &.{ zero_divisor_label, nonzero_divisor_label });
 
     builder.emitLabel(zero_divisor_label);
@@ -105,11 +105,11 @@ fn emitCheckedDivision(
 
     builder.emitLabel(nonzero_divisor_label);
     const minimum_dividend_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, {d}", .{ minimum_dividend_value, dividend_value, std.math.minInt(i64) }) catch unreachable);
+    builder.emitInstruction(std.fmt.allocPrint(emitter.arena, "{s} = icmp eq i64 {s}, {d}", .{ minimum_dividend_value, dividend_value, std.math.minInt(i64) }) catch unreachable);
     const negative_one_divisor_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = icmp eq i64 {s}, -1", .{ negative_one_divisor_value, divisor_value }) catch unreachable);
+    builder.emitInstruction(std.fmt.allocPrint(emitter.arena, "{s} = icmp eq i64 {s}, -1", .{ negative_one_divisor_value, divisor_value }) catch unreachable);
     const overflow_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = and i1 {s}, {s}", .{ overflow_value, minimum_dividend_value, negative_one_divisor_value }) catch unreachable);
+    builder.emitInstruction(std.fmt.allocPrint(emitter.arena, "{s} = and i1 {s}, {s}", .{ overflow_value, minimum_dividend_value, negative_one_divisor_value }) catch unreachable);
     builder.emitBranchInstruction(overflow_value, &.{ overflow_label, no_overflow_label });
 
     builder.emitLabel(overflow_label);
@@ -118,7 +118,7 @@ fn emitCheckedDivision(
 
     builder.emitLabel(no_overflow_label);
     const quotient_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitInstruction(std.fmt.allocPrint(emitter.allocator, "{s} = sdiv i64 {s}, {s}", .{ quotient_value, dividend_value, divisor_value }) catch unreachable);
+    builder.emitInstruction(std.fmt.allocPrint(emitter.arena, "{s} = sdiv i64 {s}, {s}", .{ quotient_value, dividend_value, divisor_value }) catch unreachable);
 
     return quotient_value;
 }
@@ -157,7 +157,7 @@ fn emitShortCircuitOperation(
     builder.emitLabel(end_label);
     const result_value = emitter.function_symbol_generator.generateValueName();
     const phi_instruction = std.fmt.allocPrint(
-        emitter.allocator,
+        emitter.arena,
         "{s} = phi i1 [{s}, %{s}], [{s}, %{s}]",
         .{ result_value, deciding_value, left_exit_label, right_value, right_exit_label },
     ) catch unreachable;
@@ -179,12 +179,12 @@ pub fn emitUnaryExpression(
     const instruction_type = lowered_program.getLlvmIrType(operation_type);
     const instruction = switch (unary_expression.operator) {
         .Negate => std.fmt.allocPrint(
-            emitter.allocator,
+            emitter.arena,
             "{s} = sub {s} 0, {s}",
             .{ result_value, instruction_type, operand_value },
         ) catch unreachable,
         .Not => std.fmt.allocPrint(
-            emitter.allocator,
+            emitter.arena,
             "{s} = xor {s} {s}, 1",
             .{ result_value, instruction_type, operand_value },
         ) catch unreachable,
@@ -219,7 +219,7 @@ pub fn emitLoweredBinaryOperation(
 
             const result_value = emitter.function_symbol_generator.generateValueName();
             const instruction = std.fmt.allocPrint(
-                emitter.allocator,
+                emitter.arena,
                 "{s} = {s} {s} {s}, {s}",
                 .{ result_value, operator_instruction, llvm_ir_type, left_value, right_value },
             ) catch unreachable;
@@ -237,7 +237,7 @@ pub fn emitLoweredBinaryOperation(
 
             const result_value = emitter.function_symbol_generator.generateValueName();
             const instruction = std.fmt.allocPrint(
-                emitter.allocator,
+                emitter.arena,
                 "{s} = {s} {s} {s}, {s}",
                 .{ result_value, operator_instruction, union_case_index_type, union_case_value, right_value },
             ) catch unreachable;
@@ -266,7 +266,7 @@ pub fn emitLoweredBinaryOperation(
             );
             const result_value = emitter.function_symbol_generator.generateValueName();
             emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-                emitter.allocator,
+                emitter.arena,
                 "{s} = xor i1 {s}, 1",
                 .{ result_value, equal_value },
             ) catch unreachable);

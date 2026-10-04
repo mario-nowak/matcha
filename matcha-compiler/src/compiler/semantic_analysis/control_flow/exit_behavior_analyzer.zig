@@ -11,14 +11,14 @@ pub const ExitBehaviorByNodeId = control_flow_types.ExitBehaviorByNodeId;
 
 pub const ExitBehaviorAnalyzer = struct {
     diagnostic_store: *diagnostics.DiagnosticStore,
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     exit_behavior_by_node_id: ExitBehaviorByNodeId,
 
-    pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
+    pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
             .diagnostic_store = diagnostic_store,
-            .allocator = allocator,
-            .exit_behavior_by_node_id = ExitBehaviorByNodeId.init(allocator),
+            .arena = arena,
+            .exit_behavior_by_node_id = ExitBehaviorByNodeId.init(arena),
         };
     }
 

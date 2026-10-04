@@ -23,17 +23,17 @@ const ResolutionEnvironment = struct {
 };
 
 pub const NameResolver = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     symbol_table: symbols.SymbolTable,
     symbol_id_by_node_id: symbols.SymbolIdByNodeId,
 
-    pub fn init(allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
+    pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .diagnostic_store = diagnostic_store,
-            .symbol_table = symbols.SymbolTable.init(allocator),
-            .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(allocator),
+            .symbol_table = symbols.SymbolTable.init(arena),
+            .symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(arena),
         };
     }
 
@@ -42,9 +42,9 @@ pub const NameResolver = struct {
     }
 
     fn resolveModule(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
-        var root_scope = scope.Scope.init(self.allocator, null);
-        self.symbol_table = symbols.SymbolTable.init(self.allocator);
-        self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.allocator);
+        var root_scope = scope.Scope.init(self.arena, null);
+        self.symbol_table = symbols.SymbolTable.init(self.arena);
+        self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
 
         var module_scope = try self.buildModuleScope(program);
 
@@ -88,7 +88,7 @@ pub const NameResolver = struct {
             .name = "printInt",
             .declared_at = null,
             .kind = .{ .Function = .{
-                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .parameter_symbol_ids = self.arena.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
                 .return_type_reference = .{ .Builtin = .Unit },
                 .implementation_kind = .BuiltinPrintInt,
             } },
@@ -109,7 +109,7 @@ pub const NameResolver = struct {
             .name = "printString",
             .declared_at = null,
             .kind = .{ .Function = .{
-                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .parameter_symbol_ids = self.arena.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
                 .return_type_reference = .{ .Builtin = .Unit },
                 .implementation_kind = .BuiltinPrintString,
             } },
@@ -130,7 +130,7 @@ pub const NameResolver = struct {
             .name = "readFile",
             .declared_at = null,
             .kind = .{ .Function = .{
-                .parameter_symbol_ids = self.allocator.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
+                .parameter_symbol_ids = self.arena.dupe(symbols.SymbolId, &.{parameter_id}) catch unreachable,
                 .return_type_reference = .{ .Builtin = .String },
                 .implementation_kind = .BuiltinReadFile,
             } },
@@ -152,7 +152,7 @@ pub const NameResolver = struct {
     }
 
     fn addGetArgumentsBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) void {
-        const string_type_reference = self.allocator.create(symbols.ResolvedTypeReference) catch unreachable;
+        const string_type_reference = self.arena.create(symbols.ResolvedTypeReference) catch unreachable;
         string_type_reference.* = .{ .Builtin = .String };
         const function_id = self.symbol_table.insertSymbol(.{
             .name = "getArguments",
@@ -167,7 +167,7 @@ pub const NameResolver = struct {
     }
 
     fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {
-        var module_scope = scope.ModuleScope.init(self.allocator, null);
+        var module_scope = scope.ModuleScope.init(self.arena, null);
         // Builtins come first, so the duplicate checks of the module items see them.
         self.addBuiltinFunctions(&module_scope);
 
@@ -211,7 +211,7 @@ pub const NameResolver = struct {
         const function_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "function");
         module_scope.validateNotInScope(function_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "function '{s}' is already defined", .{function_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "function '{s}' is already defined", .{function_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -233,7 +233,7 @@ pub const NameResolver = struct {
         const structure_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, structure_name, "structure");
         module_scope.validateNotInScope(structure_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure '{s}' is already defined", .{structure_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "structure '{s}' is already defined", .{structure_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -255,7 +255,7 @@ pub const NameResolver = struct {
         const union_name = item_definition.identifier_token.kind.Identifier;
         try self.validateIdentifierIsAvailable(item_definition.identifier_token, union_name, "union");
         module_scope.validateNotInScope(union_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "union '{s}' is already defined", .{union_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "union '{s}' is already defined", .{union_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -349,12 +349,12 @@ pub const NameResolver = struct {
         try self.validateIdentifierIsAvailable(declaration_token, declaration_name, kind_name);
         if (environment.options.module_shadowing == .Forbidden) {
             if (environment.module_scope.lookupSymbol(declaration_name)) |_| {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "{s} '{s}' is already declared in module scope", .{ kind_name, declaration_name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, declaration_token, "{s} '{s}' is already declared in module scope", .{ kind_name, declaration_name });
                 return error.DiagnosticsEmitted;
             }
         }
         if (environment.node_scope.lookupSymbol(declaration_name)) |_| {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, declaration_token, "{s} '{s}' is already declared in this scope", .{ kind_name, declaration_name });
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, declaration_token, "{s} '{s}' is already declared in this scope", .{ kind_name, declaration_name });
             return error.DiagnosticsEmitted;
         }
     }
@@ -402,7 +402,7 @@ pub const NameResolver = struct {
         loop_statement: ast.Loop,
         environment: ResolutionEnvironment,
     ) CompileError!void {
-        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var loop_scope = scope.Scope.init(self.arena, environment.node_scope);
         var loop_environment = environment;
         loop_environment.node_scope = &loop_scope;
         try self.resolveNode(loop_statement.body_block, loop_environment);
@@ -418,7 +418,7 @@ pub const NameResolver = struct {
             try self.resolveNode(update, environment);
         }
 
-        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var loop_scope = scope.Scope.init(self.arena, environment.node_scope);
         var loop_environment = environment;
         loop_environment.node_scope = &loop_scope;
         try self.resolveNode(while_statement.body_block, loop_environment);
@@ -432,7 +432,7 @@ pub const NameResolver = struct {
     ) CompileError!void {
         try self.resolveNode(for_in.iterable, environment);
 
-        var loop_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var loop_scope = scope.Scope.init(self.arena, environment.node_scope);
         const item_name = for_in.item_name.kind.Identifier;
         try self.validateBindingDeclarationName(for_in.item_name, item_name, "for-in binding", environment);
         const item_symbol_id = self.symbol_table.insertSymbol(.{
@@ -501,7 +501,7 @@ pub const NameResolver = struct {
         block: ast.Block,
         environment: ResolutionEnvironment,
     ) CompileError!void {
-        var block_scope = scope.Scope.init(self.allocator, environment.node_scope);
+        var block_scope = scope.Scope.init(self.arena, environment.node_scope);
         var block_environment = environment;
         block_environment.node_scope = &block_scope;
         for (block.statements) |*statement| {
@@ -539,7 +539,7 @@ pub const NameResolver = struct {
         try self.resolveNode(match_expression.subject, environment);
         for (match_expression.arms) |arm| {
             var body_expression_environment = environment;
-            var body_expression_scope = scope.Scope.init(self.allocator, environment.node_scope);
+            var body_expression_scope = scope.Scope.init(self.arena, environment.node_scope);
             switch (arm.pattern.kind) {
                 .Case => |case_pattern| {
                     if (case_pattern.qualifier_token) |qualifier_token| {
@@ -628,7 +628,7 @@ pub const NameResolver = struct {
         environment: ResolutionEnvironment,
     ) CompileError!symbols.SymbolId {
         const symbol_id = environment.node_scope.lookupSymbol(name) orelse environment.module_scope.lookupSymbol(name) orelse {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "undefined identifier '{s}'", .{name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, identifier_token, "undefined identifier '{s}'", .{name});
             return error.DiagnosticsEmitted;
         };
 
@@ -643,7 +643,7 @@ pub const NameResolver = struct {
     ) CompileError!void {
         const structure_name = qualified_structure_literal.structure_name.kind.Identifier;
         const symbol_id = environment.module_scope.lookupSymbol(structure_name) orelse {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, qualified_structure_literal.structure_name, "undefined structure '{s}'", .{structure_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, qualified_structure_literal.structure_name, "undefined structure '{s}'", .{structure_name});
             return error.DiagnosticsEmitted;
         };
         self.symbol_id_by_node_id.put(node_id, symbol_id) catch unreachable;
@@ -658,14 +658,14 @@ pub const NameResolver = struct {
         function_definition: *const ast.FunctionDefinition,
         module_scope: *scope.ModuleScope,
     ) CompileError!void {
-        var function_scope = scope.Scope.init(self.allocator, null);
+        var function_scope = scope.Scope.init(self.arena, null);
         var parameter_symbol_ids = std.ArrayList(symbols.SymbolId){};
 
         for (function_definition.parameters) |*parameter| {
             const parameter_name = parameter.name.kind.Identifier;
             try self.validateIdentifierIsAvailable(parameter.name, parameter_name, "parameter");
             function_scope.validateNotInScope(parameter_name) catch {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, parameter.name, "parameter '{s}' is already declared in this function", .{parameter_name});
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, parameter.name, "parameter '{s}' is already declared in this function", .{parameter_name});
                 return error.DiagnosticsEmitted;
             };
 
@@ -679,7 +679,7 @@ pub const NameResolver = struct {
                 } },
             });
             function_scope.insertSymbol(parameter_name, parameter_id);
-            parameter_symbol_ids.append(self.allocator, parameter_id) catch unreachable;
+            parameter_symbol_ids.append(self.arena, parameter_id) catch unreachable;
         }
 
         const return_type_reference = try self.resolveTypeExpression(function_definition.return_type_annotation, module_scope);
@@ -692,7 +692,7 @@ pub const NameResolver = struct {
         });
 
         self.symbol_table.finalizePreliminarySymbol(function_symbol_id, .{ .Function = .{
-            .parameter_symbol_ids = parameter_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
+            .parameter_symbol_ids = parameter_symbol_ids.toOwnedSlice(self.arena) catch unreachable,
             .return_type_reference = return_type_reference,
             .implementation_kind = .UserDefined,
         } });
@@ -712,17 +712,17 @@ pub const NameResolver = struct {
         const structure_symbol_id = module_scope.lookupSymbol(structure_name) orelse unreachable;
 
         var resolved_fields = std.ArrayList(symbols.ResolvedStructureField){};
-        var member_kind_by_name = std.StringHashMap(StructureMemberKind).init(self.allocator);
+        var member_kind_by_name = std.StringHashMap(StructureMemberKind).init(self.arena);
         for (structure_definition.fields) |field| {
             const field_name = field.name.kind.Identifier;
             try self.validateIdentifierIsAvailable(field.name, field_name, "structure member");
             if (member_kind_by_name.get(field_name)) |_| {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, field.name, "structure member '{s}' is already declared in '{s}'", .{ field_name, structure_name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, field.name, "structure member '{s}' is already declared in '{s}'", .{ field_name, structure_name });
                 return error.DiagnosticsEmitted;
             }
             member_kind_by_name.put(field_name, .Field) catch unreachable;
 
-            resolved_fields.append(self.allocator, .{
+            resolved_fields.append(self.arena, .{
                 .name = field_name,
                 .type_reference = try self.resolveTypeExpression(field.type_annotation, module_scope),
             }) catch unreachable;
@@ -736,7 +736,7 @@ pub const NameResolver = struct {
                         const function_name = item_definition.identifier_token.kind.Identifier;
                         try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "structure member");
                         if (member_kind_by_name.get(function_name)) |_| {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
                             return error.DiagnosticsEmitted;
                         }
                         member_kind_by_name.put(function_name, .Function) catch unreachable;
@@ -748,7 +748,7 @@ pub const NameResolver = struct {
                         });
                         self.symbol_id_by_node_id.put(node.id, method_id) catch unreachable;
                         try self.resolveFunction(method_id, &function_definition, module_scope);
-                        function_symbol_ids.append(self.allocator, method_id) catch unreachable;
+                        function_symbol_ids.append(self.arena, method_id) catch unreachable;
                     },
                     else => unreachable,
                 },
@@ -757,8 +757,8 @@ pub const NameResolver = struct {
         }
 
         self.symbol_table.finalizePreliminarySymbol(structure_symbol_id, .{ .Structure = .{
-            .fields = resolved_fields.toOwnedSlice(self.allocator) catch unreachable,
-            .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
+            .fields = resolved_fields.toOwnedSlice(self.arena) catch unreachable,
+            .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.arena) catch unreachable,
         } });
     }
 
@@ -776,17 +776,17 @@ pub const NameResolver = struct {
         const union_symbol_id = module_scope.lookupSymbol(union_name) orelse unreachable;
 
         var resolved_cases = std.ArrayList(symbols.ResolvedUnionCase){};
-        var member_kind_by_name = std.StringHashMap(UnionMemberKind).init(self.allocator);
+        var member_kind_by_name = std.StringHashMap(UnionMemberKind).init(self.arena);
         for (union_definition.cases) |case| {
             const case_name = case.name.kind.Identifier;
             try self.validateIdentifierIsAvailable(case.name, case_name, "union member");
             if (member_kind_by_name.get(case_name)) |_| {
-                try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, case.name, "union member '{s}' is already declared in '{s}'", .{ case_name, union_name });
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, case.name, "union member '{s}' is already declared in '{s}'", .{ case_name, union_name });
                 return error.DiagnosticsEmitted;
             }
             member_kind_by_name.put(case_name, .Case) catch unreachable;
 
-            resolved_cases.append(self.allocator, .{
+            resolved_cases.append(self.arena, .{
                 .name = case_name,
                 .type_reference = if (case.type_annotation) |type_annotation|
                     try self.resolveTypeExpression(type_annotation, module_scope)
@@ -803,7 +803,7 @@ pub const NameResolver = struct {
                         const function_name = item_definition.identifier_token.kind.Identifier;
                         try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "union member");
                         if (member_kind_by_name.get(function_name)) |_| {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, item_definition.identifier_token, "union member '{s}' is already declared in '{s}'", .{ function_name, union_name });
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "union member '{s}' is already declared in '{s}'", .{ function_name, union_name });
                             return error.DiagnosticsEmitted;
                         }
                         member_kind_by_name.put(function_name, .Function) catch unreachable;
@@ -815,7 +815,7 @@ pub const NameResolver = struct {
                         });
                         self.symbol_id_by_node_id.put(node.id, method_id) catch unreachable;
                         try self.resolveFunction(method_id, &function_definition, module_scope);
-                        function_symbol_ids.append(self.allocator, method_id) catch unreachable;
+                        function_symbol_ids.append(self.arena, method_id) catch unreachable;
                     },
                     else => unreachable,
                 },
@@ -824,8 +824,8 @@ pub const NameResolver = struct {
         }
 
         self.symbol_table.finalizePreliminarySymbol(union_symbol_id, .{ .Union = .{
-            .cases = resolved_cases.toOwnedSlice(self.allocator) catch unreachable,
-            .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.allocator) catch unreachable,
+            .cases = resolved_cases.toOwnedSlice(self.arena) catch unreachable,
+            .function_symbol_ids = function_symbol_ids.toOwnedSlice(self.arena) catch unreachable,
         } });
     }
 
@@ -841,20 +841,20 @@ pub const NameResolver = struct {
                     .{ .Builtin = builtin_type }
                 else named_type_reference: {
                     const symbol_id = module_scope.lookupSymbol(type_name) orelse {
-                        try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "unknown type annotation '{s}'", .{type_name});
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, named_type_expression.name_token, "unknown type annotation '{s}'", .{type_name});
                         return error.DiagnosticsEmitted;
                     };
                     switch (self.symbol_table.getSymbolKind(symbol_id)) {
                         .Structure, .Union => break :named_type_reference symbols.ResolvedTypeReference{ .Symbol = symbol_id },
                         else => {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, named_type_expression.name_token, "type annotation '{s}' must refer to a structure or union", .{type_name});
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, named_type_expression.name_token, "type annotation '{s}' must refer to a structure or union", .{type_name});
                             return error.DiagnosticsEmitted;
                         },
                     }
                 };
             },
             .Array => |array_type_expression| block: {
-                const array_type_reference = self.allocator.create(symbols.ResolvedTypeReference) catch unreachable;
+                const array_type_reference = self.arena.create(symbols.ResolvedTypeReference) catch unreachable;
                 array_type_reference.* = try self.resolveTypeExpression(array_type_expression.element_type, module_scope);
 
                 break :block .{ .Array = array_type_reference };
@@ -869,7 +869,7 @@ pub const NameResolver = struct {
         kind_name: []const u8,
     ) CompileError!void {
         if (std.mem.eql(u8, identifier_name, "unit")) {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.allocator, identifier_token, "{s} name '{s}' is reserved", .{ kind_name, identifier_name });
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, identifier_token, "{s} name '{s}' is reserved", .{ kind_name, identifier_name });
             return error.DiagnosticsEmitted;
         }
     }

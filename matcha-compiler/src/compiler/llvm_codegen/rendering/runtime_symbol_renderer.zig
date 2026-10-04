@@ -4,14 +4,10 @@ const runtime_symbols = @import("runtime_symbols");
 const RuntimeRequirements = runtime_symbols.RuntimeRequirements;
 
 pub const RuntimeSymbolRenderer = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
-        return .{ .allocator = allocator };
-    }
-
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
+    pub fn init(arena: std.mem.Allocator) @This() {
+        return .{ .arena = arena };
     }
 
     pub fn renderDeclarations(
@@ -19,9 +15,8 @@ pub const RuntimeSymbolRenderer = struct {
         requirements: RuntimeRequirements,
     ) []const u8 {
         var runtime_symbol_declarations = std.ArrayList(u8){};
-        defer runtime_symbol_declarations.deinit(self.allocator);
 
-        runtime_symbol_declarations.writer(self.allocator).print(
+        runtime_symbol_declarations.writer(self.arena).print(
             "declare void @{s}()\ndeclare ptr @{s}(i64)\ndeclare ptr @{s}(i64)\ndeclare void @{s}(i32, ptr)",
             .{
                 runtime_symbols.runtime_initiate_garbage_collector_function_name,
@@ -32,96 +27,96 @@ pub const RuntimeSymbolRenderer = struct {
         ) catch unreachable;
 
         if (requirements.print_int) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(i64)",
                 .{runtime_symbols.builtin_print_int_function_name},
             ) catch unreachable;
         }
         if (requirements.print_string) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr, i64)",
                 .{runtime_symbols.builtin_print_string_function_name},
             ) catch unreachable;
         }
         if (requirements.read_file) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr, ptr, i64)",
                 .{runtime_symbols.builtin_read_file_function_name},
             ) catch unreachable;
         }
         if (requirements.read_line) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr)",
                 .{runtime_symbols.builtin_read_line_function_name},
             ) catch unreachable;
         }
         if (requirements.get_arguments) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare ptr @{s}()",
                 .{runtime_symbols.builtin_get_arguments_function_name},
             ) catch unreachable;
         }
         if (requirements.string_concatenate) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr, ptr, i64, ptr, i64)",
                 .{runtime_symbols.runtime_string_concatenate_function_name},
             ) catch unreachable;
         }
         if (requirements.string_compare) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare i1 @{s}(ptr, i64, ptr, i64)",
                 .{runtime_symbols.runtime_string_compare_function_name},
             ) catch unreachable;
         }
         if (requirements.string_trim) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr, ptr, i64)",
                 .{runtime_symbols.builtin_string_trim_method_name},
             ) catch unreachable;
         }
         if (requirements.string_split) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare ptr @{s}(ptr, i64, ptr, i64)",
                 .{runtime_symbols.builtin_string_split_method_name},
             ) catch unreachable;
         }
         if (requirements.string_to_int) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare i64 @{s}(ptr, i64)",
                 .{runtime_symbols.builtin_string_to_int_method_name},
             ) catch unreachable;
         }
         if (requirements.int_to_string) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(ptr, i64)",
                 .{runtime_symbols.builtin_int_to_string_method_name},
             ) catch unreachable;
         }
         if (requirements.panic_index_out_of_bounds) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(i64, i64, i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_index_out_of_bounds_function_name},
             ) catch unreachable;
         }
         if (requirements.panic_division_by_zero) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_division_by_zero_function_name},
             ) catch unreachable;
         }
         if (requirements.panic_division_overflow) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare void @{s}(i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_division_overflow_function_name},
             ) catch unreachable;
         }
         if (requirements.array_append_slot) {
-            runtime_symbol_declarations.writer(self.allocator).print(
+            runtime_symbol_declarations.writer(self.arena).print(
                 "\ndeclare ptr @{s}(ptr, i64)",
                 .{runtime_symbols.runtime_array_append_slot_function_name},
             ) catch unreachable;
         }
 
-        return std.fmt.allocPrint(self.allocator, "{s}", .{runtime_symbol_declarations.items}) catch unreachable;
+        return std.fmt.allocPrint(self.arena, "{s}", .{runtime_symbol_declarations.items}) catch unreachable;
     }
 };

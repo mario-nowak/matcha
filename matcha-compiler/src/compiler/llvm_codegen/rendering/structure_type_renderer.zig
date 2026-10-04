@@ -17,7 +17,6 @@ pub const StructureTypeRenderer = struct {
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
         var structure_definitions_buffer = std.ArrayList(u8){};
-        defer structure_definitions_buffer.deinit(self.arena);
         const resolved_program = lowered_program.analyzed_program.resolved_program;
 
         var has_structure_definition = false;
@@ -66,7 +65,6 @@ pub const StructureTypeRenderer = struct {
         const structure_llvm_type_name = structure_layout.llvm_type_name;
 
         var structure_definition_buffer = std.ArrayList(u8){};
-        defer structure_definition_buffer.deinit(self.arena);
 
         structure_definition_buffer.writer(self.arena).print(
             "%{s} = type {{",

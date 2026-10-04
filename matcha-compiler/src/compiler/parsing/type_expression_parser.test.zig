@@ -21,10 +21,8 @@ fn parseTypeExpression(source: []const u8) !ParsedTypeExpression {
     const owned_source = try allocator.dupe(u8, source);
 
     var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
-    defer diagnostic_store.deinit();
 
     var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
-    defer lexer.deinit();
 
     var parser = parsing.TypeExpressionParser.init(&lexer, allocator, &diagnostic_store);
     const type_expression = try parser.parse();
@@ -43,10 +41,8 @@ fn expectTypeExpressionDiagnostic(source: []const u8) !void {
     const owned_source = try allocator.dupe(u8, source);
 
     var diagnostic_store = diagnostics.DiagnosticStore.init(allocator);
-    defer diagnostic_store.deinit();
 
     var lexer = lexing.Lexer.init(owned_source, allocator, &diagnostic_store);
-    defer lexer.deinit();
 
     var parser = parsing.TypeExpressionParser.init(&lexer, allocator, &diagnostic_store);
 

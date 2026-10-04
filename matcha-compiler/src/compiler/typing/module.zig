@@ -30,31 +30,30 @@ pub const Type = union(TypeKind) {
 
     UnionConstructor: UnionConstructor,
 
-    pub fn name(self: @This(), store: *const TypeStore, symbol_table: *const symbols.SymbolTable, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn name(self: @This(), store: *const TypeStore, symbol_table: *const symbols.SymbolTable, arena: std.mem.Allocator) ![]const u8 {
         return switch (self) {
-            .Unit => allocator.dupe(u8, "unit"),
-            .Boolean => allocator.dupe(u8, "boolean"),
-            .Integer => allocator.dupe(u8, "int"),
-            .String => allocator.dupe(u8, "string"),
-            .Structure => |structure_type| allocator.dupe(u8, symbol_table.getSymbol(structure_type.symbol_id).name),
-            .Array => |element_type_id| std.fmt.allocPrint(allocator, "{s}[]", .{try store.getType(element_type_id).name(store, symbol_table, allocator)}),
+            .Unit => arena.dupe(u8, "unit"),
+            .Boolean => arena.dupe(u8, "boolean"),
+            .Integer => arena.dupe(u8, "int"),
+            .String => arena.dupe(u8, "string"),
+            .Structure => |structure_type| arena.dupe(u8, symbol_table.getSymbol(structure_type.symbol_id).name),
+            .Array => |element_type_id| std.fmt.allocPrint(arena, "{s}[]", .{try store.getType(element_type_id).name(store, symbol_table, arena)}),
             .Function => |function_type| {
                 var parameter_text = std.ArrayList(u8){};
-                defer parameter_text.deinit(allocator);
                 for (function_type.parameter_type_ids, 0..) |parameter_type_id, index| {
                     if (index > 0) {
-                        try parameter_text.appendSlice(allocator, ", ");
+                        try parameter_text.appendSlice(arena, ", ");
                     }
-                    try parameter_text.appendSlice(allocator, try store.getType(parameter_type_id).name(store, symbol_table, allocator));
+                    try parameter_text.appendSlice(arena, try store.getType(parameter_type_id).name(store, symbol_table, arena));
                 }
                 return std.fmt.allocPrint(
-                    allocator,
+                    arena,
                     "function taking ({s}) and returning {s}",
-                    .{ parameter_text.items, try store.getType(function_type.return_type_id).name(store, symbol_table, allocator) },
+                    .{ parameter_text.items, try store.getType(function_type.return_type_id).name(store, symbol_table, arena) },
                 );
             },
-            .Union => |union_type| allocator.dupe(u8, symbol_table.getSymbol(union_type.symbol_id).name),
-            .UnionConstructor => allocator.dupe(u8, "union constructor"),
+            .Union => |union_type| arena.dupe(u8, symbol_table.getSymbol(union_type.symbol_id).name),
+            .UnionConstructor => arena.dupe(u8, "union constructor"),
         };
     }
 };
@@ -68,7 +67,7 @@ pub const PreliminaryType = struct {
 
 /// Table for storing types by their ID.
 pub const TypeStore = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     preliminary_entries: std.AutoHashMap(TypeId, PreliminaryType),
     entries: std.AutoHashMap(TypeId, Type),
     next_type_id: TypeId,
@@ -92,13 +91,13 @@ pub const TypeStore = struct {
         }
     };
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         var store = @This(){
-            .allocator = allocator,
-            .preliminary_entries = std.AutoHashMap(TypeId, PreliminaryType).init(allocator),
-            .entries = std.AutoHashMap(TypeId, Type).init(allocator),
+            .arena = arena,
+            .preliminary_entries = std.AutoHashMap(TypeId, PreliminaryType).init(arena),
+            .entries = std.AutoHashMap(TypeId, Type).init(arena),
             .next_type_id = 0,
-            .array_type_id_by_element_type_id = std.AutoHashMap(TypeId, TypeId).init(allocator),
+            .array_type_id_by_element_type_id = std.AutoHashMap(TypeId, TypeId).init(arena),
             .unit_type_id = undefined,
             .boolean_type_id = undefined,
             .integer_type_id = undefined,

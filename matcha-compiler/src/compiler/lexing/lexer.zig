@@ -11,23 +11,19 @@ pub const Lexer = struct {
     column: usize,
     offsetInSource: usize,
     offsetInToken: u32,
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
 
-    pub fn init(source: []const u8, allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
+    pub fn init(source: []const u8, arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
         return .{
             .source = source,
-            .allocator = allocator,
+            .arena = arena,
             .diagnostic_store = diagnostic_store,
             .line = 1,
             .column = 1,
             .offsetInSource = 0,
             .offsetInToken = 0,
         };
-    }
-
-    pub fn deinit(self: *Lexer) void {
-        _ = self;
     }
 
     pub fn next(self: *Lexer) CompileError!Token {
@@ -174,7 +170,6 @@ pub const Lexer = struct {
         const start_column = self.column;
         const start_offset = self.offsetInSource;
         var content = std.ArrayList(u8){};
-        defer content.deinit(self.allocator);
 
         // Skip the opening quote
         self.offsetInSource += 1;
@@ -188,7 +183,7 @@ pub const Lexer = struct {
                 self.column += 1;
 
                 const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-                const decoded_content = content.toOwnedSlice(self.allocator) catch unreachable;
+                const decoded_content = content.toOwnedSlice(self.arena) catch unreachable;
 
                 return Token{
                     .line = start_line,
@@ -234,13 +229,13 @@ pub const Lexer = struct {
                         );
                     },
                 };
-                content.append(self.allocator, decoded_character) catch unreachable;
+                content.append(self.arena, decoded_character) catch unreachable;
                 self.offsetInSource += 1;
                 self.column += 1;
                 continue;
             }
 
-            content.append(self.allocator, character) catch unreachable;
+            content.append(self.arena, character) catch unreachable;
             self.offsetInSource += 1;
             self.column += 1;
         }

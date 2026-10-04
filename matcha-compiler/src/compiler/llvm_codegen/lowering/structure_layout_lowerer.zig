@@ -4,37 +4,16 @@ const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
 
 pub const StructureLayoutLowerer = struct {
-    allocator: std.mem.Allocator,
-    structure_layout_kind_by_type_id: lowering_types.StructureLayoutKindByTypeId,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .structure_layout_kind_by_type_id = lowering_types.StructureLayoutKindByTypeId.init(allocator),
+            .arena = arena,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.clearLayouts();
-        self.structure_layout_kind_by_type_id.deinit();
-    }
-
-    fn clearLayouts(self: *@This()) void {
-        var layouts = self.structure_layout_kind_by_type_id.valueIterator();
-        while (layouts.next()) |layout| {
-            switch (layout.*) {
-                .Absent => {},
-                .Present => |present| {
-                    self.allocator.free(present.llvm_type_name);
-                    self.allocator.free(present.field_index_kind_by_definition_index);
-                },
-            }
-        }
-        self.structure_layout_kind_by_type_id.clearRetainingCapacity();
-    }
-
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.StructureLayoutKindByTypeId {
-        self.clearLayouts();
+        var structure_layout_kind_by_type_id = lowering_types.StructureLayoutKindByTypeId.init(self.arena);
 
         var types_iterator = analyzed_program.type_store.iterator();
         while (types_iterator.next()) |entry| {
@@ -52,7 +31,6 @@ pub const StructureLayoutLowerer = struct {
                 .None => unreachable,
                 .Present => {
                     var field_index_kind_by_definition_index = std.ArrayList(lowering_types.StructureLayoutFieldIndexKind){};
-                    defer field_index_kind_by_definition_index.deinit(self.allocator);
                     var runtime_field_index: u32 = 0;
 
                     var has_field_with_runtime_representation = false;
@@ -72,7 +50,7 @@ pub const StructureLayoutLowerer = struct {
                         };
 
                         field_index_kind_by_definition_index.append(
-                            self.allocator,
+                            self.arena,
                             field_index_kind,
                         ) catch unreachable;
                     }
@@ -80,12 +58,12 @@ pub const StructureLayoutLowerer = struct {
                     const structure_layout: lowering_types.StructureLayoutKind = if (has_field_with_runtime_representation) .{
                         .Present = .{
                             .llvm_type_name = self.generateLlvmTypeName(analyzed_program, structure_type),
-                            .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
+                            .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.arena) catch unreachable,
                         },
                         // Structures without any runtime fields don't have a layout.
                     } else .Absent;
 
-                    self.structure_layout_kind_by_type_id.put(
+                    structure_layout_kind_by_type_id.put(
                         structure_type_id,
                         structure_layout,
                     ) catch unreachable;
@@ -93,7 +71,7 @@ pub const StructureLayoutLowerer = struct {
             }
         }
 
-        return self.structure_layout_kind_by_type_id;
+        return structure_layout_kind_by_type_id;
     }
 
     fn generateLlvmTypeName(
@@ -103,7 +81,7 @@ pub const StructureLayoutLowerer = struct {
     ) []const u8 {
         const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
         return std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "matcha.structure.{s}",
             .{structure_symbol.name},
         ) catch unreachable;

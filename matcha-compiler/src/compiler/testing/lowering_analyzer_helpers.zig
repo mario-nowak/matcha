@@ -13,30 +13,30 @@ const LoweringAnalyzerFixture = struct {
 };
 
 pub fn setupLoweringAnalyzerFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !LoweringAnalyzerFixture {
-    const allocator = arena.allocator();
-    const analyzed_program = try setupAnalyzedProgram(arena, source);
+    const arena = arena_state.allocator();
+    const analyzed_program = try setupAnalyzedProgram(arena_state, source);
 
-    const llvm_type_table_lowerer = try allocator.create(lowering.LlvmTypeTableLowerer);
-    llvm_type_table_lowerer.* = lowering.LlvmTypeTableLowerer.init(allocator);
-    const call_lowerer = try allocator.create(lowering.CallLowerer);
-    call_lowerer.* = lowering.CallLowerer.init(allocator);
-    const member_access_lowerer = try allocator.create(lowering.MemberAccessLowerer);
-    member_access_lowerer.* = lowering.MemberAccessLowerer.init(allocator);
-    const binary_operation_lowerer = try allocator.create(lowering.BinaryOperationLowerer);
-    binary_operation_lowerer.* = lowering.BinaryOperationLowerer.init(allocator);
-    const place_lowerer = try allocator.create(lowering.PlaceLowerer);
-    place_lowerer.* = lowering.PlaceLowerer.init(allocator);
-    const structure_layout_lowerer = try allocator.create(lowering.StructureLayoutLowerer);
-    structure_layout_lowerer.* = lowering.StructureLayoutLowerer.init(allocator);
-    const union_layout_lowerer = try allocator.create(lowering.UnionLayoutLowerer);
-    union_layout_lowerer.* = lowering.UnionLayoutLowerer.init(allocator);
-    const function_layout_lowerer = try allocator.create(lowering.FunctionLayoutLowerer);
-    function_layout_lowerer.* = lowering.FunctionLayoutLowerer.init(allocator);
+    const llvm_type_table_lowerer = try arena.create(lowering.LlvmTypeTableLowerer);
+    llvm_type_table_lowerer.* = lowering.LlvmTypeTableLowerer.init(arena);
+    const call_lowerer = try arena.create(lowering.CallLowerer);
+    call_lowerer.* = lowering.CallLowerer.init(arena);
+    const member_access_lowerer = try arena.create(lowering.MemberAccessLowerer);
+    member_access_lowerer.* = lowering.MemberAccessLowerer.init(arena);
+    const binary_operation_lowerer = try arena.create(lowering.BinaryOperationLowerer);
+    binary_operation_lowerer.* = lowering.BinaryOperationLowerer.init(arena);
+    const place_lowerer = try arena.create(lowering.PlaceLowerer);
+    place_lowerer.* = lowering.PlaceLowerer.init(arena);
+    const structure_layout_lowerer = try arena.create(lowering.StructureLayoutLowerer);
+    structure_layout_lowerer.* = lowering.StructureLayoutLowerer.init(arena);
+    const union_layout_lowerer = try arena.create(lowering.UnionLayoutLowerer);
+    union_layout_lowerer.* = lowering.UnionLayoutLowerer.init(arena);
+    const function_layout_lowerer = try arena.create(lowering.FunctionLayoutLowerer);
+    function_layout_lowerer.* = lowering.FunctionLayoutLowerer.init(arena);
 
-    const lowering_analyzer = try allocator.create(LoweringAnalyzer);
+    const lowering_analyzer = try arena.create(LoweringAnalyzer);
     lowering_analyzer.* = LoweringAnalyzer.init(
         llvm_type_table_lowerer,
         call_lowerer,

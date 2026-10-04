@@ -12,14 +12,10 @@ const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolG
 const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
 
 pub const StringLiteralEmitter = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
-        return .{ .allocator = allocator };
-    }
-
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
+    pub fn init(arena: std.mem.Allocator) @This() {
+        return .{ .arena = arena };
     }
 
     pub fn emitStringLiteralValue(
@@ -54,7 +50,7 @@ pub const StringLiteralEmitter = struct {
     ) Value {
         const pointer_value = function_symbol_generator.generateValueName();
         const pointer_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = getelementptr inbounds [{d} x i8], ptr {s}, i64 0, i64 0",
             .{ pointer_value, len, global_name },
         ) catch unreachable;
@@ -72,7 +68,7 @@ pub const StringLiteralEmitter = struct {
     ) Value {
         const partial_string_value = function_symbol_generator.generateValueName();
         const partial_string_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = insertvalue {s} undef, ptr {s}, 0",
             .{ partial_string_value, lowering.llvm_type.string_llvm_type, pointer_value },
         ) catch unreachable;
@@ -80,7 +76,7 @@ pub const StringLiteralEmitter = struct {
 
         const string_value = function_symbol_generator.generateValueName();
         const string_instruction = std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "{s} = insertvalue {s} {s}, i64 {d}, 1",
             .{ string_value, lowering.llvm_type.string_llvm_type, partial_string_value, len },
         ) catch unreachable;

@@ -11,14 +11,14 @@ const UnionTypeRendererFixture = struct {
 };
 
 pub fn setupUnionTypeRendererFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !UnionTypeRendererFixture {
-    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
+    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena_state, source);
     const lowered_program = try lowering_analyzer_fixture.lowering_analyzer.lowerProgram(lowering_analyzer_fixture.analyzed_program);
 
-    const union_type_renderer = try arena.allocator().create(UnionTypeRenderer);
-    union_type_renderer.* = UnionTypeRenderer.init(arena.allocator());
+    const union_type_renderer = try arena_state.allocator().create(UnionTypeRenderer);
+    union_type_renderer.* = UnionTypeRenderer.init(arena_state.allocator());
 
     return .{
         .lowered_program = lowered_program,

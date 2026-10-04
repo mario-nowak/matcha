@@ -3,22 +3,18 @@ const Diagnostic = @import("diagnostic.zig").Diagnostic;
 const DiagnosticSpan = @import("diagnostic_span.zig").DiagnosticSpan;
 
 pub const DiagnosticStore = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     diagnostics: std.ArrayList(Diagnostic),
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .diagnostics = .{},
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.diagnostics.deinit(self.allocator);
-    }
-
     fn emit(self: *@This(), diagnostic: Diagnostic) !void {
-        try self.diagnostics.append(self.allocator, diagnostic);
+        try self.diagnostics.append(self.arena, diagnostic);
     }
 
     pub fn emitErrorFromSpan(self: *@This(), span: DiagnosticSpan, message: []const u8) !void {
@@ -35,12 +31,12 @@ pub const DiagnosticStore = struct {
 
     pub fn emitFormattedErrorFromToken(
         self: *@This(),
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         token: anytype,
         comptime format: []const u8,
         args: anytype,
     ) !void {
-        const message = try std.fmt.allocPrint(allocator, format, args);
+        const message = try std.fmt.allocPrint(arena, format, args);
         try self.emitErrorFromToken(token, message);
     }
 
