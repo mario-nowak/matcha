@@ -7,7 +7,7 @@ const function_symbol_generator_module = @import("function_symbol_generator.zig"
 const node_emitter_module = @import("node_emitter.zig");
 const values = @import("values.zig");
 
-const Register = function_symbol_generator_module.Register;
+const Value = function_symbol_generator_module.Value;
 const Label = function_symbol_generator_module.Label;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
@@ -15,6 +15,7 @@ const Environment = node_emitter_module.Environment;
 const LoopContext = node_emitter_module.LoopContext;
 
 const LoopConstruct = struct {
+    kind: enum { While, Loop },
     condition: ?*ast.Node,
     update: ?*ast.Node,
     body_block: *const ast.Block,
@@ -37,16 +38,24 @@ const DecisionArmCondition = union(enum) {
     Pattern: *const ast.Pattern,
 };
 
-const DecisionLabelNames = struct {
-    arm: []const u8,
-    else_arm: []const u8,
-    next: []const u8,
-    continue_label: []const u8,
+/// Names the labels of a decision construct. An `if` has one arm, called `then`. The arms of a `match` are numbered.
+const DecisionKind = enum {
+    If,
+    Match,
+    SubjectlessMatch,
+
+    fn constructName(self: @This()) []const u8 {
+        return switch (self) {
+            .If => "if",
+            .Match => "match",
+            .SubjectlessMatch => "subjectless_match",
+        };
+    }
 };
 
 const PhiIncoming = struct {
     label: Label,
-    register: Register,
+    value: Value,
 };
 
 pub fn emitBlock(
@@ -81,7 +90,7 @@ pub fn emitReturnStatement(
             .runtime_representation_by_node_id
             .get(return_value.id) orelse unreachable;
 
-        const value_register = emitter.emitNode(return_value, lowered_program, environment);
+        const returned_value = emitter.emitNode(return_value, lowered_program, environment);
 
         if (!return_value_runtime_representation.hasRuntimeRepresentation()) {
             emitter.function_ir_builder.emitTerminatorInstruction("ret void");
@@ -93,7 +102,7 @@ pub fn emitReturnStatement(
             "ret {s} {s}",
             .{
                 lowered_program.getLlvmIrType(environment.function_return_type_id),
-                value_register.expectRegister(),
+                returned_value.expectValue(),
             },
         ) catch unreachable;
         emitter.function_ir_builder.emitTerminatorInstruction(return_instruction);
@@ -122,12 +131,7 @@ pub fn emitIfStatement(
             .arms = &decision_arms,
             .else_arm = null,
         },
-        .{
-            .arm = "then",
-            .else_arm = "else",
-            .next = "next",
-            .continue_label = "continue",
-        },
+        .If,
         lowered_program,
         environment,
     );
@@ -152,12 +156,7 @@ pub fn emitIfExpression(
             .arms = &decision_arms,
             .else_arm = if_expression.else_block,
         },
-        .{
-            .arm = "then",
-            .else_arm = "else",
-            .next = "next",
-            .continue_label = "continue",
-        },
+        .If,
         lowered_program,
         environment,
     );
@@ -190,12 +189,7 @@ pub fn emitMatchExpression(
             .else_arm = match_expression.else_arm_expression,
             .exhaustive_without_else = exhaustive_without_else,
         },
-        .{
-            .arm = "match_arm",
-            .else_arm = "match_else",
-            .next = "match_next",
-            .continue_label = "match_continue",
-        },
+        .Match,
         lowered_program,
         environment,
     );
@@ -225,12 +219,7 @@ pub fn emitSubjectlessMatchExpression(
             .arms = decision_arms.items,
             .else_arm = subjectless_match_expression.else_arm_expression,
         },
-        .{
-            .arm = "match_arm",
-            .else_arm = "match_else",
-            .next = "match_next",
-            .continue_label = "match_continue",
-        },
+        .SubjectlessMatch,
         lowered_program,
         environment,
     );
@@ -250,6 +239,7 @@ pub fn emitLoop(
     return emitLoopConstruct(
         emitter,
         .{
+            .kind = .Loop,
             .condition = null,
             .body_block = body_block,
             .update = null,
@@ -273,6 +263,7 @@ pub fn emitWhile(
     return emitLoopConstruct(
         emitter,
         .{
+            .kind = .While,
             .condition = while_statement.condition,
             .body_block = body_block,
             .update = while_statement.update,
@@ -290,7 +281,9 @@ pub fn emitForInArrayLoop(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const iterable_register = emitter.emitNode(for_in.iterable, lowered_program, environment).expectRegister();
+    // Created before the iterable, so an outer construct gets a lower number than the constructs nested in it.
+    const labels = emitter.function_symbol_generator.generateConstructLabels("for_in");
+    const iterable_value = emitter.emitNode(for_in.iterable, lowered_program, environment).expectValue();
 
     const iterable_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(for_in.iterable.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(iterable_type_id)) {
@@ -304,44 +297,45 @@ pub fn emitForInArrayLoop(
         .runtime_representation_by_type_id
         .get(element_type_id) orelse unreachable;
 
-    var item_storage: ?function_symbol_generator_module.Storage = null;
+    var item_address: ?function_symbol_generator_module.Address = null;
     if (element_runtime_representation.hasRuntimeRepresentation()) {
         const item_symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-        item_storage = emitter.function_symbol_generator.generateStorage();
-        builder.emitAlloca(item_storage orelse unreachable, element_llvm_type); // don't
-        environment.storage_by_symbol_id.put(item_symbol_id, item_storage orelse unreachable) catch unreachable;
+        const item_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(item_symbol_id).name;
+        item_address = emitter.function_symbol_generator.generateBindingAddressName(item_name);
+        builder.emitStackAllocation(item_address orelse unreachable, element_llvm_type); // don't
+        environment.address_by_symbol_id.put(item_symbol_id, item_address orelse unreachable) catch unreachable;
     }
 
-    const index_storage = emitter.function_symbol_generator.generateStorage();
-    builder.emitAlloca(index_storage, "i64");
-    builder.emitStore("0", index_storage, "i64");
+    const index_address = emitter.function_symbol_generator.generateSyntheticAddressName();
+    builder.emitStackAllocation(index_address, "i64");
+    builder.emitStore("0", index_address, "i64");
 
-    const length_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
-        length_pointer_register,
+        length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
-        iterable_register,
+        iterable_value,
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(length_register, length_pointer_register, "i64");
+    const length_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitLoad(length_value, length_pointer_value, "i64");
 
-    const data_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
-        data_pointer_register,
+        data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
-        iterable_register,
+        iterable_value,
         lowering.llvm_type.array_data_field_index,
     );
 
-    const data_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(data_register, data_pointer_register, "ptr");
+    const data_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitLoad(data_value, data_pointer_value, "ptr");
 
-    const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
-    const loop_body_label = emitter.function_symbol_generator.generateLabel("loop_body");
-    const loop_continue_label = emitter.function_symbol_generator.generateLabel("loop_continue");
-    const loop_exit_label = emitter.function_symbol_generator.generateLabel("loop_exit");
+    const loop_header_label = labels.role("header");
+    const loop_body_label = labels.role("body");
+    const loop_continue_label = labels.role("continue");
+    const loop_exit_label = labels.role("exit");
     const previous_loop_context = environment.loop_context;
     environment.loop_context = LoopContext{
         .continue_label = loop_continue_label,
@@ -351,25 +345,25 @@ pub fn emitForInArrayLoop(
     builder.emitBranchInstruction(null, &.{loop_header_label});
     builder.emitLabel(loop_header_label);
 
-    const current_index_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(current_index_register, index_storage, "i64");
+    const current_index_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitLoad(current_index_value, index_address, "i64");
 
-    const within_bounds_register = emitter.function_symbol_generator.generateRegister();
+    const within_bounds_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, {s}",
-        .{ within_bounds_register, current_index_register, length_register },
+        .{ within_bounds_value, current_index_value, length_value },
     ) catch unreachable);
-    builder.emitBranchInstruction(within_bounds_register, &.{ loop_body_label, loop_exit_label });
+    builder.emitBranchInstruction(within_bounds_value, &.{ loop_body_label, loop_exit_label });
 
     builder.emitLabel(loop_body_label);
 
-    if (item_storage) |storage| {
-        const element_pointer_register = emitter.function_symbol_generator.generateRegister();
-        builder.emitElementPointer(element_pointer_register, element_llvm_type, data_register, current_index_register);
-        const element_register = emitter.function_symbol_generator.generateRegister();
-        builder.emitLoad(element_register, element_pointer_register, element_llvm_type);
-        builder.emitStore(element_register, storage, element_llvm_type);
+    if (item_address) |address| {
+        const element_pointer_value = emitter.function_symbol_generator.generateValueName();
+        builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, current_index_value);
+        const element_value = emitter.function_symbol_generator.generateValueName();
+        builder.emitLoad(element_value, element_pointer_value, element_llvm_type);
+        builder.emitStore(element_value, address, element_llvm_type);
     }
 
     const body_block = switch (for_in.body_block.kind) {
@@ -381,15 +375,15 @@ pub fn emitForInArrayLoop(
     builder.emitBranchInstruction(null, &.{loop_continue_label});
     builder.emitLabel(loop_continue_label);
 
-    const loop_index_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(loop_index_register, index_storage, "i64");
-    const next_index_register = emitter.function_symbol_generator.generateRegister();
+    const loop_index_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitLoad(loop_index_value, index_address, "i64");
+    const next_index_value = emitter.function_symbol_generator.generateValueName();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = add i64 {s}, 1",
-        .{ next_index_register, loop_index_register },
+        .{ next_index_value, loop_index_value },
     ) catch unreachable);
-    builder.emitStore(next_index_register, index_storage, "i64");
+    builder.emitStore(next_index_value, index_address, "i64");
     builder.emitBranchInstruction(null, &.{loop_header_label});
 
     builder.emitLabel(loop_exit_label);
@@ -405,10 +399,14 @@ fn emitLoopConstruct(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const loop_header_label = emitter.function_symbol_generator.generateLabel("loop_header");
-    const loop_body_label = emitter.function_symbol_generator.generateLabel("loop_body");
-    const loop_continue_label = emitter.function_symbol_generator.generateLabel("loop_continue");
-    const loop_exit_label = emitter.function_symbol_generator.generateLabel("loop_exit");
+    const labels = emitter.function_symbol_generator.generateConstructLabels(switch (loop_construct.kind) {
+        .While => "while",
+        .Loop => "loop",
+    });
+    const loop_header_label = labels.role("header");
+    const loop_body_label = labels.role("body");
+    const loop_continue_label = labels.role("continue");
+    const loop_exit_label = labels.role("exit");
     const previous_loop_context = environment.loop_context;
     environment.loop_context = LoopContext{
         .continue_label = loop_continue_label,
@@ -419,8 +417,8 @@ fn emitLoopConstruct(
     builder.emitBranchInstruction(null, &.{loop_header_label});
     builder.emitLabel(loop_header_label);
     if (loop_construct.condition) |condition| {
-        const condition_register = emitter.emitNode(condition, lowered_program, environment);
-        builder.emitBranchInstruction(condition_register.expectRegister(), &.{ loop_body_label, loop_exit_label });
+        const condition_value = emitter.emitNode(condition, lowered_program, environment);
+        builder.emitBranchInstruction(condition_value.expectValue(), &.{ loop_body_label, loop_exit_label });
     } else {
         builder.emitBranchInstruction(null, &.{loop_body_label});
     }
@@ -447,16 +445,18 @@ fn emitDecisionConstruct(
     emitter: *NodeEmitter,
     node: *const ast.Node,
     decision_construct: DecisionConstruct,
-    label_names: DecisionLabelNames,
+    decision_kind: DecisionKind,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    var subject_register: ?Register = null;
+    // Created before the subject, so an outer construct gets a lower number than the constructs nested in it.
+    const labels = emitter.function_symbol_generator.generateConstructLabels(decision_kind.constructName());
+    var subject_value: ?Value = null;
     var subject_type_id: ?typing.TypeId = null;
 
     if (decision_construct.subject) |subject| {
-        subject_register = emitter.emitNode(subject, lowered_program, environment).expectRegister();
+        subject_value = emitter.emitNode(subject, lowered_program, environment).expectValue();
         subject_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(subject.id).?;
     }
 
@@ -467,37 +467,40 @@ fn emitDecisionConstruct(
         .runtime_representation_by_type_id
         .get(result_type_id).?;
     const produces_value = result_type_runtime_representation.hasRuntimeRepresentation();
-    const continue_label = emitter.function_symbol_generator.generateLabel(label_names.continue_label);
+    const continue_label = labels.role("end");
     var incoming_values = std.ArrayList(PhiIncoming){};
     defer incoming_values.deinit(emitter.allocator);
     var continue_reachable = false;
 
     const else_label = if (decision_construct.else_arm != null)
-        emitter.function_symbol_generator.generateLabel(label_names.else_arm)
+        labels.role("else")
     else
         null;
 
     if (decision_construct.arms.len == 0 and decision_construct.else_arm != null) {
-        const else_register = emitter.emitNode(decision_construct.else_arm.?, lowered_program, environment);
+        const else_value = emitter.emitNode(decision_construct.else_arm.?, lowered_program, environment);
         if (builder.currentLabel()) |exit_label| {
             continue_reachable = true;
             if (produces_value) {
                 incoming_values.append(emitter.allocator, .{
                     .label = exit_label,
-                    .register = else_register.expectRegister(),
+                    .value = else_value.expectValue(),
                 }) catch unreachable;
             }
             builder.emitBranchInstruction(null, &.{continue_label});
         }
     } else {
         for (decision_construct.arms, 0..) |arm, index| {
-            const arm_label = emitter.function_symbol_generator.generateLabel(label_names.arm);
+            const arm_label = switch (decision_kind) {
+                .If => labels.role("then"),
+                .Match, .SubjectlessMatch => labels.arm(index),
+            };
             const is_last_arm = index + 1 == decision_construct.arms.len;
             const false_branches_to_continue = is_last_arm and
                 else_label == null and
                 !decision_construct.exhaustive_without_else;
             const false_label = if (!is_last_arm)
-                emitter.function_symbol_generator.generateLabel(label_names.next)
+                labels.armCondition(index + 1)
             else if (else_label) |label|
                 label
             else if (decision_construct.exhaustive_without_else)
@@ -519,18 +522,18 @@ fn emitDecisionConstruct(
             if (is_last_arm and decision_construct.exhaustive_without_else and else_label == null) {
                 builder.emitBranchInstruction(null, &.{arm_label});
             } else {
-                const condition_register = switch (arm.condition) {
-                    .Expression => |expression| emitter.emitNode(expression, lowered_program, environment).expectRegister(),
+                const condition_value = switch (arm.condition) {
+                    .Expression => |expression| emitter.emitNode(expression, lowered_program, environment).expectValue(),
                     .Pattern => |pattern| values.emitLoweredBinaryOperation(
                         emitter,
                         lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                         subject_type_id.?,
-                        subject_register.?,
+                        subject_value.?,
                         emitPatternValue(emitter, pattern, lowered_program),
                         lowered_program,
                     ),
                 };
-                builder.emitBranchInstruction(condition_register, &.{ arm_label, false_label.? });
+                builder.emitBranchInstruction(condition_value, &.{ arm_label, false_label.? });
             }
 
             builder.emitLabel(arm_label);
@@ -540,7 +543,7 @@ fn emitDecisionConstruct(
                         emitter,
                         payload_binding,
                         subject_type_id.?,
-                        subject_register.?,
+                        subject_value.?,
                         union_case_index,
                         lowered_program,
                         environment,
@@ -548,13 +551,13 @@ fn emitDecisionConstruct(
                 }
             }
 
-            const arm_register = emitter.emitNode(arm.body, lowered_program, environment);
+            const arm_value = emitter.emitNode(arm.body, lowered_program, environment);
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;
                 if (produces_value) {
                     incoming_values.append(emitter.allocator, .{
                         .label = exit_label,
-                        .register = arm_register.expectRegister(),
+                        .value = arm_value.expectValue(),
                     }) catch unreachable;
                 }
                 builder.emitBranchInstruction(null, &.{continue_label});
@@ -568,13 +571,13 @@ fn emitDecisionConstruct(
         }
 
         if (decision_construct.else_arm) |else_arm| {
-            const else_register = emitter.emitNode(else_arm, lowered_program, environment);
+            const else_value = emitter.emitNode(else_arm, lowered_program, environment);
             if (builder.currentLabel()) |exit_label| {
                 continue_reachable = true;
                 if (produces_value) {
                     incoming_values.append(emitter.allocator, .{
                         .label = exit_label,
-                        .register = else_register.expectRegister(),
+                        .value = else_value.expectValue(),
                     }) catch unreachable;
                 }
                 builder.emitBranchInstruction(null, &.{continue_label});
@@ -584,9 +587,9 @@ fn emitDecisionConstruct(
 
     if (!continue_reachable) {
         // Every path through the construct diverged; the cursor is already
-        // null, so the poison register below is never used in emitted code.
+        // null, so the poison value below is never used in emitted code.
         return if (produces_value)
-            .{ .register = emitter.function_symbol_generator.generateRegister() }
+            .{ .value = emitter.function_symbol_generator.generateValueName() }
         else
             .zero_sized;
     }
@@ -596,10 +599,10 @@ fn emitDecisionConstruct(
         return .zero_sized;
     }
     if (incoming_values.items.len == 0) {
-        return .{ .register = emitter.function_symbol_generator.generateRegister() };
+        return .{ .value = emitter.function_symbol_generator.generateValueName() };
     }
     if (incoming_values.items.len == 1) {
-        return .{ .register = incoming_values.items[0].register };
+        return .{ .value = incoming_values.items[0].value };
     }
 
     var phi_incoming_buffer = std.ArrayList(u8){};
@@ -610,32 +613,32 @@ fn emitDecisionConstruct(
         }
         phi_incoming_buffer.writer(emitter.allocator).print(
             "[{s}, %{s}]",
-            .{ incoming.register, incoming.label },
+            .{ incoming.value, incoming.label },
         ) catch unreachable;
     }
 
-    const result_register = emitter.function_symbol_generator.generateRegister();
+    const result_value = emitter.function_symbol_generator.generateValueName();
     const phi_instruction = std.fmt.allocPrint(
         emitter.allocator,
         "{s} = phi {s} {s}",
         .{
-            result_register,
+            result_value,
             lowered_program.getLlvmIrType(result_type_id),
             phi_incoming_buffer.items,
         },
     ) catch unreachable;
     builder.emitInstruction(phi_instruction);
 
-    return .{ .register = result_register };
+    return .{ .value = result_value };
 }
 
 // Binds the payload of the matched case to the binding of its case pattern. A payload without a runtime
-// representation gets no storage, because reading the binding never loads it.
+// representation gets no address, because reading the binding never loads it.
 fn emitCasePatternBinding(
     emitter: *NodeEmitter,
     payload_binding: ast.PayloadBinding,
     union_type_id: typing.TypeId,
-    union_register: Register,
+    union_value: Value,
     case_index: u32,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
@@ -652,29 +655,30 @@ fn emitCasePatternBinding(
         return;
     }
 
-    const payload_storage = emitter.function_symbol_generator.generateStorage();
+    const payload_name = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(payload_symbol_id).name;
+    const payload_address = emitter.function_symbol_generator.generateBindingAddressName(payload_name);
     const payload_llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-    builder.emitAlloca(payload_storage, payload_llvm_type);
-    environment.storage_by_symbol_id.put(payload_symbol_id, payload_storage) catch unreachable;
+    builder.emitStackAllocation(payload_address, payload_llvm_type);
+    environment.address_by_symbol_id.put(payload_symbol_id, payload_address) catch unreachable;
 
     const union_case_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?.cases[case_index];
-    const payload_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const payload_pointer_value = emitter.function_symbol_generator.generateValueName();
     builder.emitFieldPointer(
-        payload_pointer_register,
+        payload_pointer_value,
         union_case_layout.llvm_type_name,
-        union_register,
+        union_value,
         lowering.lowering_types.union_payload_field_index,
     );
-    const payload_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(payload_register, payload_pointer_register, payload_llvm_type);
-    builder.emitStore(payload_register, payload_storage, payload_llvm_type);
+    const payload_value = emitter.function_symbol_generator.generateValueName();
+    builder.emitLoad(payload_value, payload_pointer_value, payload_llvm_type);
+    builder.emitStore(payload_value, payload_address, payload_llvm_type);
 }
 
 fn emitPatternValue(
     emitter: *NodeEmitter,
     pattern: *const ast.Pattern,
     lowered_program: *const lowering.LoweredProgram,
-) Register {
+) Value {
     return switch (pattern.kind) {
         .IntegerLiteral => |integer_literal| std.fmt.allocPrint(
             emitter.allocator,

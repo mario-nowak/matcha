@@ -48,7 +48,7 @@ pub fn parse(allocator: std.mem.Allocator, argument_iterator: anytype) !Command 
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
-        return parsing_error;
+        return error.InvalidCommandLine;
     };
     defer result.deinit();
 
@@ -120,11 +120,25 @@ fn parseHelpCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !C
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
-        return parsing_error;
+        return error.InvalidCommandLine;
     };
     defer result.deinit();
 
     return .{ .help = null };
+}
+
+fn reportMissingInputPath() error{MissingInputPath} {
+    std.fs.File.stderr().deprecatedWriter().print("error: missing input file\n", .{}) catch {};
+    return error.MissingInputPath;
+}
+
+// The default output path is the input path without `.mt`, so an input without the extension would be overwritten.
+fn validateInputPath(input_path: []const u8) !void {
+    if (std.mem.eql(u8, std.fs.path.extension(input_path), ".mt")) {
+        return;
+    }
+    try std.fs.File.stderr().deprecatedWriter().print("error: input file must have the .mt extension: {s}\n", .{input_path});
+    return error.InputPathWithoutMatchaExtension;
 }
 
 fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
@@ -140,7 +154,7 @@ fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !C
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
-        return parsing_error;
+        return error.InvalidCommandLine;
     };
     defer result.deinit();
 
@@ -148,7 +162,8 @@ fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !C
         return .{ .help = .emit };
     }
 
-    const input_path = result.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return reportMissingInputPath();
+    try validateInputPath(input_path);
     return .{ .emit = .{
         .input_path = input_path,
         .output_path = result.args.output,
@@ -168,7 +183,7 @@ fn parseBuildCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
-        return parsing_error;
+        return error.InvalidCommandLine;
     };
     defer result.deinit();
 
@@ -176,7 +191,8 @@ fn parseBuildCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !
         return .{ .help = .build };
     }
 
-    const input_path = result.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return reportMissingInputPath();
+    try validateInputPath(input_path);
     return .{ .build = .{
         .input_path = input_path,
         .output_path = result.args.output,
@@ -197,7 +213,7 @@ fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Co
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
-        return parsing_error;
+        return error.InvalidCommandLine;
     };
     defer result.deinit();
 
@@ -205,7 +221,8 @@ fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Co
         return .{ .help = .run };
     }
 
-    const input_path = result.positionals[0] orelse return error.MissingInputPath;
+    const input_path = result.positionals[0] orelse return reportMissingInputPath();
+    try validateInputPath(input_path);
     var program_arguments: std.ArrayList([]const u8) = .empty;
     defer program_arguments.deinit(allocator);
 

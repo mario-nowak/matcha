@@ -72,8 +72,6 @@ pub const PrimitiveBinaryOperation = enum {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
-    And,
-    Or,
 };
 
 pub const BinaryOperationDecision = union(enum) {
@@ -84,6 +82,8 @@ pub const BinaryOperationDecision = union(enum) {
     ZeroSizedCompareEqual,
     ZeroSizedCompareNotEqual,
     UnionCaseIndexComparison,
+    ShortCircuitAnd,
+    ShortCircuitOr,
 };
 
 pub const PlaceDecision = union(enum) {

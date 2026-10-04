@@ -361,6 +361,7 @@ pub const NodeTypeAnalyzer = struct {
         const type_id = self.type_id_by_symbol_id.get(structure_symbol_id).?;
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
+            qualified_structure_literal.structure_name,
             qualified_structure_literal.fields,
             type_id,
             environment,
@@ -383,6 +384,7 @@ pub const NodeTypeAnalyzer = struct {
         };
         return self.checkStructureLiteralFieldsAgainstType(
             node_id,
+            structure_literal.dot_token,
             structure_literal.fields,
             type_id,
             environment,
@@ -392,6 +394,7 @@ pub const NodeTypeAnalyzer = struct {
     fn checkStructureLiteralFieldsAgainstType(
         self: *@This(),
         node_id: ast.NodeId,
+        literal_token: lexing.Token,
         fields: []const ast.StructureFieldInitializer,
         type_id: typing.TypeId,
         environment: TypeCheckEnvironment,
@@ -401,7 +404,7 @@ pub const NodeTypeAnalyzer = struct {
             else => {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
                     self.allocator,
-                    fields[0].name,
+                    literal_token,
                     "expected a structure type for this literal, found {s}",
                     .{try self.getTypeName(type_id)},
                 );
@@ -450,7 +453,7 @@ pub const NodeTypeAnalyzer = struct {
             if (field_exists_in_construction == null) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
                     self.allocator,
-                    fields[0].name,
+                    literal_token,
                     "missing field '{s}' in construction of '{s}'",
                     .{ field.name, structure_name },
                 );
@@ -1144,12 +1147,12 @@ pub const NodeTypeAnalyzer = struct {
         environment: TypeCheckEnvironment,
     ) TypeError!typing.TypeId {
         const left_expression_type = try self.checkNode(binary_expression.left, .asExpression, environment);
-        const right_expression_type = try self.checkNode(binary_expression.right, .asExpression, environment);
         const operator_signature = try self.findBinaryOperatorSignature(
             binary_expression.operator_token,
             binary_expression.operator,
             left_expression_type,
         );
+        const right_expression_type = try self.checkNode(binary_expression.right, .asExpressionWithType(operator_signature.argument_type_id), environment);
         const result_type_id = try self.checkBinaryOperatorApplication(
             binary_expression.operator_token,
             binary_expression.operator,

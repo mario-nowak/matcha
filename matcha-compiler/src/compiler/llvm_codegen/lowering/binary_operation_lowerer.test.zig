@@ -118,5 +118,33 @@ pub const BinaryOperationLowerer = struct {
 
             try expect(decisions.get(binary_expression.id).?).toMatch(.{ .PrimitiveOperation = .Equal });
         }
+
+        test "lowers and to a short-circuit operation" {
+            const source =
+                \\val both = true and false;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitAnd);
+        }
+
+        test "lowers or to a short-circuit operation" {
+            const source =
+                \\val either = true or false;
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+
+            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.ShortCircuitOr);
+        }
     };
 };

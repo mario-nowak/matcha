@@ -826,5 +826,69 @@ pub const Parser = struct {
                 });
             }
         };
+
+        pub const call_expressions = struct {
+            test "rejects arguments without a comma between them" {
+                const source = "val sum = add(1 2);";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const parser_pipeline = try setupParserPipeline(&arena, source);
+
+                const result = parser_pipeline.parser.parse();
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+                    .{ .severity = .@"error", .message = "expected ',' or ')' after call argument" },
+                });
+            }
+
+            test "rejects a comma before the first argument" {
+                const source = "val sum = add(, 1);";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const parser_pipeline = try setupParserPipeline(&arena, source);
+
+                const result = parser_pipeline.parser.parse();
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+                    .{ .severity = .@"error", .message = "expected expression" },
+                });
+            }
+
+            test "rejects two commas between arguments" {
+                const source = "val sum = add(1,, 2);";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const parser_pipeline = try setupParserPipeline(&arena, source);
+
+                const result = parser_pipeline.parser.parse();
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(parser_pipeline.diagnostic_store.items()).toMatch(.{
+                    .{ .severity = .@"error", .message = "expected expression" },
+                });
+            }
+
+            test "accepts a trailing comma after the last argument" {
+                const source = "val sum = add(1, 2,);";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const parser_pipeline = try setupParserPipeline(&arena, source);
+
+                const program = try parser_pipeline.parser.parse();
+
+                try expect(program).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .BindingDeclaration = .{
+                        .value = .{ .kind = .{ .CallExpression = .{
+                            .arguments = .{
+                                .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 1 } } } },
+                                .{ .kind = .{ .IntegerLiteral = .{ .kind = .{ .IntLiteral = 2 } } } },
+                            },
+                        } } },
+                    } } },
+                } });
+            }
+        };
     };
 };

@@ -11,11 +11,10 @@ pub fn generateLlvmIrFromFile(
     input_path: []const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
 ) ![]const u8 {
-    const cwd = std.fs.cwd();
-    const file = try cwd.openFile(input_path, .{});
-    defer file.close();
-
-    const file_contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    const file_contents = readInputFile(allocator, input_path) catch |read_error| {
+        try std.fs.File.stderr().deprecatedWriter().print("error: cannot read input file '{s}': {s}\n", .{ input_path, @errorName(read_error) });
+        return error.InputFileUnreadable;
+    };
     defer allocator.free(file_contents);
 
     var lexer = lexing.Lexer.init(file_contents, allocator, diagnostic_store);
@@ -138,7 +137,10 @@ pub fn emitFile(
 ) !void {
     const llvm_ir = try generateLlvmIrFromFile(allocator, input_path, diagnostic_store);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(allocator, input_path);
-    try writeFile(resolved_output_path, llvm_ir);
+    writeFile(resolved_output_path, llvm_ir) catch |write_error| {
+        try std.fs.File.stderr().deprecatedWriter().print("error: cannot write output file '{s}': {s}\n", .{ resolved_output_path, @errorName(write_error) });
+        return error.OutputFileUnwritable;
+    };
     try std.fs.File.stdout().deprecatedWriter().print("wrote {s}\n", .{resolved_output_path});
 }
 
@@ -188,6 +190,12 @@ pub fn writeFile(path: []const u8, contents: []const u8) !void {
     var file = try cwd.createFile(path, .{});
     defer file.close();
     try file.writeAll(contents);
+}
+
+fn readInputFile(allocator: std.mem.Allocator, input_path: []const u8) ![]const u8 {
+    const file = try std.fs.cwd().openFile(input_path, .{});
+    defer file.close();
+    return file.readToEndAlloc(allocator, std.math.maxInt(usize));
 }
 
 fn stemWithoutMatchaExtension(input_path: []const u8) []const u8 {

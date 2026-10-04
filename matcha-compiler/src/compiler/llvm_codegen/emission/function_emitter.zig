@@ -64,7 +64,7 @@ pub const FunctionEmitter = struct {
 
         self.function_ir_builder.emitTerminatorInstruction("ret i32 0");
 
-        return self.renderCurrentFunction("main", "i32", "i32 %argc, ptr %argv");
+        return self.renderCurrentFunction("main", "i32", "i32 %parameter.argc, ptr %parameter.argv");
     }
 
     pub fn emitFunctionDefinition(
@@ -102,27 +102,23 @@ pub const FunctionEmitter = struct {
             const parameter_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(parameter_symbol_id);
             const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
             const parameter_llvm_ir_type = lowered_program.getLlvmIrType(parameter_type_id);
-            const parameter_register = std.fmt.allocPrint(
-                self.allocator,
-                "%arg_{d}_{s}",
-                .{ parameter_index, parameter_symbol.name },
-            ) catch unreachable;
+            const parameter_value = self.function_symbol_generator.parameterName(parameter_symbol.name);
 
             if (parameter_index > 0) {
                 parameter_list_buffer.writer(self.allocator).print(", ", .{}) catch unreachable;
             }
             parameter_list_buffer.writer(self.allocator).print(
                 "{s} {s}",
-                .{ parameter_llvm_ir_type, parameter_register },
+                .{ parameter_llvm_ir_type, parameter_value },
             ) catch unreachable;
 
-            const storage = self.function_symbol_generator.generateStorage();
-            self.function_ir_builder.emitAlloca(storage, parameter_llvm_ir_type);
-            self.function_ir_builder.emitStore(parameter_register, storage, parameter_llvm_ir_type);
-            environment.storage_by_symbol_id.put(parameter_symbol_id, storage) catch unreachable;
+            const address = self.function_symbol_generator.generateBindingAddressName(parameter_symbol.name);
+            self.function_ir_builder.emitStackAllocation(address, parameter_llvm_ir_type);
+            self.function_ir_builder.emitStore(parameter_value, address, parameter_llvm_ir_type);
+            environment.address_by_symbol_id.put(parameter_symbol_id, address) catch unreachable;
         }
 
-        const body_register = self.node_emitter.emitNode(
+        const body_value = self.node_emitter.emitNode(
             function_definition.body_expression,
             lowered_program,
             &environment,
@@ -140,7 +136,7 @@ pub const FunctionEmitter = struct {
                     const return_instruction = std.fmt.allocPrint(
                         self.allocator,
                         "ret {s} {s}",
-                        .{ function_return_llvm_ir_type, body_register.expectRegister() },
+                        .{ function_return_llvm_ir_type, body_value.expectValue() },
                     ) catch unreachable;
                     self.function_ir_builder.emitTerminatorInstruction(return_instruction);
                 },

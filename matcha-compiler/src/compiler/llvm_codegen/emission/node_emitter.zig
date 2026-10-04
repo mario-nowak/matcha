@@ -16,31 +16,31 @@ const calls = @import("calls.zig");
 const places = @import("places.zig");
 const aggregates = @import("aggregates.zig");
 
-const Register = function_symbol_generator_module.Register;
-const Storage = function_symbol_generator_module.Storage;
+const Value = function_symbol_generator_module.Value;
+const Address = function_symbol_generator_module.Address;
 const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
 const RuntimeCallEmitter = runtime_call_emitter_module.RuntimeCallEmitter;
 const RuntimeStringParts = runtime_call_emitter_module.RuntimeStringParts;
 const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
 const StringLiteralEmitter = string_literal_emitter_module.StringLiteralEmitter;
-const StorageBySymbolId = std.AutoHashMap(symbols.SymbolId, Storage);
+const AddressBySymbolId = std.AutoHashMap(symbols.SymbolId, Address);
 
 /// The outcome of emitting a single AST node.
 pub const EmissionResult = union(enum) {
-    /// The node is an expression whose value lives in this register.
-    register: Register,
+    /// The node is an expression, and this is its value.
+    value: Value,
     /// The node is an expression that was fully evaluated (including side effects), but its type has no runtime
-    /// representation, so there is no register.
+    /// representation, so there is no IR value.
     zero_sized,
     /// The node is a statement; no value exists.
     statement,
 
-    /// Unwraps the register of an expression that must have a runtime representation. Reaching this on a
+    /// Unwraps the value of an expression that must have a runtime representation. Reaching this on a
     /// `zero_sized` or `statement` result is a compiler bug at the call site.
-    pub fn expectRegister(self: @This()) Register {
+    pub fn expectValue(self: @This()) Value {
         return switch (self) {
-            .register => |register| register,
+            .value => |value| value,
             .zero_sized, .statement => unreachable,
         };
     }
@@ -52,7 +52,7 @@ pub const LoopContext = struct {
 };
 
 pub const Environment = struct {
-    storage_by_symbol_id: StorageBySymbolId,
+    address_by_symbol_id: AddressBySymbolId,
     loop_context: ?LoopContext,
     function_return_type_id: typing.TypeId,
 
@@ -62,14 +62,14 @@ pub const Environment = struct {
         function_return_type_id: typing.TypeId,
     ) @This() {
         return .{
-            .storage_by_symbol_id = StorageBySymbolId.init(allocator),
+            .address_by_symbol_id = AddressBySymbolId.init(allocator),
             .loop_context = loop_context,
             .function_return_type_id = function_return_type_id,
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.storage_by_symbol_id.deinit();
+        self.address_by_symbol_id.deinit();
     }
 };
 
@@ -106,26 +106,26 @@ pub const NodeEmitter = struct {
         _ = self;
     }
 
-    pub fn emitStringParts(self: *@This(), string_register: Register) RuntimeStringParts {
-        const pointer_register = self.function_symbol_generator.generateRegister();
+    pub fn emitStringParts(self: *@This(), string_value: Value) RuntimeStringParts {
+        const pointer_value = self.function_symbol_generator.generateValueName();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = extractvalue {s} {s}, 0",
-            .{ pointer_register, lowering.llvm_type.string_llvm_type, string_register },
+            .{ pointer_value, lowering.llvm_type.string_llvm_type, string_value },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(pointer_instruction);
 
-        const length_register = self.function_symbol_generator.generateRegister();
+        const length_value = self.function_symbol_generator.generateValueName();
         const length_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = extractvalue {s} {s}, 1",
-            .{ length_register, lowering.llvm_type.string_llvm_type, string_register },
+            .{ length_value, lowering.llvm_type.string_llvm_type, string_value },
         ) catch unreachable;
         self.function_ir_builder.emitInstruction(length_instruction);
 
         return .{
-            .pointer_register = pointer_register,
-            .length_register = length_register,
+            .pointer_value = pointer_value,
+            .length_value = length_value,
         };
     }
 
@@ -142,13 +142,13 @@ pub const NodeEmitter = struct {
                 lowered_program,
                 environment,
             ),
-            .IntegerLiteral => |token| return .{ .register = std.fmt.allocPrint(
+            .IntegerLiteral => |token| return .{ .value = std.fmt.allocPrint(
                 self.allocator,
                 "{d}",
                 .{token.kind.IntLiteral},
             ) catch unreachable },
-            .BooleanLiteral => |token| return .{ .register = if (token.kind.BooleanLiteral) "1" else "0" },
-            .StringLiteral => |token| return .{ .register = self.string_literal_emitter.emitStringLiteralValue(
+            .BooleanLiteral => |token| return .{ .value = if (token.kind.BooleanLiteral) "1" else "0" },
+            .StringLiteral => |token| return .{ .value = self.string_literal_emitter.emitStringLiteralValue(
                 self.string_literal_pool,
                 node.id,
                 token.kind.StringLiteral,

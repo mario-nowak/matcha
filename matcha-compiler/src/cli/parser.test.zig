@@ -66,3 +66,42 @@ test "parse run command with forwarded program arguments" {
         else => try std.testing.expect(false),
     }
 }
+
+pub const Parser = struct {
+    pub const parse = struct {
+        pub const input_paths = struct {
+            test "rejects a build command when the input has no .mt extension" {
+                const command_line = "matcha build examples/learning-matcha";
+                var iter = try std.process.ArgIteratorGeneral(.{}).init(std.testing.allocator, command_line);
+                defer iter.deinit();
+                _ = iter.next();
+
+                const result = parser.parse(std.testing.allocator, &iter);
+
+                try std.testing.expectError(error.InputPathWithoutMatchaExtension, result);
+            }
+
+            test "rejects a emit command when the input has no .mt extension" {
+                const command_line = "matcha emit examples/learning-matcha";
+                var iter = try std.process.ArgIteratorGeneral(.{}).init(std.testing.allocator, command_line);
+                defer iter.deinit();
+                _ = iter.next();
+
+                const result = parser.parse(std.testing.allocator, &iter);
+
+                try std.testing.expectError(error.InputPathWithoutMatchaExtension, result);
+            }
+
+            test "rejects a run command when the input has no .mt extension" {
+                const command_line = "matcha run examples/learning-matcha";
+                var iter = try std.process.ArgIteratorGeneral(.{}).init(std.testing.allocator, command_line);
+                defer iter.deinit();
+                _ = iter.next();
+
+                const result = parser.parse(std.testing.allocator, &iter);
+
+                try std.testing.expectError(error.InputPathWithoutMatchaExtension, result);
+            }
+        };
+    };
+};

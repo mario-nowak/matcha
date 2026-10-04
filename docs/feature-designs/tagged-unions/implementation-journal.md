@@ -271,6 +271,10 @@ now not all of them are real issues. But a lot of them are.
 
 ---
 
+- Union equality is decided but deferred: one compiler-generated equality function per union type, for example `@matcha.union.Maybe.synthetic_function.equal(ptr, ptr)` (see the IR naming plan below), emitted only for compared unions and the unions reachable through their payloads. Inline comparisons would need hand-built loops for recursive and mutually recursive unions, while a function just calls itself. It is the first compiler-generated function, so it needs new machinery, and `match` covers most uses until then.
+
+---
+
 # Cleanups for later
 
 - Merge the five identical error sets (`LexError`, `ParseError`, `ControlFlowValidationError`, `NameResolutionError`, `TypeError`) into one `CompileError = error{DiagnosticsEmitted} || std.mem.Allocator.Error` in the `diagnostics` module.
@@ -278,21 +282,100 @@ now not all of them are real issues. But a lot of them are.
 - Replace `catch unreachable` on allocations with `try`, so `error.OutOfMemory` propagates through `CompileError` instead of being undefined behavior in ReleaseFast (review item 51).
 - Delete `getTypeIdFromResolvedTypeReference()` and the unused `getLlvmIrTypeFromResolvedTypeReference()` in `llvm_type.zig`: they redo the type checker's reference-to-type translation in codegen. The renderers should read `StructureType.fields[i].type_id` and `UnionType.cases[i].type_id` instead.
 - Emit union payloads and structure field values before the allocation, not after it, so an early exit in a payload or field expression doesn't leave a wasted allocation behind. Fixed while lowering unions, for array literal elements too.
-- Rename the codegen value and slot concepts, so the names say what the IR contains:
-    - `Register` becomes `Value`, because it often holds a literal like `1` and not a register. Rename `generateRegister()`, `EmissionResult.register` and `expectRegister()` to match. IR name: `%.value_<counter>`.
-    - `Storage` becomes `Address`, because it holds a pointer to an `alloca` slot and not the slot itself. Rename `storage_by_symbol_id` to `address_by_symbol_id`.
-    - Symbol slots (bindings, parameters, `for` items, payload bindings) use `generateSymbolAddress(symbol)`. IR name: `%.address__symbol_<id>__<name>`. No counter, because the symbol id is already unique.
-    - Synthetic slots (the `for` index, runtime call result slots) use `generateSyntheticAddress()`. IR name: `%.address__synthetic_<counter>`.
-    - `%String` and `%Array` become `%matcha_string` and `%matcha_array`, like the other generated names (`matcha_structure_0__Point`, `matcha_print_int`). Only `string_llvm_type_name` and `array_llvm_type_name` in `llvm_type.zig` change.
-- Name labels after the AST construct, so the IR shows where it is in the source:
-    - Use node kind, node id and arm index, for example `.match_expression_12__arm_1`. No counter, because the node id is already unique. No `matcha__` prefix, because the leading `.` already prevents collisions.
-    - Name the block that checks an arm after that arm: `.match_expression_12__arm_2__condition`, not `__arm_1__next`.
-    - Keep values as `%.value_<counter>`. One node makes many values, some values have no node, and about 130 `generateRegister()` sites would each need a role name.
-    - Consider `;` comments with a source snippet before each statement or arm instead, for example `; .Horizontal(value) => value`.
-    - Risk: node ids shift when the parser adds or removes nodes, so one parser change renames labels in many IR tests at once.
+- The renaming of the codegen value and slot concepts and of the labels moved into the IR naming plan below.
 - Learn about optimization flags. `linker.zig` calls `clang` without `-O`, so it compiles at `-O0` and `mem2reg` never runs. Every `alloca`/`store`/`load` of a binding stays in the binary as a real stack access. Consider a `--release` flag on `matcha build` that passes `-O2`.
 - Load the case index of a union match subject once, not again in every arm. Today `UnionCaseIndexComparison` loads it for each comparison. The LLVM optimizer removes the extra loads at `-O1` and above.
 - Construct unit cases like `Maybe.None` once, as one global constant per case, instead of allocating on every use.
 - Allocate case structures without pointers, for example a unit case or an `int` payload, with `matcha_allocate_atomic`, so the garbage collector does not scan them. This belongs with the atomic allocation work in issue #25.
 - Split `DecisionConstruct` in `control_flow.zig` into a pattern match construct and a condition chain construct. Today one construct serves both, so it allows a construct without a subject but with pattern arms. Pattern matching will grow apart from the subjectless match, like the planned split of `MatchExpression` above.
 - Keep the case names and the case types of a union in one place (review item 33). The names are in the union symbol and the types are in `UnionType`, matched by index. `UnionLayoutLowerer` reads the names from the symbol.
+
+---
+
+# IR naming plan
+
+- Goal: an IR name only changes when the related source changes. Global counters (symbol ids, node ids) break this, because one new builtin or one new parser node renames unrelated code. Example: registering the builtins before the module items (review item 7) shifts every symbol id by 5 and breaks 30 IR tests.
+- Separator is `.`, not `__`. Identifiers can contain `__`, so `__` names are ambiguous: structure `X` with function `b__function__c` and structure `X__function__b` with function `c` both give `matcha_structure__X__function__b__function__c`. Identifiers can never contain `.`, and LLVM accepts `.` in unquoted names.
+- Sigils: `@` is a global name (functions, global constants). `%` is a local name (values, parameters, labels) or a named type. Types have their own namespace.
+
+## Global names
+
+- `matcha` followed by pairs of `<kind>.<name>`. The kinds are a fixed list, so a user name is never read as a kind. A modifier joins its kind with `_` (`synthetic_function`) to keep the pairs regular.
+
+| What | Name |
+|---|---|
+| top-level function | `@matcha.function.add` |
+| structure type | `%matcha.structure.Point` |
+| structure function | `@matcha.structure.Point.function.origin` |
+| union case type | `%matcha.union.Maybe.case.Some` |
+| union function | `@matcha.union.Result.function.fromNumber` |
+| compiler-generated function | `@matcha.union.Maybe.synthetic_function.equal` |
+| string literal | `@matcha.string_literal.<n>` |
+| builtin function | `@matcha.compiler_module.builtin.function.printInt` |
+| builtin method | `@matcha.compiler_module.builtin.type.string.method.trim`, `@matcha.compiler_module.builtin.type.int.method.toString` |
+| builtin type | `%matcha.compiler_module.builtin.type.string`, `%matcha.compiler_module.builtin.type.array` |
+| runtime internal | `@matcha.compiler_module.runtime.function.allocate` |
+
+- `function` marks a user-defined function, `synthetic_function` a compiler-generated one, so a user function `equal` cannot clash with the generated one.
+- No case index in case type names: case names are unique within a union.
+- Builtins and runtime internals live in compiler-provided modules. The kind `compiler_module` cannot clash with a user module, because user modules use the kind `module`. So a user file `builtin.mt` stays allowed and no name is reserved.
+    - Not `internal_module`: `internal` is an LLVM linkage and a common visibility keyword, and builtins are public.
+    - Not `$builtin` or `module..builtin`: `$` is unwanted, and an empty name breaks the pairs.
+- The runtime exports its functions with `@export(&printInt, .{ .name = runtime_symbols.builtin_print_int_function_name })` instead of `export fn matcha_print_int`. The runtime imports the `runtime_symbols` module, so the compiler and the runtime share one spelling of every name.
+- Runtime internal names translate the old names to camel case: `matcha_string_concatenate` becomes `stringConcatenate`, `matcha_init_arguments` becomes `initArguments`.
+- The `runtime_symbols` constants say what they name: `builtin_print_int_function_name`, `builtin_string_trim_method_name`, `runtime_allocate_function_name`. The Zig functions in the runtime use the same camel case names as the IR, for example `fn stringConcatenate`.
+- `@main` stays. Its parameters become `%parameter.argc` and `%parameter.argv`.
+
+## Modules
+
+- Modules prepend pairs: `@matcha.module.json.module.parser.function.parse`. Names in the entry module do not change, so adding modules renames nothing that exists today.
+- Open decisions for the modules design:
+    - Module names must be identifiers. A rule is needed for file names like `json-parser.mt`.
+    - Whether the entry module gets a pair (`module.main`) or none.
+    - One LLVM module per program or per Matcha module. Per Matcha module, string literals need `private` linkage or a module pair.
+
+## Local names
+
+- Every local name starts with a fixed category, so no raw user name appears as a local name. No leading `.` is needed.
+
+| What | Name | Counter |
+|---|---|---|
+| value | `%value.<n>` | per function, from 0 |
+| binding address (`val`, `var`, parameter, `for` item, payload binding) | `%address.binding.<name>.<n>` | per function and name, from 0, always present |
+| synthetic address (`for` index, runtime call result) | `%address.synthetic.<n>` | per function, from 0 |
+| parameter | `%parameter.<name>` | none, parameter names are unique |
+
+- Code renames to match: `Register` becomes `Value`, `Storage` becomes `Address` (`generateRegister()`, `EmissionResult.register`, `expectRegister()`, `storage_by_symbol_id`).
+- `FunctionSymbolGenerator` hands out names and emits nothing, so its functions say so: `generateValueName()`, `generateBindingAddressName(name)`, `generateSyntheticAddressName()` and `parameterName(name)`.
+
+## Labels
+
+- `<construct>.<n>.<role>`, where `<n>` counts that construct per function, from 0. The same scheme for every control-flow construct:
+
+| Construct | Labels |
+|---|---|
+| `if` | `if.0.then`, `if.0.else`, `if.0.end` |
+| `match` | `match.0.arm.0`, `match.0.arm.1.condition`, `match.0.arm.1`, `match.0.else`, `match.0.end` |
+| subjectless `match` | the same roles with `subjectless_match` |
+| `while` | `while.0.header`, `while.0.body`, `while.0.continue`, `while.0.exit` |
+| `loop` | `loop.0.header`, `loop.0.body`, `loop.0.continue`, `loop.0.exit` |
+| `for in` | `for_in.0.header`, `for_in.0.body`, `for_in.0.continue`, `for_in.0.exit` |
+| `and`, `or` | `and.0.right`, `and.0.end` |
+| index bounds check | `index.0.in_bounds`, `index.0.out_of_bounds` |
+
+- `arm.<i>.condition` is the block that checks arm `i`. Arm 0 is checked in the block before it, so it has no condition label.
+- A decision construct ends in `end`, its join point. A loop keeps `continue` (the target of `continue`) and `exit` (the target of `leave`).
+- `loop` keeps `header` and `continue`, although it has no condition and no update: removing the blocks would change the IR structure, so it is not part of the rename.
+- A construct gets its number before its subexpressions are emitted, so an outer construct has a lower number than the constructs nested in it.
+- `FunctionSymbolGenerator.generateConstructLabels(name)` returns the labels of one construct: `role(name)`, `arm(index)` and `armCondition(index)`.
+
+## Order
+
+1. User-defined global names: the three layout lowerers and `StringLiteralPool`.
+2. Review item 7: register the builtins before the module items. Harmless after step 1.
+3. Builtin and runtime names: the runtime exports, `RuntimeSymbolRenderer` and the builtin types in `llvm_type.zig`.
+4. Code renames only (`Register` to `Value`, `Storage` to `Address`). No IR change.
+5. Local value, address and parameter names.
+6. Labels.
+
+- Proof that a rename is pure: a script maps the old names to the new names in the old test expectations, and the result must equal the new expectations. Running `llvm-as` on the test outputs (review item 53) also catches invalid names.

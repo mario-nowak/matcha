@@ -11,7 +11,8 @@ pub fn main() !void {
     defer command_line_arguments.deinit();
     _ = command_line_arguments.skip();
 
-    const exit_code = cli.run(allocator, &command_line_arguments) catch {
+    const exit_code = cli.run(allocator, &command_line_arguments) catch |run_error| {
+        cli.reportUnreportedError(run_error);
         std.process.exit(1);
     };
     std.process.exit(exit_code);
