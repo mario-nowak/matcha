@@ -6,7 +6,7 @@ const function_symbol_generator_module = @import("function_symbol_generator.zig"
 const node_emitter_module = @import("node_emitter.zig");
 const values = @import("values.zig");
 
-const Register = function_symbol_generator_module.Register;
+const Value = function_symbol_generator_module.Value;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
@@ -20,7 +20,7 @@ pub fn emitBindingDeclaration(
 ) EmissionResult {
     // Regardless of the runtime representation of the value node, we still must emit it because it may have side
     // effects. For example, a function call that returns unit may still have side effects.
-    const value_register = emitter.emitNode(value_declaration.value, lowered_program, environment);
+    const initial_value = emitter.emitNode(value_declaration.value, lowered_program, environment);
 
     const runtime_representation = lowered_program
         .analyzed_program
@@ -36,11 +36,11 @@ pub fn emitBindingDeclaration(
     const value_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(value_declaration.value.id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
 
-    const storage = emitter.function_symbol_generator.generateStorage();
-    emitter.function_ir_builder.emitAlloca(storage, llvm_ir_type);
-    emitter.function_ir_builder.emitStore(value_register.expectRegister(), storage, llvm_ir_type);
+    const address = emitter.function_symbol_generator.generateAddress();
+    emitter.function_ir_builder.emitAlloca(address, llvm_ir_type);
+    emitter.function_ir_builder.emitStore(initial_value.expectValue(), address, llvm_ir_type);
 
-    environment.storage_by_symbol_id.put(symbol_id, storage) catch unreachable;
+    environment.address_by_symbol_id.put(symbol_id, address) catch unreachable;
 
     return .statement;
 }
@@ -58,34 +58,34 @@ pub fn emitAssignmentStatement(
     const llvm_ir_type = lowered_program.getLlvmIrType(value_type_id);
     switch (assignment_statement.operator) {
         .Assign => {
-            const value_register = emitter.emitNode(assignment_statement.value, lowered_program, environment);
-            const place_register = switch (place_emission_result) {
+            const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
+            const place_value = switch (place_emission_result) {
                 .zero_sized => return .statement,
-                .register => |place_register| place_register,
+                .value => |place_value| place_value,
                 .statement => unreachable,
             };
-            emitter.function_ir_builder.emitStore(value_register.expectRegister(), place_register, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(assigned_value.expectValue(), place_value, llvm_ir_type);
         },
         .Compound => {
-            const value_register = emitter.emitNode(assignment_statement.value, lowered_program, environment);
-            const place_register = switch (place_emission_result) {
+            const assigned_value = emitter.emitNode(assignment_statement.value, lowered_program, environment);
+            const place_value = switch (place_emission_result) {
                 .zero_sized => return .statement,
-                .register => |place_register| place_register,
+                .value => |place_value| place_value,
                 .statement => unreachable,
             };
 
-            const current_value_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitLoad(current_value_register, place_register, llvm_ir_type);
+            const current_value = emitter.function_symbol_generator.generateValue();
+            emitter.function_ir_builder.emitLoad(current_value, place_value, llvm_ir_type);
 
-            const result_register = values.emitLoweredBinaryOperation(
+            const result_value = values.emitLoweredBinaryOperation(
                 emitter,
                 lowered_program.binary_operation_decision_by_node_id.get(node.id) orelse unreachable,
                 value_type_id,
-                current_value_register,
-                value_register.expectRegister(),
+                current_value,
+                assigned_value.expectValue(),
                 lowered_program,
             );
-            emitter.function_ir_builder.emitStore(result_register, place_register, llvm_ir_type);
+            emitter.function_ir_builder.emitStore(result_value, place_value, llvm_ir_type);
         },
     }
     return .statement;
@@ -109,7 +109,7 @@ pub fn emitPlace(
             if (!target_runtime_representation.hasRuntimeRepresentation()) {
                 return .zero_sized;
             }
-            return .{ .register = environment.storage_by_symbol_id.get(identifier_binding.symbol_id).? };
+            return .{ .value = environment.address_by_symbol_id.get(identifier_binding.symbol_id).? };
         },
         .StructureField => |structure_field| {
             const member_expression = switch (target.kind) {
@@ -143,8 +143,8 @@ pub fn emitStructureFieldPointer(
 ) EmissionResult {
     // First check if the base expression of the member access has a runtime representation and exit early if not
     const base_emission_result = emitter.emitNode(member_expression.base, lowered_program, environment);
-    const base_register = switch (base_emission_result) {
-        .register => |register| register,
+    const base_value = switch (base_emission_result) {
+        .value => |value| value,
         .zero_sized => return .zero_sized,
         .statement => unreachable,
     };
@@ -164,15 +164,15 @@ pub fn emitStructureFieldPointer(
         .Index => |field_layout_index| field_layout_index,
     };
 
-    const field_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const field_pointer_value = emitter.function_symbol_generator.generateValue();
     emitter.function_ir_builder.emitFieldPointer(
-        field_pointer_register,
+        field_pointer_value,
         structure_layout.llvm_type_name,
-        base_register,
+        base_value,
         field_layout_index,
     );
 
-    return .{ .register = field_pointer_register };
+    return .{ .value = field_pointer_value };
 }
 
 pub fn emitIndexExpressionPointer(
@@ -182,8 +182,8 @@ pub fn emitIndexExpressionPointer(
     environment: *Environment,
 ) EmissionResult {
     const builder = emitter.function_ir_builder;
-    const base_register = emitter.emitNode(index_expression.base, lowered_program, environment).expectRegister();
-    const index_register = emitter.emitNode(index_expression.index, lowered_program, environment).expectRegister();
+    const base_value = emitter.emitNode(index_expression.base, lowered_program, environment).expectValue();
+    const index_value = emitter.emitNode(index_expression.index, lowered_program, environment).expectValue();
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
@@ -192,49 +192,49 @@ pub fn emitIndexExpressionPointer(
     };
 
     // Perform bounds check
-    const length_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const length_pointer_value = emitter.function_symbol_generator.generateValue();
     builder.emitFieldPointer(
-        length_pointer_register,
+        length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
-        base_register,
+        base_value,
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(length_register, length_pointer_register, "i64");
+    const length_value = emitter.function_symbol_generator.generateValue();
+    builder.emitLoad(length_value, length_pointer_value, "i64");
 
-    const data_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const data_pointer_value = emitter.function_symbol_generator.generateValue();
     builder.emitFieldPointer(
-        data_pointer_register,
+        data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
-        base_register,
+        base_value,
         lowering.llvm_type.array_data_field_index,
     );
 
-    const negative_check_register = emitter.function_symbol_generator.generateRegister();
+    const negative_check_value = emitter.function_symbol_generator.generateValue();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp slt i64 {s}, 0",
-        .{ negative_check_register, index_register },
+        .{ negative_check_value, index_value },
     ) catch unreachable);
 
-    const overflow_check_register = emitter.function_symbol_generator.generateRegister();
+    const overflow_check_value = emitter.function_symbol_generator.generateValue();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = icmp sge i64 {s}, {s}",
-        .{ overflow_check_register, index_register, length_register },
+        .{ overflow_check_value, index_value, length_value },
     ) catch unreachable);
 
-    const out_of_bounds_register = emitter.function_symbol_generator.generateRegister();
+    const out_of_bounds_value = emitter.function_symbol_generator.generateValue();
     builder.emitInstruction(std.fmt.allocPrint(
         emitter.allocator,
         "{s} = or i1 {s}, {s}",
-        .{ out_of_bounds_register, negative_check_register, overflow_check_register },
+        .{ out_of_bounds_value, negative_check_value, overflow_check_value },
     ) catch unreachable);
 
     const panic_label = emitter.function_symbol_generator.generateLabel("index_panic");
     const ok_label = emitter.function_symbol_generator.generateLabel("index_ok");
-    builder.emitBranchInstruction(out_of_bounds_register, &.{ panic_label, ok_label });
+    builder.emitBranchInstruction(out_of_bounds_value, &.{ panic_label, ok_label });
 
     builder.emitLabel(panic_label);
     const line = index_expression.left_bracket.line;
@@ -243,8 +243,8 @@ pub fn emitIndexExpressionPointer(
         builder,
         line,
         column,
-        index_register,
-        length_register,
+        index_value,
+        length_value,
     );
     builder.emitTerminatorInstruction("unreachable");
 
@@ -258,11 +258,11 @@ pub fn emitIndexExpressionPointer(
     if (!element_runtime_representation.hasRuntimeRepresentation()) {
         return .zero_sized;
     }
-    const data_register = emitter.function_symbol_generator.generateRegister();
-    builder.emitLoad(data_register, data_pointer_register, "ptr");
-    const element_pointer_register = emitter.function_symbol_generator.generateRegister();
+    const data_value = emitter.function_symbol_generator.generateValue();
+    builder.emitLoad(data_value, data_pointer_value, "ptr");
+    const element_pointer_value = emitter.function_symbol_generator.generateValue();
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    builder.emitElementPointer(element_pointer_register, element_llvm_type, data_register, index_register);
+    builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 
-    return .{ .register = element_pointer_register };
+    return .{ .value = element_pointer_value };
 }

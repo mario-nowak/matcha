@@ -21,19 +21,19 @@ fn runtimeFunction(comptime name: []const u8) []const u8 {
 
 pub const runtime_allocate_function_name = runtimeFunction("allocate");
 pub const runtime_allocate_atomic_function_name = runtimeFunction("allocateAtomic");
-pub const runtime_print_int_function_name = builtinFunction("printInt");
-pub const runtime_print_string_function_name = builtinFunction("printString");
-pub const runtime_read_file_function_name = builtinFunction("readFile");
-pub const runtime_read_line_function_name = builtinFunction("readLine");
+pub const builtin_print_int_function_name = builtinFunction("printInt");
+pub const builtin_print_string_function_name = builtinFunction("printString");
+pub const builtin_read_file_function_name = builtinFunction("readFile");
+pub const builtin_read_line_function_name = builtinFunction("readLine");
 pub const runtime_initiate_garbage_collector_function_name = runtimeFunction("initiateGarbageCollector");
 pub const runtime_init_arguments_function_name = runtimeFunction("initArguments");
-pub const runtime_get_arguments_function_name = builtinFunction("getArguments");
+pub const builtin_get_arguments_function_name = builtinFunction("getArguments");
 pub const runtime_string_concatenate_function_name = runtimeFunction("stringConcatenate");
 pub const runtime_string_compare_function_name = runtimeFunction("stringCompare");
-pub const runtime_string_trim_function_name = builtinMethod("string", "trim");
-pub const runtime_string_split_function_name = builtinMethod("string", "split");
-pub const runtime_string_to_int_function_name = builtinMethod("string", "toInt");
-pub const runtime_int_to_string_function_name = builtinMethod("int", "toString");
+pub const builtin_string_trim_method_name = builtinMethod("string", "trim");
+pub const builtin_string_split_method_name = builtinMethod("string", "split");
+pub const builtin_string_to_int_method_name = builtinMethod("string", "toInt");
+pub const builtin_int_to_string_method_name = builtinMethod("int", "toString");
 pub const runtime_panic_index_out_of_bounds_function_name = runtimeFunction("panicIndexOutOfBounds");
 pub const runtime_array_append_slot_function_name = runtimeFunction("arrayAppendSlot");
 

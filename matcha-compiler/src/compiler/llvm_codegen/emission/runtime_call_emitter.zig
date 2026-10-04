@@ -5,11 +5,11 @@ const runtime_symbols = @import("runtime_symbols");
 const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
-const Register = function_symbol_generator_module.Register;
+const Value = function_symbol_generator_module.Value;
 
 pub const RuntimeStringParts = struct {
-    pointer_register: Register,
-    length_register: Register,
+    pointer_value: Value,
+    length_value: Value,
 };
 
 /// Emits calls into the Matcha runtime. It records every runtime function it emits a call to, so the module
@@ -60,13 +60,13 @@ pub const RuntimeCallEmitter = struct {
     pub fn emitPrintIntCall(
         self: *@This(),
         builder: *FunctionIrBuilder,
-        integer_register: Register,
+        integer_value: Value,
     ) void {
         self.runtime_requirements.print_int = true;
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(i64 {s})",
-            .{ runtime_symbols.runtime_print_int_function_name, integer_register },
+            .{ runtime_symbols.builtin_print_int_function_name, integer_value },
         ) catch unreachable);
     }
 
@@ -80,9 +80,9 @@ pub const RuntimeCallEmitter = struct {
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
             .{
-                runtime_symbols.runtime_print_string_function_name,
-                string_parts.pointer_register,
-                string_parts.length_register,
+                runtime_symbols.builtin_print_string_function_name,
+                string_parts.pointer_value,
+                string_parts.length_value,
             },
         ) catch unreachable;
         builder.emitInstruction(print_instruction);
@@ -93,12 +93,12 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         path_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.read_file = true;
         return self.emitStringOutputCall(
             builder,
             symbol_generator,
-            runtime_symbols.runtime_read_file_function_name,
+            runtime_symbols.builtin_read_file_function_name,
             path_parts,
         );
     }
@@ -107,12 +107,12 @@ pub const RuntimeCallEmitter = struct {
         self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
-    ) Register {
+    ) Value {
         self.runtime_requirements.read_line = true;
         return self.emitZeroInputStringOutputCall(
             builder,
             symbol_generator,
-            runtime_symbols.runtime_read_line_function_name,
+            runtime_symbols.builtin_read_line_function_name,
         );
     }
 
@@ -120,15 +120,15 @@ pub const RuntimeCallEmitter = struct {
         self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
-    ) Register {
+    ) Value {
         self.runtime_requirements.get_arguments = true;
-        const result_register = symbol_generator.generateRegister();
+        const result_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}()",
-            .{ result_register, runtime_symbols.runtime_get_arguments_function_name },
+            .{ result_value, runtime_symbols.builtin_get_arguments_function_name },
         ) catch unreachable);
-        return result_register;
+        return result_value;
     }
 
     pub fn emitStringConcatenateCall(
@@ -137,26 +137,26 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         left_parts: RuntimeStringParts,
         right_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.string_concatenate = true;
-        const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateAddress();
+        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
                 runtime_symbols.runtime_string_concatenate_function_name,
-                result_storage,
-                left_parts.pointer_register,
-                left_parts.length_register,
-                right_parts.pointer_register,
-                right_parts.length_register,
+                result_address,
+                left_parts.pointer_value,
+                left_parts.length_value,
+                right_parts.pointer_value,
+                right_parts.length_value,
             },
         ) catch unreachable);
 
-        const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
-        return result_register;
+        const result_value = symbol_generator.generateValue();
+        builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
     }
 
     pub fn emitStringCompareCall(
@@ -165,22 +165,22 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         left_parts: RuntimeStringParts,
         right_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.string_compare = true;
-        const result_register = symbol_generator.generateRegister();
+        const result_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call i1 @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
-                result_register,
+                result_value,
                 runtime_symbols.runtime_string_compare_function_name,
-                left_parts.pointer_register,
-                left_parts.length_register,
-                right_parts.pointer_register,
-                right_parts.length_register,
+                left_parts.pointer_value,
+                left_parts.length_value,
+                right_parts.pointer_value,
+                right_parts.length_value,
             },
         ) catch unreachable);
-        return result_register;
+        return result_value;
     }
 
     pub fn emitStringTrimCall(
@@ -188,12 +188,12 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         string_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.string_trim = true;
         return self.emitStringOutputCall(
             builder,
             symbol_generator,
-            runtime_symbols.runtime_string_trim_function_name,
+            runtime_symbols.builtin_string_trim_method_name,
             string_parts,
         );
     }
@@ -204,22 +204,22 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         source_parts: RuntimeStringParts,
         delimiter_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.string_split = true;
-        const result_register = symbol_generator.generateRegister();
+        const result_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
             .{
-                result_register,
-                runtime_symbols.runtime_string_split_function_name,
-                source_parts.pointer_register,
-                source_parts.length_register,
-                delimiter_parts.pointer_register,
-                delimiter_parts.length_register,
+                result_value,
+                runtime_symbols.builtin_string_split_method_name,
+                source_parts.pointer_value,
+                source_parts.length_value,
+                delimiter_parts.pointer_value,
+                delimiter_parts.length_value,
             },
         ) catch unreachable);
-        return result_register;
+        return result_value;
     }
 
     pub fn emitStringToIntCall(
@@ -227,44 +227,44 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         string_parts: RuntimeStringParts,
-    ) Register {
+    ) Value {
         self.runtime_requirements.string_to_int = true;
-        const result_register = symbol_generator.generateRegister();
+        const result_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call i64 @{s}(ptr {s}, i64 {s})",
             .{
-                result_register,
-                runtime_symbols.runtime_string_to_int_function_name,
-                string_parts.pointer_register,
-                string_parts.length_register,
+                result_value,
+                runtime_symbols.builtin_string_to_int_method_name,
+                string_parts.pointer_value,
+                string_parts.length_value,
             },
         ) catch unreachable);
-        return result_register;
+        return result_value;
     }
 
     pub fn emitIntToStringCall(
         self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
-        integer_register: Register,
-    ) Register {
+        integer_value: Value,
+    ) Value {
         self.runtime_requirements.int_to_string = true;
-        const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
+        const result_address = symbol_generator.generateAddress();
+        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, i64 {s})",
             .{
-                runtime_symbols.runtime_int_to_string_function_name,
-                result_storage,
-                integer_register,
+                runtime_symbols.builtin_int_to_string_method_name,
+                result_address,
+                integer_value,
             },
         ) catch unreachable);
 
-        const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
-        return result_register;
+        const result_value = symbol_generator.generateValue();
+        builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
     }
 
     pub fn emitPanicIndexOutOfBoundsCall(
@@ -272,8 +272,8 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         line: usize,
         column: usize,
-        index_register: Register,
-        length_register: Register,
+        index_value: Value,
+        length_value: Value,
     ) void {
         self.runtime_requirements.panic_index_out_of_bounds = true;
         builder.emitInstruction(std.fmt.allocPrint(
@@ -283,8 +283,8 @@ pub const RuntimeCallEmitter = struct {
                 runtime_symbols.runtime_panic_index_out_of_bounds_function_name,
                 line,
                 column,
-                index_register,
-                length_register,
+                index_value,
+                length_value,
             },
         ) catch unreachable);
     }
@@ -293,23 +293,23 @@ pub const RuntimeCallEmitter = struct {
         self: *@This(),
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
-        array_register: Register,
+        array_value: Value,
         element_llvm_type: []const u8,
-    ) Register {
+    ) Value {
         self.runtime_requirements.array_append_slot = true;
-        const slot_register = symbol_generator.generateRegister();
+        const slot_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(ptr {s}, i64 {s})",
             .{
-                slot_register,
+                slot_value,
                 runtime_symbols.runtime_array_append_slot_function_name,
-                array_register,
+                array_value,
                 self.sizeOf(element_llvm_type, 1),
             },
         ) catch unreachable);
 
-        return slot_register;
+        return slot_value;
     }
 
     /// Allocates garbage-collected memory for `count` values of `llvm_type`, which the collector scans for pointers.
@@ -319,15 +319,15 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         llvm_type: []const u8,
         count: usize,
-    ) Register {
-        const memory_register = symbol_generator.generateRegister();
+    ) Value {
+        const memory_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(i64 {s})",
-            .{ memory_register, runtime_symbols.runtime_allocate_function_name, self.sizeOf(llvm_type, count) },
+            .{ memory_value, runtime_symbols.runtime_allocate_function_name, self.sizeOf(llvm_type, count) },
         ) catch unreachable);
 
-        return memory_register;
+        return memory_value;
     }
 
     /// Allocates garbage-collected memory of `byte_count` bytes, which the collector does not scan for pointers.
@@ -336,15 +336,15 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         byte_count: usize,
-    ) Register {
-        const memory_register = symbol_generator.generateRegister();
+    ) Value {
+        const memory_value = symbol_generator.generateValue();
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "{s} = call ptr @{s}(i64 {d})",
-            .{ memory_register, runtime_symbols.runtime_allocate_atomic_function_name, byte_count },
+            .{ memory_value, runtime_symbols.runtime_allocate_atomic_function_name, byte_count },
         ) catch unreachable);
 
-        return memory_register;
+        return memory_value;
     }
 
     /// Renders the size in bytes of `count` values of `llvm_type` as a constant expression. LLVM has no `sizeof`, so
@@ -363,24 +363,24 @@ pub const RuntimeCallEmitter = struct {
         symbol_generator: *FunctionSymbolGenerator,
         runtime_function_name: []const u8,
         string_parts: RuntimeStringParts,
-    ) Register {
-        const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
+    ) Value {
+        const result_address = symbol_generator.generateAddress();
+        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s}, ptr {s}, i64 {s})",
             .{
                 runtime_function_name,
-                result_storage,
-                string_parts.pointer_register,
-                string_parts.length_register,
+                result_address,
+                string_parts.pointer_value,
+                string_parts.length_value,
             },
         ) catch unreachable);
 
-        const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
+        const result_value = symbol_generator.generateValue();
+        builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
 
-        return result_register;
+        return result_value;
     }
 
     fn emitZeroInputStringOutputCall(
@@ -388,17 +388,17 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         runtime_function_name: []const u8,
-    ) Register {
-        const result_storage = symbol_generator.generateStorage();
-        builder.emitAlloca(result_storage, lowering.llvm_type.string_llvm_type);
+    ) Value {
+        const result_address = symbol_generator.generateAddress();
+        builder.emitAlloca(result_address, lowering.llvm_type.string_llvm_type);
         builder.emitInstruction(std.fmt.allocPrint(
             self.allocator,
             "call void @{s}(ptr {s})",
-            .{ runtime_function_name, result_storage },
+            .{ runtime_function_name, result_address },
         ) catch unreachable);
 
-        const result_register = symbol_generator.generateRegister();
-        builder.emitLoad(result_register, result_storage, lowering.llvm_type.string_llvm_type);
-        return result_register;
+        const result_value = symbol_generator.generateValue();
+        builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
     }
 };

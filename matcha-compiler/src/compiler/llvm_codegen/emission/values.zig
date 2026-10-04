@@ -6,7 +6,7 @@ const lowering = @import("lowering");
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const node_emitter_module = @import("node_emitter.zig");
 
-const Register = function_symbol_generator_module.Register;
+const Value = function_symbol_generator_module.Value;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
@@ -27,14 +27,14 @@ pub fn emitIdentifier(
     }
 
     const symbol_id = lowered_program.analyzed_program.resolved_program.symbol_id_by_node_id.get(node.id).?;
-    const storage = environment.storage_by_symbol_id.get(symbol_id).?;
+    const address = environment.address_by_symbol_id.get(symbol_id).?;
     const llvm_ir_type = lowered_program.getLlvmIrType(
         lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?,
     );
-    const register = emitter.function_symbol_generator.generateRegister();
-    emitter.function_ir_builder.emitLoad(register, storage, llvm_ir_type);
+    const value = emitter.function_symbol_generator.generateValue();
+    emitter.function_ir_builder.emitLoad(value, address, llvm_ir_type);
 
-    return .{ .register = register };
+    return .{ .value = value };
 }
 
 pub fn emitBinaryExpression(
@@ -51,23 +51,23 @@ pub fn emitBinaryExpression(
         else => {},
     }
 
-    const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment);
-    const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment);
+    const left_value = emitter.emitNode(binary_expression.left, lowered_program, environment);
+    const right_value = emitter.emitNode(binary_expression.right, lowered_program, environment);
     const left_operand_type = lowered_program.analyzed_program.type_id_by_node_id.get(binary_expression.left.id).?;
 
     // Unit operands have no runtime value. Their side effects already ran above, so the result is a constant.
     switch (decision) {
-        .ZeroSizedCompareEqual => return .{ .register = "1" },
-        .ZeroSizedCompareNotEqual => return .{ .register = "0" },
+        .ZeroSizedCompareEqual => return .{ .value = "1" },
+        .ZeroSizedCompareNotEqual => return .{ .value = "0" },
         else => {},
     }
 
-    return .{ .register = emitLoweredBinaryOperation(
+    return .{ .value = emitLoweredBinaryOperation(
         emitter,
         decision,
         left_operand_type,
-        left_register.expectRegister(),
-        right_register.expectRegister(),
+        left_value.expectValue(),
+        right_value.expectValue(),
         lowered_program,
     ) };
 }
@@ -89,29 +89,29 @@ fn emitShortCircuitOperation(
     const end_label = emitter.function_symbol_generator.generateLabel(end_label_name);
     const right_label = emitter.function_symbol_generator.generateLabel(right_label_name);
 
-    const left_register = emitter.emitNode(binary_expression.left, lowered_program, environment).expectRegister();
+    const left_value = emitter.emitNode(binary_expression.left, lowered_program, environment).expectValue();
     // The phi needs the block where the left operand ended, which is not the start block when the operand branches.
     const left_exit_label = builder.currentLabel() orelse unreachable;
     switch (operator) {
-        .And => builder.emitBranchInstruction(left_register, &.{ right_label, end_label }),
-        .Or => builder.emitBranchInstruction(left_register, &.{ end_label, right_label }),
+        .And => builder.emitBranchInstruction(left_value, &.{ right_label, end_label }),
+        .Or => builder.emitBranchInstruction(left_value, &.{ end_label, right_label }),
     }
 
     builder.emitLabel(right_label);
-    const right_register = emitter.emitNode(binary_expression.right, lowered_program, environment).expectRegister();
+    const right_value = emitter.emitNode(binary_expression.right, lowered_program, environment).expectValue();
     const right_exit_label = builder.currentLabel() orelse unreachable;
     builder.emitBranchInstruction(null, &.{end_label});
 
     builder.emitLabel(end_label);
-    const result_register = emitter.function_symbol_generator.generateRegister();
+    const result_value = emitter.function_symbol_generator.generateValue();
     const phi_instruction = std.fmt.allocPrint(
         emitter.allocator,
         "{s} = phi i1 [{s}, %{s}], [{s}, %{s}]",
-        .{ result_register, deciding_value, left_exit_label, right_register, right_exit_label },
+        .{ result_value, deciding_value, left_exit_label, right_value, right_exit_label },
     ) catch unreachable;
     builder.emitInstruction(phi_instruction);
 
-    return .{ .register = result_register };
+    return .{ .value = result_value };
 }
 
 pub fn emitUnaryExpression(
@@ -121,35 +121,35 @@ pub fn emitUnaryExpression(
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
 ) EmissionResult {
-    const operand_register = emitter.emitNode(unary_expression.operand, lowered_program, environment).expectRegister();
-    const result_register = emitter.function_symbol_generator.generateRegister();
+    const operand_value = emitter.emitNode(unary_expression.operand, lowered_program, environment).expectValue();
+    const result_value = emitter.function_symbol_generator.generateValue();
     const operation_type = lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?;
     const instruction_type = lowered_program.getLlvmIrType(operation_type);
     const instruction = switch (unary_expression.operator) {
         .Negate => std.fmt.allocPrint(
             emitter.allocator,
             "{s} = sub {s} 0, {s}",
-            .{ result_register, instruction_type, operand_register },
+            .{ result_value, instruction_type, operand_value },
         ) catch unreachable,
         .Not => std.fmt.allocPrint(
             emitter.allocator,
             "{s} = xor {s} {s}, 1",
-            .{ result_register, instruction_type, operand_register },
+            .{ result_value, instruction_type, operand_value },
         ) catch unreachable,
     };
     emitter.function_ir_builder.emitInstruction(instruction);
 
-    return .{ .register = result_register };
+    return .{ .value = result_value };
 }
 
 pub fn emitLoweredBinaryOperation(
     emitter: *NodeEmitter,
     decision: lowering.lowering_types.BinaryOperationDecision,
     operand_type_id: typing.TypeId,
-    left_register: Register,
-    right_register: Register,
+    left_value: Value,
+    right_value: Value,
     lowered_program: *const lowering.LoweredProgram,
-) Register {
+) Value {
     return switch (decision) {
         .PrimitiveOperation => |primitive_operation| {
             const llvm_ir_type = lowered_program.getLlvmIrType(operand_type_id);
@@ -166,60 +166,60 @@ pub fn emitLoweredBinaryOperation(
                 .GreaterThanOrEqual => "icmp sge",
             };
 
-            const result_register = emitter.function_symbol_generator.generateRegister();
+            const result_value = emitter.function_symbol_generator.generateValue();
             const instruction = std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = {s} {s} {s}, {s}",
-                .{ result_register, operator_instruction, llvm_ir_type, left_register, right_register },
+                .{ result_value, operator_instruction, llvm_ir_type, left_value, right_value },
             ) catch unreachable;
             emitter.function_ir_builder.emitInstruction(instruction);
 
-            return result_register;
+            return result_value;
         },
         .UnionCaseIndexComparison => {
             const union_case_index_type = lowering.lowering_types.union_case_index_llvm_type;
             const operator_instruction = "icmp eq";
 
             // The case index is the first field of every case, so it can be loaded from the union pointer directly
-            const union_case_register = emitter.function_symbol_generator.generateRegister();
-            emitter.function_ir_builder.emitLoad(union_case_register, left_register, union_case_index_type);
+            const union_case_value = emitter.function_symbol_generator.generateValue();
+            emitter.function_ir_builder.emitLoad(union_case_value, left_value, union_case_index_type);
 
-            const result_register = emitter.function_symbol_generator.generateRegister();
+            const result_value = emitter.function_symbol_generator.generateValue();
             const instruction = std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = {s} {s} {s}, {s}",
-                .{ result_register, operator_instruction, union_case_index_type, union_case_register, right_register },
+                .{ result_value, operator_instruction, union_case_index_type, union_case_value, right_value },
             ) catch unreachable;
             emitter.function_ir_builder.emitInstruction(instruction);
 
-            return result_register;
+            return result_value;
         },
         .StringConcatenate => emitter.runtime_call_emitter.emitStringConcatenateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
-            emitter.emitStringParts(left_register),
-            emitter.emitStringParts(right_register),
+            emitter.emitStringParts(left_value),
+            emitter.emitStringParts(right_value),
         ),
         .StringCompareEqual => emitter.runtime_call_emitter.emitStringCompareCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
-            emitter.emitStringParts(left_register),
-            emitter.emitStringParts(right_register),
+            emitter.emitStringParts(left_value),
+            emitter.emitStringParts(right_value),
         ),
         .StringCompareNotEqual => compare_not_equal: {
-            const equal_register = emitter.runtime_call_emitter.emitStringCompareCall(
+            const equal_value = emitter.runtime_call_emitter.emitStringCompareCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
-                emitter.emitStringParts(left_register),
-                emitter.emitStringParts(right_register),
+                emitter.emitStringParts(left_value),
+                emitter.emitStringParts(right_value),
             );
-            const result_register = emitter.function_symbol_generator.generateRegister();
+            const result_value = emitter.function_symbol_generator.generateValue();
             emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
                 emitter.allocator,
                 "{s} = xor i1 {s}, 1",
-                .{ result_register, equal_register },
+                .{ result_value, equal_value },
             ) catch unreachable);
-            break :compare_not_equal result_register;
+            break :compare_not_equal result_value;
         },
         .ZeroSizedCompareEqual, .ZeroSizedCompareNotEqual, .ShortCircuitAnd, .ShortCircuitOr => unreachable,
     };

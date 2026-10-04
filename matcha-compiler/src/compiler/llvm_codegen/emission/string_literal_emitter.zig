@@ -6,7 +6,7 @@ const function_ir_builder_module = @import("function_ir_builder.zig");
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const string_literal_pool_module = @import("string_literal_pool.zig");
 
-const Register = function_symbol_generator_module.Register;
+const Value = function_symbol_generator_module.Value;
 const FunctionIrBuilder = function_ir_builder_module.FunctionIrBuilder;
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
 const StringLiteralPool = string_literal_pool_module.StringLiteralPool;
@@ -29,16 +29,16 @@ pub const StringLiteralEmitter = struct {
         content: []const u8,
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
-    ) Register {
+    ) Value {
         const string_literal_global = string_literal_pool.registerLiteral(node_id, content);
-        const pointer_register = self.emitStringLiteralPointer(
+        const pointer_value = self.emitStringLiteralPointer(
             string_literal_global.name,
             string_literal_global.len,
             function_symbol_generator,
             builder,
         );
         return self.emitStringValue(
-            pointer_register,
+            pointer_value,
             string_literal_global.len,
             function_symbol_generator,
             builder,
@@ -51,41 +51,41 @@ pub const StringLiteralEmitter = struct {
         len: usize,
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
-    ) Register {
-        const pointer_register = function_symbol_generator.generateRegister();
+    ) Value {
+        const pointer_value = function_symbol_generator.generateValue();
         const pointer_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = getelementptr inbounds [{d} x i8], ptr {s}, i64 0, i64 0",
-            .{ pointer_register, len, global_name },
+            .{ pointer_value, len, global_name },
         ) catch unreachable;
         builder.emitInstruction(pointer_instruction);
 
-        return pointer_register;
+        return pointer_value;
     }
 
     fn emitStringValue(
         self: *@This(),
-        pointer_register: Register,
+        pointer_value: Value,
         len: usize,
         function_symbol_generator: *FunctionSymbolGenerator,
         builder: *FunctionIrBuilder,
-    ) Register {
-        const partial_string_register = function_symbol_generator.generateRegister();
+    ) Value {
+        const partial_string_value = function_symbol_generator.generateValue();
         const partial_string_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = insertvalue {s} undef, ptr {s}, 0",
-            .{ partial_string_register, lowering.llvm_type.string_llvm_type, pointer_register },
+            .{ partial_string_value, lowering.llvm_type.string_llvm_type, pointer_value },
         ) catch unreachable;
         builder.emitInstruction(partial_string_instruction);
 
-        const string_register = function_symbol_generator.generateRegister();
+        const string_value = function_symbol_generator.generateValue();
         const string_instruction = std.fmt.allocPrint(
             self.allocator,
             "{s} = insertvalue {s} {s}, i64 {d}, 1",
-            .{ string_register, lowering.llvm_type.string_llvm_type, partial_string_register, len },
+            .{ string_value, lowering.llvm_type.string_llvm_type, partial_string_value, len },
         ) catch unreachable;
         builder.emitInstruction(string_instruction);
 
-        return string_register;
+        return string_value;
     }
 };

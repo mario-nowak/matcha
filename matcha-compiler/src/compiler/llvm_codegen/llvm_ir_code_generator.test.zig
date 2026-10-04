@@ -976,7 +976,7 @@ pub const LlvmIrCodeGenerator = struct {
                     );
                 }
 
-                test "binds no payload storage when a case pattern binds a unit payload" {
+                test "binds no payload address when a case pattern binds a unit payload" {
                     const source =
                         \\item Signal = union { Off, On: unit };
                         \\val signal = Signal.On(unit);
