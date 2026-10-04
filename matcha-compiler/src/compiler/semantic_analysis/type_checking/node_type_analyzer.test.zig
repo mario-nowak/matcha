@@ -1867,6 +1867,56 @@ pub const NodeTypeAnalyzer = struct {
 
                 try expect(result.type_store.getType(result.type_id_by_node_id.get(callee.id).?)).toMatch(.{ .Function = .{ .parameter_type_ids = .{result.type_store.integer_type_id} } });
             }
+
+            test "reports a missing field at the literal when an anonymous structure literal is empty" {
+                const source =
+                    \\item Point = structure { x: int; };
+                    \\val point: Point = .{};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "missing field 'x' in construction of 'Point'", .span = .{ .line = 2, .column = 20 } },
+                });
+            }
+
+            test "reports a missing field at the literal when a qualified structure literal is empty" {
+                const source =
+                    \\item Point = structure { x: int; };
+                    \\val point = Point {};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "missing field 'x' in construction of 'Point'", .span = .{ .line = 2, .column = 13 } },
+                });
+            }
+
+            test "reports a non-structure expected type at the literal when an anonymous structure literal is empty" {
+                const source =
+                    \\val number: int = .{};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try std.testing.expectError(error.DiagnosticsEmitted, result);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "expected a structure type for this literal, found int", .span = .{ .line = 1, .column = 19 } },
+                });
+            }
         };
 
         pub const arrays = struct {
