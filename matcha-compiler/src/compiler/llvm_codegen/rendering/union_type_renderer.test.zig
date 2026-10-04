@@ -47,7 +47,7 @@ pub const UnionTypeRenderer = struct {
 
             try expect(rendered).toMatch(
                 \\%matcha.union.Payload.case.Number = type { i32, i64 }
-                \\%matcha.union.Payload.case.Text = type { i32, %String }
+                \\%matcha.union.Payload.case.Text = type { i32, %matcha.compiler_module.builtin.type.string }
                 \\%matcha.union.Payload.case.Owner = type { i32, ptr }
                 \\%matcha.union.Payload.case.Owners = type { i32, ptr }
             );
