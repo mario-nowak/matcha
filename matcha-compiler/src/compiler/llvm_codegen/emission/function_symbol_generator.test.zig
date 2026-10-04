@@ -56,6 +56,33 @@ pub const FunctionSymbolGenerator = struct {
         }
     };
 
+    pub const generateConstructLabels = struct {
+        test "numbers constructs per construct name from zero" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
+
+            const labels = .{
+                function_symbol_generator.generateConstructLabels("if").role("end"),
+                function_symbol_generator.generateConstructLabels("match").role("end"),
+                function_symbol_generator.generateConstructLabels("if").role("end"),
+            };
+
+            try expect(labels).toMatch(.{ "if.0.end", "match.0.end", "if.1.end" });
+        }
+
+        test "names an arm and the condition of an arm by their index" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
+            const construct_labels = function_symbol_generator.generateConstructLabels("match");
+
+            const labels = .{ construct_labels.arm(1), construct_labels.armCondition(2) };
+
+            try expect(labels).toMatch(.{ "match.0.arm.1", "match.0.arm.2.condition" });
+        }
+    };
+
     pub const reset = struct {
         test "restarts every counter" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -64,6 +91,7 @@ pub const FunctionSymbolGenerator = struct {
             _ = function_symbol_generator.generateValueName();
             _ = function_symbol_generator.generateBindingAddressName("count");
             _ = function_symbol_generator.generateSyntheticAddressName();
+            _ = function_symbol_generator.generateConstructLabels("if");
 
             function_symbol_generator.reset();
 
@@ -71,8 +99,9 @@ pub const FunctionSymbolGenerator = struct {
                 function_symbol_generator.generateValueName(),
                 function_symbol_generator.generateBindingAddressName("count"),
                 function_symbol_generator.generateSyntheticAddressName(),
+                function_symbol_generator.generateConstructLabels("if").role("end"),
             };
-            try expect(names).toMatch(.{ "%value.0", "%address.binding.count.0", "%address.synthetic.0" });
+            try expect(names).toMatch(.{ "%value.0", "%address.binding.count.0", "%address.synthetic.0", "if.0.end" });
         }
     };
 };

@@ -151,20 +151,20 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.0 = load ptr, ptr %address.binding.self.0
                     \\    %value.1 = load i32, ptr %value.0
                     \\    %value.2 = icmp eq i32 %value.1, 0
-                    \\    br i1 %value.2, label %label_match_arm_1, label %label_match_next_2
-                    \\label_match_arm_1:
+                    \\    br i1 %value.2, label %match.0.arm.0, label %match.0.arm.1.condition
+                    \\match.0.arm.0:
                     \\    %value.3 = load i64, ptr %address.binding.fallback.0
-                    \\    br label %label_match_continue_0
-                    \\label_match_next_2:
-                    \\    br label %label_match_arm_3
-                    \\label_match_arm_3:
+                    \\    br label %match.0.end
+                    \\match.0.arm.1.condition:
+                    \\    br label %match.0.arm.1
+                    \\match.0.arm.1:
                     \\    %value.4 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %value.0, i32 0, i32 1
                     \\    %value.5 = load i64, ptr %value.4
                     \\    store i64 %value.5, ptr %address.binding.value.0
                     \\    %value.6 = load i64, ptr %address.binding.value.0
-                    \\    br label %label_match_continue_0
-                    \\label_match_continue_0:
-                    \\    %value.7 = phi i64 [%value.3, %label_match_arm_1], [%value.6, %label_match_arm_3]
+                    \\    br label %match.0.end
+                    \\match.0.end:
+                    \\    %value.7 = phi i64 [%value.3, %match.0.arm.0], [%value.6, %match.0.arm.1]
                     \\    ret i64 %value.7
                     \\}
                     \\
@@ -350,13 +350,13 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    store i1 1, ptr %address.binding.flag.0
                     \\    %value.0 = load i1, ptr %address.binding.flag.0
-                    \\    br i1 %value.0, label %label_then_2, label %label_else_1
-                    \\label_then_2:
-                    \\    br label %label_continue_0
-                    \\label_else_1:
-                    \\    br label %label_continue_0
-                    \\label_continue_0:
-                    \\    %value.1 = phi i64 [2, %label_then_2], [1, %label_else_1]
+                    \\    br i1 %value.0, label %if.0.then, label %if.0.else
+                    \\if.0.then:
+                    \\    br label %if.0.end
+                    \\if.0.else:
+                    \\    br label %if.0.end
+                    \\if.0.end:
+                    \\    %value.1 = phi i64 [2, %if.0.then], [1, %if.0.else]
                     \\    store i64 %value.1, ptr %address.binding.score.0
                     \\    ret i32 0
                     \\}
@@ -391,14 +391,14 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %address.binding.right.0 = alloca i64
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    br i1 1, label %label_then_2, label %label_else_1
-                    \\label_then_2:
+                    \\    br i1 1, label %if.0.then, label %if.0.else
+                    \\if.0.then:
                     \\    store i64 1, ptr %address.binding.left.0
-                    \\    br label %label_continue_0
-                    \\label_else_1:
+                    \\    br label %if.0.end
+                    \\if.0.else:
                     \\    store i64 2, ptr %address.binding.right.0
-                    \\    br label %label_continue_0
-                    \\label_continue_0:
+                    \\    br label %if.0.end
+                    \\if.0.end:
                     \\    ret i32 0
                     \\}
                     \\
@@ -431,11 +431,11 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %address.binding.value.0 = alloca i64
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    br i1 1, label %label_then_1, label %label_continue_0
-                    \\label_then_1:
+                    \\    br i1 1, label %if.0.then, label %if.0.end
+                    \\if.0.then:
                     \\    store i64 1, ptr %address.binding.value.0
-                    \\    br label %label_continue_0
-                    \\label_continue_0:
+                    \\    br label %if.0.end
+                    \\if.0.end:
                     \\    ret i32 0
                     \\}
                     \\
@@ -472,19 +472,19 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    store i64 0, ptr %address.binding.index.0
-                    \\    br label %label_loop_header_0
-                    \\label_loop_header_0:
+                    \\    br label %while.0.header
+                    \\while.0.header:
                     \\    %value.0 = load i64, ptr %address.binding.index.0
                     \\    %value.1 = icmp slt i64 %value.0, 5
-                    \\    br i1 %value.1, label %label_loop_body_1, label %label_loop_exit_3
-                    \\label_loop_body_1:
-                    \\    br label %label_loop_continue_2
-                    \\label_loop_continue_2:
+                    \\    br i1 %value.1, label %while.0.body, label %while.0.exit
+                    \\while.0.body:
+                    \\    br label %while.0.continue
+                    \\while.0.continue:
                     \\    %value.2 = load i64, ptr %address.binding.index.0
                     \\    %value.3 = add i64 %value.2, 1
                     \\    store i64 %value.3, ptr %address.binding.index.0
-                    \\    br label %label_loop_header_0
-                    \\label_loop_exit_3:
+                    \\    br label %while.0.header
+                    \\while.0.exit:
                     \\    ret i32 0
                     \\}
                     \\
@@ -521,11 +521,11 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    store i1 0, ptr %address.binding.left.0
                     \\    %value.0 = load i1, ptr %address.binding.left.0
-                    \\    br i1 %value.0, label %label_and_right_1, label %label_and_end_0
-                    \\label_and_right_1:
-                    \\    br label %label_and_end_0
-                    \\label_and_end_0:
-                    \\    %value.1 = phi i1 [0, %entry], [1, %label_and_right_1]
+                    \\    br i1 %value.0, label %and.0.right, label %and.0.end
+                    \\and.0.right:
+                    \\    br label %and.0.end
+                    \\and.0.end:
+                    \\    %value.1 = phi i1 [0, %entry], [1, %and.0.right]
                     \\    store i1 %value.1, ptr %address.binding.both.0
                     \\    ret i32 0
                     \\}
@@ -563,11 +563,11 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    store i1 1, ptr %address.binding.left.0
                     \\    %value.0 = load i1, ptr %address.binding.left.0
-                    \\    br i1 %value.0, label %label_or_end_0, label %label_or_right_1
-                    \\label_or_right_1:
-                    \\    br label %label_or_end_0
-                    \\label_or_end_0:
-                    \\    %value.1 = phi i1 [1, %entry], [0, %label_or_right_1]
+                    \\    br i1 %value.0, label %or.0.end, label %or.0.right
+                    \\or.0.right:
+                    \\    br label %or.0.end
+                    \\or.0.end:
+                    \\    %value.1 = phi i1 [1, %entry], [0, %or.0.right]
                     \\    store i1 %value.1, ptr %address.binding.either.0
                     \\    ret i32 0
                     \\}
@@ -650,18 +650,18 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    %value.0 = icmp eq i64 2, 1
-                    \\    br i1 %value.0, label %label_match_arm_2, label %label_match_next_3
-                    \\label_match_arm_2:
-                    \\    br label %label_match_continue_0
-                    \\label_match_next_3:
+                    \\    br i1 %value.0, label %match.0.arm.0, label %match.0.arm.1.condition
+                    \\match.0.arm.0:
+                    \\    br label %match.0.end
+                    \\match.0.arm.1.condition:
                     \\    %value.1 = icmp eq i64 2, 2
-                    \\    br i1 %value.1, label %label_match_arm_4, label %label_match_else_1
-                    \\label_match_arm_4:
-                    \\    br label %label_match_continue_0
-                    \\label_match_else_1:
-                    \\    br label %label_match_continue_0
-                    \\label_match_continue_0:
-                    \\    %value.2 = phi i64 [10, %label_match_arm_2], [20, %label_match_arm_4], [0, %label_match_else_1]
+                    \\    br i1 %value.1, label %match.0.arm.1, label %match.0.else
+                    \\match.0.arm.1:
+                    \\    br label %match.0.end
+                    \\match.0.else:
+                    \\    br label %match.0.end
+                    \\match.0.end:
+                    \\    %value.2 = phi i64 [10, %match.0.arm.0], [20, %match.0.arm.1], [0, %match.0.else]
                     \\    store i64 %value.2, ptr %address.binding.score.0
                     \\    ret i32 0
                     \\}
@@ -702,13 +702,13 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    store i1 1, ptr %address.binding.flag.0
                     \\    %value.0 = load i1, ptr %address.binding.flag.0
-                    \\    br i1 %value.0, label %label_match_arm_2, label %label_match_else_1
-                    \\label_match_arm_2:
-                    \\    br label %label_match_continue_0
-                    \\label_match_else_1:
-                    \\    br label %label_match_continue_0
-                    \\label_match_continue_0:
-                    \\    %value.1 = phi i64 [1, %label_match_arm_2], [0, %label_match_else_1]
+                    \\    br i1 %value.0, label %subjectless_match.0.arm.0, label %subjectless_match.0.else
+                    \\subjectless_match.0.arm.0:
+                    \\    br label %subjectless_match.0.end
+                    \\subjectless_match.0.else:
+                    \\    br label %subjectless_match.0.end
+                    \\subjectless_match.0.end:
+                    \\    %value.1 = phi i64 [1, %subjectless_match.0.arm.0], [0, %subjectless_match.0.else]
                     \\    store i64 %value.1, ptr %address.binding.score.0
                     \\    ret i32 0
                     \\}
@@ -760,13 +760,13 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.8 = extractvalue %matcha.compiler_module.builtin.type.string %value.5, 0
                     \\    %value.9 = extractvalue %matcha.compiler_module.builtin.type.string %value.5, 1
                     \\    %value.10 = call i1 @matcha.compiler_module.runtime.function.stringCompare(ptr %value.6, i64 %value.7, ptr %value.8, i64 %value.9)
-                    \\    br i1 %value.10, label %label_match_arm_2, label %label_match_else_1
-                    \\label_match_arm_2:
-                    \\    br label %label_match_continue_0
-                    \\label_match_else_1:
-                    \\    br label %label_match_continue_0
-                    \\label_match_continue_0:
-                    \\    %value.11 = phi i64 [1, %label_match_arm_2], [0, %label_match_else_1]
+                    \\    br i1 %value.10, label %match.0.arm.0, label %match.0.else
+                    \\match.0.arm.0:
+                    \\    br label %match.0.end
+                    \\match.0.else:
+                    \\    br label %match.0.end
+                    \\match.0.end:
+                    \\    %value.11 = phi i64 [1, %match.0.arm.0], [0, %match.0.else]
                     \\    store i64 %value.11, ptr %address.binding.score.0
                     \\    ret i32 0
                     \\}
@@ -823,29 +823,29 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
                         \\    %value.4 = load i32, ptr %value.3
                         \\    %value.5 = icmp eq i32 %value.4, 0
-                        \\    br i1 %value.5, label %label_match_arm_1, label %label_match_next_2
-                        \\label_match_arm_1:
-                        \\    br label %label_match_continue_0
-                        \\label_match_next_2:
+                        \\    br i1 %value.5, label %match.0.arm.0, label %match.0.arm.1.condition
+                        \\match.0.arm.0:
+                        \\    br label %match.0.end
+                        \\match.0.arm.1.condition:
                         \\    %value.6 = load i32, ptr %value.3
                         \\    %value.7 = icmp eq i32 %value.6, 1
-                        \\    br i1 %value.7, label %label_match_arm_3, label %label_match_next_4
-                        \\label_match_arm_3:
+                        \\    br i1 %value.7, label %match.0.arm.1, label %match.0.arm.2.condition
+                        \\match.0.arm.1:
                         \\    %value.8 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
                         \\    %value.9 = load i64, ptr %value.8
                         \\    store i64 %value.9, ptr %address.binding.value.0
                         \\    %value.10 = load i64, ptr %address.binding.value.0
-                        \\    br label %label_match_continue_0
-                        \\label_match_next_4:
-                        \\    br label %label_match_arm_5
-                        \\label_match_arm_5:
+                        \\    br label %match.0.end
+                        \\match.0.arm.2.condition:
+                        \\    br label %match.0.arm.2
+                        \\match.0.arm.2:
                         \\    %value.11 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %value.3, i32 0, i32 1
                         \\    %value.12 = load i64, ptr %value.11
                         \\    store i64 %value.12, ptr %address.binding.value.1
                         \\    %value.13 = load i64, ptr %address.binding.value.1
-                        \\    br label %label_match_continue_0
-                        \\label_match_continue_0:
-                        \\    %value.14 = phi i64 [0, %label_match_arm_1], [%value.10, %label_match_arm_3], [%value.13, %label_match_arm_5]
+                        \\    br label %match.0.end
+                        \\match.0.end:
+                        \\    %value.14 = phi i64 [0, %match.0.arm.0], [%value.10, %match.0.arm.1], [%value.13, %match.0.arm.2]
                         \\    store i64 %value.14, ptr %address.binding.result.0
                         \\    ret i32 0
                         \\}
@@ -897,15 +897,15 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
                         \\    %value.4 = load i32, ptr %value.3
                         \\    %value.5 = icmp eq i32 %value.4, 0
-                        \\    br i1 %value.5, label %label_match_arm_1, label %label_match_next_2
-                        \\label_match_arm_1:
-                        \\    br label %label_match_continue_0
-                        \\label_match_next_2:
-                        \\    br label %label_match_arm_3
-                        \\label_match_arm_3:
-                        \\    br label %label_match_continue_0
-                        \\label_match_continue_0:
-                        \\    %value.6 = phi i64 [1, %label_match_arm_1], [2, %label_match_arm_3]
+                        \\    br i1 %value.5, label %match.0.arm.0, label %match.0.arm.1.condition
+                        \\match.0.arm.0:
+                        \\    br label %match.0.end
+                        \\match.0.arm.1.condition:
+                        \\    br label %match.0.arm.1
+                        \\match.0.arm.1:
+                        \\    br label %match.0.end
+                        \\match.0.end:
+                        \\    %value.6 = phi i64 [1, %match.0.arm.0], [2, %match.0.arm.1]
                         \\    store i64 %value.6, ptr %address.binding.result.0
                         \\    ret i32 0
                         \\}
@@ -958,17 +958,17 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
                         \\    %value.4 = load i32, ptr %value.3
                         \\    %value.5 = icmp eq i32 %value.4, 0
-                        \\    br i1 %value.5, label %label_match_arm_2, label %label_match_else_1
-                        \\label_match_arm_2:
+                        \\    br i1 %value.5, label %match.0.arm.0, label %match.0.else
+                        \\match.0.arm.0:
                         \\    %value.6 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
                         \\    %value.7 = load i64, ptr %value.6
                         \\    store i64 %value.7, ptr %address.binding.value.0
                         \\    %value.8 = load i64, ptr %address.binding.value.0
-                        \\    br label %label_match_continue_0
-                        \\label_match_else_1:
-                        \\    br label %label_match_continue_0
-                        \\label_match_continue_0:
-                        \\    %value.9 = phi i64 [%value.8, %label_match_arm_2], [0, %label_match_else_1]
+                        \\    br label %match.0.end
+                        \\match.0.else:
+                        \\    br label %match.0.end
+                        \\match.0.end:
+                        \\    %value.9 = phi i64 [%value.8, %match.0.arm.0], [0, %match.0.else]
                         \\    store i64 %value.9, ptr %address.binding.result.0
                         \\    ret i32 0
                         \\}
@@ -1018,15 +1018,15 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.2 = load ptr, ptr %address.binding.signal.0
                         \\    %value.3 = load i32, ptr %value.2
                         \\    %value.4 = icmp eq i32 %value.3, 0
-                        \\    br i1 %value.4, label %label_match_arm_1, label %label_match_next_2
-                        \\label_match_arm_1:
-                        \\    br label %label_match_continue_0
-                        \\label_match_next_2:
-                        \\    br label %label_match_arm_3
-                        \\label_match_arm_3:
-                        \\    br label %label_match_continue_0
-                        \\label_match_continue_0:
-                        \\    %value.5 = phi i64 [0, %label_match_arm_1], [1, %label_match_arm_3]
+                        \\    br i1 %value.4, label %match.0.arm.0, label %match.0.arm.1.condition
+                        \\match.0.arm.0:
+                        \\    br label %match.0.end
+                        \\match.0.arm.1.condition:
+                        \\    br label %match.0.arm.1
+                        \\match.0.arm.1:
+                        \\    br label %match.0.end
+                        \\match.0.end:
+                        \\    %value.5 = phi i64 [0, %match.0.arm.0], [1, %match.0.arm.1]
                         \\    store i64 %value.5, ptr %address.binding.result.0
                         \\    ret i32 0
                         \\}
@@ -1088,24 +1088,24 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.9 = load i64, ptr %value.8
                     \\    %value.10 = getelementptr inbounds %matcha.compiler_module.builtin.type.array, ptr %value.7, i32 0, i32 2
                     \\    %value.11 = load ptr, ptr %value.10
-                    \\    br label %label_loop_header_0
-                    \\label_loop_header_0:
+                    \\    br label %for_in.0.header
+                    \\for_in.0.header:
                     \\    %value.12 = load i64, ptr %address.synthetic.0
                     \\    %value.13 = icmp slt i64 %value.12, %value.9
-                    \\    br i1 %value.13, label %label_loop_body_1, label %label_loop_exit_3
-                    \\label_loop_body_1:
+                    \\    br i1 %value.13, label %for_in.0.body, label %for_in.0.exit
+                    \\for_in.0.body:
                     \\    %value.14 = getelementptr inbounds i64, ptr %value.11, i64 %value.12
                     \\    %value.15 = load i64, ptr %value.14
                     \\    store i64 %value.15, ptr %address.binding.value.0
                     \\    %value.16 = load i64, ptr %address.binding.value.0
                     \\    call void @matcha.compiler_module.builtin.function.printInt(i64 %value.16)
-                    \\    br label %label_loop_continue_2
-                    \\label_loop_continue_2:
+                    \\    br label %for_in.0.continue
+                    \\for_in.0.continue:
                     \\    %value.17 = load i64, ptr %address.synthetic.0
                     \\    %value.18 = add i64 %value.17, 1
                     \\    store i64 %value.18, ptr %address.synthetic.0
-                    \\    br label %label_loop_header_0
-                    \\label_loop_exit_3:
+                    \\    br label %for_in.0.header
+                    \\for_in.0.exit:
                     \\    ret i32 0
                     \\}
                     \\
@@ -1158,11 +1158,11 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.10 = icmp slt i64 0, 0
                     \\    %value.11 = icmp sge i64 0, %value.8
                     \\    %value.12 = or i1 %value.10, %value.11
-                    \\    br i1 %value.12, label %label_index_panic_0, label %label_index_ok_1
-                    \\label_index_panic_0:
+                    \\    br i1 %value.12, label %index.0.out_of_bounds, label %index.0.in_bounds
+                    \\index.0.out_of_bounds:
                     \\    call void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64 2, i64 8, i64 0, i64 %value.8)
                     \\    unreachable
-                    \\label_index_ok_1:
+                    \\index.0.in_bounds:
                     \\    %value.13 = load ptr, ptr %value.9
                     \\    %value.14 = getelementptr inbounds i64, ptr %value.13, i64 0
                     \\    store i64 2, ptr %value.14
@@ -1388,15 +1388,15 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %address.binding.flag.0 = alloca i1
                     \\    store i1 %parameter.flag, ptr %address.binding.flag.0
                     \\    %value.0 = load i1, ptr %address.binding.flag.0
-                    \\    br i1 %value.0, label %label_then_2, label %label_else_1
-                    \\label_then_2:
+                    \\    br i1 %value.0, label %if.0.then, label %if.0.else
+                    \\if.0.then:
                     \\    %value.1 = call ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64 1)
-                    \\    br label %label_continue_0
-                    \\label_else_1:
+                    \\    br label %if.0.end
+                    \\if.0.else:
                     \\    %value.2 = call ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64 1)
-                    \\    br label %label_continue_0
-                    \\label_continue_0:
-                    \\    %value.3 = phi ptr [%value.1, %label_then_2], [%value.2, %label_else_1]
+                    \\    br label %if.0.end
+                    \\if.0.end:
+                    \\    %value.3 = phi ptr [%value.1, %if.0.then], [%value.2, %if.0.else]
                     \\    ret ptr %value.3
                     \\}
                     \\
