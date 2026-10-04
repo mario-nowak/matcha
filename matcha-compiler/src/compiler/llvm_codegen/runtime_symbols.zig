@@ -35,6 +35,8 @@ pub const builtin_string_split_method_name = builtinMethod("string", "split");
 pub const builtin_string_to_int_method_name = builtinMethod("string", "toInt");
 pub const builtin_int_to_string_method_name = builtinMethod("int", "toString");
 pub const runtime_panic_index_out_of_bounds_function_name = runtimeFunction("panicIndexOutOfBounds");
+pub const runtime_panic_division_by_zero_function_name = runtimeFunction("panicDivisionByZero");
+pub const runtime_panic_division_overflow_function_name = runtimeFunction("panicDivisionOverflow");
 pub const runtime_array_append_slot_function_name = runtimeFunction("arrayAppendSlot");
 
 pub const RuntimeRequirements = struct {
@@ -50,6 +52,8 @@ pub const RuntimeRequirements = struct {
     string_to_int: bool = false,
     int_to_string: bool = false,
     panic_index_out_of_bounds: bool = false,
+    panic_division_by_zero: bool = false,
+    panic_division_overflow: bool = false,
     array_append_slot: bool = false,
 
     pub fn reset(self: *@This()) void {

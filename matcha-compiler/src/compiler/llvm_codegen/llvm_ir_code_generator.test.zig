@@ -618,6 +618,66 @@ pub const LlvmIrCodeGenerator = struct {
             }
         };
 
+        pub const integer_division = struct {
+            test "checks the divisor and the overflow case before dividing" {
+                const source =
+                    \\val dividend = 10;
+                    \\val divisor = 2;
+                    \\val quotient = dividend / divisor;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64, i64) noreturn
+                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionOverflow(i64, i64) noreturn
+                    \\
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
+                    \\
+                    \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
+                    \\entry:
+                    \\    %address.binding.dividend.0 = alloca i64
+                    \\    %address.binding.divisor.0 = alloca i64
+                    \\    %address.binding.quotient.0 = alloca i64
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
+                    \\    store i64 10, ptr %address.binding.dividend.0
+                    \\    store i64 2, ptr %address.binding.divisor.0
+                    \\    %value.0 = load i64, ptr %address.binding.dividend.0
+                    \\    %value.1 = load i64, ptr %address.binding.divisor.0
+                    \\    %value.2 = icmp eq i64 %value.1, 0
+                    \\    br i1 %value.2, label %division.0.zero_divisor, label %division.0.nonzero_divisor
+                    \\division.0.zero_divisor:
+                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64 3, i64 25)
+                    \\    unreachable
+                    \\division.0.nonzero_divisor:
+                    \\    %value.3 = icmp eq i64 %value.0, -9223372036854775808
+                    \\    %value.4 = icmp eq i64 %value.1, -1
+                    \\    %value.5 = and i1 %value.3, %value.4
+                    \\    br i1 %value.5, label %division.0.overflow, label %division.0.no_overflow
+                    \\division.0.overflow:
+                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionOverflow(i64 3, i64 25)
+                    \\    unreachable
+                    \\division.0.no_overflow:
+                    \\    %value.6 = sdiv i64 %value.0, %value.1
+                    \\    store i64 %value.6, ptr %address.binding.quotient.0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+        };
+
         pub const match = struct {
             test "lowers a match with a subject to a compare and branch chain" {
                 const source =

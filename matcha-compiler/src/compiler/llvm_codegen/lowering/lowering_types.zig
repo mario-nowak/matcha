@@ -65,7 +65,6 @@ pub const PrimitiveBinaryOperation = enum {
     Add,
     Subtract,
     Multiply,
-    Divide,
     Equal,
     NotEqual,
     LessThan,
@@ -84,6 +83,7 @@ pub const BinaryOperationDecision = union(enum) {
     UnionCaseIndexComparison,
     ShortCircuitAnd,
     ShortCircuitOr,
+    CheckedDivide,
 };
 
 pub const PlaceDecision = union(enum) {

@@ -4,7 +4,7 @@ comptime {
     _ = @import("diagnostic_format.test.zig");
     _ = @import("syntax.test.zig");
     _ = @import("binding.test.zig");
-    _ = @import("operator.test.zig");
+    referenceAllTestsRecursive(@import("operator.test.zig"));
     _ = @import("control_flow.test.zig");
     _ = @import("match.test.zig");
     _ = @import("functions.test.zig");

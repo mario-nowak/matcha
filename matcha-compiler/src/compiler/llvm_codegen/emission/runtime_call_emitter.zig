@@ -289,6 +289,24 @@ pub const RuntimeCallEmitter = struct {
         ) catch unreachable);
     }
 
+    pub fn emitPanicDivisionByZeroCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) void {
+        self.runtime_requirements.panic_division_by_zero = true;
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i64 {d}, i64 {d})",
+            .{ runtime_symbols.runtime_panic_division_by_zero_function_name, line, column },
+        ) catch unreachable);
+    }
+
+    pub fn emitPanicDivisionOverflowCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) void {
+        self.runtime_requirements.panic_division_overflow = true;
+        builder.emitInstruction(std.fmt.allocPrint(
+            self.allocator,
+            "call void @{s}(i64 {d}, i64 {d})",
+            .{ runtime_symbols.runtime_panic_division_overflow_function_name, line, column },
+        ) catch unreachable);
+    }
+
     pub fn emitArrayAppendSlotCall(
         self: *@This(),
         builder: *FunctionIrBuilder,

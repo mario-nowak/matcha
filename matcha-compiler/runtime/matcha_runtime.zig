@@ -20,6 +20,8 @@ comptime {
     @export(&stringToInt, .{ .name = runtime_symbols.builtin_string_to_int_method_name });
     @export(&intToString, .{ .name = runtime_symbols.builtin_int_to_string_method_name });
     @export(&panicIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name });
+    @export(&panicDivisionByZero, .{ .name = runtime_symbols.runtime_panic_division_by_zero_function_name });
+    @export(&panicDivisionOverflow, .{ .name = runtime_symbols.runtime_panic_division_overflow_function_name });
 }
 
 extern fn GC_init() void;
@@ -372,5 +374,17 @@ fn panicIndexOutOfBounds(line: usize, column: usize, index: i64, length: usize) 
         "runtime error: array index out of bounds\n  at line {d}, column {d}\n  index {d} is out of bounds for length {d}",
         .{ line, column, index, length },
     ) catch unreachable;
+    panic(formatted);
+}
+
+fn panicDivisionByZero(line: usize, column: usize) callconv(.c) noreturn {
+    var buffer: [128]u8 = undefined;
+    const formatted = std.fmt.bufPrint(&buffer, "runtime error: division by zero\n  at line {d}, column {d}", .{ line, column }) catch unreachable;
+    panic(formatted);
+}
+
+fn panicDivisionOverflow(line: usize, column: usize) callconv(.c) noreturn {
+    var buffer: [128]u8 = undefined;
+    const formatted = std.fmt.bufPrint(&buffer, "runtime error: integer overflow in division\n  at line {d}, column {d}", .{ line, column }) catch unreachable;
     panic(formatted);
 }
