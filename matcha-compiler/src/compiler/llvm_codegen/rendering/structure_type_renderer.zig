@@ -1,9 +1,7 @@
 const std = @import("std");
-const symbols = @import("symbols");
+const typing = @import("typing");
 const lowering = @import("lowering");
 const lowering_types = lowering.lowering_types;
-
-const llvm_type_lowering = lowering.llvm_type;
 
 pub const StructureTypeRenderer = struct {
     arena: std.mem.Allocator,
@@ -40,8 +38,6 @@ pub const StructureTypeRenderer = struct {
                 .Present => |structure_layout| structure_layout,
             };
 
-            const structure_symbol = resolved_program.symbol_table.getSymbol(structure_symbol_id);
-
             if (has_structure_definition) {
                 structure_definitions_buffer.writer(self.arena).print("\n", .{}) catch unreachable;
             }
@@ -49,7 +45,7 @@ pub const StructureTypeRenderer = struct {
                 "{s}",
                 .{
                     self.renderStructureTypeDefinition(
-                        structure_symbol,
+                        lowered_program.analyzed_program.type_store.getType(structure_type_id).Structure,
                         structure_layout,
                         lowered_program,
                     ),
@@ -63,14 +59,10 @@ pub const StructureTypeRenderer = struct {
 
     fn renderStructureTypeDefinition(
         self: *@This(),
-        structure_symbol: symbols.Symbol,
+        structure_type: typing.StructureType,
         structure_layout: lowering_types.StructureLayout,
         lowered_program: *const lowering.LoweredProgram,
     ) []const u8 {
-        const structure_information = switch (structure_symbol.kind) {
-            .Structure => |structure_information| structure_information,
-            else => unreachable,
-        };
         const structure_llvm_type_name = structure_layout.llvm_type_name;
 
         var structure_definition_buffer = std.ArrayList(u8){};
@@ -80,7 +72,7 @@ pub const StructureTypeRenderer = struct {
             "%{s} = type {{",
             .{structure_llvm_type_name},
         ) catch unreachable;
-        for (structure_information.fields, 0..) |field, field_index_in_structure_definition| {
+        for (structure_type.fields, 0..) |field, field_index_in_structure_definition| {
             const field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index_in_structure_definition]) {
                 .Absent => continue,
                 .Index => |field_index| field_index,
@@ -92,13 +84,12 @@ pub const StructureTypeRenderer = struct {
                 structure_definition_buffer.writer(self.arena).print(", ", .{}) catch unreachable;
             }
 
-            const field_type_id = llvm_type_lowering.getTypeIdFromResolvedTypeReference(lowered_program.analyzed_program, field.type_reference);
             structure_definition_buffer.writer(self.arena).print(
                 "{s}",
-                .{lowered_program.getLlvmIrType(field_type_id)},
+                .{lowered_program.getLlvmIrType(field.type_id)},
             ) catch unreachable;
         }
-        if (structure_information.fields.len > 0) {
+        if (structure_type.fields.len > 0) {
             structure_definition_buffer.writer(self.arena).print(" ", .{}) catch unreachable;
         }
         structure_definition_buffer.writer(self.arena).print("}}", .{}) catch unreachable;
