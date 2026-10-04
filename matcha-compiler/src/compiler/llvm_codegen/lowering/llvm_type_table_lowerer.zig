@@ -4,31 +4,25 @@ const typing = @import("typing");
 const llvm_type = @import("llvm_type.zig");
 
 pub const LlvmTypeTableLowerer = struct {
-    allocator: std.mem.Allocator,
-    llvm_ir_type_by_type_id: std.ArrayList([]const u8),
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .llvm_ir_type_by_type_id = .{},
+            .arena = arena,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.llvm_ir_type_by_type_id.deinit(self.allocator);
-    }
-
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) []const []const u8 {
-        self.llvm_ir_type_by_type_id.clearRetainingCapacity();
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) ![]const []const u8 {
+        var llvm_ir_type_by_type_id = std.ArrayList([]const u8){};
 
         for (0..analyzed_program.type_store.count()) |index| {
             const type_id: typing.TypeId = @intCast(index);
-            self.llvm_ir_type_by_type_id.append(
-                self.allocator,
+            try llvm_ir_type_by_type_id.append(
+                self.arena,
                 llvm_type.getLlvmIrTypeByMatchaType(&analyzed_program.type_store, type_id),
-            ) catch unreachable;
+            );
         }
 
-        return self.llvm_ir_type_by_type_id.items;
+        return llvm_ir_type_by_type_id.toOwnedSlice(self.arena);
     }
 };

@@ -44,14 +44,14 @@ pub const LoweringAnalyzer = struct {
     }
 
     pub fn lowerProgram(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowered_program.LoweredProgram {
-        const llvm_ir_type_by_type_id = self.llvm_type_table_lowerer.lower(analyzed_program);
-        const call_dispatch_decision_by_node_id = self.call_lowerer.lower(analyzed_program);
-        const member_access_decision_by_node_id = self.member_access_lowerer.lower(analyzed_program);
-        const binary_operation_decision_by_node_id = self.binary_operation_lowerer.lower(analyzed_program);
-        const place_decision_by_node_id = self.place_lowerer.lower(analyzed_program);
-        const structure_layout_kind_by_type_id = self.structure_layout_lowerer.lower(analyzed_program);
+        const llvm_ir_type_by_type_id = try self.llvm_type_table_lowerer.lower(analyzed_program);
+        const call_dispatch_decision_by_node_id = try self.call_lowerer.lower(analyzed_program);
+        const member_access_decision_by_node_id = try self.member_access_lowerer.lower(analyzed_program);
+        const binary_operation_decision_by_node_id = try self.binary_operation_lowerer.lower(analyzed_program);
+        const place_decision_by_node_id = try self.place_lowerer.lower(analyzed_program);
+        const structure_layout_kind_by_type_id = try self.structure_layout_lowerer.lower(analyzed_program);
         const union_layout_by_type_id = try self.union_layout_lowerer.lower(analyzed_program);
-        const function_layout_by_symbol_id = self.function_layout_lowerer.lower(analyzed_program);
+        const function_layout_by_symbol_id = try self.function_layout_lowerer.lower(analyzed_program);
 
         return .{
             .analyzed_program = analyzed_program,

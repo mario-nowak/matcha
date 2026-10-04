@@ -57,19 +57,15 @@ pub const Environment = struct {
     function_return_type_id: typing.TypeId,
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         loop_context: ?LoopContext,
         function_return_type_id: typing.TypeId,
     ) @This() {
         return .{
-            .address_by_symbol_id = AddressBySymbolId.init(allocator),
+            .address_by_symbol_id = AddressBySymbolId.init(arena),
             .loop_context = loop_context,
             .function_return_type_id = function_return_type_id,
         };
-    }
-
-    pub fn deinit(self: *@This()) void {
-        self.address_by_symbol_id.deinit();
     }
 };
 
@@ -77,7 +73,7 @@ pub const Environment = struct {
 /// Reachability is not threaded through calls: it lives in the
 /// FunctionIrBuilder cursor (see its doc comment).
 pub const NodeEmitter = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     function_symbol_generator: *FunctionSymbolGenerator,
     function_ir_builder: *FunctionIrBuilder,
     runtime_call_emitter: *RuntimeCallEmitter,
@@ -85,7 +81,7 @@ pub const NodeEmitter = struct {
     string_literal_emitter: *StringLiteralEmitter,
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         function_symbol_generator: *FunctionSymbolGenerator,
         function_ir_builder: *FunctionIrBuilder,
         runtime_call_emitter: *RuntimeCallEmitter,
@@ -93,7 +89,7 @@ pub const NodeEmitter = struct {
         string_literal_emitter: *StringLiteralEmitter,
     ) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .function_symbol_generator = function_symbol_generator,
             .function_ir_builder = function_ir_builder,
             .runtime_call_emitter = runtime_call_emitter,
@@ -102,26 +98,22 @@ pub const NodeEmitter = struct {
         };
     }
 
-    pub fn deinit(self: *const @This()) void {
-        _ = self;
-    }
-
-    pub fn emitStringParts(self: *@This(), string_value: Value) RuntimeStringParts {
-        const pointer_value = self.function_symbol_generator.generateValueName();
-        const pointer_instruction = std.fmt.allocPrint(
-            self.allocator,
+    pub fn emitStringParts(self: *@This(), string_value: Value) !RuntimeStringParts {
+        const pointer_value = try self.function_symbol_generator.generateValueName();
+        const pointer_instruction = try std.fmt.allocPrint(
+            self.arena,
             "{s} = extractvalue {s} {s}, 0",
             .{ pointer_value, lowering.llvm_type.string_llvm_type, string_value },
-        ) catch unreachable;
-        self.function_ir_builder.emitInstruction(pointer_instruction);
+        );
+        try self.function_ir_builder.emitInstruction(pointer_instruction);
 
-        const length_value = self.function_symbol_generator.generateValueName();
-        const length_instruction = std.fmt.allocPrint(
-            self.allocator,
+        const length_value = try self.function_symbol_generator.generateValueName();
+        const length_instruction = try std.fmt.allocPrint(
+            self.arena,
             "{s} = extractvalue {s} {s}, 1",
             .{ length_value, lowering.llvm_type.string_llvm_type, string_value },
-        ) catch unreachable;
-        self.function_ir_builder.emitInstruction(length_instruction);
+        );
+        try self.function_ir_builder.emitInstruction(length_instruction);
 
         return .{
             .pointer_value = pointer_value,
@@ -134,155 +126,155 @@ pub const NodeEmitter = struct {
         node: *const ast.Node,
         lowered_program: *const lowering.LoweredProgram,
         environment: *Environment,
-    ) EmissionResult {
+    ) std.mem.Allocator.Error!EmissionResult {
         switch (node.kind) {
-            .ReturnStatement => |return_statement| return control_flow.emitReturnStatement(
+            .return_statement => |return_statement| return control_flow.emitReturnStatement(
                 self,
                 &return_statement,
                 lowered_program,
                 environment,
             ),
-            .IntegerLiteral => |token| return .{ .value = std.fmt.allocPrint(
-                self.allocator,
+            .integer_literal => |token| return .{ .value = try std.fmt.allocPrint(
+                self.arena,
                 "{d}",
-                .{token.kind.IntLiteral},
-            ) catch unreachable },
-            .BooleanLiteral => |token| return .{ .value = if (token.kind.BooleanLiteral) "1" else "0" },
-            .StringLiteral => |token| return .{ .value = self.string_literal_emitter.emitStringLiteralValue(
+                .{token.kind.int_literal},
+            ) },
+            .boolean_literal => |token| return .{ .value = if (token.kind.boolean_literal) "1" else "0" },
+            .string_literal => |token| return .{ .value = try self.string_literal_emitter.emitStringLiteralValue(
                 self.string_literal_pool,
                 node.id,
-                token.kind.StringLiteral,
+                token.kind.string_literal,
                 self.function_symbol_generator,
                 self.function_ir_builder,
             ) },
-            .UnitLiteral => return .zero_sized,
-            .Identifier => return values.emitIdentifier(self, node, lowered_program, environment),
-            .Loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
-            .While => |while_statement| return control_flow.emitWhile(
+            .unit_literal => return .zero_sized,
+            .identifier => return values.emitIdentifier(self, node, lowered_program, environment),
+            .loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
+            .@"while" => |while_statement| return control_flow.emitWhile(
                 self,
                 &while_statement,
                 lowered_program,
                 environment,
             ),
-            .ForIn => |for_in| return control_flow.emitForInArrayLoop(
+            .for_in => |for_in| return control_flow.emitForInArrayLoop(
                 self,
                 node,
                 &for_in,
                 lowered_program,
                 environment,
             ),
-            .LeaveStatement => {
-                self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
+            .leave_statement => {
+                try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.leave_label});
                 return .statement;
             },
-            .ContinueStatement => {
-                self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
+            .continue_statement => {
+                try self.function_ir_builder.emitBranchInstruction(null, &.{environment.loop_context.?.continue_label});
                 return .statement;
             },
-            .CallExpression => |call_expression| return calls.emitCallExpression(
+            .call_expression => |call_expression| return calls.emitCallExpression(
                 self,
                 node,
                 &call_expression,
                 lowered_program,
                 environment,
             ),
-            .ImplicitMemberExpression => return aggregates.emitImplicitMemberExpression(
+            .implicit_member_expression => return aggregates.emitImplicitMemberExpression(
                 self,
                 node,
                 lowered_program,
                 environment,
             ),
-            .MemberExpression => |member_expression| return aggregates.emitMemberExpression(
+            .member_expression => |member_expression| return aggregates.emitMemberExpression(
                 self,
                 node,
                 &member_expression,
                 lowered_program,
                 environment,
             ),
-            .BinaryExpression => |binary_expression| return values.emitBinaryExpression(
+            .binary_expression => |binary_expression| return values.emitBinaryExpression(
                 self,
                 node,
                 &binary_expression,
                 lowered_program,
                 environment,
             ),
-            .UnaryExpression => |unary_expression| return values.emitUnaryExpression(
+            .unary_expression => |unary_expression| return values.emitUnaryExpression(
                 self,
                 node,
                 &unary_expression,
                 lowered_program,
                 environment,
             ),
-            .BindingDeclaration => |value_declaration| return places.emitBindingDeclaration(
+            .binding_declaration => |value_declaration| return places.emitBindingDeclaration(
                 self,
                 node,
                 &value_declaration,
                 lowered_program,
                 environment,
             ),
-            .AssignmentStatement => |assignment_statement| return places.emitAssignmentStatement(
+            .assignment_statement => |assignment_statement| return places.emitAssignmentStatement(
                 self,
                 node,
                 &assignment_statement,
                 lowered_program,
                 environment,
             ),
-            .Block => |block| return control_flow.emitBlock(self, block, lowered_program, environment),
-            .IfStatement => |if_statement| return control_flow.emitIfStatement(
+            .block => |block| return control_flow.emitBlock(self, block, lowered_program, environment),
+            .if_statement => |if_statement| return control_flow.emitIfStatement(
                 self,
                 node,
                 &if_statement,
                 lowered_program,
                 environment,
             ),
-            .IfExpression => |if_expression| return control_flow.emitIfExpression(
+            .if_expression => |if_expression| return control_flow.emitIfExpression(
                 self,
                 node,
                 &if_expression,
                 lowered_program,
                 environment,
             ),
-            .MatchExpression => |match_expression| return control_flow.emitMatchExpression(
+            .match_expression => |match_expression| return control_flow.emitMatchExpression(
                 self,
                 node,
                 &match_expression,
                 lowered_program,
                 environment,
             ),
-            .SubjectlessMatchExpression => |subjectless_match_expression| return control_flow.emitSubjectlessMatchExpression(
+            .subjectless_match_expression => |subjectless_match_expression| return control_flow.emitSubjectlessMatchExpression(
                 self,
                 node,
                 &subjectless_match_expression,
                 lowered_program,
                 environment,
             ),
-            .ExpressionStatement => |expression_statement| {
-                _ = self.emitNode(expression_statement.expression, lowered_program, environment);
+            .expression_statement => |expression_statement| {
+                _ = try self.emitNode(expression_statement.expression, lowered_program, environment);
                 return .statement;
             },
-            .ItemDefinition => return .statement,
-            .QualifiedStructureLiteral => |qualified_structure_literal| return aggregates.emitStructureLiteral(
+            .item_definition => return .statement,
+            .qualified_structure_literal => |qualified_structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
                 qualified_structure_literal.fields,
                 lowered_program,
                 environment,
             ),
-            .StructureLiteral => |structure_literal| return aggregates.emitStructureLiteral(
+            .structure_literal => |structure_literal| return aggregates.emitStructureLiteral(
                 self,
                 node,
                 structure_literal.fields,
                 lowered_program,
                 environment,
             ),
-            .ArrayLiteral => |array_literal| return aggregates.emitArrayLiteral(
+            .array_literal => |array_literal| return aggregates.emitArrayLiteral(
                 self,
                 node,
                 &array_literal,
                 lowered_program,
                 environment,
             ),
-            .IndexExpression => |index_expression| return aggregates.emitIndexExpression(
+            .index_expression => |index_expression| return aggregates.emitIndexExpression(
                 self,
                 node,
                 &index_expression,

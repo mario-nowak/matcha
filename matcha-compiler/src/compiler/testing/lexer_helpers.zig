@@ -7,13 +7,13 @@ const LexerPipeline = struct {
     lexer: *lexing.Lexer,
 };
 
-pub fn setupLexerPipeline(arena: *std.heap.ArenaAllocator, source: []const u8) !LexerPipeline {
-    const allocator = arena.allocator();
-    const diagnostic_store = try allocator.create(diagnostics.DiagnosticStore);
-    diagnostic_store.* = diagnostics.DiagnosticStore.init(allocator);
+pub fn setupLexerPipeline(arena_state: *std.heap.ArenaAllocator, source: []const u8) !LexerPipeline {
+    const arena = arena_state.allocator();
+    const diagnostic_store = try arena.create(diagnostics.DiagnosticStore);
+    diagnostic_store.* = diagnostics.DiagnosticStore.init(arena);
 
-    const lexer = try allocator.create(lexing.Lexer);
-    lexer.* = lexing.Lexer.init(source, allocator, diagnostic_store);
+    const lexer = try arena.create(lexing.Lexer);
+    lexer.* = lexing.Lexer.init(source, arena, diagnostic_store);
 
     return .{
         .diagnostic_store = diagnostic_store,
@@ -22,13 +22,12 @@ pub fn setupLexerPipeline(arena: *std.heap.ArenaAllocator, source: []const u8) !
 }
 
 pub fn collectTokens(lexer: *lexing.Lexer) ![]lexing.Token {
-    const allocator = lexer.allocator;
+    const arena = lexer.arena;
     var tokens = std.ArrayList(lexing.Token){};
-    defer tokens.deinit(allocator);
     while (true) {
         const token = try lexer.next();
-        try tokens.append(allocator, token);
-        if (token.kind == .EndOfFile) break;
+        try tokens.append(arena, token);
+        if (token.kind == .end_of_file) break;
     }
-    return tokens.toOwnedSlice(allocator);
+    return tokens.toOwnedSlice(arena);
 }

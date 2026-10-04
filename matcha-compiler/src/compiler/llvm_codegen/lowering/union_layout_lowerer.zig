@@ -18,14 +18,14 @@ pub const UnionLayoutLowerer = struct {
         var types_iterator = analyzed_program.type_store.iterator();
         while (types_iterator.next()) |entry| {
             const union_type = switch (entry.matcha_type) {
-                .Union => |union_type| union_type,
+                .@"union" => |union_type| union_type,
                 else => continue,
             };
 
             var union_layout_cases = std.ArrayList(lowering_types.UnionCaseLayout){};
             for (0..union_type.cases.len) |case_index| {
                 try union_layout_cases.append(self.arena, lowering_types.UnionCaseLayout{
-                    .llvm_type_name = self.generateLlvmTypeName(analyzed_program, union_type, case_index),
+                    .llvm_type_name = try self.generateLlvmTypeName(analyzed_program, union_type, case_index),
                 });
             }
 
@@ -47,15 +47,15 @@ pub const UnionLayoutLowerer = struct {
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         union_type: typing.UnionType,
         case_index: usize,
-    ) []const u8 {
+    ) ![]const u8 {
         const union_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
-        const union_symbol_information = union_symbol.kind.Union;
+        const union_symbol_information = union_symbol.kind.@"union";
         const union_case = union_symbol_information.cases[case_index];
 
         return std.fmt.allocPrint(
             self.arena,
             "matcha.union.{s}.case.{s}",
             .{ union_symbol.name, union_case.name },
-        ) catch unreachable;
+        );
     }
 };

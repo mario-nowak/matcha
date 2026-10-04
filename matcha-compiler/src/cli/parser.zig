@@ -34,15 +34,15 @@ const help_params = clap.parseParamsComptime(
     \\
 );
 
-pub fn parse(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+pub fn parse(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
     var diagnostic = clap.Diagnostic{};
-    var result = clap.parseEx(
+    const result = clap.parseEx(
         clap.Help,
         &top_level_params,
         top_level_parsers,
         argument_iterator,
         .{
-            .allocator = allocator,
+            .allocator = arena,
             .diagnostic = &diagnostic,
             .terminating_positional = 0,
         },
@@ -50,7 +50,6 @@ pub fn parse(allocator: std.mem.Allocator, argument_iterator: anytype) !Command 
         try diagnostic.reportToFile(.stderr(), parsing_error);
         return error.InvalidCommandLine;
     };
-    defer result.deinit();
 
     if (result.args.help != 0) {
         return .{ .help = null };
@@ -61,15 +60,16 @@ pub fn parse(allocator: std.mem.Allocator, argument_iterator: anytype) !Command 
 
     const subcommand = result.positionals[0] orelse return .{ .help = null };
     return switch (subcommand) {
-        .help => parseHelpCommand(allocator, argument_iterator),
-        .emit => parseEmitCommand(allocator, argument_iterator),
-        .build => parseBuildCommand(allocator, argument_iterator),
-        .run => parseRunCommand(allocator, argument_iterator),
+        .help => parseHelpCommand(arena, argument_iterator),
+        .emit => parseEmitCommand(arena, argument_iterator),
+        .build => parseBuildCommand(arena, argument_iterator),
+        .run => parseRunCommand(arena, argument_iterator),
     };
 }
 
 pub fn writeHelp(topic: ?HelpTopic) !void {
-    const stdout = std.fs.File.stdout().deprecatedWriter();
+    var stdout_writer = std.fs.File.stdout().writerStreaming(&.{});
+    const stdout = &stdout_writer.interface;
     if (topic == null) {
         try stdout.writeAll(
             "Usage:\n" ++
@@ -107,28 +107,28 @@ const run_params = clap.parseParamsComptime(
     \\
 );
 
-fn parseHelpCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+fn parseHelpCommand(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
     var diagnostic = clap.Diagnostic{};
-    var result = clap.parseEx(
+    _ = clap.parseEx(
         clap.Help,
         &help_params,
         clap.parsers.default,
         argument_iterator,
         .{
-            .allocator = allocator,
+            .allocator = arena,
             .diagnostic = &diagnostic,
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
         return error.InvalidCommandLine;
     };
-    defer result.deinit();
 
     return .{ .help = null };
 }
 
 fn reportMissingInputPath() error{MissingInputPath} {
-    std.fs.File.stderr().deprecatedWriter().print("error: missing input file\n", .{}) catch {};
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    stderr_writer.interface.print("error: missing input file\n", .{}) catch {};
     return error.MissingInputPath;
 }
 
@@ -137,26 +137,26 @@ fn validateInputPath(input_path: []const u8) !void {
     if (std.mem.eql(u8, std.fs.path.extension(input_path), ".mt")) {
         return;
     }
-    try std.fs.File.stderr().deprecatedWriter().print("error: input file must have the .mt extension: {s}\n", .{input_path});
+    var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
+    try stderr_writer.interface.print("error: input file must have the .mt extension: {s}\n", .{input_path});
     return error.InputPathWithoutMatchaExtension;
 }
 
-fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+fn parseEmitCommand(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
     var diagnostic = clap.Diagnostic{};
-    var result = clap.parseEx(
+    const result = clap.parseEx(
         clap.Help,
         &command_params,
         clap.parsers.default,
         argument_iterator,
         .{
-            .allocator = allocator,
+            .allocator = arena,
             .diagnostic = &diagnostic,
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
         return error.InvalidCommandLine;
     };
-    defer result.deinit();
 
     if (result.args.help != 0) {
         return .{ .help = .emit };
@@ -170,22 +170,21 @@ fn parseEmitCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !C
     } };
 }
 
-fn parseBuildCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+fn parseBuildCommand(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
     var diagnostic = clap.Diagnostic{};
-    var result = clap.parseEx(
+    const result = clap.parseEx(
         clap.Help,
         &command_params,
         clap.parsers.default,
         argument_iterator,
         .{
-            .allocator = allocator,
+            .allocator = arena,
             .diagnostic = &diagnostic,
         },
     ) catch |parsing_error| {
         try diagnostic.reportToFile(.stderr(), parsing_error);
         return error.InvalidCommandLine;
     };
-    defer result.deinit();
 
     if (result.args.help != 0) {
         return .{ .help = .build };
@@ -199,15 +198,15 @@ fn parseBuildCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !
     } };
 }
 
-fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Command {
+fn parseRunCommand(arena: std.mem.Allocator, argument_iterator: anytype) !Command {
     var diagnostic = clap.Diagnostic{};
-    var result = clap.parseEx(
+    const result = clap.parseEx(
         clap.Help,
         &run_params,
         clap.parsers.default,
         argument_iterator,
         .{
-            .allocator = allocator,
+            .allocator = arena,
             .diagnostic = &diagnostic,
             .terminating_positional = 0,
         },
@@ -215,7 +214,6 @@ fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Co
         try diagnostic.reportToFile(.stderr(), parsing_error);
         return error.InvalidCommandLine;
     };
-    defer result.deinit();
 
     if (result.args.help != 0) {
         return .{ .help = .run };
@@ -224,20 +222,19 @@ fn parseRunCommand(allocator: std.mem.Allocator, argument_iterator: anytype) !Co
     const input_path = result.positionals[0] orelse return reportMissingInputPath();
     try validateInputPath(input_path);
     var program_arguments: std.ArrayList([]const u8) = .empty;
-    defer program_arguments.deinit(allocator);
 
     if (argument_iterator.next()) |argument| {
         if (!std.mem.eql(u8, argument, "--")) {
-            try program_arguments.append(allocator, argument);
+            try program_arguments.append(arena, argument);
         }
     }
 
     while (argument_iterator.next()) |argument| {
-        try program_arguments.append(allocator, argument);
+        try program_arguments.append(arena, argument);
     }
 
     return .{ .run = .{
         .input_path = input_path,
-        .program_arguments = try program_arguments.toOwnedSlice(allocator),
+        .program_arguments = try program_arguments.toOwnedSlice(arena),
     } };
 }

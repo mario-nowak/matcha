@@ -15,51 +15,51 @@ const LlvmIrCodeGeneratorFixture = struct {
 };
 
 pub fn setupLlvmIrCodeGeneratorFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !LlvmIrCodeGeneratorFixture {
-    const allocator = arena.allocator();
-    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena, source);
+    const arena = arena_state.allocator();
+    const lowering_analyzer_fixture = try setupLoweringAnalyzerFixture(arena_state, source);
 
-    const function_symbol_generator = try allocator.create(llvm_codegen.FunctionSymbolGenerator);
-    function_symbol_generator.* = llvm_codegen.FunctionSymbolGenerator.init(allocator);
-    const function_ir_builder = try allocator.create(llvm_codegen.FunctionIrBuilder);
-    function_ir_builder.* = llvm_codegen.FunctionIrBuilder.init(allocator);
-    const runtime_call_emitter = try allocator.create(llvm_codegen.RuntimeCallEmitter);
-    runtime_call_emitter.* = llvm_codegen.RuntimeCallEmitter.init(allocator);
-    const runtime_symbol_renderer = try allocator.create(llvm_codegen.RuntimeSymbolRenderer);
-    runtime_symbol_renderer.* = llvm_codegen.RuntimeSymbolRenderer.init(allocator);
-    const string_literal_renderer = try allocator.create(llvm_codegen.StringLiteralRenderer);
-    string_literal_renderer.* = llvm_codegen.StringLiteralRenderer.init(allocator);
-    const string_literal_pool = try allocator.create(llvm_codegen.StringLiteralPool);
-    string_literal_pool.* = llvm_codegen.StringLiteralPool.init(allocator);
-    const string_literal_emitter = try allocator.create(llvm_codegen.StringLiteralEmitter);
-    string_literal_emitter.* = llvm_codegen.StringLiteralEmitter.init(allocator);
-    const structure_type_renderer = try allocator.create(llvm_codegen.StructureTypeRenderer);
-    structure_type_renderer.* = llvm_codegen.StructureTypeRenderer.init(allocator);
-    const union_type_renderer = try allocator.create(llvm_codegen.UnionTypeRenderer);
-    union_type_renderer.* = llvm_codegen.UnionTypeRenderer.init(allocator);
+    const function_symbol_generator = try arena.create(llvm_codegen.FunctionSymbolGenerator);
+    function_symbol_generator.* = llvm_codegen.FunctionSymbolGenerator.init(arena);
+    const function_ir_builder = try arena.create(llvm_codegen.FunctionIrBuilder);
+    function_ir_builder.* = llvm_codegen.FunctionIrBuilder.init(arena);
+    const runtime_call_emitter = try arena.create(llvm_codegen.RuntimeCallEmitter);
+    runtime_call_emitter.* = llvm_codegen.RuntimeCallEmitter.init(arena);
+    const runtime_symbol_renderer = try arena.create(llvm_codegen.RuntimeSymbolRenderer);
+    runtime_symbol_renderer.* = llvm_codegen.RuntimeSymbolRenderer.init(arena);
+    const string_literal_renderer = try arena.create(llvm_codegen.StringLiteralRenderer);
+    string_literal_renderer.* = llvm_codegen.StringLiteralRenderer.init(arena);
+    const string_literal_pool = try arena.create(llvm_codegen.StringLiteralPool);
+    string_literal_pool.* = llvm_codegen.StringLiteralPool.init(arena);
+    const string_literal_emitter = try arena.create(llvm_codegen.StringLiteralEmitter);
+    string_literal_emitter.* = llvm_codegen.StringLiteralEmitter.init(arena);
+    const structure_type_renderer = try arena.create(llvm_codegen.StructureTypeRenderer);
+    structure_type_renderer.* = llvm_codegen.StructureTypeRenderer.init(arena);
+    const union_type_renderer = try arena.create(llvm_codegen.UnionTypeRenderer);
+    union_type_renderer.* = llvm_codegen.UnionTypeRenderer.init(arena);
 
-    const node_emitter = try allocator.create(llvm_codegen.NodeEmitter);
+    const node_emitter = try arena.create(llvm_codegen.NodeEmitter);
     node_emitter.* = llvm_codegen.NodeEmitter.init(
-        allocator,
+        arena,
         function_symbol_generator,
         function_ir_builder,
         runtime_call_emitter,
         string_literal_pool,
         string_literal_emitter,
     );
-    const function_emitter = try allocator.create(llvm_codegen.FunctionEmitter);
+    const function_emitter = try arena.create(llvm_codegen.FunctionEmitter);
     function_emitter.* = llvm_codegen.FunctionEmitter.init(
-        allocator,
+        arena,
         function_symbol_generator,
         function_ir_builder,
         runtime_call_emitter,
         node_emitter,
     );
-    const llvm_module_renderer = try allocator.create(llvm_codegen.rendering.LlvmModuleRenderer);
+    const llvm_module_renderer = try arena.create(llvm_codegen.rendering.LlvmModuleRenderer);
     llvm_module_renderer.* = llvm_codegen.rendering.LlvmModuleRenderer.init(
-        allocator,
+        arena,
         test_target_triple,
         function_emitter,
         runtime_call_emitter,
@@ -70,7 +70,7 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         union_type_renderer,
     );
 
-    const llvm_ir_code_generator = try allocator.create(LlvmIrCodeGenerator);
+    const llvm_ir_code_generator = try arena.create(LlvmIrCodeGenerator);
     llvm_ir_code_generator.* = LlvmIrCodeGenerator.init(lowering_analyzer_fixture.lowering_analyzer, llvm_module_renderer);
 
     return .{

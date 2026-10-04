@@ -16,15 +16,15 @@ pub const array_data_field_index: u32 = 2;
 
 pub fn getLlvmIrTypeByMatchaType(type_store: *const typing.TypeStore, type_id: typing.TypeId) []const u8 {
     return switch (type_store.getType(type_id)) {
-        .Unit => "void",
-        .Boolean => "i1",
-        .Integer => "i64",
-        .String => string_llvm_type,
-        .Structure => "ptr",
-        .Array => "ptr",
-        .Function => "ptr",
-        .Union => "ptr",
+        .unit => "void",
+        .boolean => "i1",
+        .integer => "i64",
+        .string => string_llvm_type,
+        .structure => "ptr",
+        .array => "ptr",
+        .function => "ptr",
+        .@"union" => "ptr",
         // Internal type
-        .UnionConstructor => "ptr",
+        .union_constructor => "ptr",
     };
 }

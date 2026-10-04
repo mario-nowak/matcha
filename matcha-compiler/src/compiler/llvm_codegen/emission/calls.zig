@@ -19,18 +19,18 @@ pub fn emitCallExpression(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const call_dispatch = lowered_program.call_dispatch_decision_by_node_id.get(node.id) orelse unreachable;
 
     return switch (call_dispatch) {
-        .UserFunction => |user_function| emitUserFunctionCall(
+        .user_function => |user_function| try emitUserFunctionCall(
             emitter,
             user_function,
             call_expression,
             lowered_program,
             environment,
         ),
-        .UnionConstruction => |union_construction| emitUnionConstruction(
+        .union_construction => |union_construction| try emitUnionConstruction(
             emitter,
             union_construction.union_type_id,
             union_construction.case_index,
@@ -38,20 +38,20 @@ pub fn emitCallExpression(
             lowered_program,
             environment,
         ),
-        .Builtin => |builtin_call_kind| emitBuiltinCall(
+        .builtin => |builtin_call_kind| try emitBuiltinCall(
             emitter,
             builtin_call_kind,
             call_expression,
             lowered_program,
             environment,
         ),
-        .ArrayMethod => |array_method| {
+        .array_method => |array_method| {
             const callee_member_expression = switch (call_expression.callee.kind) {
-                .MemberExpression => |member_expression| member_expression,
+                .member_expression => |member_expression| member_expression,
                 else => unreachable,
             };
             return switch (array_method) {
-                .Append => emitArrayAppendCall(
+                .append => try emitArrayAppendCall(
                     emitter,
                     &callee_member_expression,
                     call_expression,
@@ -60,9 +60,9 @@ pub fn emitCallExpression(
                 ),
             };
         },
-        .StringMethod => |string_method| {
+        .string_method => |string_method| {
             const callee_member_expression = switch (call_expression.callee.kind) {
-                .MemberExpression => |member_expression| member_expression,
+                .member_expression => |member_expression| member_expression,
                 else => unreachable,
             };
             return emitStringMethodCall(
@@ -74,9 +74,9 @@ pub fn emitCallExpression(
                 environment,
             );
         },
-        .IntegerMethod => |integer_method| {
+        .integer_method => |integer_method| {
             const callee_member_expression = switch (call_expression.callee.kind) {
-                .MemberExpression => |member_expression| member_expression,
+                .member_expression => |member_expression| member_expression,
                 else => unreachable,
             };
             return emitIntegerMethodCall(
@@ -97,37 +97,36 @@ fn emitUserFunctionCall(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     var argument_values = std.ArrayList(Value){};
-    defer argument_values.deinit(emitter.allocator);
 
     if (user_function.receiver_node_id) |receiver_node_id| {
         const callee_member_expression = switch (call_expression.callee.kind) {
-            .MemberExpression => |member_expression| member_expression,
+            .member_expression => |member_expression| member_expression,
             else => unreachable,
         };
         if (callee_member_expression.base.id != receiver_node_id) unreachable;
 
-        const receiver_emission_result = emitter.emitNode(callee_member_expression.base, lowered_program, environment);
+        const receiver_emission_result = try emitter.emitNode(callee_member_expression.base, lowered_program, environment);
         switch (receiver_emission_result) {
-            .value => |receiver_value| argument_values.append(
-                emitter.allocator,
+            .value => |receiver_value| try argument_values.append(
+                emitter.arena,
                 receiver_value,
-            ) catch unreachable,
+            ),
             else => {},
         }
     }
 
     for (call_expression.arguments) |*argument| {
-        const argument_emission_result = emitter.emitNode(argument, lowered_program, environment);
+        const argument_emission_result = try emitter.emitNode(argument, lowered_program, environment);
         const argument_value = switch (argument_emission_result) {
             .value => |value| value,
             else => continue,
         };
-        argument_values.append(
-            emitter.allocator,
+        try argument_values.append(
+            emitter.arena,
             argument_value,
-        ) catch unreachable;
+        );
     }
 
     return emitDirectFunctionCall(
@@ -144,45 +143,45 @@ fn emitBuiltinCall(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     switch (builtin_call_kind) {
-        .PrintInt => {
+        .print_int => {
             if (call_expression.arguments.len != 1) unreachable;
-            const argument_value = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
-            emitter.runtime_call_emitter.emitPrintIntCall(
+            const argument_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            try emitter.runtime_call_emitter.emitPrintIntCall(
                 emitter.function_ir_builder,
                 argument_value.expectValue(),
             );
             return .zero_sized;
         },
-        .PrintString => {
+        .print_string => {
             if (call_expression.arguments.len != 1) unreachable;
-            const argument_value = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
-            emitter.runtime_call_emitter.emitPrintStringCall(
+            const argument_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            try emitter.runtime_call_emitter.emitPrintStringCall(
                 emitter.function_ir_builder,
-                emitter.emitStringParts(argument_value.expectValue()),
+                try emitter.emitStringParts(argument_value.expectValue()),
             );
             return .zero_sized;
         },
-        .ReadFile => {
+        .read_file => {
             if (call_expression.arguments.len != 1) unreachable;
-            const path_value = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
-            return .{ .value = emitter.runtime_call_emitter.emitReadFileCall(
+            const path_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            return .{ .value = try emitter.runtime_call_emitter.emitReadFileCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
-                emitter.emitStringParts(path_value.expectValue()),
+                try emitter.emitStringParts(path_value.expectValue()),
             ) };
         },
-        .ReadLine => {
+        .read_line => {
             if (call_expression.arguments.len != 0) unreachable;
-            return .{ .value = emitter.runtime_call_emitter.emitReadLineCall(
+            return .{ .value = try emitter.runtime_call_emitter.emitReadLineCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
             ) };
         },
-        .GetArguments => {
+        .get_arguments => {
             if (call_expression.arguments.len != 0) unreachable;
-            return .{ .value = emitter.runtime_call_emitter.emitGetArgumentsCall(
+            return .{ .value = try emitter.runtime_call_emitter.emitGetArgumentsCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
             ) };
@@ -195,63 +194,63 @@ fn emitDirectFunctionCall(
     callee_symbol_id: symbols.SymbolId,
     argument_values: []const Value,
     lowered_program: *const lowering.LoweredProgram,
-) EmissionResult {
+) !EmissionResult {
     const callee_symbol = lowered_program.analyzed_program.resolved_program.symbol_table.getSymbol(callee_symbol_id);
     const function_symbol_information = switch (callee_symbol.kind) {
-        .Function => |function_symbol_information| function_symbol_information,
+        .function => |function_symbol_information| function_symbol_information,
         else => unreachable,
     };
     const function_layout = lowered_program.function_layout_by_symbol_id.get(callee_symbol_id) orelse unreachable;
 
     var argument_list_buffer = std.ArrayList(u8){};
-    defer argument_list_buffer.deinit(emitter.allocator);
 
     for (function_layout.parameter_index_kind_by_definition_index, 0..) |parameter_layout_index_kind, parameter_definition_index| {
         const parameter_layout_index = switch (parameter_layout_index_kind) {
-            .Absent => continue,
-            .Index => |index| index,
+            .absent => continue,
+            .index => |index| index,
         };
         if (parameter_layout_index > 0) {
-            argument_list_buffer.writer(emitter.allocator).print(", ", .{}) catch unreachable;
+            try argument_list_buffer.print(emitter.arena, ", ", .{});
         }
         const parameter_symbol_id = function_symbol_information.parameter_symbol_ids[parameter_definition_index];
         const parameter_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(parameter_symbol_id) orelse unreachable;
         const parameter_llvm_type = lowered_program.getLlvmIrType(parameter_type_id);
         const argument_value = argument_values[parameter_layout_index];
 
-        argument_list_buffer.writer(emitter.allocator).print(
+        try argument_list_buffer.print(
+            emitter.arena,
             "{s} {s}",
             .{ parameter_llvm_type, argument_value },
-        ) catch unreachable;
+        );
     }
 
     const function_name = function_layout.llvm_function_name;
     const function_type_id = lowered_program.analyzed_program.type_id_by_symbol_id.get(callee_symbol_id) orelse unreachable;
     const function_return_type_id = switch (lowered_program.analyzed_program.type_store.getType(function_type_id)) {
-        .Function => |function_type| function_type.return_type_id,
+        .function => |function_type| function_type.return_type_id,
         else => unreachable,
     };
     const function_return_llvm_ir_type = lowered_program.getLlvmIrType(function_return_type_id);
 
     switch (function_layout.return_type_value_kind) {
-        .Absent => {
-            const call_instruction = std.fmt.allocPrint(
-                emitter.allocator,
+        .absent => {
+            const call_instruction = try std.fmt.allocPrint(
+                emitter.arena,
                 "call void @{s}({s})",
                 .{ function_name, argument_list_buffer.items },
-            ) catch unreachable;
-            emitter.function_ir_builder.emitInstruction(call_instruction);
+            );
+            try emitter.function_ir_builder.emitInstruction(call_instruction);
 
             return .zero_sized;
         },
-        .Present => {
-            const result_value = emitter.function_symbol_generator.generateValueName();
-            const call_instruction = std.fmt.allocPrint(
-                emitter.allocator,
+        .present => {
+            const result_value = try emitter.function_symbol_generator.generateValueName();
+            const call_instruction = try std.fmt.allocPrint(
+                emitter.arena,
                 "{s} = call {s} @{s}({s})",
                 .{ result_value, function_return_llvm_ir_type, function_name, argument_list_buffer.items },
-            ) catch unreachable;
-            emitter.function_ir_builder.emitInstruction(call_instruction);
+            );
+            try emitter.function_ir_builder.emitInstruction(call_instruction);
 
             return .{ .value = result_value };
         },
@@ -264,15 +263,15 @@ fn emitArrayAppendCall(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     if (call_expression.arguments.len != 1) unreachable;
 
-    const base_value = emitter.emitNode(callee_member_expression.base, lowered_program, environment).expectValue();
-    const argument_value = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+    const base_value = (try emitter.emitNode(callee_member_expression.base, lowered_program, environment)).expectValue();
+    const argument_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
 
     const array_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(callee_member_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
 
@@ -286,26 +285,26 @@ fn emitArrayAppendCall(
         // since the element doesn't need to be stored anywhere.
 
         // load length of the array
-        const length_pointer_value = emitter.function_symbol_generator.generateValueName();
-        emitter.function_ir_builder.emitFieldPointer(
+        const length_pointer_value = try emitter.function_symbol_generator.generateValueName();
+        try emitter.function_ir_builder.emitFieldPointer(
             length_pointer_value,
             lowering.llvm_type.array_llvm_type_name,
             base_value,
             lowering.llvm_type.array_length_field_index,
         );
-        const length_value = emitter.function_symbol_generator.generateValueName();
-        emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
+        const length_value = try emitter.function_symbol_generator.generateValueName();
+        try emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
 
         // increment length of the array
-        const new_length_value = emitter.function_symbol_generator.generateValueName();
-        emitter.function_ir_builder.emitInstruction(std.fmt.allocPrint(
-            emitter.allocator,
+        const new_length_value = try emitter.function_symbol_generator.generateValueName();
+        try emitter.function_ir_builder.emitInstruction(try std.fmt.allocPrint(
+            emitter.arena,
             "{s} = add i64 {s}, 1",
             .{ new_length_value, length_value },
-        ) catch unreachable);
+        ));
 
         // store new length of the array
-        emitter.function_ir_builder.emitStore(new_length_value, length_pointer_value, "i64");
+        try emitter.function_ir_builder.emitStore(new_length_value, length_pointer_value, "i64");
 
         return .zero_sized;
     }
@@ -313,14 +312,14 @@ fn emitArrayAppendCall(
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
 
     // The runtime helper grows the backing storage if needed and returns the slot for the new element.
-    const slot_value = emitter.runtime_call_emitter.emitArrayAppendSlotCall(
+    const slot_value = try emitter.runtime_call_emitter.emitArrayAppendSlotCall(
         emitter.function_ir_builder,
         emitter.function_symbol_generator,
         base_value,
         element_llvm_type,
     );
 
-    emitter.function_ir_builder.emitStore(argument_value.expectValue(), slot_value, element_llvm_type);
+    try emitter.function_ir_builder.emitStore(argument_value.expectValue(), slot_value, element_llvm_type);
 
     return .zero_sized;
 }
@@ -332,36 +331,36 @@ fn emitStringMethodCall(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
-    const base_value = emitter.emitNode(callee_member_expression.base, lowered_program, environment).expectValue();
+) !EmissionResult {
+    const base_value = (try emitter.emitNode(callee_member_expression.base, lowered_program, environment)).expectValue();
 
     switch (string_method) {
-        .Trim => {
+        .trim => {
             if (call_expression.arguments.len != 0) unreachable;
-            return .{ .value = emitter.runtime_call_emitter.emitStringTrimCall(
+            return .{ .value = try emitter.runtime_call_emitter.emitStringTrimCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
-                emitter.emitStringParts(base_value),
+                try emitter.emitStringParts(base_value),
             ) };
         },
-        .Split => {
+        .split => {
             if (call_expression.arguments.len != 1) unreachable;
 
-            const delimiter_value = emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
-            return .{ .value = emitter.runtime_call_emitter.emitStringSplitCall(
+            const delimiter_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            return .{ .value = try emitter.runtime_call_emitter.emitStringSplitCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
-                emitter.emitStringParts(base_value),
-                emitter.emitStringParts(delimiter_value.expectValue()),
+                try emitter.emitStringParts(base_value),
+                try emitter.emitStringParts(delimiter_value.expectValue()),
             ) };
         },
-        .ToInt => {
+        .to_int => {
             if (call_expression.arguments.len != 0) unreachable;
 
-            return .{ .value = emitter.runtime_call_emitter.emitStringToIntCall(
+            return .{ .value = try emitter.runtime_call_emitter.emitStringToIntCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
-                emitter.emitStringParts(base_value),
+                try emitter.emitStringParts(base_value),
             ) };
         },
     }
@@ -374,14 +373,14 @@ fn emitIntegerMethodCall(
     call_expression: *const ast.CallExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
-    const base_value = emitter.emitNode(callee_member_expression.base, lowered_program, environment);
+) !EmissionResult {
+    const base_value = try emitter.emitNode(callee_member_expression.base, lowered_program, environment);
 
     switch (integer_method) {
-        .ToString => {
+        .to_string => {
             if (call_expression.arguments.len != 0) unreachable;
 
-            return .{ .value = emitter.runtime_call_emitter.emitIntToStringCall(
+            return .{ .value = try emitter.runtime_call_emitter.emitIntToStringCall(
                 emitter.function_ir_builder,
                 emitter.function_symbol_generator,
                 base_value.expectValue(),

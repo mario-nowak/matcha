@@ -31,10 +31,10 @@ pub const Symbol = struct {
 };
 
 pub const SymbolKind = union(enum) {
-    Binding: BindingSymbolInformation,
-    Function: FunctionSymbolInformation,
-    Structure: StructureSymbolInformation,
-    Union: UnionSymbolInformation,
+    binding: BindingSymbolInformation,
+    function: FunctionSymbolInformation,
+    structure: StructureSymbolInformation,
+    @"union": UnionSymbolInformation,
 };
 
 pub const SymbolKindTag = std.meta.Tag(SymbolKind);
@@ -90,17 +90,17 @@ pub const ResolvedUnionCase = struct {
 };
 
 pub const FunctionImplementationKind = union(enum) {
-    UserDefined,
-    BuiltinPrintInt,
-    BuiltinPrintString,
-    BuiltinReadFile,
-    BuiltinReadLine,
-    BuiltinGetArguments,
+    user_defined,
+    builtin_print_int,
+    builtin_print_string,
+    builtin_read_file,
+    builtin_read_line,
+    builtin_get_arguments,
 };
 
 pub const BindingMutability = enum {
-    Mutable,
-    Immutable,
+    mutable,
+    immutable,
 };
 
 /// Table for storing symbols by their ID.
@@ -118,41 +118,41 @@ pub const SymbolTable = struct {
         }
     };
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .preliminary_entries = std.AutoHashMap(SymbolId, PreliminarySymbol).init(allocator),
-            .entries = std.AutoHashMap(SymbolId, Symbol).init(allocator),
+            .preliminary_entries = std.AutoHashMap(SymbolId, PreliminarySymbol).init(arena),
+            .entries = std.AutoHashMap(SymbolId, Symbol).init(arena),
             .next_symbol_id = 0,
         };
     }
 
-    pub fn insertSymbol(self: *@This(), payload: SymbolCreationPayload) SymbolId {
+    pub fn insertSymbol(self: *@This(), payload: SymbolCreationPayload) !SymbolId {
         const symbol_id = self.next_symbol_id;
         self.next_symbol_id += 1;
-        self.entries.put(symbol_id, .{
+        try self.entries.put(symbol_id, .{
             .id = symbol_id,
             .name = payload.name,
             .declared_at = payload.declared_at,
             .kind = payload.kind,
-        }) catch unreachable;
+        });
 
         return symbol_id;
     }
 
-    pub fn insertPreliminarySymbol(self: *@This(), payload: PreliminarySymbolCreationPayload) SymbolId {
+    pub fn insertPreliminarySymbol(self: *@This(), payload: PreliminarySymbolCreationPayload) !SymbolId {
         const symbol_id = self.next_symbol_id;
         self.next_symbol_id += 1;
-        self.preliminary_entries.put(symbol_id, .{
+        try self.preliminary_entries.put(symbol_id, .{
             .id = symbol_id,
             .name = payload.name,
             .declared_at = payload.declared_at,
             .kind = payload.kind,
-        }) catch unreachable;
+        });
 
         return symbol_id;
     }
 
-    pub fn finalizePreliminarySymbol(self: *@This(), symbol_id: SymbolId, kind: SymbolKind) void {
+    pub fn finalizePreliminarySymbol(self: *@This(), symbol_id: SymbolId, kind: SymbolKind) !void {
         const removed_entry = self.preliminary_entries.fetchRemove(symbol_id) orelse {
             if (self.entries.contains(symbol_id)) {
                 std.debug.panic("Internal Compiler Error: Symbol {d} is already finalized", .{symbol_id});
@@ -163,12 +163,12 @@ pub const SymbolTable = struct {
         if (preliminary.kind != std.meta.activeTag(kind)) {
             std.debug.panic("Internal Compiler Error: Cannot change kind of symbol {d} during finalization", .{symbol_id});
         }
-        self.entries.put(symbol_id, .{
+        try self.entries.put(symbol_id, .{
             .id = preliminary.id,
             .name = preliminary.name,
             .declared_at = preliminary.declared_at,
             .kind = kind,
-        }) catch unreachable;
+        });
     }
 
     pub fn getSymbol(self: *const @This(), symbol_id: SymbolId) Symbol {
@@ -206,16 +206,16 @@ pub const SymbolTable = struct {
 };
 
 pub const ResolvedTypeReference = union(enum) {
-    Builtin: BuiltinType,
-    Symbol: SymbolId,
-    Array: *ResolvedTypeReference,
+    builtin: BuiltinType,
+    symbol: SymbolId,
+    array: *ResolvedTypeReference,
 };
 
 pub const BuiltinType = enum {
-    Unit,
-    Boolean,
-    Integer,
-    String,
+    unit,
+    boolean,
+    integer,
+    string,
 };
 
 pub const SymbolIdByNodeId = std.AutoHashMap(ast.NodeId, SymbolId);

@@ -5,166 +5,161 @@ const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
 
 pub const BinaryOperationLowerer = struct {
-    allocator: std.mem.Allocator,
-    decision_by_node_id: lowering_types.BinaryOperationDecisionByNodeId,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .decision_by_node_id = lowering_types.BinaryOperationDecisionByNodeId.init(allocator),
+            .arena = arena,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.decision_by_node_id.deinit();
-    }
-
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.BinaryOperationDecisionByNodeId {
-        self.decision_by_node_id.clearRetainingCapacity();
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.BinaryOperationDecisionByNodeId {
+        var decision_by_node_id = lowering_types.BinaryOperationDecisionByNodeId.init(self.arena);
 
         for (analyzed_program.resolved_program.program.statements) |*statement| {
-            self.lowerNode(statement, analyzed_program);
+            try self.lowerNode(statement, analyzed_program, &decision_by_node_id);
         }
 
-        return self.decision_by_node_id;
+        return decision_by_node_id;
     }
 
     fn lowerNode(
         self: *@This(),
         node: *const ast.Node,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
-    ) void {
+        decision_by_node_id: *lowering_types.BinaryOperationDecisionByNodeId,
+    ) !void {
         switch (node.kind) {
-            .BindingDeclaration => |binding_declaration| self.lowerNode(binding_declaration.value, analyzed_program),
-            .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                .Function => |function_definition| self.lowerNode(function_definition.body_expression, analyzed_program),
-                inline .Structure, .Union => |type_definition| {
+            .binding_declaration => |binding_declaration| try self.lowerNode(binding_declaration.value, analyzed_program, decision_by_node_id),
+            .item_definition => |item_definition| switch (item_definition.definition) {
+                .function => |function_definition| try self.lowerNode(function_definition.body_expression, analyzed_program, decision_by_node_id),
+                inline .structure, .@"union" => |type_definition| {
                     for (type_definition.function_definitions) |*function_definition_node| {
-                        self.lowerNode(function_definition_node, analyzed_program);
+                        try self.lowerNode(function_definition_node, analyzed_program, decision_by_node_id);
                     }
                 },
             },
-            .ReturnStatement => |return_statement| {
+            .return_statement => |return_statement| {
                 if (return_statement.value) |value| {
-                    self.lowerNode(value, analyzed_program);
+                    try self.lowerNode(value, analyzed_program, decision_by_node_id);
                 }
             },
-            .IfStatement => |if_statement| {
-                self.lowerNode(if_statement.condition, analyzed_program);
-                self.lowerNode(if_statement.then_branch, analyzed_program);
+            .if_statement => |if_statement| {
+                try self.lowerNode(if_statement.condition, analyzed_program, decision_by_node_id);
+                try self.lowerNode(if_statement.then_branch, analyzed_program, decision_by_node_id);
             },
-            .ExpressionStatement => |expression_statement| self.lowerNode(expression_statement.expression, analyzed_program),
-            .AssignmentStatement => |assignment_statement| {
-                self.lowerNode(assignment_statement.target, analyzed_program);
-                self.lowerNode(assignment_statement.value, analyzed_program);
+            .expression_statement => |expression_statement| try self.lowerNode(expression_statement.expression, analyzed_program, decision_by_node_id),
+            .assignment_statement => |assignment_statement| {
+                try self.lowerNode(assignment_statement.target, analyzed_program, decision_by_node_id);
+                try self.lowerNode(assignment_statement.value, analyzed_program, decision_by_node_id);
                 switch (assignment_statement.operator) {
-                    .Assign => {},
-                    .Compound => |binary_operator| {
+                    .assign => {},
+                    .compound => |binary_operator| {
                         const target_type_id = analyzed_program.type_id_by_node_id.get(assignment_statement.target.id) orelse unreachable;
                         const decision = decisionFor(binary_operator, target_type_id, analyzed_program);
-                        self.decision_by_node_id.put(node.id, decision) catch unreachable;
+                        try decision_by_node_id.put(node.id, decision);
                     },
                 }
             },
-            .Loop => |loop| self.lowerNode(loop.body_block, analyzed_program),
-            .While => |while_statement| {
-                self.lowerNode(while_statement.condition, analyzed_program);
+            .loop => |loop| try self.lowerNode(loop.body_block, analyzed_program, decision_by_node_id),
+            .@"while" => |while_statement| {
+                try self.lowerNode(while_statement.condition, analyzed_program, decision_by_node_id);
                 if (while_statement.update) |update| {
-                    self.lowerNode(update, analyzed_program);
+                    try self.lowerNode(update, analyzed_program, decision_by_node_id);
                 }
-                self.lowerNode(while_statement.body_block, analyzed_program);
+                try self.lowerNode(while_statement.body_block, analyzed_program, decision_by_node_id);
             },
-            .ForIn => |for_in| {
-                self.lowerNode(for_in.iterable, analyzed_program);
-                self.lowerNode(for_in.body_block, analyzed_program);
+            .for_in => |for_in| {
+                try self.lowerNode(for_in.iterable, analyzed_program, decision_by_node_id);
+                try self.lowerNode(for_in.body_block, analyzed_program, decision_by_node_id);
             },
-            .IfExpression => |if_expression| {
-                self.lowerNode(if_expression.condition, analyzed_program);
-                self.lowerNode(if_expression.then_block, analyzed_program);
-                self.lowerNode(if_expression.else_block, analyzed_program);
+            .if_expression => |if_expression| {
+                try self.lowerNode(if_expression.condition, analyzed_program, decision_by_node_id);
+                try self.lowerNode(if_expression.then_block, analyzed_program, decision_by_node_id);
+                try self.lowerNode(if_expression.else_block, analyzed_program, decision_by_node_id);
             },
-            .MatchExpression => |match_expression| {
-                self.lowerNode(match_expression.subject, analyzed_program);
+            .match_expression => |match_expression| {
+                try self.lowerNode(match_expression.subject, analyzed_program, decision_by_node_id);
                 const subject_type_id = analyzed_program.type_id_by_node_id.get(match_expression.subject.id) orelse unreachable;
-                const subject_comparison_decision = decisionFor(.Equal, subject_type_id, analyzed_program);
-                self.decision_by_node_id.put(node.id, subject_comparison_decision) catch unreachable;
+                const subject_comparison_decision = decisionFor(.equal, subject_type_id, analyzed_program);
+                try decision_by_node_id.put(node.id, subject_comparison_decision);
                 for (match_expression.arms) |arm| {
-                    self.lowerNode(arm.body_expression, analyzed_program);
+                    try self.lowerNode(arm.body_expression, analyzed_program, decision_by_node_id);
                 }
                 if (match_expression.else_arm_expression) |else_arm_expression| {
-                    self.lowerNode(else_arm_expression, analyzed_program);
+                    try self.lowerNode(else_arm_expression, analyzed_program, decision_by_node_id);
                 }
             },
-            .SubjectlessMatchExpression => |subjectless_match_expression| {
+            .subjectless_match_expression => |subjectless_match_expression| {
                 for (subjectless_match_expression.arms) |arm| {
-                    self.lowerNode(arm.condition, analyzed_program);
-                    self.lowerNode(arm.body_expression, analyzed_program);
+                    try self.lowerNode(arm.condition, analyzed_program, decision_by_node_id);
+                    try self.lowerNode(arm.body_expression, analyzed_program, decision_by_node_id);
                 }
                 if (subjectless_match_expression.else_arm_expression) |else_arm_expression| {
-                    self.lowerNode(else_arm_expression, analyzed_program);
+                    try self.lowerNode(else_arm_expression, analyzed_program, decision_by_node_id);
                 }
             },
-            .CallExpression => |call_expression| {
-                self.lowerNode(call_expression.callee, analyzed_program);
+            .call_expression => |call_expression| {
+                try self.lowerNode(call_expression.callee, analyzed_program, decision_by_node_id);
                 for (call_expression.arguments) |*argument| {
-                    self.lowerNode(argument, analyzed_program);
+                    try self.lowerNode(argument, analyzed_program, decision_by_node_id);
                 }
             },
-            .MemberExpression => |member_expression| self.lowerNode(member_expression.base, analyzed_program),
-            .BinaryExpression => |binary_expression| {
-                self.lowerNode(binary_expression.left, analyzed_program);
-                self.lowerNode(binary_expression.right, analyzed_program);
-                self.lowerBinaryExpression(node.id, &binary_expression, analyzed_program);
+            .member_expression => |member_expression| try self.lowerNode(member_expression.base, analyzed_program, decision_by_node_id),
+            .binary_expression => |binary_expression| {
+                try self.lowerNode(binary_expression.left, analyzed_program, decision_by_node_id);
+                try self.lowerNode(binary_expression.right, analyzed_program, decision_by_node_id);
+                try lowerBinaryExpression(node.id, &binary_expression, analyzed_program, decision_by_node_id);
             },
-            .UnaryExpression => |unary_expression| self.lowerNode(unary_expression.operand, analyzed_program),
-            .Block => |block| {
+            .unary_expression => |unary_expression| try self.lowerNode(unary_expression.operand, analyzed_program, decision_by_node_id),
+            .block => |block| {
                 for (block.statements) |*statement| {
-                    self.lowerNode(statement, analyzed_program);
+                    try self.lowerNode(statement, analyzed_program, decision_by_node_id);
                 }
                 if (block.result) |result| {
-                    self.lowerNode(result, analyzed_program);
+                    try self.lowerNode(result, analyzed_program, decision_by_node_id);
                 }
             },
-            .QualifiedStructureLiteral => |qualified_structure_literal| {
+            .qualified_structure_literal => |qualified_structure_literal| {
                 for (qualified_structure_literal.fields) |field| {
-                    self.lowerNode(field.value, analyzed_program);
+                    try self.lowerNode(field.value, analyzed_program, decision_by_node_id);
                 }
             },
-            .StructureLiteral => |structure_literal| {
+            .structure_literal => |structure_literal| {
                 for (structure_literal.fields) |field| {
-                    self.lowerNode(field.value, analyzed_program);
+                    try self.lowerNode(field.value, analyzed_program, decision_by_node_id);
                 }
             },
-            .ArrayLiteral => |array_literal| {
+            .array_literal => |array_literal| {
                 for (array_literal.elements) |*element| {
-                    self.lowerNode(element, analyzed_program);
+                    try self.lowerNode(element, analyzed_program, decision_by_node_id);
                 }
             },
-            .IndexExpression => |index_expression| {
-                self.lowerNode(index_expression.base, analyzed_program);
-                self.lowerNode(index_expression.index, analyzed_program);
+            .index_expression => |index_expression| {
+                try self.lowerNode(index_expression.base, analyzed_program, decision_by_node_id);
+                try self.lowerNode(index_expression.index, analyzed_program, decision_by_node_id);
             },
-            .LeaveStatement,
-            .ContinueStatement,
-            .Identifier,
-            .IntegerLiteral,
-            .BooleanLiteral,
-            .StringLiteral,
-            .UnitLiteral,
-            .ImplicitMemberExpression,
+            .leave_statement,
+            .continue_statement,
+            .identifier,
+            .integer_literal,
+            .boolean_literal,
+            .string_literal,
+            .unit_literal,
+            .implicit_member_expression,
             => {},
         }
     }
 
     fn lowerBinaryExpression(
-        self: *@This(),
         node_id: ast.NodeId,
         binary_expression: *const ast.BinaryExpression,
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
-    ) void {
+        decision_by_node_id: *lowering_types.BinaryOperationDecisionByNodeId,
+    ) !void {
         const left_operand_type_id = analyzed_program.type_id_by_node_id.get(binary_expression.left.id) orelse unreachable;
         const decision = decisionFor(binary_expression.operator, left_operand_type_id, analyzed_program);
-        self.decision_by_node_id.put(node_id, decision) catch unreachable;
+        try decision_by_node_id.put(node_id, decision);
     }
 
     fn decisionFor(
@@ -174,9 +169,9 @@ pub const BinaryOperationLowerer = struct {
     ) lowering_types.BinaryOperationDecision {
         if (left_operand_type_id == analyzed_program.type_store.string_type_id) {
             return switch (binary_operator) {
-                .Add => .StringConcatenate,
-                .Equal => .StringCompareEqual,
-                .NotEqual => .StringCompareNotEqual,
+                .add => .string_concatenate,
+                .equal => .string_compare_equal,
+                .not_equal => .string_compare_not_equal,
                 else => unreachable,
             };
         }
@@ -187,40 +182,40 @@ pub const BinaryOperationLowerer = struct {
             .get(left_operand_type_id) orelse unreachable;
         if (!left_operand_runtime_representation.hasRuntimeRepresentation()) {
             return switch (binary_operator) {
-                .Equal => .ZeroSizedCompareEqual,
-                .NotEqual => .ZeroSizedCompareNotEqual,
+                .equal => .zero_sized_compare_equal,
+                .not_equal => .zero_sized_compare_not_equal,
                 else => unreachable,
             };
         }
 
         switch (binary_operator) {
-            .And => return .ShortCircuitAnd,
-            .Or => return .ShortCircuitOr,
-            .Divide => return .CheckedDivide,
+            .@"and" => return .short_circuit_and,
+            .@"or" => return .short_circuit_or,
+            .divide => return .checked_divide,
             else => {},
         }
 
         const left_operand_type = analyzed_program.type_store.getType(left_operand_type_id);
-        if (left_operand_type == .Union) {
+        if (left_operand_type == .@"union") {
             return switch (binary_operator) {
-                .Equal => .UnionCaseIndexComparison,
+                .equal => .union_case_index_comparison,
                 else => unreachable,
             };
         }
 
-        return .{ .PrimitiveOperation = switch (binary_operator) {
-            .Add => .Add,
-            .Subtract => .Subtract,
-            .Multiply => .Multiply,
-            .Equal => .Equal,
-            .NotEqual => .NotEqual,
-            .LessThan => .LessThan,
-            .LessThanOrEqual => .LessThanOrEqual,
-            .GreaterThan => .GreaterThan,
-            .GreaterThanOrEqual => .GreaterThanOrEqual,
-            .And,
-            .Or,
-            .Divide,
+        return .{ .primitive_operation = switch (binary_operator) {
+            .add => .add,
+            .subtract => .subtract,
+            .multiply => .multiply,
+            .equal => .equal,
+            .not_equal => .not_equal,
+            .less_than => .less_than,
+            .less_than_or_equal => .less_than_or_equal,
+            .greater_than => .greater_than,
+            .greater_than_or_equal => .greater_than_or_equal,
+            .@"and",
+            .@"or",
+            .divide,
             => unreachable,
         } };
     }

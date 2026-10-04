@@ -11,14 +11,14 @@ const ExitBehaviorAnalyzerFixture = struct {
 };
 
 pub fn setupExitBehaviorAnalyzerFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !ExitBehaviorAnalyzerFixture {
-    const allocator = arena.allocator();
-    const parser_pipeline = try setupParserPipeline(arena, source);
+    const arena = arena_state.allocator();
+    const parser_pipeline = try setupParserPipeline(arena_state, source);
     const program = try parser_pipeline.parser.parse();
-    const analyzer = try allocator.create(ExitBehaviorAnalyzer);
-    analyzer.* = ExitBehaviorAnalyzer.init(allocator, parser_pipeline.diagnostic_store);
+    const analyzer = try arena.create(ExitBehaviorAnalyzer);
+    analyzer.* = ExitBehaviorAnalyzer.init(arena, parser_pipeline.diagnostic_store);
 
     return .{
         .program = program,

@@ -16,11 +16,11 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.binding_declaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(member_expression.id).?).toMatch(.{ .StructureField = .{ .field_index = 1 } });
+            try expect(decisions.get(member_expression.id).?).toMatch(.{ .structure_field = .{ .field_index = 1 } });
         }
 
         test "lowers the length of a string to a string length access" {
@@ -31,11 +31,11 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.binding_declaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(member_expression.id).?).toMatch(.StringLength);
+            try expect(decisions.get(member_expression.id).?).toMatch(.string_length);
         }
 
         test "lowers the length of an array to an array length access" {
@@ -46,11 +46,11 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.binding_declaration.value;
 
-            const decisions = fixture.lowerer.lower(fixture.analyzed_program);
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(decisions.get(member_expression.id).?).toMatch(.ArrayLength);
+            try expect(decisions.get(member_expression.id).?).toMatch(.array_length);
         }
     };
 };

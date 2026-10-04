@@ -1,8 +1,8 @@
 const lexing = @import("lexing");
 
 pub const TypeExpression = union(enum) {
-    Named: NamedTypeExpression,
-    Array: ArrayTypeExpression,
+    named: NamedTypeExpression,
+    array: ArrayTypeExpression,
 };
 
 pub const NamedTypeExpression = struct {

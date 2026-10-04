@@ -8,24 +8,24 @@ const RuntimeRepresentationByNodeId = runtime_representation_types.RuntimeRepres
 const RuntimeRepresentationByTypeId = runtime_representation_types.RuntimeRepresentationByTypeId;
 
 const RuntimeRepresentationAnalysisState = union(enum) {
-    Resolving,
-    Resolved: RuntimeRepresentation,
+    resolving,
+    resolved: RuntimeRepresentation,
 };
 
 const RuntimeRepresentationAnalysisStateByTypeId = std.AutoHashMap(typing.TypeId, RuntimeRepresentationAnalysisState);
 
 pub const RuntimeRepresentationAnalyzer = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     runtime_representation_by_node_id: RuntimeRepresentationByNodeId,
     runtime_representation_by_type_id: RuntimeRepresentationByTypeId,
     analysis_state_by_type_id: RuntimeRepresentationAnalysisStateByTypeId,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(allocator),
-            .runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(allocator),
-            .analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(allocator),
+            .arena = arena,
+            .runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(arena),
+            .runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(arena),
+            .analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(arena),
         };
     }
 
@@ -33,9 +33,9 @@ pub const RuntimeRepresentationAnalyzer = struct {
         self: *@This(),
         type_check_result: *const type_checking.TypeCheckResult,
     ) anyerror!runtime_representation_types.RuntimeRepresentationResult {
-        self.runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(self.allocator);
-        self.runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(self.allocator);
-        self.analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(self.allocator);
+        self.runtime_representation_by_node_id = RuntimeRepresentationByNodeId.init(self.arena);
+        self.runtime_representation_by_type_id = RuntimeRepresentationByTypeId.init(self.arena);
+        self.analysis_state_by_type_id = RuntimeRepresentationAnalysisStateByTypeId.init(self.arena);
 
         // First we need to seed the runtime representation of every type that we encountered during the type analysis.
         try self.seedRuntimeRepresentationByTypeId(&type_check_result.type_store);
@@ -75,31 +75,31 @@ pub const RuntimeRepresentationAnalyzer = struct {
             // This is more of a theoretical right now because `Foo` could be defined but not constructed in the current
             // version of matcha.
             return switch (analysis_state) {
-                .Resolving => .Present,
-                .Resolved => |runtime_representation| runtime_representation,
+                .resolving => .present,
+                .resolved => |runtime_representation| runtime_representation,
             };
         }
 
         // If we have not encountered the type yet, we set it as resolving before doing a potential recursive decent.
-        try self.analysis_state_by_type_id.put(type_id, .Resolving);
+        try self.analysis_state_by_type_id.put(type_id, .resolving);
 
         const runtime_representation = switch (type_store.getType(type_id)) {
-            .Unit => .None,
-            .Boolean,
-            .Integer,
-            .String,
-            .Function,
-            .UnionConstructor,
-            .Union,
-            => .Present,
-            .Structure => |structure_type| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type),
-            .Array => |element_type_id| block: {
+            .unit => .none,
+            .boolean,
+            .integer,
+            .string,
+            .function,
+            .union_constructor,
+            .@"union",
+            => .present,
+            .structure => |structure_type| try self.resolveRuntimeRepresentationOfStructureType(type_store, structure_type),
+            .array => |element_type_id| block: {
                 _ = try self.resolveRuntimeRepresentationOfType(type_store, element_type_id);
-                break :block .Present;
+                break :block .present;
             },
         };
 
-        try self.analysis_state_by_type_id.put(type_id, .{ .Resolved = runtime_representation });
+        try self.analysis_state_by_type_id.put(type_id, .{ .resolved = runtime_representation });
         try self.runtime_representation_by_type_id.put(type_id, runtime_representation);
 
         return runtime_representation;
@@ -114,6 +114,6 @@ pub const RuntimeRepresentationAnalyzer = struct {
             _ = try self.resolveRuntimeRepresentationOfType(type_store, field.type_id);
         }
 
-        return .Present;
+        return .present;
     }
 };

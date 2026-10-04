@@ -14,13 +14,13 @@ pub fn LowererFixture(comptime Lowerer: type) type {
 /// The lowerers only differ in the table they produce, so one fixture serves all of them.
 pub fn setupLowererFixture(
     comptime Lowerer: type,
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !LowererFixture(Lowerer) {
-    const analyzed_program = try setupAnalyzedProgram(arena, source);
+    const analyzed_program = try setupAnalyzedProgram(arena_state, source);
 
-    const lowerer = try arena.allocator().create(Lowerer);
-    lowerer.* = Lowerer.init(arena.allocator());
+    const lowerer = try arena_state.allocator().create(Lowerer);
+    lowerer.* = Lowerer.init(arena_state.allocator());
 
     return .{
         .analyzed_program = analyzed_program,

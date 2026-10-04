@@ -5,11 +5,11 @@ const typing = @import("typing");
 pub const NodeId = u32;
 
 pub const BuiltinCallKind = enum {
-    PrintInt,
-    PrintString,
-    ReadFile,
-    ReadLine,
-    GetArguments,
+    print_int,
+    print_string,
+    read_file,
+    read_line,
+    get_arguments,
 };
 
 pub const UserFunctionCall = struct {
@@ -18,12 +18,12 @@ pub const UserFunctionCall = struct {
 };
 
 pub const CallDispatchDecision = union(enum) {
-    UserFunction: UserFunctionCall,
-    Builtin: BuiltinCallKind,
-    ArrayMethod: typing.ArrayInstanceMethod,
-    StringMethod: typing.StringInstanceMethod,
-    IntegerMethod: typing.IntegerInstanceMethod,
-    UnionConstruction: UnionConstruction,
+    user_function: UserFunctionCall,
+    builtin: BuiltinCallKind,
+    array_method: typing.ArrayInstanceMethod,
+    string_method: typing.StringInstanceMethod,
+    integer_method: typing.IntegerInstanceMethod,
+    union_construction: UnionConstruction,
 };
 
 pub const UnionConstruction = struct {
@@ -32,13 +32,13 @@ pub const UnionConstruction = struct {
 };
 
 pub const FunctionLayoutParameterIndexKind = union(enum) {
-    Absent,
-    Index: u32,
+    absent,
+    index: u32,
 };
 
 pub const FunctionLayoutReturnTypeValueKind = enum {
-    Absent,
-    Present,
+    absent,
+    present,
 };
 
 pub const FunctionLayout = struct {
@@ -48,57 +48,57 @@ pub const FunctionLayout = struct {
 };
 
 pub const MemberAccessDecision = union(enum) {
-    StructureField: struct {
+    structure_field: struct {
         field_index: u32,
     },
-    UnionConstruction: UnionConstruction,
-    ArrayLength,
-    StringLength,
-    InstanceMethod,
-    TypeFunction,
-    ArrayMethod,
-    StringMethod,
-    IntegerMethod,
+    union_construction: UnionConstruction,
+    array_length,
+    string_length,
+    instance_method,
+    type_function,
+    array_method,
+    string_method,
+    integer_method,
 };
 
 pub const PrimitiveBinaryOperation = enum {
-    Add,
-    Subtract,
-    Multiply,
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
+    add,
+    subtract,
+    multiply,
+    equal,
+    not_equal,
+    less_than,
+    less_than_or_equal,
+    greater_than,
+    greater_than_or_equal,
 };
 
 pub const BinaryOperationDecision = union(enum) {
-    PrimitiveOperation: PrimitiveBinaryOperation,
-    StringConcatenate,
-    StringCompareEqual,
-    StringCompareNotEqual,
-    ZeroSizedCompareEqual,
-    ZeroSizedCompareNotEqual,
-    UnionCaseIndexComparison,
-    ShortCircuitAnd,
-    ShortCircuitOr,
-    CheckedDivide,
+    primitive_operation: PrimitiveBinaryOperation,
+    string_concatenate,
+    string_compare_equal,
+    string_compare_not_equal,
+    zero_sized_compare_equal,
+    zero_sized_compare_not_equal,
+    union_case_index_comparison,
+    short_circuit_and,
+    short_circuit_or,
+    checked_divide,
 };
 
 pub const PlaceDecision = union(enum) {
-    IdentifierBinding: struct {
+    identifier_binding: struct {
         symbol_id: symbols.SymbolId,
     },
-    StructureField: struct {
+    structure_field: struct {
         field_index: u32,
     },
-    ArrayElement,
+    array_element,
 };
 
 pub const StructureLayoutFieldIndexKind = union(enum) {
-    Absent,
-    Index: u32,
+    absent,
+    index: u32,
 };
 
 pub const StructureLayout = struct {
@@ -107,8 +107,8 @@ pub const StructureLayout = struct {
 };
 
 pub const StructureLayoutKind = union(enum) {
-    Absent,
-    Present: StructureLayout,
+    absent,
+    present: StructureLayout,
 };
 
 // Every union case is a structure that holds the case index first and the payload, if it has one, second.

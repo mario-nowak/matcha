@@ -20,7 +20,7 @@ pub const NodeTypeAnalyzer = struct {
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
-                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .Union = .{ .cases = .{
+                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .@"union" = .{ .cases = .{
                         .{ .type_id = result.type_store.unit_type_id },
                         .{ .type_id = result.type_store.integer_type_id },
                     } } });
@@ -38,12 +38,12 @@ pub const NodeTypeAnalyzer = struct {
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
-                    const union_type = result.type_store.getType(union_type_id).Union;
+                    const union_type = result.type_store.getType(union_type_id).@"union";
                     try expect(result.type_store.getType(union_type.cases[0].constructor_type_id)).toMatch(.{
-                        .UnionConstructor = .{ .union_type_id = union_type_id, .case_index = 0 },
+                        .union_constructor = .{ .union_type_id = union_type_id, .case_index = 0 },
                     });
                     try expect(result.type_store.getType(union_type.cases[1].constructor_type_id)).toMatch(.{
-                        .UnionConstructor = .{ .union_type_id = union_type_id, .case_index = 1 },
+                        .union_constructor = .{ .union_type_id = union_type_id, .case_index = 1 },
                     });
                 }
 
@@ -59,7 +59,7 @@ pub const NodeTypeAnalyzer = struct {
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
-                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .Union = .{ .cases = .{
+                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .@"union" = .{ .cases = .{
                         .{ .type_id = result.type_store.unit_type_id },
                         .{ .type_id = union_type_id },
                     } } });
@@ -81,7 +81,7 @@ pub const NodeTypeAnalyzer = struct {
 
                     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
                     const structure_type_id = result.type_id_by_symbol_id.get(structure_symbol_id) orelse unreachable;
-                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .Union = .{ .cases = .{
+                    try expect(result.type_store.getType(union_type_id)).toMatch(.{ .@"union" = .{ .cases = .{
                         .{ .type_id = structure_type_id },
                     } } });
                 }
@@ -102,7 +102,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -121,11 +121,11 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_case_node = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+                    const union_case_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .UnionTypeBaseCaseAccess = .{ .case_index = 1 } });
+                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .union_type_base_case_access = .{ .case_index = 1 } });
                 }
 
                 test "rejects an assignment to a unit case" {
@@ -159,7 +159,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id) catch |err| switch (err) {
                         error.DiagnosticsEmitted => {
@@ -190,7 +190,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -313,12 +313,12 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const callee_node = program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                    const callee_node = program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
                     const union_type_id = result.type_id_by_symbol_id.get(union_symbol_id) orelse unreachable;
-                    const union_type = result.type_store.getType(union_type_id).Union;
+                    const union_type = result.type_store.getType(union_type_id).@"union";
                     const callee_type_id = result.type_id_by_node_id.get(callee_node.id) orelse unreachable;
                     try expect(callee_type_id).toMatch(union_type.cases[1].constructor_type_id);
                 }
@@ -373,7 +373,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id) catch |err| switch (err) {
                         error.DiagnosticsEmitted => {
@@ -404,7 +404,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -423,11 +423,11 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_case_node = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+                    const union_case_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .UnionTypeBaseCaseAccess = .{ .case_index = 1 } });
+                    try expect(result.member_access_by_node_id.get(union_case_node.id).?).toMatch(.{ .union_type_base_case_access = .{ .case_index = 1 } });
                 }
 
                 test "types a payload case construction as the union" {
@@ -444,7 +444,7 @@ pub const NodeTypeAnalyzer = struct {
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
                     const result_binding_node = program.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
-                    const union_case_node = result_binding_node.kind.BindingDeclaration.value;
+                    const union_case_node = result_binding_node.kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -588,7 +588,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const body_node = program.statements[1].kind.ItemDefinition.definition.Function.body_expression;
+                    const body_node = program.statements[1].kind.item_definition.definition.function.body_expression;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -607,8 +607,8 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const body_node = program.statements[1].kind.ItemDefinition.definition.Function.body_expression;
-                    const return_value_node = body_node.kind.Block.statements[0].kind.ReturnStatement.value orelse unreachable;
+                    const body_node = program.statements[1].kind.item_definition.definition.function.body_expression;
+                    const return_value_node = body_node.kind.block.statements[0].kind.return_statement.value orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -627,7 +627,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const if_node = program.statements[1].kind.BindingDeclaration.value;
+                    const if_node = program.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -646,7 +646,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const block_node = program.statements[1].kind.BindingDeclaration.value;
+                    const block_node = program.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -666,7 +666,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const assigned_value_node = program.statements[2].kind.AssignmentStatement.value;
+                    const assigned_value_node = program.statements[2].kind.assignment_statement.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -688,7 +688,7 @@ pub const NodeTypeAnalyzer = struct {
                     const inner_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
                     const outer_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[1].id) orelse unreachable;
                     const outer_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[2].id) orelse unreachable;
-                    const argument_node = &program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.arguments[0];
+                    const argument_node = &program.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -709,7 +709,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const argument_node = &program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.arguments[0];
+                    const argument_node = &program.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -727,7 +727,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const element_nodes = program.statements[1].kind.BindingDeclaration.value.kind.ArrayLiteral.elements;
+                    const element_nodes = program.statements[1].kind.binding_declaration.value.kind.array_literal.elements;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -748,7 +748,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const implicit_case_node = &program.statements[1].kind.BindingDeclaration.value.kind.ArrayLiteral.elements[1];
+                    const implicit_case_node = &program.statements[1].kind.binding_declaration.value.kind.array_literal.elements[1];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -770,7 +770,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const implicit_case_node = program.statements[1].kind.BindingDeclaration.value.kind.MatchExpression.arms[1].body_expression;
+                    const implicit_case_node = program.statements[1].kind.binding_declaration.value.kind.match_expression.arms[1].body_expression;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -791,7 +791,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const else_arm_node = program.statements[1].kind.BindingDeclaration.value.kind.MatchExpression.else_arm_expression orelse unreachable;
+                    const else_arm_node = program.statements[1].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -809,7 +809,7 @@ pub const NodeTypeAnalyzer = struct {
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const program = fixture.resolved_program.program;
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const else_block_node = program.statements[1].kind.BindingDeclaration.value.kind.IfExpression.else_block;
+                    const else_block_node = program.statements[1].kind.binding_declaration.value.kind.if_expression.else_block;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -884,12 +884,12 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .type_function_access = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
                 }
 
                 test "records a type function access with its union and function when it is an implicit member" {
@@ -905,12 +905,12 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                    const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .type_function_access = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = from_number_symbol_id } });
                 }
 
                 test "types a qualified static function call as the return type when the function returns the union" {
@@ -1035,12 +1035,12 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const get_self_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.Union.function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                    const get_self_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
+                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .InstanceMethodAccess = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = get_self_symbol_id } });
+                    try expect(result.member_access_by_node_id.get(callee.id) orelse unreachable).toMatch(.{ .instance_method_access = .{ .owner_symbol_id = union_symbol_id, .function_symbol_id = get_self_symbol_id } });
                 }
 
                 test "types an instance method call on a constructed union as the method return type" {
@@ -1140,11 +1140,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const unit_literal = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+                const unit_literal = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(unit_literal.id).?)).toMatch(.Unit);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(unit_literal.id).?)).toMatch(.unit);
             }
         };
 
@@ -1156,11 +1156,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const binary_expression = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+                const binary_expression = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.boolean);
             }
 
             test "types array equality as a boolean" {
@@ -1170,11 +1170,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const binary_expression = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value;
+                const binary_expression = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.Boolean);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(binary_expression.id).?)).toMatch(.boolean);
             }
 
             test "rejects array equality when the element types differ" {
@@ -1204,7 +1204,7 @@ pub const NodeTypeAnalyzer = struct {
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                 const program = fixture.resolved_program.program;
                 const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                const right_operand = program.statements[2].kind.BindingDeclaration.value.kind.BinaryExpression.right;
+                const right_operand = program.statements[2].kind.binding_declaration.value.kind.binary_expression.right;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1221,11 +1221,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const body_expression = fixture.resolved_program.program.statements[0].kind.ItemDefinition.definition.Function.body_expression;
+                const body_expression = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(body_expression.id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(body_expression.id).?)).toMatch(.integer);
             }
 
             test "types array parameters and returns in a function signature as arrays" {
@@ -1239,7 +1239,7 @@ pub const NodeTypeAnalyzer = struct {
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(function_symbol_id).?)).toMatch(.{ .Function = .{ .parameter_type_ids = .{result.type_store.getArrayType(result.type_store.integer_type_id).?}, .return_type_id = result.type_store.getArrayType(result.type_store.integer_type_id).? } });
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(function_symbol_id).?)).toMatch(.{ .function = .{ .parameter_type_ids = .{result.type_store.getArrayType(result.type_store.integer_type_id).?}, .return_type_id = result.type_store.getArrayType(result.type_store.integer_type_id).? } });
             }
         };
 
@@ -1448,11 +1448,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
             }
 
             test "accepts a qualified case pattern that names the subject union" {
@@ -1467,11 +1467,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
             }
 
             test "accepts a match that misses a union case when it has an else arm" {
@@ -1486,11 +1486,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
             }
 
             test "records the declared case index of each case pattern when the arms list the cases in reverse order" {
@@ -1505,7 +1505,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_arms = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.MatchExpression.arms;
+                const match_arms = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.match_expression.arms;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1525,7 +1525,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_arms = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.MatchExpression.arms;
+                const match_arms = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.match_expression.arms;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1544,13 +1544,13 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
-                const payload_binding = match_node.kind.MatchExpression.arms[1].pattern.kind.Case.binding.?;
+                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const payload_binding = match_node.kind.match_expression.arms[1].pattern.kind.case.binding.?;
                 const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.integer);
             }
 
             test "types a payload binding of a unit case as unit" {
@@ -1565,13 +1565,13 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
-                const payload_binding = match_node.kind.MatchExpression.arms[0].pattern.kind.Case.binding.?;
+                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const payload_binding = match_node.kind.match_expression.arms[0].pattern.kind.case.binding.?;
                 const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.Unit);
+                try expect(result.type_store.getType(result.type_id_by_symbol_id.get(payload_binding_symbol_id).?)).toMatch(.unit);
             }
 
             test "names the missing case when a match misses one union case without an else arm" {
@@ -1812,11 +1812,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const member_expression = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .StructureInstanceFieldAccess = .{ .field_index = 1 } });
+                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .structure_instance_field_access = .{ .field_index = 1 } });
             }
 
             test "types a field access as the field type" {
@@ -1828,11 +1828,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value;
+                const member_expression = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.String);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.string);
             }
 
             test "records a type function access with its structure and function" {
@@ -1848,12 +1848,12 @@ pub const NodeTypeAnalyzer = struct {
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                 const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
-                const origin_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
-                const callee = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                const origin_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
+                const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .TypeFunctionAccess = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = origin_symbol_id } });
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .type_function_access = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = origin_symbol_id } });
             }
 
             test "records a method access with its structure and function" {
@@ -1870,12 +1870,12 @@ pub const NodeTypeAnalyzer = struct {
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                 const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
-                const moved_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.Structure.function_symbol_ids[0];
-                const callee = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                const moved_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
+                const callee = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .InstanceMethodAccess = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = moved_symbol_id } });
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .instance_method_access = .{ .owner_symbol_id = point_symbol_id, .function_symbol_id = moved_symbol_id } });
             }
 
             test "types a method callee without its receiver parameter" {
@@ -1891,11 +1891,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const callee = fixture.resolved_program.program.statements[2].kind.BindingDeclaration.value.kind.CallExpression.callee;
+                const callee = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(callee.id).?)).toMatch(.{ .Function = .{ .parameter_type_ids = .{result.type_store.integer_type_id} } });
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(callee.id).?)).toMatch(.{ .function = .{ .parameter_type_ids = .{result.type_store.integer_type_id} } });
             }
 
             test "reports a missing field at the literal when an anonymous structure literal is empty" {
@@ -1958,11 +1958,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+                const member_expression = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .ArrayInstanceFieldAccess = .Length });
+                try expect(result.member_access_by_node_id.get(member_expression.id).?).toMatch(.{ .array_instance_field_access = .length });
             }
 
             test "types the length of an array as an integer" {
@@ -1973,11 +1973,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[1].kind.BindingDeclaration.value;
+                const member_expression = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.Integer);
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(member_expression.id).?)).toMatch(.integer);
             }
 
             test "records append on an array as an array method access" {
@@ -1988,11 +1988,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const callee = fixture.resolved_program.program.statements[1].kind.ExpressionStatement.expression.kind.CallExpression.callee;
+                const callee = fixture.resolved_program.program.statements[1].kind.expression_statement.expression.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .ArrayInstanceMethodAccess = .Append });
+                try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .array_instance_method_access = .append });
             }
 
             test "rejects an empty array literal when the expected type is an integer" {
@@ -2021,11 +2021,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const else_arm_node = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value.kind.MatchExpression.else_arm_expression orelse unreachable;
+                const else_arm_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(else_arm_node.id) orelse unreachable)).toMatch(.{ .Array = result.type_store.integer_type_id });
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(else_arm_node.id) orelse unreachable)).toMatch(.{ .array = result.type_store.integer_type_id });
             }
 
             test "types an empty array literal as the then branch type when it is the else branch of an if" {
@@ -2035,11 +2035,11 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const else_block_node = fixture.resolved_program.program.statements[0].kind.BindingDeclaration.value.kind.IfExpression.else_block;
+                const else_block_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value.kind.if_expression.else_block;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
-                try expect(result.type_store.getType(result.type_id_by_node_id.get(else_block_node.id) orelse unreachable)).toMatch(.{ .Array = result.type_store.integer_type_id });
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(else_block_node.id) orelse unreachable)).toMatch(.{ .array = result.type_store.integer_type_id });
             }
         };
     };

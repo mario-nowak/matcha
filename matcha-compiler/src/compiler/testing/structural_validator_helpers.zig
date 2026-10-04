@@ -11,13 +11,13 @@ const StructuralValidatorFixture = struct {
 };
 
 pub fn setupStructuralValidatorFixture(
-    arena: *std.heap.ArenaAllocator,
+    arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !StructuralValidatorFixture {
-    const allocator = arena.allocator();
-    const parser_pipeline = try setupParserPipeline(arena, source);
+    const arena = arena_state.allocator();
+    const parser_pipeline = try setupParserPipeline(arena_state, source);
     const program = try parser_pipeline.parser.parse();
-    const validator = try allocator.create(StructuralValidator);
+    const validator = try arena.create(StructuralValidator);
     validator.* = StructuralValidator.init(parser_pipeline.diagnostic_store);
 
     return .{

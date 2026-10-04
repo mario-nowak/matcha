@@ -100,9 +100,9 @@ test "Expectation > toBeError: rejects a successful value" {
 }
 
 test "Expectation > toMatch: compares nested fields and ignores omitted fields" {
-    const Mode = enum { Read, Write };
-    const actual = .{ .name = @as([]const u8, "example"), .options = .{ .mode = Mode.Read, .enabled = true }, .id = 42 };
-    const expected = .{ .name = "example", .options = .{ .mode = .Read } };
+    const Mode = enum { read, write };
+    const actual = .{ .name = @as([]const u8, "example"), .options = .{ .mode = Mode.read, .enabled = true }, .id = 42 };
+    const expected = .{ .name = "example", .options = .{ .mode = .read } };
 
     const result = expect(actual).toMatch(expected);
 
@@ -129,9 +129,9 @@ test "Expectation > toMatch: follows pointers to compare their values" {
 }
 
 test "Expectation > toMatch: matches payload-free union cases" {
-    const State = union(enum) { Ready, Count: u32 };
-    const actual: State = .Ready;
-    const expected = .Ready;
+    const State = union(enum) { ready, count: u32 };
+    const actual: State = .ready;
+    const expected = .ready;
 
     const result = expect(actual).toMatch(expected);
 
@@ -139,9 +139,9 @@ test "Expectation > toMatch: matches payload-free union cases" {
 }
 
 test "Expectation > toMatch: compares union payloads" {
-    const State = union(enum) { Ready, Count: u32 };
-    const actual: State = .{ .Count = 42 };
-    const expected = .{ .Count = 42 };
+    const State = union(enum) { ready, count: u32 };
+    const actual: State = .{ .count = 42 };
+    const expected = .{ .count = 42 };
 
     const result = expect(actual).toMatch(expected);
 
@@ -149,9 +149,9 @@ test "Expectation > toMatch: compares union payloads" {
 }
 
 test "Expectation > toMatch: rejects a different active union case" {
-    const State = union(enum) { Ready, Count: u32 };
-    const actual: State = .Ready;
-    const expected = .{ .Count = 42 };
+    const State = union(enum) { ready, count: u32 };
+    const actual: State = .ready;
+    const expected = .{ .count = 42 };
 
     const result = expect(actual).toMatch(expected);
 
@@ -159,9 +159,9 @@ test "Expectation > toMatch: rejects a different active union case" {
 }
 
 test "Expectation > toMatch: rejects different union payloads" {
-    const State = union(enum) { Ready, Count: u32 };
-    const actual: State = .{ .Count = 42 };
-    const expected = .{ .Count = 43 };
+    const State = union(enum) { ready, count: u32 };
+    const actual: State = .{ .count = 42 };
+    const expected = .{ .count = 43 };
 
     const result = expect(actual).toMatch(expected);
 

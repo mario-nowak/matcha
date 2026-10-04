@@ -13,9 +13,9 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .IntegerLiteral = .{
+                try expect(pattern).toMatch(.{ .kind = .{ .integer_literal = .{
                     .minus_token = null,
-                    .literal_token = .{ .kind = .{ .IntLiteral = 42 } },
+                    .literal_token = .{ .kind = .{ .int_literal = 42 } },
                 } } });
             }
 
@@ -27,9 +27,9 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .IntegerLiteral = .{
-                    .minus_token = .{ .kind = .Minus },
-                    .literal_token = .{ .kind = .{ .IntLiteral = 1 } },
+                try expect(pattern).toMatch(.{ .kind = .{ .integer_literal = .{
+                    .minus_token = .{ .kind = .minus },
+                    .literal_token = .{ .kind = .{ .int_literal = 1 } },
                 } } });
             }
 
@@ -41,7 +41,7 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .BooleanLiteral = .{ .kind = .{ .BooleanLiteral = false } } } });
+                try expect(pattern).toMatch(.{ .kind = .{ .boolean_literal = .{ .kind = .{ .boolean_literal = false } } } });
             }
 
             test "parses a string literal pattern" {
@@ -52,7 +52,7 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .StringLiteral = .{ .kind = .{ .StringLiteral = "pro" } } } });
+                try expect(pattern).toMatch(.{ .kind = .{ .string_literal = .{ .kind = .{ .string_literal = "pro" } } } });
             }
         };
 
@@ -65,9 +65,9 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .Case = .{
+                try expect(pattern).toMatch(.{ .kind = .{ .case = .{
                     .qualifier_token = null,
-                    .case_name_token = .{ .kind = .{ .Identifier = "None" } },
+                    .case_name_token = .{ .kind = .{ .identifier = "None" } },
                     .binding = null,
                 } } });
             }
@@ -80,9 +80,9 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .Case = .{
-                    .qualifier_token = .{ .kind = .{ .Identifier = "Result" } },
-                    .case_name_token = .{ .kind = .{ .Identifier = "None" } },
+                try expect(pattern).toMatch(.{ .kind = .{ .case = .{
+                    .qualifier_token = .{ .kind = .{ .identifier = "Result" } },
+                    .case_name_token = .{ .kind = .{ .identifier = "None" } },
                     .binding = null,
                 } } });
             }
@@ -95,9 +95,9 @@ pub const PatternParser = struct {
 
                 const pattern = try fixture.pattern_parser.parse();
 
-                try expect(pattern).toMatch(.{ .kind = .{ .Case = .{
-                    .case_name_token = .{ .kind = .{ .Identifier = "Some" } },
-                    .binding = .{ .name_token = .{ .kind = .{ .Identifier = "value" } } },
+                try expect(pattern).toMatch(.{ .kind = .{ .case = .{
+                    .case_name_token = .{ .kind = .{ .identifier = "Some" } },
+                    .binding = .{ .name_token = .{ .kind = .{ .identifier = "value" } } },
                 } } });
             }
         };
@@ -125,7 +125,7 @@ pub const PatternParser = struct {
 
                 try expect(pattern).toMatch(.{
                     .id = 1,
-                    .kind = .{ .Case = .{ .binding = .{ .id = 0 } } },
+                    .kind = .{ .case = .{ .binding = .{ .id = 0 } } },
                 });
             }
         };

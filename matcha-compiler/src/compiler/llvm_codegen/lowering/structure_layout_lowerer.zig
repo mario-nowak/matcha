@@ -4,42 +4,21 @@ const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
 
 pub const StructureLayoutLowerer = struct {
-    allocator: std.mem.Allocator,
-    structure_layout_kind_by_type_id: lowering_types.StructureLayoutKindByTypeId,
+    arena: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator) @This() {
         return .{
-            .allocator = allocator,
-            .structure_layout_kind_by_type_id = lowering_types.StructureLayoutKindByTypeId.init(allocator),
+            .arena = arena,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.clearLayouts();
-        self.structure_layout_kind_by_type_id.deinit();
-    }
-
-    fn clearLayouts(self: *@This()) void {
-        var layouts = self.structure_layout_kind_by_type_id.valueIterator();
-        while (layouts.next()) |layout| {
-            switch (layout.*) {
-                .Absent => {},
-                .Present => |present| {
-                    self.allocator.free(present.llvm_type_name);
-                    self.allocator.free(present.field_index_kind_by_definition_index);
-                },
-            }
-        }
-        self.structure_layout_kind_by_type_id.clearRetainingCapacity();
-    }
-
-    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) lowering_types.StructureLayoutKindByTypeId {
-        self.clearLayouts();
+    pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.StructureLayoutKindByTypeId {
+        var structure_layout_kind_by_type_id = lowering_types.StructureLayoutKindByTypeId.init(self.arena);
 
         var types_iterator = analyzed_program.type_store.iterator();
         while (types_iterator.next()) |entry| {
             const structure_type = switch (entry.matcha_type) {
-                .Structure => |structure_type| structure_type,
+                .structure => |structure_type| structure_type,
                 else => continue,
             };
             const structure_type_id = entry.type_id;
@@ -49,10 +28,9 @@ pub const StructureLayoutLowerer = struct {
                 .get(structure_type_id) orelse unreachable;
 
             switch (structure_runtime_representation) {
-                .None => unreachable,
-                .Present => {
+                .none => unreachable,
+                .present => {
                     var field_index_kind_by_definition_index = std.ArrayList(lowering_types.StructureLayoutFieldIndexKind){};
-                    defer field_index_kind_by_definition_index.deinit(self.allocator);
                     var runtime_field_index: u32 = 0;
 
                     var has_field_with_runtime_representation = false;
@@ -62,50 +40,50 @@ pub const StructureLayoutLowerer = struct {
                             .runtime_representation_by_type_id
                             .get(field.type_id) orelse unreachable;
                         const field_index_kind: lowering_types.StructureLayoutFieldIndexKind = switch (field_runtime_representation) {
-                            .Present => block: {
+                            .present => block: {
                                 has_field_with_runtime_representation = true;
                                 const index = runtime_field_index;
                                 runtime_field_index += 1;
-                                break :block .{ .Index = index };
+                                break :block .{ .index = index };
                             },
-                            .None => .Absent,
+                            .none => .absent,
                         };
 
-                        field_index_kind_by_definition_index.append(
-                            self.allocator,
+                        try field_index_kind_by_definition_index.append(
+                            self.arena,
                             field_index_kind,
-                        ) catch unreachable;
+                        );
                     }
 
                     const structure_layout: lowering_types.StructureLayoutKind = if (has_field_with_runtime_representation) .{
-                        .Present = .{
-                            .llvm_type_name = self.generateLlvmTypeName(analyzed_program, structure_type),
-                            .field_index_kind_by_definition_index = field_index_kind_by_definition_index.toOwnedSlice(self.allocator) catch unreachable,
+                        .present = .{
+                            .llvm_type_name = try self.generateLlvmTypeName(analyzed_program, structure_type),
+                            .field_index_kind_by_definition_index = try field_index_kind_by_definition_index.toOwnedSlice(self.arena),
                         },
                         // Structures without any runtime fields don't have a layout.
-                    } else .Absent;
+                    } else .absent;
 
-                    self.structure_layout_kind_by_type_id.put(
+                    try structure_layout_kind_by_type_id.put(
                         structure_type_id,
                         structure_layout,
-                    ) catch unreachable;
+                    );
                 },
             }
         }
 
-        return self.structure_layout_kind_by_type_id;
+        return structure_layout_kind_by_type_id;
     }
 
     fn generateLlvmTypeName(
         self: *@This(),
         analyzed_program: *const semantic_analysis.AnalyzedProgram,
         structure_type: typing.StructureType,
-    ) []const u8 {
+    ) ![]const u8 {
         const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
         return std.fmt.allocPrint(
-            self.allocator,
+            self.arena,
             "matcha.structure.{s}",
             .{structure_symbol.name},
-        ) catch unreachable;
+        );
     }
 };

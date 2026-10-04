@@ -1,82 +1,74 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
+const CompileError = diagnostics.CompileError;
 const tokens = @import("token.zig");
 const TokenKind = tokens.TokenKind;
 const Token = tokens.Token;
-
-pub const LexError = error{
-    OutOfMemory,
-    DiagnosticsEmitted,
-};
 
 pub const Lexer = struct {
     source: []const u8,
     line: usize,
     column: usize,
-    offsetInSource: usize,
-    offsetInToken: u32,
-    allocator: std.mem.Allocator,
+    offset_in_source: usize,
+    offset_in_token: u32,
+    arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
 
-    pub fn init(source: []const u8, allocator: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
+    pub fn init(source: []const u8, arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
         return .{
             .source = source,
-            .allocator = allocator,
+            .arena = arena,
             .diagnostic_store = diagnostic_store,
             .line = 1,
             .column = 1,
-            .offsetInSource = 0,
-            .offsetInToken = 0,
+            .offset_in_source = 0,
+            .offset_in_token = 0,
         };
     }
 
-    pub fn deinit(self: *Lexer) void {
-        _ = self;
-    }
-
-    pub fn next(self: *Lexer) LexError!Token {
+    pub fn next(self: *Lexer) CompileError!Token {
         self.skipTrivia();
 
         if (self.done()) {
             return .{
                 .line = self.line,
                 .column = self.column,
-                .offsetInSource = self.offsetInSource,
-                .lenInSource = 0,
-                .kind = .EndOfFile,
+                .offset_in_source = self.offset_in_source,
+                .length_in_source = 0,
+                .kind = .end_of_file,
             };
         }
 
-        const currentCharacter = self.source[self.offsetInSource];
-        if (currentCharacter == '"') {
+        const current_character = self.source[self.offset_in_source];
+        if (current_character == '"') {
             return self.lexStringLiteral();
         }
-        if (isAlphabetic(currentCharacter)) {
+        if (isAlphabetic(current_character)) {
             return self.lexKeywordOrIdentifier();
         }
-        if (isNumeric(currentCharacter)) {
+        if (isNumeric(current_character)) {
             return self.lexNumericLiteral();
         }
 
         return self.lexOperator();
     }
 
-    pub fn peek(self: *Lexer) LexError!Token {
-        const lineBeforeNext = self.line;
-        const columnBeforeNext = self.column;
-        const offsetInSourceBeforeNext = self.offsetInSource;
+    pub fn peek(self: *Lexer) CompileError!Token {
+        const line_before_next = self.line;
+        const column_before_next = self.column;
+        const offset_in_source_before_next = self.offset_in_source;
 
-        const nextToken = try self.next();
+        const next_token = try self.next();
 
-        self.line = lineBeforeNext;
-        self.column = columnBeforeNext;
-        self.offsetInSource = offsetInSourceBeforeNext;
+        self.line = line_before_next;
+        self.column = column_before_next;
+        self.offset_in_source = offset_in_source_before_next;
 
-        return nextToken;
+        return next_token;
     }
 
     pub fn done(self: *Lexer) bool {
-        return self.offsetInSource >= self.source.len;
+        return self.offset_in_source >= self.source.len;
     }
 
     fn emitError(
@@ -86,7 +78,7 @@ pub const Lexer = struct {
         offset_in_source: usize,
         len_in_source: u32,
         message: []const u8,
-    ) LexError {
+    ) CompileError {
         self.diagnostic_store.emitErrorFromSpan(.{
             .line = line,
             .column = column,
@@ -109,106 +101,105 @@ pub const Lexer = struct {
     }
 
     fn lexKeywordOrIdentifier(self: *Lexer) Token {
-        self.offsetInToken = 0;
-        for (self.source[self.offsetInSource..self.source.len]) |character| {
+        self.offset_in_token = 0;
+        for (self.source[self.offset_in_source..self.source.len]) |character| {
             if (!isAlphanumeric(character)) {
                 break;
             }
-            self.offsetInToken += 1;
+            self.offset_in_token += 1;
         }
 
-        const alphanumeric = self.source[self.offsetInSource .. self.offsetInSource + self.offsetInToken];
-        var tokenType = asBooleanLiteral(alphanumeric);
-        if (tokenType == null) {
-            tokenType = asKeyword(alphanumeric);
+        const alphanumeric = self.source[self.offset_in_source .. self.offset_in_source + self.offset_in_token];
+        var token_kind = asBooleanLiteral(alphanumeric);
+        if (token_kind == null) {
+            token_kind = asKeyword(alphanumeric);
         }
-        if (tokenType == null) {
-            tokenType = .{ .Identifier = alphanumeric };
+        if (token_kind == null) {
+            token_kind = .{ .identifier = alphanumeric };
         }
 
         const token = Token{
             .line = self.line,
             .column = self.column,
-            .offsetInSource = self.offsetInSource,
-            .lenInSource = self.offsetInToken,
-            .kind = tokenType.?,
+            .offset_in_source = self.offset_in_source,
+            .length_in_source = self.offset_in_token,
+            .kind = token_kind.?,
         };
 
-        self.column += self.offsetInToken;
-        self.offsetInSource += self.offsetInToken;
+        self.column += self.offset_in_token;
+        self.offset_in_source += self.offset_in_token;
 
         return token;
     }
 
-    fn lexNumericLiteral(self: *Lexer) LexError!Token {
-        self.offsetInToken = 0;
-        for (self.source[self.offsetInSource..self.source.len]) |character| {
+    fn lexNumericLiteral(self: *Lexer) CompileError!Token {
+        self.offset_in_token = 0;
+        for (self.source[self.offset_in_source..self.source.len]) |character| {
             if (!isNumeric(character)) {
                 break;
             }
-            self.offsetInToken += 1;
+            self.offset_in_token += 1;
         }
 
-        const numeric = self.source[self.offsetInSource .. self.offsetInSource + self.offsetInToken];
+        const numeric = self.source[self.offset_in_source .. self.offset_in_source + self.offset_in_token];
         // The lexer only accepts digits, so overflow is the only way parsing can fail.
         const value = std.fmt.parseInt(i64, numeric, 10) catch return self.emitError(
             self.line,
             self.column,
-            self.offsetInSource,
-            self.offsetInToken,
+            self.offset_in_source,
+            self.offset_in_token,
             "integer literal is too large for int, the maximum is 9223372036854775807",
         );
 
         const token = Token{
             .line = self.line,
             .column = self.column,
-            .offsetInSource = self.offsetInSource,
-            .lenInSource = self.offsetInToken,
-            .kind = .{ .IntLiteral = value },
+            .offset_in_source = self.offset_in_source,
+            .length_in_source = self.offset_in_token,
+            .kind = .{ .int_literal = value },
         };
 
-        self.column += self.offsetInToken;
-        self.offsetInSource += self.offsetInToken;
+        self.column += self.offset_in_token;
+        self.offset_in_source += self.offset_in_token;
 
         return token;
     }
 
-    fn lexStringLiteral(self: *Lexer) LexError!Token {
+    fn lexStringLiteral(self: *Lexer) CompileError!Token {
         const start_line = self.line;
         const start_column = self.column;
-        const start_offset = self.offsetInSource;
+        const start_offset = self.offset_in_source;
         var content = std.ArrayList(u8){};
-        defer content.deinit(self.allocator);
 
         // Skip the opening quote
-        self.offsetInSource += 1;
+        self.offset_in_source += 1;
         self.column += 1;
 
         while (!self.done()) {
-            const character = self.source[self.offsetInSource];
+            const character = self.source[self.offset_in_source];
             if (character == '"') {
                 // Skip the closing quote
-                self.offsetInSource += 1;
+                self.offset_in_source += 1;
                 self.column += 1;
 
-                const total_length: u32 = @intCast(self.offsetInSource - start_offset);
-                const decoded_content = content.toOwnedSlice(self.allocator) catch unreachable;
+                const total_length: u32 = @intCast(self.offset_in_source - start_offset);
+                const decoded_content = try content.toOwnedSlice(self.arena);
 
                 return Token{
                     .line = start_line,
                     .column = start_column,
-                    .offsetInSource = start_offset,
-                    .lenInSource = total_length,
-                    .kind = .{ .StringLiteral = decoded_content },
+                    .offset_in_source = start_offset,
+                    .length_in_source = total_length,
+                    .kind = .{ .string_literal = decoded_content },
                 };
             }
 
             if (character == '\\') {
-                self.offsetInSource += 1;
+                self.offset_in_source += 1;
                 self.column += 1;
 
                 if (self.done()) {
-                    const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+                    const total_length: u32 = @intCast(self.offset_in_source - start_offset);
                     return self.emitError(
                         start_line,
                         start_column,
@@ -218,7 +209,7 @@ pub const Lexer = struct {
                     );
                 }
 
-                const escaped_character = self.source[self.offsetInSource];
+                const escaped_character = self.source[self.offset_in_source];
                 const decoded_character: u8 = switch (escaped_character) {
                     'n' => '\n',
                     'r' => '\r',
@@ -226,9 +217,9 @@ pub const Lexer = struct {
                     '"' => '"',
                     '\\' => '\\',
                     else => {
-                        self.offsetInSource += 1;
+                        self.offset_in_source += 1;
                         self.column += 1;
-                        const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+                        const total_length: u32 = @intCast(self.offset_in_source - start_offset);
                         return self.emitError(
                             start_line,
                             start_column,
@@ -238,18 +229,18 @@ pub const Lexer = struct {
                         );
                     },
                 };
-                content.append(self.allocator, decoded_character) catch unreachable;
-                self.offsetInSource += 1;
+                try content.append(self.arena, decoded_character);
+                self.offset_in_source += 1;
                 self.column += 1;
                 continue;
             }
 
-            content.append(self.allocator, character) catch unreachable;
-            self.offsetInSource += 1;
+            try content.append(self.arena, character);
+            self.offset_in_source += 1;
             self.column += 1;
         }
 
-        const total_length: u32 = @intCast(self.offsetInSource - start_offset);
+        const total_length: u32 = @intCast(self.offset_in_source - start_offset);
         return self.emitError(
             start_line,
             start_column,
@@ -259,31 +250,31 @@ pub const Lexer = struct {
         );
     }
 
-    fn lexOperator(self: *Lexer) LexError!Token {
-        const character = self.source[self.offsetInSource];
-        if (self.offsetInSource + 1 < self.source.len) {
-            const nextCharacter = self.source[self.offsetInSource + 1];
-            const multiCharacterKind: ?TokenKind = switch (character) {
-                '=' => if (nextCharacter == '=') .EqualEqual else if (nextCharacter == '>') .FatArrow else null,
-                '+' => if (nextCharacter == '=') .PlusAssign else null,
-                '-' => if (nextCharacter == '=') .MinusAssign else null,
-                '*' => if (nextCharacter == '=') .AsteriskAssign else null,
-                '!' => if (nextCharacter == '=') .NotEqual else null,
-                '<' => if (nextCharacter == '=') .LessThanOrEqual else null,
-                '>' => if (nextCharacter == '=') .GreaterThanOrEqual else null,
+    fn lexOperator(self: *Lexer) CompileError!Token {
+        const character = self.source[self.offset_in_source];
+        if (self.offset_in_source + 1 < self.source.len) {
+            const next_character = self.source[self.offset_in_source + 1];
+            const multi_character_kind: ?TokenKind = switch (character) {
+                '=' => if (next_character == '=') .equal_equal else if (next_character == '>') .fat_arrow else null,
+                '+' => if (next_character == '=') .plus_assign else null,
+                '-' => if (next_character == '=') .minus_assign else null,
+                '*' => if (next_character == '=') .asterisk_assign else null,
+                '!' => if (next_character == '=') .not_equal else null,
+                '<' => if (next_character == '=') .less_than_or_equal else null,
+                '>' => if (next_character == '=') .greater_than_or_equal else null,
                 else => null,
             };
 
-            if (multiCharacterKind) |kind| {
+            if (multi_character_kind) |kind| {
                 const token = Token{
                     .line = self.line,
                     .column = self.column,
-                    .offsetInSource = self.offsetInSource,
-                    .lenInSource = 2,
+                    .offset_in_source = self.offset_in_source,
+                    .length_in_source = 2,
                     .kind = kind,
                 };
 
-                self.offsetInSource += 2;
+                self.offset_in_source += 2;
                 self.column += 2;
 
                 return token;
@@ -292,38 +283,38 @@ pub const Lexer = struct {
 
         const line = self.line;
         const column = self.column;
-        const offset_in_source = self.offsetInSource;
+        const offset_in_source = self.offset_in_source;
 
         const kind: ?TokenKind = switch (character) {
-            '=' => .Assign,
-            '(' => .LeftParenthesis,
-            ')' => .RightParenthesis,
-            '{' => .LeftBrace,
-            '}' => .RightBrace,
-            '[' => .LeftBracket,
-            ']' => .RightBracket,
-            ':' => .Colon,
-            ';' => .Semicolon,
-            '+' => .Plus,
-            '-' => .Minus,
-            '*' => .Asterisk,
-            '/' => .Slash,
-            '<' => .LessThan,
-            '>' => .GreaterThan,
-            ',' => .Comma,
-            '.' => .Dot,
+            '=' => .assign,
+            '(' => .left_parenthesis,
+            ')' => .right_parenthesis,
+            '{' => .left_brace,
+            '}' => .right_brace,
+            '[' => .left_bracket,
+            ']' => .right_bracket,
+            ':' => .colon,
+            ';' => .semicolon,
+            '+' => .plus,
+            '-' => .minus,
+            '*' => .asterisk,
+            '/' => .slash,
+            '<' => .less_than,
+            '>' => .greater_than,
+            ',' => .comma,
+            '.' => .dot,
             else => null,
         };
 
-        self.offsetInSource += 1;
+        self.offset_in_source += 1;
         self.column += 1;
 
         if (kind) |resolved_kind| {
             return Token{
                 .line = line,
                 .column = column,
-                .offsetInSource = offset_in_source,
-                .lenInSource = 1,
+                .offset_in_source = offset_in_source,
+                .length_in_source = 1,
                 .kind = resolved_kind,
             };
         }
@@ -332,40 +323,40 @@ pub const Lexer = struct {
     }
 
     fn asBooleanLiteral(alphanumeric: []const u8) ?TokenKind {
-        if (std.mem.eql(u8, alphanumeric, "true")) return .{ .BooleanLiteral = true };
-        if (std.mem.eql(u8, alphanumeric, "false")) return .{ .BooleanLiteral = false };
+        if (std.mem.eql(u8, alphanumeric, "true")) return .{ .boolean_literal = true };
+        if (std.mem.eql(u8, alphanumeric, "false")) return .{ .boolean_literal = false };
         return null;
     }
 
     fn asKeyword(alphanumeric: []const u8) ?TokenKind {
-        if (std.mem.eql(u8, alphanumeric, "val")) return .Val;
-        if (std.mem.eql(u8, alphanumeric, "var")) return .Var;
-        if (std.mem.eql(u8, alphanumeric, "if")) return .If;
-        if (std.mem.eql(u8, alphanumeric, "else")) return .Else;
-        if (std.mem.eql(u8, alphanumeric, "match")) return .Match;
-        if (std.mem.eql(u8, alphanumeric, "not")) return .Not;
-        if (std.mem.eql(u8, alphanumeric, "and")) return .And;
-        if (std.mem.eql(u8, alphanumeric, "or")) return .Or;
-        if (std.mem.eql(u8, alphanumeric, "loop")) return .Loop;
-        if (std.mem.eql(u8, alphanumeric, "leave")) return .Leave;
-        if (std.mem.eql(u8, alphanumeric, "continue")) return .Continue;
-        if (std.mem.eql(u8, alphanumeric, "while")) return .While;
-        if (std.mem.eql(u8, alphanumeric, "for")) return .For;
-        if (std.mem.eql(u8, alphanumeric, "in")) return .In;
-        if (std.mem.eql(u8, alphanumeric, "return")) return .Return;
-        if (std.mem.eql(u8, alphanumeric, "structure")) return .Structure;
-        if (std.mem.eql(u8, alphanumeric, "union")) return .Union;
+        if (std.mem.eql(u8, alphanumeric, "val")) return .val;
+        if (std.mem.eql(u8, alphanumeric, "var")) return .@"var";
+        if (std.mem.eql(u8, alphanumeric, "if")) return .@"if";
+        if (std.mem.eql(u8, alphanumeric, "else")) return .@"else";
+        if (std.mem.eql(u8, alphanumeric, "match")) return .match;
+        if (std.mem.eql(u8, alphanumeric, "not")) return .not;
+        if (std.mem.eql(u8, alphanumeric, "and")) return .@"and";
+        if (std.mem.eql(u8, alphanumeric, "or")) return .@"or";
+        if (std.mem.eql(u8, alphanumeric, "loop")) return .loop;
+        if (std.mem.eql(u8, alphanumeric, "leave")) return .leave;
+        if (std.mem.eql(u8, alphanumeric, "continue")) return .@"continue";
+        if (std.mem.eql(u8, alphanumeric, "while")) return .@"while";
+        if (std.mem.eql(u8, alphanumeric, "for")) return .@"for";
+        if (std.mem.eql(u8, alphanumeric, "in")) return .in;
+        if (std.mem.eql(u8, alphanumeric, "return")) return .@"return";
+        if (std.mem.eql(u8, alphanumeric, "structure")) return .structure;
+        if (std.mem.eql(u8, alphanumeric, "union")) return .@"union";
         return null;
     }
 
     fn skipWhitespace(self: *Lexer) void {
         while (!self.done()) {
-            const character = self.source[self.offsetInSource];
+            const character = self.source[self.offset_in_source];
             if (character == ' ' or character == '\t' or character == '\r') {
-                self.offsetInSource += 1;
+                self.offset_in_source += 1;
                 self.column += 1;
             } else if (character == '\n') {
-                self.offsetInSource += 1;
+                self.offset_in_source += 1;
                 self.line += 1;
                 self.column = 1;
             } else {
@@ -382,19 +373,19 @@ pub const Lexer = struct {
     }
 
     fn skipComment(self: *Lexer) bool {
-        if (self.offsetInSource + 1 >= self.source.len) {
+        if (self.offset_in_source + 1 >= self.source.len) {
             return false;
         }
 
-        if (self.source[self.offsetInSource] != '/' or self.source[self.offsetInSource + 1] != '/') {
+        if (self.source[self.offset_in_source] != '/' or self.source[self.offset_in_source + 1] != '/') {
             return false;
         }
 
-        self.offsetInSource += 2;
+        self.offset_in_source += 2;
         self.column += 2;
 
-        while (!self.done() and self.source[self.offsetInSource] != '\n') {
-            self.offsetInSource += 1;
+        while (!self.done() and self.source[self.offset_in_source] != '\n') {
+            self.offset_in_source += 1;
             self.column += 1;
         }
 

@@ -114,7 +114,7 @@ fn expectValue(actual: anytype, expected: anytype) error{TestExpectedEqual}!void
             try std.testing.expectEqual(false, actual == null);
             try expectValue(actual.?, expected);
         },
-        // Coerce literals such as .Add or 42 to the actual enum or integer type.
+        // Coerce literals such as .add or 42 to the actual enum or integer type.
         else => try std.testing.expectEqualDeep(@as(Actual, expected), actual),
     }
 }

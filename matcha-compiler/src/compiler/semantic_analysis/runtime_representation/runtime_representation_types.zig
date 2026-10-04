@@ -5,13 +5,13 @@ const typing = @import("typing");
 /// The target representation of a node at runtime. Nodes without a runtime representation (e.g. nodes of the `unit`
 /// type) should not exist at runtime.
 pub const RuntimeRepresentation = union(enum) {
-    None,
-    Present,
+    none,
+    present,
 
     pub fn hasRuntimeRepresentation(self: @This()) bool {
         return switch (self) {
-            .None => false,
-            .Present => true,
+            .none => false,
+            .present => true,
         };
     }
 };

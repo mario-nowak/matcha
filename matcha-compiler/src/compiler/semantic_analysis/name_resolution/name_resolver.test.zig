@@ -14,12 +14,12 @@ test "NameResolver > resolveProgram: records union cases with resolved payload t
     const union_symbol_id = result.symbol_id_by_node_id.get(union_node.id).?;
     try expect(result.symbol_table.getSymbol(union_symbol_id)).toMatch(.{
         .name = "WebEvent",
-        .kind = .{ .Union = .{
+        .kind = .{ .@"union" = .{
             .cases = .{
-                .{ .name = "PageLoad", .type_reference = .{ .Builtin = .Unit } },
-                .{ .name = "PageUnload", .type_reference = .{ .Builtin = .Unit } },
-                .{ .name = "KeyPress", .type_reference = .{ .Builtin = .String } },
-                .{ .name = "Click", .type_reference = .{ .Builtin = .Integer } },
+                .{ .name = "PageLoad", .type_reference = .{ .builtin = .unit } },
+                .{ .name = "PageUnload", .type_reference = .{ .builtin = .unit } },
+                .{ .name = "KeyPress", .type_reference = .{ .builtin = .string } },
+                .{ .name = "Click", .type_reference = .{ .builtin = .integer } },
             },
             .function_symbol_ids = .{},
         } },
@@ -43,10 +43,10 @@ test "NameResolver > resolveProgram: resolves forward union and structure refere
     const state_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[2].id).?;
     try expect(result.symbol_table.getSymbol(event_id)).toMatch(.{
-        .kind = .{ .Union = .{
+        .kind = .{ .@"union" = .{
             .cases = .{
-                .{ .name = "Status", .type_reference = .{ .Symbol = state_id } },
-                .{ .name = "Owner", .type_reference = .{ .Symbol = user_id } },
+                .{ .name = "Status", .type_reference = .{ .symbol = state_id } },
+                .{ .name = "Owner", .type_reference = .{ .symbol = user_id } },
             },
         } },
     });
@@ -63,11 +63,11 @@ test "NameResolver > resolveProgram: resolves self references and array payload 
 
     const tree_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     try expect(result.symbol_table.getSymbol(tree_id)).toMatch(.{
-        .kind = .{ .Union = .{
+        .kind = .{ .@"union" = .{
             .cases = .{
-                .{ .name = "Leaf", .type_reference = .{ .Builtin = .Integer } },
-                .{ .name = "Parent", .type_reference = .{ .Symbol = tree_id } },
-                .{ .name = "Children", .type_reference = .{ .Array = .{ .Symbol = tree_id } } },
+                .{ .name = "Leaf", .type_reference = .{ .builtin = .integer } },
+                .{ .name = "Parent", .type_reference = .{ .symbol = tree_id } },
+                .{ .name = "Children", .type_reference = .{ .array = .{ .symbol = tree_id } } },
             },
         } },
     });
@@ -85,26 +85,26 @@ test "NameResolver > resolveProgram: resolves union function signatures and para
     defer arena.deinit();
     const fixture = try setupNameResolverFixture(&arena, source);
     const union_node = fixture.program.statements[0];
-    const function_node = union_node.kind.ItemDefinition.definition.Union.function_definitions[0];
-    const body = function_node.kind.ItemDefinition.definition.Function.body_expression;
+    const function_node = union_node.kind.item_definition.definition.@"union".function_definitions[0];
+    const body = function_node.kind.item_definition.definition.function.body_expression;
 
     const result = try fixture.resolver.resolveProgram(&fixture.program);
 
     const union_id = result.symbol_id_by_node_id.get(union_node.id).?;
     const function_id = result.symbol_id_by_node_id.get(function_node.id).?;
     const parameter_id = result.symbol_id_by_node_id.get(body.id).?;
-    try expect(result.symbol_table.getSymbol(union_id)).toMatch(.{ .kind = .{ .Union = .{ .function_symbol_ids = .{function_id} } } });
+    try expect(result.symbol_table.getSymbol(union_id)).toMatch(.{ .kind = .{ .@"union" = .{ .function_symbol_ids = .{function_id} } } });
     try expect(result.symbol_table.getSymbol(function_id)).toMatch(.{
         .name = "echo",
-        .kind = .{ .Function = .{
+        .kind = .{ .function = .{
             .parameter_symbol_ids = .{parameter_id},
-            .return_type_reference = .{ .Symbol = union_id },
-            .implementation_kind = .UserDefined,
+            .return_type_reference = .{ .symbol = union_id },
+            .implementation_kind = .user_defined,
         } },
     });
     try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
         .name = "event",
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Symbol = union_id } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .symbol = union_id } } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
@@ -126,15 +126,15 @@ test "NameResolver > resolveProgram: accepts unions in function and declaration 
     const union_id = result.symbol_id_by_node_id.get(fixture.program.statements[2].id).?;
     const function_symbol = result.symbol_table.getSymbol(function_id);
     try expect(function_symbol).toMatch(.{
-        .kind = .{ .Function = .{ .return_type_reference = .{ .Symbol = union_id } } },
+        .kind = .{ .function = .{ .return_type_reference = .{ .symbol = union_id } } },
     });
-    const parameter_id = function_symbol.kind.Function.parameter_symbol_ids[0];
+    const parameter_id = function_symbol.kind.function.parameter_symbol_ids[0];
     try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
         .name = "event",
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Symbol = union_id } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .symbol = union_id } } },
     });
     try expect(result.symbol_table.getSymbol(binding_id)).toMatch(.{
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Symbol = union_id } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .symbol = union_id } } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
@@ -153,8 +153,8 @@ test "NameResolver > resolveProgram: accepts unions in structure field annotatio
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     const state_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
     try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
-        .kind = .{ .Structure = .{
-            .fields = .{.{ .name = "state", .type_reference = .{ .Symbol = state_id } }},
+        .kind = .{ .structure = .{
+            .fields = .{.{ .name = "state", .type_reference = .{ .symbol = state_id } }},
         } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
@@ -170,7 +170,7 @@ test "NameResolver > resolveProgram: resolves qualified union bases without bind
     const fixture = try setupNameResolverFixture(&arena, source);
     const union_node = fixture.program.statements[0];
     const binding_node = fixture.program.statements[1];
-    const member = binding_node.kind.BindingDeclaration.value.kind.MemberExpression;
+    const member = binding_node.kind.binding_declaration.value.kind.member_expression;
 
     const result = try fixture.resolver.resolveProgram(&fixture.program);
 
@@ -196,7 +196,7 @@ test "NameResolver > resolveProgram: resolves implicit member call arguments wit
     const union_node = fixture.program.statements[0];
     const key_node = fixture.program.statements[1];
     const event_node = fixture.program.statements[2];
-    const call = event_node.kind.BindingDeclaration.value.kind.CallExpression;
+    const call = event_node.kind.binding_declaration.value.kind.call_expression;
 
     const result = try fixture.resolver.resolveProgram(&fixture.program);
 
@@ -357,10 +357,10 @@ test "NameResolver > resolveProgram: records structure fields with resolved type
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
         .name = "User",
-        .kind = .{ .Structure = .{
+        .kind = .{ .structure = .{
             .fields = .{
-                .{ .name = "name", .type_reference = .{ .Builtin = .String } },
-                .{ .name = "friend", .type_reference = .{ .Symbol = user_id } },
+                .{ .name = "name", .type_reference = .{ .builtin = .string } },
+                .{ .name = "friend", .type_reference = .{ .symbol = user_id } },
             },
         } },
     });
@@ -383,15 +383,15 @@ test "NameResolver > resolveProgram: records function signatures with typed para
     const greet_symbol = result.symbol_table.getSymbol(greet_id);
     try expect(greet_symbol).toMatch(.{
         .name = "greet",
-        .kind = .{ .Function = .{
-            .return_type_reference = .{ .Builtin = .String },
-            .implementation_kind = .UserDefined,
+        .kind = .{ .function = .{
+            .return_type_reference = .{ .builtin = .string },
+            .implementation_kind = .user_defined,
         } },
     });
-    const parameter_id = greet_symbol.kind.Function.parameter_symbol_ids[0];
+    const parameter_id = greet_symbol.kind.function.parameter_symbol_ids[0];
     try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
         .name = "user",
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Symbol = user_id } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .symbol = user_id } } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
@@ -410,7 +410,7 @@ test "NameResolver > resolveProgram: records declared type annotations on bindin
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     const declaration_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
     try expect(result.symbol_table.getSymbol(declaration_id)).toMatch(.{
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Array = .{ .Symbol = user_id } } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .array = .{ .symbol = user_id } } } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
@@ -429,20 +429,20 @@ test "NameResolver > resolveProgram: resolves array type expressions recursively
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     const echo_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
     try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
-        .kind = .{ .Structure = .{
+        .kind = .{ .structure = .{
             .fields = .{
-                .{ .name = "friends", .type_reference = .{ .Array = .{ .Symbol = user_id } } },
-                .{ .name = "labels", .type_reference = .{ .Array = .{ .Array = .{ .Builtin = .String } } } },
+                .{ .name = "friends", .type_reference = .{ .array = .{ .symbol = user_id } } },
+                .{ .name = "labels", .type_reference = .{ .array = .{ .array = .{ .builtin = .string } } } },
             },
         } },
     });
     const echo_symbol = result.symbol_table.getSymbol(echo_id);
     try expect(echo_symbol).toMatch(.{
-        .kind = .{ .Function = .{ .return_type_reference = .{ .Array = .{ .Builtin = .String } } } },
+        .kind = .{ .function = .{ .return_type_reference = .{ .array = .{ .builtin = .string } } } },
     });
-    const parameter_id = echo_symbol.kind.Function.parameter_symbol_ids[0];
+    const parameter_id = echo_symbol.kind.function.parameter_symbol_ids[0];
     try expect(result.symbol_table.getSymbol(parameter_id)).toMatch(.{
-        .kind = .{ .Binding = .{ .declared_type_reference = .{ .Array = .{ .Symbol = user_id } } } },
+        .kind = .{ .binding = .{ .declared_type_reference = .{ .array = .{ .symbol = user_id } } } },
     });
     try expect(fixture.diagnostic_store.items()).toMatch(.{});
 }
@@ -461,17 +461,17 @@ test "NameResolver > resolveProgram: resolves forward structure references in fi
     const user_id = result.symbol_id_by_node_id.get(fixture.program.statements[0].id).?;
     const organization_id = result.symbol_id_by_node_id.get(fixture.program.statements[1].id).?;
     try expect(result.symbol_table.getSymbol(user_id)).toMatch(.{
-        .kind = .{ .Structure = .{
+        .kind = .{ .structure = .{
             .fields = .{
-                .{ .name = "organization", .type_reference = .{ .Symbol = organization_id } },
-                .{ .name = "name", .type_reference = .{ .Builtin = .String } },
+                .{ .name = "organization", .type_reference = .{ .symbol = organization_id } },
+                .{ .name = "name", .type_reference = .{ .builtin = .string } },
             },
         } },
     });
     try expect(result.symbol_table.getSymbol(organization_id)).toMatch(.{
-        .kind = .{ .Structure = .{
+        .kind = .{ .structure = .{
             .fields = .{
-                .{ .name = "owner", .type_reference = .{ .Symbol = user_id } },
+                .{ .name = "owner", .type_reference = .{ .symbol = user_id } },
             },
         } },
     });
@@ -489,7 +489,7 @@ test "NameResolver > resolveProgram: resolves for-in item bindings inside loop b
     defer arena.deinit();
     const fixture = try setupNameResolverFixture(&arena, source);
     const for_in_node = fixture.program.statements[1];
-    const print_call = for_in_node.kind.ForIn.body_block.kind.Block.statements[0].kind.ExpressionStatement.expression.kind.CallExpression;
+    const print_call = for_in_node.kind.for_in.body_block.kind.block.statements[0].kind.expression_statement.expression.kind.call_expression;
 
     const result = try fixture.resolver.resolveProgram(&fixture.program);
 
@@ -528,13 +528,13 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
-                const second_match_arm = match_node.kind.MatchExpression.arms[1];
-                const print_call_argument = second_match_arm.body_expression.kind.CallExpression.arguments[0];
+                const match_node = fixture.program.statements[2].kind.expression_statement.expression;
+                const second_match_arm = match_node.kind.match_expression.arms[1];
+                const print_call_argument = second_match_arm.body_expression.kind.call_expression.arguments[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-                const value_pattern_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.Case.binding.?.id).?;
+                const value_pattern_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.case.binding.?.id).?;
                 const value_body_symbol_id = result.symbol_id_by_node_id.get(print_call_argument.id).?;
                 try expect(value_body_symbol_id).toMatch(value_pattern_symbol_id);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{});
@@ -616,14 +616,14 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
-                const first_match_arm = match_node.kind.MatchExpression.arms[0];
-                const second_match_arm = match_node.kind.MatchExpression.arms[1];
+                const match_node = fixture.program.statements[2].kind.expression_statement.expression;
+                const first_match_arm = match_node.kind.match_expression.arms[0];
+                const second_match_arm = match_node.kind.match_expression.arms[1];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-                const first_value_symbol_id = result.symbol_id_by_node_id.get(first_match_arm.pattern.kind.Case.binding.?.id).?;
-                const second_value_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.Case.binding.?.id).?;
+                const first_value_symbol_id = result.symbol_id_by_node_id.get(first_match_arm.pattern.kind.case.binding.?.id).?;
+                const second_value_symbol_id = result.symbol_id_by_node_id.get(second_match_arm.pattern.kind.case.binding.?.id).?;
                 try std.testing.expect(first_value_symbol_id != second_value_symbol_id);
             }
 
@@ -639,15 +639,15 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
-                const some_match_arm = match_node.kind.MatchExpression.arms[0];
+                const match_node = fixture.program.statements[2].kind.expression_statement.expression;
+                const some_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
 
-                const value_symbol_id = result.symbol_id_by_node_id.get(some_match_arm.pattern.kind.Case.binding.?.id).?;
+                const value_symbol_id = result.symbol_id_by_node_id.get(some_match_arm.pattern.kind.case.binding.?.id).?;
                 try expect(result.symbol_table.getSymbol(value_symbol_id)).toMatch(.{
                     .name = "value",
-                    .kind = .{ .Binding = .{ .binding_mutability = .Immutable } },
+                    .kind = .{ .binding = .{ .binding_mutability = .immutable } },
                 });
             }
 
@@ -663,8 +663,8 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
-                const none_match_arm = match_node.kind.MatchExpression.arms[0];
+                const match_node = fixture.program.statements[2].kind.expression_statement.expression;
+                const none_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
 
@@ -810,8 +810,8 @@ pub const NameResolver = struct {
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
                 const union_node = fixture.program.statements[0];
-                const match_node = fixture.program.statements[2].kind.ExpressionStatement.expression;
-                const none_match_arm = match_node.kind.MatchExpression.arms[0];
+                const match_node = fixture.program.statements[2].kind.expression_statement.expression;
+                const none_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
 

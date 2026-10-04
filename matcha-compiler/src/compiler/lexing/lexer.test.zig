@@ -12,12 +12,12 @@ test "Lexer > next: tokenizes boolean keywords" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Not },
-        .{ .kind = .{ .BooleanLiteral = true } },
-        .{ .kind = .And },
-        .{ .kind = .{ .BooleanLiteral = false } },
-        .{ .kind = .Or },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .not },
+        .{ .kind = .{ .boolean_literal = true } },
+        .{ .kind = .@"and" },
+        .{ .kind = .{ .boolean_literal = false } },
+        .{ .kind = .@"or" },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -30,12 +30,12 @@ test "Lexer > next: keeps keyword prefixes inside identifiers" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .Identifier = "notable" } },
-        .{ .kind = .{ .Identifier = "android" } },
-        .{ .kind = .{ .Identifier = "orbit" } },
-        .{ .kind = .{ .Identifier = "iffy" } },
-        .{ .kind = .{ .Identifier = "elsewise" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .identifier = "notable" } },
+        .{ .kind = .{ .identifier = "android" } },
+        .{ .kind = .{ .identifier = "orbit" } },
+        .{ .kind = .{ .identifier = "iffy" } },
+        .{ .kind = .{ .identifier = "elsewise" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -48,9 +48,9 @@ test "Lexer > next: distinguishes assignment from equality" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Assign },
-        .{ .kind = .EqualEqual },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .assign },
+        .{ .kind = .equal_equal },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -63,10 +63,10 @@ test "Lexer > next: tokenizes compound assignment operators" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .PlusAssign },
-        .{ .kind = .MinusAssign },
-        .{ .kind = .AsteriskAssign },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .plus_assign },
+        .{ .kind = .minus_assign },
+        .{ .kind = .asterisk_assign },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -79,13 +79,13 @@ test "Lexer > next: tokenizes comparison operators" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .EqualEqual },
-        .{ .kind = .NotEqual },
-        .{ .kind = .LessThan },
-        .{ .kind = .LessThanOrEqual },
-        .{ .kind = .GreaterThan },
-        .{ .kind = .GreaterThanOrEqual },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .equal_equal },
+        .{ .kind = .not_equal },
+        .{ .kind = .less_than },
+        .{ .kind = .less_than_or_equal },
+        .{ .kind = .greater_than },
+        .{ .kind = .greater_than_or_equal },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -98,10 +98,10 @@ test "Lexer > next: distinguishes a fat arrow from assignment and equality" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .FatArrow },
-        .{ .kind = .Assign },
-        .{ .kind = .EqualEqual },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .fat_arrow },
+        .{ .kind = .assign },
+        .{ .kind = .equal_equal },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -114,9 +114,9 @@ test "Lexer > next: tokenizes brackets" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .LeftBracket },
-        .{ .kind = .RightBracket },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .left_bracket },
+        .{ .kind = .right_bracket },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -129,9 +129,9 @@ test "Lexer > next: tokenizes match keywords" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Match },
-        .{ .kind = .Else },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .match },
+        .{ .kind = .@"else" },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -144,9 +144,9 @@ test "Lexer > next: tokenizes for-in keywords" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .For },
-        .{ .kind = .In },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .@"for" },
+        .{ .kind = .in },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -159,8 +159,8 @@ test "Lexer > next: tokenizes the continue keyword" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Continue },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .@"continue" },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -173,8 +173,8 @@ test "Lexer > next: keeps item as an identifier" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .Identifier = "item" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .identifier = "item" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -187,8 +187,8 @@ test "Lexer > next: tokenizes the structure keyword" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Structure },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .structure },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -201,9 +201,9 @@ test "Lexer > next: tokenizes binding keywords" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .Val },
-        .{ .kind = .Var },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .val },
+        .{ .kind = .@"var" },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -216,11 +216,11 @@ test "Lexer > next: tokenizes braces and separators" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .LeftBrace },
-        .{ .kind = .RightBrace },
-        .{ .kind = .Comma },
-        .{ .kind = .Semicolon },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .left_brace },
+        .{ .kind = .right_brace },
+        .{ .kind = .comma },
+        .{ .kind = .semicolon },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -233,11 +233,11 @@ test "Lexer > next: captures integer literal values" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .IntLiteral = 0 } },
-        .{ .kind = .{ .IntLiteral = 1 } },
-        .{ .kind = .{ .IntLiteral = 2 } },
-        .{ .kind = .{ .IntLiteral = 42 } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .int_literal = 0 } },
+        .{ .kind = .{ .int_literal = 1 } },
+        .{ .kind = .{ .int_literal = 2 } },
+        .{ .kind = .{ .int_literal = 42 } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -250,8 +250,8 @@ test "Lexer > next: preserves spaces inside string literals" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .StringLiteral = "hello world" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .string_literal = "hello world" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -264,8 +264,8 @@ test "Lexer > next: captures string literal content" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .StringLiteral = "hello" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .string_literal = "hello" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -278,8 +278,8 @@ test "Lexer > next: decodes string literal escapes" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .StringLiteral = "line\nquote: \" slash: \\ tab: \t" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .string_literal = "line\nquote: \" slash: \\ tab: \t" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -294,9 +294,9 @@ test "Lexer > next: tokenizes multiple strings in sequence" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .StringLiteral = "first" } },
-        .{ .kind = .{ .StringLiteral = "second" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .string_literal = "first" } },
+        .{ .kind = .{ .string_literal = "second" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -340,8 +340,8 @@ test "Lexer > next: skips a comment before a token" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .Identifier = "answer" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .identifier = "answer" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -357,9 +357,9 @@ test "Lexer > next: resumes tokenization after a trailing comment" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .Identifier = "answer" } },
-        .{ .kind = .{ .Identifier = "next" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .identifier = "answer" } },
+        .{ .kind = .{ .identifier = "next" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -377,9 +377,9 @@ test "Lexer > next: skips consecutive line comments" {
     const tokens = try collectTokens(lexer_pipeline.lexer);
 
     try expect(tokens).toMatch(.{
-        .{ .kind = .{ .Identifier = "first" } },
-        .{ .kind = .{ .Identifier = "second" } },
-        .{ .kind = .EndOfFile },
+        .{ .kind = .{ .identifier = "first" } },
+        .{ .kind = .{ .identifier = "second" } },
+        .{ .kind = .end_of_file },
     });
 }
 
@@ -395,8 +395,8 @@ pub const Lexer = struct {
                 const tokens = try collectTokens(lexer_pipeline.lexer);
 
                 try expect(tokens).toMatch(.{
-                    .{ .kind = .{ .IntLiteral = 9223372036854775807 } },
-                    .{ .kind = .EndOfFile },
+                    .{ .kind = .{ .int_literal = 9223372036854775807 } },
+                    .{ .kind = .end_of_file },
                 });
             }
 

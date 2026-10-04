@@ -12,36 +12,36 @@ pub const PayloadBinding = @import("pattern.zig").PayloadBinding;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
-    BindingDeclaration: BindingDeclaration,
-    ItemDefinition: ItemDefinition,
-    ReturnStatement: ReturnStatement,
-    IfStatement: IfStatement,
-    ExpressionStatement: ExpressionStatement,
-    AssignmentStatement: AssignmentStatement,
-    Loop: Loop,
-    LeaveStatement: LeaveStatement,
-    ContinueStatement: ContinueStatement,
-    While: While,
-    ForIn: ForIn,
+    binding_declaration: BindingDeclaration,
+    item_definition: ItemDefinition,
+    return_statement: ReturnStatement,
+    if_statement: IfStatement,
+    expression_statement: ExpressionStatement,
+    assignment_statement: AssignmentStatement,
+    loop: Loop,
+    leave_statement: LeaveStatement,
+    continue_statement: ContinueStatement,
+    @"while": While,
+    for_in: ForIn,
     // Expressions-ish nodes
-    IfExpression: IfExpression,
-    MatchExpression: MatchExpression,
-    SubjectlessMatchExpression: SubjectlessMatchExpression,
-    CallExpression: CallExpression,
-    MemberExpression: MemberExpression,
-    ImplicitMemberExpression: ImplicitMemberExpression,
-    BinaryExpression: BinaryExpression,
-    UnaryExpression: UnaryExpression,
-    Identifier: lexing.Token,
-    IntegerLiteral: lexing.Token,
-    BooleanLiteral: lexing.Token,
-    StringLiteral: lexing.Token,
-    UnitLiteral: lexing.Token,
-    Block: Block,
-    QualifiedStructureLiteral: QualifiedStructureLiteral,
-    StructureLiteral: StructureLiteral,
-    ArrayLiteral: ArrayLiteral,
-    IndexExpression: IndexExpression,
+    if_expression: IfExpression,
+    match_expression: MatchExpression,
+    subjectless_match_expression: SubjectlessMatchExpression,
+    call_expression: CallExpression,
+    member_expression: MemberExpression,
+    implicit_member_expression: ImplicitMemberExpression,
+    binary_expression: BinaryExpression,
+    unary_expression: UnaryExpression,
+    identifier: lexing.Token,
+    integer_literal: lexing.Token,
+    boolean_literal: lexing.Token,
+    string_literal: lexing.Token,
+    unit_literal: lexing.Token,
+    block: Block,
+    qualified_structure_literal: QualifiedStructureLiteral,
+    structure_literal: StructureLiteral,
+    array_literal: ArrayLiteral,
+    index_expression: IndexExpression,
 };
 
 pub const Node = struct {
@@ -50,35 +50,35 @@ pub const Node = struct {
 
     pub fn primaryToken(self: *const @This()) lexing.Token {
         return switch (self.kind) {
-            .BindingDeclaration => |binding_declaration| binding_declaration.name,
-            .ItemDefinition => |item_definition| item_definition.identifier_token,
-            .ReturnStatement => |return_statement| return_statement.return_token,
-            .IfStatement => |if_statement| if_statement.if_token,
-            .ExpressionStatement => |expression_statement| expression_statement.expression.primaryToken(),
-            .AssignmentStatement => |assignment_statement| assignment_statement.assignment_token,
-            .Loop => |loop| loop.loop_token,
-            .LeaveStatement => |leave_statement| leave_statement.leave_token,
-            .ContinueStatement => |continue_statement| continue_statement.continue_token,
-            .While => |while_statement| while_statement.while_token,
-            .ForIn => |for_in| for_in.for_token,
-            .IfExpression => |if_expression| if_expression.if_token,
-            .MatchExpression => |match_expression| match_expression.match_token,
-            .SubjectlessMatchExpression => |subjectless_match_expression| subjectless_match_expression.match_token,
-            .CallExpression => |call_expression| call_expression.left_parenthesis,
-            .MemberExpression => |member_expression| member_expression.member_name_token,
-            .ImplicitMemberExpression => |implicit_call_expression| implicit_call_expression.member_name_token,
-            .BinaryExpression => |binary_expression| binary_expression.operator_token,
-            .UnaryExpression => |unary_expression| unary_expression.operator_token,
-            .Identifier => |token| token,
-            .IntegerLiteral => |token| token,
-            .BooleanLiteral => |token| token,
-            .StringLiteral => |token| token,
-            .UnitLiteral => |token| token,
-            .Block => |block| block.left_brace,
-            .QualifiedStructureLiteral => |qualified_structure_literal| qualified_structure_literal.structure_name,
-            .StructureLiteral => |structure_literal| structure_literal.dot_token,
-            .ArrayLiteral => |array_literal| array_literal.left_bracket,
-            .IndexExpression => |index_expression| index_expression.left_bracket,
+            .binding_declaration => |binding_declaration| binding_declaration.name,
+            .item_definition => |item_definition| item_definition.identifier_token,
+            .return_statement => |return_statement| return_statement.return_token,
+            .if_statement => |if_statement| if_statement.if_token,
+            .expression_statement => |expression_statement| expression_statement.expression.primaryToken(),
+            .assignment_statement => |assignment_statement| assignment_statement.assignment_token,
+            .loop => |loop| loop.loop_token,
+            .leave_statement => |leave_statement| leave_statement.leave_token,
+            .continue_statement => |continue_statement| continue_statement.continue_token,
+            .@"while" => |while_statement| while_statement.while_token,
+            .for_in => |for_in| for_in.for_token,
+            .if_expression => |if_expression| if_expression.if_token,
+            .match_expression => |match_expression| match_expression.match_token,
+            .subjectless_match_expression => |subjectless_match_expression| subjectless_match_expression.match_token,
+            .call_expression => |call_expression| call_expression.left_parenthesis,
+            .member_expression => |member_expression| member_expression.member_name_token,
+            .implicit_member_expression => |implicit_call_expression| implicit_call_expression.member_name_token,
+            .binary_expression => |binary_expression| binary_expression.operator_token,
+            .unary_expression => |unary_expression| unary_expression.operator_token,
+            .identifier => |token| token,
+            .integer_literal => |token| token,
+            .boolean_literal => |token| token,
+            .string_literal => |token| token,
+            .unit_literal => |token| token,
+            .block => |block| block.left_brace,
+            .qualified_structure_literal => |qualified_structure_literal| qualified_structure_literal.structure_name,
+            .structure_literal => |structure_literal| structure_literal.dot_token,
+            .array_literal => |array_literal| array_literal.left_bracket,
+            .index_expression => |index_expression| index_expression.left_bracket,
         };
     }
 };
@@ -90,9 +90,9 @@ pub const ItemDefinition = struct {
 };
 
 pub const ItemDefinitionKind = union(enum) {
-    Function: FunctionDefinition,
-    Structure: StructureDefinition,
-    Union: UnionDefinition,
+    function: FunctionDefinition,
+    structure: StructureDefinition,
+    @"union": UnionDefinition,
 };
 
 pub const UnionDefinition = struct {
@@ -149,13 +149,13 @@ pub const AssignmentStatement = struct {
 };
 
 pub const AssignmentOperator = union(enum) {
-    Assign,
-    Compound: BinaryOperator,
+    assign,
+    compound: BinaryOperator,
 };
 
 pub const BindingMutability = enum {
-    Mutable,
-    Immutable,
+    mutable,
+    immutable,
 };
 
 pub const Loop = struct {
@@ -250,33 +250,33 @@ pub const ImplicitMemberExpression = struct {
 };
 
 pub const BinaryOperator = enum {
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
-    And,
-    Or,
+    add,
+    subtract,
+    multiply,
+    divide,
+    equal,
+    not_equal,
+    less_than,
+    less_than_or_equal,
+    greater_than,
+    greater_than_or_equal,
+    @"and",
+    @"or",
 
     pub fn name(self: @This()) []const u8 {
         return switch (self) {
-            .Add => "+",
-            .Subtract => "-",
-            .Multiply => "*",
-            .Divide => "/",
-            .Equal => "==",
-            .NotEqual => "!=",
-            .LessThan => "<",
-            .LessThanOrEqual => "<=",
-            .GreaterThan => ">",
-            .GreaterThanOrEqual => ">=",
-            .And => "and",
-            .Or => "or",
+            .add => "+",
+            .subtract => "-",
+            .multiply => "*",
+            .divide => "/",
+            .equal => "==",
+            .not_equal => "!=",
+            .less_than => "<",
+            .less_than_or_equal => "<=",
+            .greater_than => ">",
+            .greater_than_or_equal => ">=",
+            .@"and" => "and",
+            .@"or" => "or",
         };
     }
 };
@@ -289,13 +289,13 @@ pub const BinaryExpression = struct {
 };
 
 pub const UnaryOperator = enum {
-    Negate,
-    Not,
+    negate,
+    not,
 
     pub fn name(self: @This()) []const u8 {
         return switch (self) {
-            .Negate => "-",
-            .Not => "not",
+            .negate => "-",
+            .not => "not",
         };
     }
 };

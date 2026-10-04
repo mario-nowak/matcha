@@ -17,11 +17,11 @@ pub fn emitImplicitMemberExpression(
     node: *const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
         // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
-        .UnionConstruction => |union_construction| return emitUnionConstruction(
+        .union_construction => |union_construction| return emitUnionConstruction(
             emitter,
             union_construction.union_type_id,
             union_construction.case_index,
@@ -29,14 +29,14 @@ pub fn emitImplicitMemberExpression(
             lowered_program,
             environment,
         ),
-        .ArrayLength,
-        .ArrayMethod,
-        .IntegerMethod,
-        .StringLength,
-        .StringMethod,
-        .StructureField,
-        .InstanceMethod,
-        .TypeFunction,
+        .array_length,
+        .array_method,
+        .integer_method,
+        .string_length,
+        .string_method,
+        .structure_field,
+        .instance_method,
+        .type_function,
         => unreachable,
     }
 }
@@ -47,33 +47,33 @@ pub fn emitMemberExpression(
     member_expression: *const ast.MemberExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const member_access_decision = lowered_program.member_access_decision_by_node_id.get(node.id) orelse unreachable;
     switch (member_access_decision) {
-        .ArrayLength => {
-            const base_value = emitter.emitNode(member_expression.base, lowered_program, environment);
+        .array_length => {
+            const base_value = try emitter.emitNode(member_expression.base, lowered_program, environment);
 
-            const length_pointer_value = emitter.function_symbol_generator.generateValueName();
-            emitter.function_ir_builder.emitFieldPointer(
+            const length_pointer_value = try emitter.function_symbol_generator.generateValueName();
+            try emitter.function_ir_builder.emitFieldPointer(
                 length_pointer_value,
                 lowering.llvm_type.array_llvm_type_name,
                 base_value.expectValue(),
                 lowering.llvm_type.array_length_field_index,
             );
 
-            const length_value = emitter.function_symbol_generator.generateValueName();
-            emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
+            const length_value = try emitter.function_symbol_generator.generateValueName();
+            try emitter.function_ir_builder.emitLoad(length_value, length_pointer_value, "i64");
 
             return .{ .value = length_value };
         },
-        .StringLength => {
-            const base_value = emitter.emitNode(member_expression.base, lowered_program, environment);
-            const string_parts = emitter.emitStringParts(base_value.expectValue());
+        .string_length => {
+            const base_value = try emitter.emitNode(member_expression.base, lowered_program, environment);
+            const string_parts = try emitter.emitStringParts(base_value.expectValue());
 
             return .{ .value = string_parts.length_value };
         },
-        .StructureField => |structure_field| {
-            const member_pointer_emission_result = places.emitStructureFieldPointer(
+        .structure_field => |structure_field| {
+            const member_pointer_emission_result = try places.emitStructureFieldPointer(
                 emitter,
                 member_expression,
                 structure_field.field_index,
@@ -86,8 +86,8 @@ pub fn emitMemberExpression(
                 .statement => unreachable,
             };
 
-            const member_value = emitter.function_symbol_generator.generateValueName();
-            emitter.function_ir_builder.emitLoad(
+            const member_value = try emitter.function_symbol_generator.generateValueName();
+            try emitter.function_ir_builder.emitLoad(
                 member_value,
                 member_pointer_value,
                 lowered_program.getLlvmIrType(lowered_program.analyzed_program.type_id_by_node_id.get(node.id).?),
@@ -96,7 +96,7 @@ pub fn emitMemberExpression(
             return .{ .value = member_value };
         },
         // A unit case used as a value, like `Result.None` or `.None`, constructs the case without a payload
-        .UnionConstruction => |union_construction| return emitUnionConstruction(
+        .union_construction => |union_construction| return emitUnionConstruction(
             emitter,
             union_construction.union_type_id,
             union_construction.case_index,
@@ -104,11 +104,11 @@ pub fn emitMemberExpression(
             lowered_program,
             environment,
         ),
-        .InstanceMethod => unreachable,
-        .TypeFunction => unreachable,
-        .ArrayMethod => unreachable,
-        .StringMethod => unreachable,
-        .IntegerMethod => unreachable,
+        .instance_method => unreachable,
+        .type_function => unreachable,
+        .array_method => unreachable,
+        .string_method => unreachable,
+        .integer_method => unreachable,
     }
 }
 
@@ -119,10 +119,10 @@ pub fn emitUnionConstruction(
     optional_payload: ?*const ast.Node,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     // Emit the payload before the allocation, so that an early exit in the payload leaves no wasted allocation behind.
     const optional_payload_value: ?Value = if (optional_payload) |payload|
-        switch (emitter.emitNode(payload, lowered_program, environment)) {
+        switch (try emitter.emitNode(payload, lowered_program, environment)) {
             .value => |value| value,
             .zero_sized => null,
             .statement => unreachable,
@@ -133,8 +133,8 @@ pub fn emitUnionConstruction(
     // Allocate the structure of the constructed case
     const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
     const union_case_layout = union_layout.cases[case_index];
-    const union_case_llvm_type = std.fmt.allocPrint(emitter.allocator, "%{s}", .{union_case_layout.llvm_type_name}) catch unreachable;
-    const union_header_value = emitter.runtime_call_emitter.emitAllocateCall(
+    const union_case_llvm_type = try std.fmt.allocPrint(emitter.arena, "%{s}", .{union_case_layout.llvm_type_name});
+    const union_header_value = try emitter.runtime_call_emitter.emitAllocateCall(
         emitter.function_ir_builder,
         emitter.function_symbol_generator,
         union_case_llvm_type,
@@ -142,23 +142,23 @@ pub fn emitUnionConstruction(
     );
 
     // Store the case index in union
-    const case_index_pointer_value = emitter.function_symbol_generator.generateValueName();
-    emitter.function_ir_builder.emitFieldPointer(
+    const case_index_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try emitter.function_ir_builder.emitFieldPointer(
         case_index_pointer_value,
         union_case_layout.llvm_type_name,
         union_header_value,
         lowering.lowering_types.union_case_index_field_index,
     );
-    emitter.function_ir_builder.emitStore(
-        std.fmt.allocPrint(emitter.allocator, "{d}", .{case_index}) catch unreachable,
+    try emitter.function_ir_builder.emitStore(
+        try std.fmt.allocPrint(emitter.arena, "{d}", .{case_index}),
         case_index_pointer_value,
         lowering.lowering_types.union_case_index_llvm_type,
     );
 
     // Store the payload in union
     if (optional_payload_value) |payload_value| {
-        const payload_pointer_value = emitter.function_symbol_generator.generateValueName();
-        emitter.function_ir_builder.emitFieldPointer(
+        const payload_pointer_value = try emitter.function_symbol_generator.generateValueName();
+        try emitter.function_ir_builder.emitFieldPointer(
             payload_pointer_value,
             union_case_layout.llvm_type_name,
             union_header_value,
@@ -167,7 +167,7 @@ pub fn emitUnionConstruction(
 
         const payload_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(optional_payload.?.id).?;
         const payload_llvm_ir_type = lowered_program.getLlvmIrType(payload_type_id);
-        emitter.function_ir_builder.emitStore(payload_value, payload_pointer_value, payload_llvm_ir_type);
+        try emitter.function_ir_builder.emitStore(payload_value, payload_pointer_value, payload_llvm_ir_type);
     }
 
     return .{ .value = union_header_value };
@@ -179,10 +179,10 @@ pub fn emitStructureLiteral(
     fields: []const ast.StructureFieldInitializer,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const node_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const structure_type = switch (lowered_program.analyzed_program.type_store.getType(node_type_id)) {
-        .Structure => |structure_type| structure_type,
+        .structure => |structure_type| structure_type,
         else => unreachable,
     };
     const structure_layout_kind = lowered_program
@@ -190,20 +190,20 @@ pub fn emitStructureLiteral(
 
     // Emit the field values before the allocation, so that an early exit in a field value leaves no wasted
     // allocation behind.
-    const field_value_emission_results = emitter.allocator.alloc(EmissionResult, fields.len) catch unreachable;
+    const field_value_emission_results = try emitter.arena.alloc(EmissionResult, fields.len);
     for (fields, field_value_emission_results) |field, *field_value_emission_result| {
-        field_value_emission_result.* = emitter.emitNode(field.value, lowered_program, environment);
+        field_value_emission_result.* = try emitter.emitNode(field.value, lowered_program, environment);
     }
 
     const structure_header_value = switch (structure_layout_kind) {
-        .Present => |structure_layout| emitter.runtime_call_emitter.emitAllocateCall(
+        .present => |structure_layout| try emitter.runtime_call_emitter.emitAllocateCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
-            std.fmt.allocPrint(emitter.allocator, "%{s}", .{structure_layout.llvm_type_name}) catch unreachable,
+            try std.fmt.allocPrint(emitter.arena, "%{s}", .{structure_layout.llvm_type_name}),
             1,
         ),
         // Structures without a layout only allocate a single byte for identity comparison
-        .Absent => emitter.runtime_call_emitter.emitAllocateAtomicCall(
+        .absent => try emitter.runtime_call_emitter.emitAllocateAtomicCall(
             emitter.function_ir_builder,
             emitter.function_symbol_generator,
             1,
@@ -211,19 +211,19 @@ pub fn emitStructureLiteral(
     };
 
     for (fields, field_value_emission_results) |field, field_value_emission_result| {
-        const field_index = structure_type.getFieldIndex(field.name.kind.Identifier) orelse unreachable;
+        const field_index = structure_type.getFieldIndex(field.name.kind.identifier) orelse unreachable;
         const structure_field = structure_type.fields[@intCast(field_index)];
         const structure_layout = switch (structure_layout_kind) {
-            .Absent => continue,
-            .Present => |structure_layout| structure_layout,
+            .absent => continue,
+            .present => |structure_layout| structure_layout,
         };
         const layout_field_index = switch (structure_layout.field_index_kind_by_definition_index[field_index]) {
-            .Absent => continue,
-            .Index => |layout_field_index| layout_field_index,
+            .absent => continue,
+            .index => |layout_field_index| layout_field_index,
         };
 
-        const field_pointer_value = emitter.function_symbol_generator.generateValueName();
-        emitter.function_ir_builder.emitFieldPointer(
+        const field_pointer_value = try emitter.function_symbol_generator.generateValueName();
+        try emitter.function_ir_builder.emitFieldPointer(
             field_pointer_value,
             structure_layout.llvm_type_name,
             structure_header_value,
@@ -231,7 +231,7 @@ pub fn emitStructureLiteral(
         );
 
         const field_llvm_ir_type = lowered_program.getLlvmIrType(structure_field.type_id);
-        emitter.function_ir_builder.emitStore(
+        try emitter.function_ir_builder.emitStore(
             field_value_emission_result.expectValue(),
             field_pointer_value,
             field_llvm_ir_type,
@@ -247,11 +247,11 @@ pub fn emitArrayLiteral(
     array_literal: *const ast.ArrayLiteral,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     const builder = emitter.function_ir_builder;
     const array_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(node.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(array_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
@@ -264,12 +264,12 @@ pub fn emitArrayLiteral(
 
     // Emit the elements before the allocations, so that an early exit in an element leaves no wasted allocation
     // behind.
-    const element_emission_results = emitter.allocator.alloc(EmissionResult, length) catch unreachable;
+    const element_emission_results = try emitter.arena.alloc(EmissionResult, length);
     for (array_literal.elements, element_emission_results) |*element, *element_emission_result| {
-        element_emission_result.* = emitter.emitNode(element, lowered_program, environment);
+        element_emission_result.* = try emitter.emitNode(element, lowered_program, environment);
     }
 
-    const header_value = emitter.runtime_call_emitter.emitAllocateCall(
+    const header_value = try emitter.runtime_call_emitter.emitAllocateCall(
         builder,
         emitter.function_symbol_generator,
         lowering.llvm_type.array_llvm_type,
@@ -277,48 +277,48 @@ pub fn emitArrayLiteral(
     );
     // In case the element type does not have a runtime representation, we can just set the data pointer to null.
     const data_value = if (element_runtime_representation.hasRuntimeRepresentation())
-        emitter.runtime_call_emitter.emitAllocateCall(builder, emitter.function_symbol_generator, element_llvm_type, length)
+        try emitter.runtime_call_emitter.emitAllocateCall(builder, emitter.function_symbol_generator, element_llvm_type, length)
     else
         "null";
 
     for (element_emission_results, 0..) |element_value, index| {
         if (element_runtime_representation.hasRuntimeRepresentation()) {
-            const element_pointer_value = emitter.function_symbol_generator.generateValueName();
-            const index_value = std.fmt.allocPrint(emitter.allocator, "{d}", .{index}) catch unreachable;
-            builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
+            const element_pointer_value = try emitter.function_symbol_generator.generateValueName();
+            const index_value = try std.fmt.allocPrint(emitter.arena, "{d}", .{index});
+            try builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
 
-            builder.emitStore(element_value.expectValue(), element_pointer_value, element_llvm_type);
+            try builder.emitStore(element_value.expectValue(), element_pointer_value, element_llvm_type);
         }
     }
 
-    const length_pointer_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitFieldPointer(
+    const length_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitFieldPointer(
         length_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
         header_value,
         lowering.llvm_type.array_length_field_index,
     );
 
-    const length_number_string = std.fmt.allocPrint(emitter.allocator, "{d}", .{length}) catch unreachable;
-    builder.emitStore(length_number_string, length_pointer_value, "i64");
+    const length_number_string = try std.fmt.allocPrint(emitter.arena, "{d}", .{length});
+    try builder.emitStore(length_number_string, length_pointer_value, "i64");
 
-    const capacity_pointer_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitFieldPointer(
+    const capacity_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitFieldPointer(
         capacity_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
         header_value,
         lowering.llvm_type.array_capacity_field_index,
     );
-    builder.emitStore(length_number_string, capacity_pointer_value, "i64");
+    try builder.emitStore(length_number_string, capacity_pointer_value, "i64");
 
-    const data_pointer_value = emitter.function_symbol_generator.generateValueName();
-    builder.emitFieldPointer(
+    const data_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitFieldPointer(
         data_pointer_value,
         lowering.llvm_type.array_llvm_type_name,
         header_value,
         lowering.llvm_type.array_data_field_index,
     );
-    builder.emitStore(data_value, data_pointer_value, "ptr");
+    try builder.emitStore(data_value, data_pointer_value, "ptr");
 
     return .{ .value = header_value };
 }
@@ -329,13 +329,13 @@ pub fn emitIndexExpression(
     index_expression: *const ast.IndexExpression,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
-) EmissionResult {
+) !EmissionResult {
     _ = node;
-    const pointer_value = places.emitIndexExpressionPointer(emitter, index_expression, lowered_program, environment);
+    const pointer_value = try places.emitIndexExpressionPointer(emitter, index_expression, lowered_program, environment);
 
     const base_type_id = lowered_program.analyzed_program.type_id_by_node_id.get(index_expression.base.id) orelse unreachable;
     const element_type_id = switch (lowered_program.analyzed_program.type_store.getType(base_type_id)) {
-        .Array => |id| id,
+        .array => |id| id,
         else => unreachable,
     };
     const element_runtime_representation = lowered_program
@@ -348,8 +348,8 @@ pub fn emitIndexExpression(
     }
 
     const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    const result_value = emitter.function_symbol_generator.generateValueName();
-    emitter.function_ir_builder.emitLoad(result_value, pointer_value.expectValue(), element_llvm_type);
+    const result_value = try emitter.function_symbol_generator.generateValueName();
+    try emitter.function_ir_builder.emitLoad(result_value, pointer_value.expectValue(), element_llvm_type);
 
     return .{ .value = result_value };
 }

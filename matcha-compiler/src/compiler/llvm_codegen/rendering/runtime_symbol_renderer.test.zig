@@ -9,7 +9,7 @@ pub const RuntimeSymbolRenderer = struct {
             defer arena.deinit();
             const runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(arena.allocator());
 
-            const rendered = runtime_symbol_renderer.renderDeclarations(.{});
+            const rendered = try runtime_symbol_renderer.renderDeclarations(.{});
 
             try expect(rendered).toMatch(
                 \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
@@ -24,7 +24,7 @@ pub const RuntimeSymbolRenderer = struct {
             defer arena.deinit();
             const runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(arena.allocator());
 
-            const rendered = runtime_symbol_renderer.renderDeclarations(.{ .print_int = true });
+            const rendered = try runtime_symbol_renderer.renderDeclarations(.{ .print_int = true });
 
             try expect(rendered).toMatch(
                 \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
@@ -40,7 +40,7 @@ pub const RuntimeSymbolRenderer = struct {
             defer arena.deinit();
             const runtime_symbol_renderer = llvm_codegen.RuntimeSymbolRenderer.init(arena.allocator());
 
-            const rendered = runtime_symbol_renderer.renderDeclarations(.{
+            const rendered = try runtime_symbol_renderer.renderDeclarations(.{
                 .print_int = true,
                 .print_string = true,
                 .read_file = true,

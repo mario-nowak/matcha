@@ -3,35 +3,30 @@ const symbols = @import("symbols");
 const control_flow_validation = @import("../control_flow/module.zig");
 
 pub const NodeRoleExpressionKind = enum {
-    Value,
-    Callee,
+    value,
+    callee,
 };
 
 pub const NodeRole = union(enum) {
-    Statement,
-    Expression: NodeRoleExpressionKind,
+    statement,
+    expression: NodeRoleExpressionKind,
 
     pub fn isInCalleePosition(self: @This()) bool {
         return switch (self) {
-            .Statement => false,
-            .Expression => |expression| switch (expression) {
-                .Value => false,
-                .Callee => true,
+            .statement => false,
+            .expression => |expression| switch (expression) {
+                .value => false,
+                .callee => true,
             },
         };
     }
 };
 
 pub const ExhaustivenessClass = enum {
-    Boolean,
-    Union,
-    IntegerOpen,
-    StringOpen,
-};
-
-pub const TypeError = error{
-    OutOfMemory,
-    DiagnosticsEmitted,
+    boolean,
+    @"union",
+    integer_open,
+    string_open,
 };
 
 /// Facts about the surrounding program that every node inherits from its parent unless a node explicitly overrides
@@ -56,15 +51,15 @@ pub const ParentNodeExpectation = struct {
     node_role: NodeRole,
     type_id: ?typing.TypeId,
 
-    pub const asStatement: @This() = .{ .node_role = .Statement, .type_id = null };
-    pub const asExpression: @This() = .{ .node_role = .{ .Expression = .Value }, .type_id = null };
+    pub const as_statement: @This() = .{ .node_role = .statement, .type_id = null };
+    pub const as_expression: @This() = .{ .node_role = .{ .expression = .value }, .type_id = null };
 
     pub fn asExpressionWithType(type_id: ?typing.TypeId) @This() {
-        return .{ .node_role = .{ .Expression = .Value }, .type_id = type_id };
+        return .{ .node_role = .{ .expression = .value }, .type_id = type_id };
     }
 
     pub fn asCallee(type_id: ?typing.TypeId) @This() {
-        return .{ .node_role = .{ .Expression = .Callee }, .type_id = type_id };
+        return .{ .node_role = .{ .expression = .callee }, .type_id = type_id };
     }
 
     /// The expectation a node hands to the child that produces its value, e.g. a block to its result expression or an
@@ -72,8 +67,8 @@ pub const ParentNodeExpectation = struct {
     /// position again.
     pub fn forwarded(self: @This()) @This() {
         return switch (self.node_role) {
-            .Statement => self,
-            .Expression => .{ .node_role = .{ .Expression = .Value }, .type_id = self.type_id },
+            .statement => self,
+            .expression => .{ .node_role = .{ .expression = .value }, .type_id = self.type_id },
         };
     }
 };

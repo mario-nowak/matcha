@@ -12,7 +12,7 @@ pub const StructureTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupStructureTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch("%matcha.structure.Node = type { i64, %matcha.compiler_module.builtin.type.string, ptr }");
         }
@@ -25,7 +25,7 @@ pub const StructureTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupStructureTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch("%matcha.structure.Record = type { i64, %matcha.compiler_module.builtin.type.string }");
         }
@@ -38,7 +38,7 @@ pub const StructureTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupStructureTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch("");
         }
@@ -53,7 +53,7 @@ pub const StructureTypeRenderer = struct {
             defer arena.deinit();
             const fixture = try setupStructureTypeRendererFixture(&arena, source);
 
-            const rendered = fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
+            const rendered = try fixture.structure_type_renderer.renderStructureTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
                 \\%matcha.structure.First = type { i64 }

@@ -11,15 +11,15 @@ pub const Scope = struct {
     parent: ?*const Scope,
     bindings: ScopeBindings,
 
-    pub fn init(allocator: std.mem.Allocator, parent: ?*const Scope) @This() {
+    pub fn init(arena: std.mem.Allocator, parent: ?*const Scope) @This() {
         return .{
             .parent = parent,
-            .bindings = ScopeBindings.init(allocator),
+            .bindings = ScopeBindings.init(arena),
         };
     }
 
-    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) void {
-        self.bindings.put(name, symbol_id) catch unreachable;
+    pub fn insertSymbol(self: *@This(), name: []const u8, symbol_id: symbols.SymbolId) !void {
+        try self.bindings.put(name, symbol_id);
     }
 
     pub fn lookupSymbol(self: *const @This(), name: []const u8) ?symbols.SymbolId {

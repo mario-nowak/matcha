@@ -10,10 +10,10 @@ pub const StringLiteralRenderer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var string_literal_pool = StringLiteralPool.init(arena.allocator());
-            _ = string_literal_pool.registerLiteral(0, "hello");
+            _ = try string_literal_pool.registerLiteral(0, "hello");
             var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(arena.allocator());
 
-            const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
+            const rendered = try string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
                 \\@matcha.string_literal.0 = private unnamed_addr constant [5 x i8] c"hello"
@@ -24,10 +24,10 @@ pub const StringLiteralRenderer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var string_literal_pool = StringLiteralPool.init(arena.allocator());
-            _ = string_literal_pool.registerLiteral(0, "a\"b\\c\n");
+            _ = try string_literal_pool.registerLiteral(0, "a\"b\\c\n");
             var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(arena.allocator());
 
-            const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
+            const rendered = try string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
                 \\@matcha.string_literal.0 = private unnamed_addr constant [6 x i8] c"a\22b\5Cc\0A"
@@ -38,10 +38,10 @@ pub const StringLiteralRenderer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var string_literal_pool = StringLiteralPool.init(arena.allocator());
-            _ = string_literal_pool.registerLiteral(0, "é");
+            _ = try string_literal_pool.registerLiteral(0, "é");
             var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(arena.allocator());
 
-            const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
+            const rendered = try string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
                 \\@matcha.string_literal.0 = private unnamed_addr constant [2 x i8] c"\C3\A9"
@@ -52,11 +52,11 @@ pub const StringLiteralRenderer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             var string_literal_pool = StringLiteralPool.init(arena.allocator());
-            _ = string_literal_pool.registerLiteral(0, "first");
-            _ = string_literal_pool.registerLiteral(1, "second");
+            _ = try string_literal_pool.registerLiteral(0, "first");
+            _ = try string_literal_pool.registerLiteral(1, "second");
             var string_literal_renderer = llvm_codegen.StringLiteralRenderer.init(arena.allocator());
 
-            const rendered = string_literal_renderer.renderGlobals(&string_literal_pool);
+            const rendered = try string_literal_renderer.renderGlobals(&string_literal_pool);
 
             try expect(rendered).toMatch(
                 \\@matcha.string_literal.0 = private unnamed_addr constant [5 x i8] c"first"

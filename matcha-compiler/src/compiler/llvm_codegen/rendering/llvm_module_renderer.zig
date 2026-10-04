@@ -22,7 +22,7 @@ const LlvmTypeDefinition = struct {
 };
 
 pub const LlvmModuleRenderer = struct {
-    allocator: std.mem.Allocator,
+    arena: std.mem.Allocator,
     target_triple: []const u8,
     function_emitter: *FunctionEmitter,
     runtime_call_emitter: *RuntimeCallEmitter,
@@ -34,7 +34,7 @@ pub const LlvmModuleRenderer = struct {
     llvm_matcha_type_by_type_id: std.AutoHashMap(typing.TypeId, LlvmTypeDefinition),
 
     pub fn init(
-        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
         target_triple: []const u8,
         function_emitter: *FunctionEmitter,
         runtime_call_emitter: *RuntimeCallEmitter,
@@ -45,7 +45,7 @@ pub const LlvmModuleRenderer = struct {
         union_type_renderer: *UnionTypeRenderer,
     ) @This() {
         return .{
-            .allocator = allocator,
+            .arena = arena,
             .target_triple = target_triple,
             .function_emitter = function_emitter,
             .runtime_call_emitter = runtime_call_emitter,
@@ -54,24 +54,18 @@ pub const LlvmModuleRenderer = struct {
             .string_literal_renderer = string_literal_renderer,
             .structure_type_renderer = structure_type_renderer,
             .union_type_renderer = union_type_renderer,
-            .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(allocator),
+            .llvm_matcha_type_by_type_id = std.AutoHashMap(typing.TypeId, LlvmTypeDefinition).init(arena),
         };
-    }
-
-    pub fn deinit(self: *@This()) void {
-        self.llvm_matcha_type_by_type_id.deinit();
     }
 
     pub fn renderLlvmIr(self: *@This(), lowered_program: *const lowering.LoweredProgram) ![]const u8 {
         self.resetModuleState();
 
-        const structure_type_definitions = self.structure_type_renderer.renderStructureTypeDefinitions(lowered_program);
+        const structure_type_definitions = try self.structure_type_renderer.renderStructureTypeDefinitions(lowered_program);
         const union_type_definitions = try self.union_type_renderer.renderUnionTypeDefinitions(lowered_program);
-        var user_defined_functions = self.renderTopLevelFunctionDefinitions(lowered_program);
-        defer user_defined_functions.deinit(self.allocator);
-        var owned_functions = self.renderOwnedFunctionDefinitions(lowered_program);
-        defer owned_functions.deinit(self.allocator);
-        const main_function_ir = self.function_emitter.emitMainFunction(lowered_program);
+        const user_defined_functions = try self.renderTopLevelFunctionDefinitions(lowered_program);
+        const owned_functions = try self.renderOwnedFunctionDefinitions(lowered_program);
+        const main_function_ir = try self.function_emitter.emitMainFunction(lowered_program);
 
         return self.renderModule(
             structure_type_definitions,
@@ -85,21 +79,21 @@ pub const LlvmModuleRenderer = struct {
     fn renderTopLevelFunctionDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
-    ) std.ArrayList([]const u8) {
+    ) !std.ArrayList([]const u8) {
         var user_defined_functions = std.ArrayList([]const u8){};
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Function => |function_definition| {
-                        const function_ir = self.function_emitter.emitFunctionDefinition(
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .function => |function_definition| {
+                        const function_ir = try self.function_emitter.emitFunctionDefinition(
                             statement.id,
                             &function_definition,
                             lowered_program,
                         );
-                        user_defined_functions.append(self.allocator, function_ir) catch unreachable;
+                        try user_defined_functions.append(self.arena, function_ir);
                     },
-                    .Structure => {},
-                    .Union => {},
+                    .structure => {},
+                    .@"union" => {},
                 },
                 else => {},
             }
@@ -117,33 +111,31 @@ pub const LlvmModuleRenderer = struct {
         main_function_ir: []const u8,
     ) ![]const u8 {
         var sections = std.ArrayList([]const u8){};
-        defer sections.deinit(self.allocator);
-        try sections.append(self.allocator, self.renderModulePreamble());
+        try sections.append(self.arena, try self.renderModulePreamble());
         if (structure_type_definitions.len > 0) {
-            sections.append(self.allocator, structure_type_definitions) catch unreachable;
+            try sections.append(self.arena, structure_type_definitions);
         }
         if (union_type_definitions.len > 0) {
-            try sections.append(self.allocator, union_type_definitions);
+            try sections.append(self.arena, union_type_definitions);
         }
         for (user_defined_functions) |function_ir| {
-            sections.append(self.allocator, function_ir) catch unreachable;
+            try sections.append(self.arena, function_ir);
         }
         for (owned_functions) |function_ir| {
-            sections.append(self.allocator, function_ir) catch unreachable;
+            try sections.append(self.arena, function_ir);
         }
-        sections.append(self.allocator, main_function_ir) catch unreachable;
+        try sections.append(self.arena, main_function_ir);
 
         var module_buffer = std.ArrayList(u8){};
-        defer module_buffer.deinit(self.allocator);
         for (sections.items, 0..) |section, index| {
-            module_buffer.writer(self.allocator).print("{s}", .{section}) catch unreachable;
+            try module_buffer.print(self.arena, "{s}", .{section});
             if (index + 1 < sections.items.len) {
-                module_buffer.writer(self.allocator).print("\n\n", .{}) catch unreachable;
+                try module_buffer.print(self.arena, "\n\n", .{});
             }
         }
-        module_buffer.writer(self.allocator).print("\n", .{}) catch unreachable;
+        try module_buffer.print(self.arena, "\n", .{});
 
-        return std.fmt.allocPrint(self.allocator, "{s}", .{module_buffer.items}) catch unreachable;
+        return module_buffer.toOwnedSlice(self.arena);
     }
 
     fn resetModuleState(self: *@This()) void {
@@ -151,39 +143,39 @@ pub const LlvmModuleRenderer = struct {
         self.runtime_call_emitter.reset();
     }
 
-    fn renderModulePreamble(self: *@This()) []const u8 {
+    fn renderModulePreamble(self: *@This()) ![]const u8 {
         var module_preamble_buffer = std.ArrayList(u8){};
-        defer module_preamble_buffer.deinit(self.allocator);
 
-        const runtime_symbol_declarations = self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
-        module_preamble_buffer.writer(self.allocator).print(
+        const runtime_symbol_declarations = try self.runtime_symbol_renderer.renderDeclarations(self.runtime_call_emitter.runtime_requirements);
+        try module_preamble_buffer.print(
+            self.arena,
             "target triple = \"{s}\"\n\n{s}\n\n{s}\n{s}",
             .{ self.target_triple, runtime_symbol_declarations, lowering.llvm_type.string_llvm_type_definition, lowering.llvm_type.array_llvm_type_definition },
-        ) catch unreachable;
+        );
 
-        const string_literal_globals_ir = self.string_literal_renderer.renderGlobals(self.string_literal_pool);
+        const string_literal_globals_ir = try self.string_literal_renderer.renderGlobals(self.string_literal_pool);
         if (string_literal_globals_ir.len > 0) {
-            module_preamble_buffer.writer(self.allocator).print("\n\n{s}", .{string_literal_globals_ir}) catch unreachable;
+            try module_preamble_buffer.print(self.arena, "\n\n{s}", .{string_literal_globals_ir});
         }
-        return std.fmt.allocPrint(self.allocator, "{s}", .{module_preamble_buffer.items}) catch unreachable;
+        return module_preamble_buffer.toOwnedSlice(self.arena);
     }
 
     /// Renders the functions that a type declares in its body.
     fn renderOwnedFunctionDefinitions(
         self: *@This(),
         lowered_program: *const lowering.LoweredProgram,
-    ) std.ArrayList([]const u8) {
+    ) !std.ArrayList([]const u8) {
         var owned_function_definitions = std.ArrayList([]const u8){};
 
         for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
             const function_definitions = switch (statement.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    inline .Structure, .Union => |type_definition| type_definition.function_definitions,
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    inline .structure, .@"union" => |type_definition| type_definition.function_definitions,
                     else => continue,
                 },
                 else => continue,
             };
-            self.appendOwnedFunctionDefinitions(
+            try self.appendOwnedFunctionDefinitions(
                 &owned_function_definitions,
                 function_definitions,
                 lowered_program,
@@ -198,21 +190,21 @@ pub const LlvmModuleRenderer = struct {
         owned_function_definitions: *std.ArrayList([]const u8),
         function_definitions: []const ast.Node,
         lowered_program: *const lowering.LoweredProgram,
-    ) void {
+    ) !void {
         for (function_definitions) |function_definition_node| {
             const function_definition = switch (function_definition_node.kind) {
-                .ItemDefinition => |item_definition| switch (item_definition.definition) {
-                    .Function => |function| function,
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .function => |function| function,
                     else => unreachable,
                 },
                 else => unreachable,
             };
-            const function_definition_emission = self.function_emitter.emitFunctionDefinition(
+            const function_definition_emission = try self.function_emitter.emitFunctionDefinition(
                 function_definition_node.id,
                 &function_definition,
                 lowered_program,
             );
-            owned_function_definitions.append(self.allocator, function_definition_emission) catch unreachable;
+            try owned_function_definitions.append(self.arena, function_definition_emission);
         }
     }
 };
