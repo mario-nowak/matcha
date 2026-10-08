@@ -127,6 +127,33 @@ pub const RuntimeCallEmitter = struct {
         return result_value;
     }
 
+    pub fn emitStartProcessCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        command_parts: RuntimeStringParts,
+        arguments_value: Value,
+    ) !Value {
+        self.runtime_requirements.start_process = true;
+        const result_address = try symbol_generator.generateSyntheticAddressName();
+        try builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "call void @{s}(ptr {s}, ptr {s}, i64 {s}, ptr {s})",
+            .{
+                runtime_symbols.builtin_start_process_function_name,
+                result_address,
+                command_parts.pointer_value,
+                command_parts.length_value,
+                arguments_value,
+            },
+        ));
+
+        const result_value = try symbol_generator.generateValueName();
+        try builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
+    }
+
     pub fn emitStringConcatenateCall(
         self: *@This(),
         builder: *FunctionIrBuilder,

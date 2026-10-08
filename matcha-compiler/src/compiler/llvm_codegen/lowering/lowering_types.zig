@@ -10,6 +10,7 @@ pub const BuiltinCallKind = enum {
     read_file,
     read_line,
     get_arguments,
+    start_process,
 };
 
 pub const UserFunctionCall = struct {

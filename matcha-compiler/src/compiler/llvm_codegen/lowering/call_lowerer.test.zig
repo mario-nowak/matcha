@@ -223,6 +223,20 @@ pub const CallLowerer = struct {
 
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .builtin = .get_arguments });
             }
+
+            test "lowers startProcess to a builtin call" {
+                const source =
+                    \\val output = startProcess("echo", ["hello"]);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .builtin = .start_process });
+            }
         };
 
         pub const methods = struct {

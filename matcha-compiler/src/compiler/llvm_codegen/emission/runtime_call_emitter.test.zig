@@ -76,6 +76,21 @@ pub const RuntimeCallEmitter = struct {
         }
     };
 
+    pub const emitStartProcessCall = struct {
+        test "records the start process runtime requirement" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
+            var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
+            var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
+            const command_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
+
+            _ = try runtime_call_emitter.emitStartProcessCall(&function_ir_builder, &function_symbol_generator, command_parts, "%arguments");
+
+            try expect(runtime_call_emitter.runtime_requirements).toMatch(.{ .start_process = true });
+        }
+    };
+
     pub const emitStringConcatenateCall = struct {
         test "records the string concatenate runtime requirement" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

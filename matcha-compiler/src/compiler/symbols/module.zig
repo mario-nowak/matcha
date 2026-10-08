@@ -96,6 +96,7 @@ pub const FunctionImplementationKind = union(enum) {
     builtin_read_file,
     builtin_read_line,
     builtin_get_arguments,
+    builtin_start_process,
 };
 
 pub const BindingMutability = enum {
