@@ -52,6 +52,7 @@ pub const RuntimeSymbolRenderer = struct {
                 .string_trim = true,
                 .string_split = true,
                 .string_to_int = true,
+                .string_slice = true,
                 .int_to_string = true,
                 .panic_index_out_of_bounds = true,
                 .panic_division_by_zero = true,
@@ -75,6 +76,7 @@ pub const RuntimeSymbolRenderer = struct {
                 \\declare void @matcha.compiler_module.builtin.type.string.method.trim(ptr, ptr, i64)
                 \\declare ptr @matcha.compiler_module.builtin.type.string.method.split(ptr, i64, ptr, i64)
                 \\declare i64 @matcha.compiler_module.builtin.type.string.method.toInt(ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.type.string.method.slice(ptr, ptr, i64, i64, i64)
                 \\declare void @matcha.compiler_module.builtin.type.int.method.toString(ptr, i64)
                 \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64, i64, i64, i64) noreturn
                 \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64, i64) noreturn

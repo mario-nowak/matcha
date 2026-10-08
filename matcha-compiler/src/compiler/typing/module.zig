@@ -236,6 +236,7 @@ pub const StringInstanceMethod = enum {
     trim,
     split,
     to_int,
+    slice,
 };
 
 pub const IntegerInstanceMethod = enum {

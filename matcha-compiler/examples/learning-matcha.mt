@@ -52,6 +52,8 @@ val trimmed_string = "    hello    ".trim();
 val string_as_int = "1337".toInt(); // `toInt` will panic for invalid strings.
 // Strings also have a byte-length field.
 val string_length = my_string.length;
+// `slice` returns the bytes from a start index up to, but not including, an end index.
+val first_letter = my_string.slice(0, 1); // "h". `slice` will panic for out-of-bounds ranges.
 
 // ### Arrays
 // Arrays are small headers that store the length and a pointer to the underlying data.

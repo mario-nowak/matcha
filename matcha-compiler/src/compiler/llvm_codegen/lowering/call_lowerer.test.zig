@@ -285,6 +285,21 @@ pub const CallLowerer = struct {
                 try expect(decisions.get(call_expression.id).?).toMatch(.{ .string_method = .to_int });
             }
 
+            test "lowers slice on a string to a string method call" {
+                const source =
+                    \\val text = "abc";
+                    \\val part = text.slice(0, 1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
+                const call_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.binding_declaration.value;
+
+                const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
+
+                try expect(decisions.get(call_expression.id).?).toMatch(.{ .string_method = .slice });
+            }
+
             test "lowers toString on an integer to an integer method call" {
                 const source =
                     \\val number = 1;

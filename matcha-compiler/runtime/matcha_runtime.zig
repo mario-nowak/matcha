@@ -19,6 +19,7 @@ comptime {
     @export(&stringTrim, .{ .name = runtime_symbols.builtin_string_trim_method_name });
     @export(&stringSplit, .{ .name = runtime_symbols.builtin_string_split_method_name });
     @export(&stringToInt, .{ .name = runtime_symbols.builtin_string_to_int_method_name });
+    @export(&stringSlice, .{ .name = runtime_symbols.builtin_string_slice_method_name });
     @export(&intToString, .{ .name = runtime_symbols.builtin_int_to_string_method_name });
     @export(&panicIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name });
     @export(&panicDivisionByZero, .{ .name = runtime_symbols.runtime_panic_division_by_zero_function_name });
@@ -403,6 +404,26 @@ fn stringSplit(
 
 fn stringToInt(ptr: [*]const u8, len: usize) callconv(.c) i64 {
     return std.fmt.parseInt(i64, ptr[0..len], 10) catch panic("runtime error: failed to parse int");
+}
+
+/// Returns the bytes from `start` up to, but not including, `end`. The result shares the bytes of the source string.
+fn stringSlice(out: *MatchaString, ptr: [*]const u8, len: usize, start: i64, end: i64) callconv(.c) void {
+    if (start < 0 or end < start or end > len) {
+        var buffer: [128]u8 = undefined;
+        const formatted = std.fmt.bufPrint(
+            &buffer,
+            "runtime error: string slice [{d}, {d}) is out of bounds for length {d}",
+            .{ start, end, len },
+        ) catch unreachable;
+        panic(formatted);
+    }
+
+    const start_index: usize = @intCast(start);
+    const end_index: usize = @intCast(end);
+    out.* = .{
+        .ptr = ptr + start_index,
+        .len = end_index - start_index,
+    };
 }
 
 fn intToString(out: *MatchaString, value: i64) callconv(.c) void {

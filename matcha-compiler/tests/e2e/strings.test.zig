@@ -67,3 +67,32 @@ test "printString with int argument reports a semantic diagnostic" {
 
     try e2e.expectCompileDiagnostic(&result, "function argument expects string, found int");
 }
+
+test "slice returns the bytes between start and end" {
+    const source =
+        \\val text = "{\"key\": 1}";
+        \\printString(text.slice(0, 1));
+        \\printString(text.slice(1, 6));
+        \\printInt(text.slice(3, 3).length);
+        \\printString(match text.slice(0, 1) {
+        \\    "{" => "object",
+        \\    else => "other",
+        \\});
+    ;
+
+    var result = try e2e.runSource("strings_slice.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "{\n\"key\"\n0\nobject\n");
+}
+
+test "slice reports a runtime error when the range is out of bounds" {
+    const source =
+        \\printString("abc".slice(2, 4));
+    ;
+
+    var result = try e2e.runSource("strings_slice_out_of_bounds.mt", source);
+    defer result.deinit();
+
+    try e2e.expectRuntimeError(&result, "runtime error: string slice [2, 4) is out of bounds for length 3");
+}

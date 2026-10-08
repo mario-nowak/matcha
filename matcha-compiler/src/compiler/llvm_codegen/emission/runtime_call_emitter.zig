@@ -266,6 +266,35 @@ pub const RuntimeCallEmitter = struct {
         return result_value;
     }
 
+    pub fn emitStringSliceCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        string_parts: RuntimeStringParts,
+        start_value: Value,
+        end_value: Value,
+    ) !Value {
+        self.runtime_requirements.string_slice = true;
+        const result_address = try symbol_generator.generateSyntheticAddressName();
+        try builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "call void @{s}(ptr {s}, ptr {s}, i64 {s}, i64 {s}, i64 {s})",
+            .{
+                runtime_symbols.builtin_string_slice_method_name,
+                result_address,
+                string_parts.pointer_value,
+                string_parts.length_value,
+                start_value,
+                end_value,
+            },
+        ));
+
+        const result_value = try symbol_generator.generateValueName();
+        try builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
+    }
+
     pub fn emitIntToStringCall(
         self: *@This(),
         builder: *FunctionIrBuilder,
