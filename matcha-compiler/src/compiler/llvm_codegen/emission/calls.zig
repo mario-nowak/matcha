@@ -374,6 +374,19 @@ fn emitStringMethodCall(
                 try emitter.emitStringParts(base_value),
             ) };
         },
+        .slice => {
+            if (call_expression.arguments.len != 2) unreachable;
+
+            const start_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            const end_value = try emitter.emitNode(&call_expression.arguments[1], lowered_program, environment);
+            return .{ .value = try emitter.runtime_call_emitter.emitStringSliceCall(
+                emitter.function_ir_builder,
+                emitter.function_symbol_generator,
+                try emitter.emitStringParts(base_value),
+                start_value.expectValue(),
+                end_value.expectValue(),
+            ) };
+        },
     }
 }
 
