@@ -62,6 +62,13 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.builtin_get_arguments_function_name},
             );
         }
+        if (requirements.start_process) {
+            try runtime_symbol_declarations.print(
+                self.arena,
+                "\ndeclare void @{s}(ptr, ptr, i64, ptr)",
+                .{runtime_symbols.builtin_start_process_function_name},
+            );
+        }
         if (requirements.string_concatenate) {
             try runtime_symbol_declarations.print(
                 self.arena,

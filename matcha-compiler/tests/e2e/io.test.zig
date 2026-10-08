@@ -42,3 +42,25 @@ test "readFile reads file contents from disk" {
 
     try e2e.expectSuccessOutput(&result, "matcha file input\n");
 }
+
+test "startProcess returns the stdout of the started process" {
+    const source =
+        \\printString(startProcess("echo", ["hello", "matcha"]).trim());
+    ;
+
+    var result = try e2e.runSource("io_start_process.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "hello matcha\n");
+}
+
+test "startProcess panics with the exit status and stderr when the process exits with a non-zero status" {
+    const source =
+        \\printString(startProcess("sh", ["-c", "echo oops >&2; exit 3"]));
+    ;
+
+    var result = try e2e.runSource("io_start_process_failure.mt", source);
+    defer result.deinit();
+
+    try e2e.expectRuntimeError(&result, "oops\nruntime error: process exited with status 3\n");
+}

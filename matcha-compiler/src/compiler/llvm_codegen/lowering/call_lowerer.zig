@@ -223,6 +223,7 @@ pub const CallLowerer = struct {
             .builtin_read_file => .read_file,
             .builtin_read_line => .read_line,
             .builtin_get_arguments => .get_arguments,
+            .builtin_start_process => .start_process,
             .user_defined => null,
         };
     }

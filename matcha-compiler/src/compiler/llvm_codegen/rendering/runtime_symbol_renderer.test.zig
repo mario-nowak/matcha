@@ -46,6 +46,7 @@ pub const RuntimeSymbolRenderer = struct {
                 .read_file = true,
                 .read_line = true,
                 .get_arguments = true,
+                .start_process = true,
                 .string_concatenate = true,
                 .string_compare = true,
                 .string_trim = true,
@@ -68,6 +69,7 @@ pub const RuntimeSymbolRenderer = struct {
                 \\declare void @matcha.compiler_module.builtin.function.readFile(ptr, ptr, i64)
                 \\declare void @matcha.compiler_module.builtin.function.readLine(ptr)
                 \\declare ptr @matcha.compiler_module.builtin.function.getArguments()
+                \\declare void @matcha.compiler_module.builtin.function.startProcess(ptr, ptr, i64, ptr)
                 \\declare void @matcha.compiler_module.runtime.function.stringConcatenate(ptr, ptr, i64, ptr, i64)
                 \\declare i1 @matcha.compiler_module.runtime.function.stringCompare(ptr, i64, ptr, i64)
                 \\declare void @matcha.compiler_module.builtin.type.string.method.trim(ptr, ptr, i64)

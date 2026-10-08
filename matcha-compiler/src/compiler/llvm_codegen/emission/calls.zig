@@ -186,6 +186,17 @@ fn emitBuiltinCall(
                 emitter.function_symbol_generator,
             ) };
         },
+        .start_process => {
+            if (call_expression.arguments.len != 2) unreachable;
+            const command_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            const arguments_value = try emitter.emitNode(&call_expression.arguments[1], lowered_program, environment);
+            return .{ .value = try emitter.runtime_call_emitter.emitStartProcessCall(
+                emitter.function_ir_builder,
+                emitter.function_symbol_generator,
+                try emitter.emitStringParts(command_value.expectValue()),
+                arguments_value.expectValue(),
+            ) };
+        },
     }
 }
 

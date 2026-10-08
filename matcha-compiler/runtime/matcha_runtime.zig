@@ -13,6 +13,7 @@ comptime {
     @export(&readLine, .{ .name = runtime_symbols.builtin_read_line_function_name });
     @export(&initArguments, .{ .name = runtime_symbols.runtime_init_arguments_function_name });
     @export(&getArguments, .{ .name = runtime_symbols.builtin_get_arguments_function_name });
+    @export(&startProcess, .{ .name = runtime_symbols.builtin_start_process_function_name });
     @export(&stringConcatenate, .{ .name = runtime_symbols.runtime_string_concatenate_function_name });
     @export(&stringCompare, .{ .name = runtime_symbols.runtime_string_compare_function_name });
     @export(&stringTrim, .{ .name = runtime_symbols.builtin_string_trim_method_name });
@@ -263,6 +264,49 @@ fn initArguments(argument_count_from_main: i32, argument_values_raw: *anyopaque)
 fn getArguments() callconv(.c) *ArrayHeader {
     const arguments_header = cached_program_arguments orelse panic("runtime error: program arguments were not initialized");
     return cloneArguments(arguments_header);
+}
+
+fn startProcess(
+    out: *MatchaString,
+    command_ptr: [*]const u8,
+    command_len: usize,
+    arguments_header: *const ArrayHeader,
+) callconv(.c) void {
+    const argument_count: usize = @intCast(arguments_header.length);
+    const argv = std.heap.page_allocator.alloc([]const u8, argument_count + 1) catch panic("runtime error: out of memory");
+    defer std.heap.page_allocator.free(argv);
+
+    argv[0] = command_ptr[0..command_len];
+    if (argument_count > 0) {
+        const arguments: [*]const MatchaString = @ptrCast(@alignCast(arguments_header.data.?));
+        for (arguments[0..argument_count], argv[1..]) |argument, *slot| {
+            slot.* = argument.ptr[0..argument.len];
+        }
+    }
+
+    const result = std.process.Child.run(.{
+        .allocator = std.heap.page_allocator,
+        .argv = argv,
+        .max_output_bytes = std.math.maxInt(usize),
+    }) catch panic("runtime error: failed to start process");
+    defer std.heap.page_allocator.free(result.stdout);
+    defer std.heap.page_allocator.free(result.stderr);
+
+    var buffer: [64]u8 = undefined;
+    const failure_message = switch (result.term) {
+        .Exited => |exit_code| if (exit_code == 0)
+            null
+        else
+            std.fmt.bufPrint(&buffer, "runtime error: process exited with status {d}", .{exit_code}) catch unreachable,
+        else => "runtime error: process terminated abnormally",
+    };
+    if (failure_message) |message| {
+        // Forward the stderr of the process, so the panic shows why it failed.
+        writeTo(stderr_fd, result.stderr);
+        panic(message);
+    }
+
+    out.* = copyBytesToAtomic(result.stdout);
 }
 
 fn stringConcatenate(

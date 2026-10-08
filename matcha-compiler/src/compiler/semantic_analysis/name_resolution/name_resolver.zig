@@ -73,6 +73,7 @@ pub const NameResolver = struct {
         try self.addReadFileBuiltinFunction(module_scope);
         try self.addReadLineBuiltinFunction(module_scope);
         try self.addGetArgumentsBuiltinFunction(module_scope);
+        try self.addStartProcessBuiltinFunction(module_scope);
     }
 
     fn addPrintIntBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
@@ -164,6 +165,40 @@ pub const NameResolver = struct {
             } },
         });
         try module_scope.insertSymbol("getArguments", function_id);
+    }
+
+    fn addStartProcessBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+        const string_type_reference = try self.arena.create(symbols.ResolvedTypeReference);
+        string_type_reference.* = .{ .builtin = .string };
+        const command_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "command",
+            .declared_at = null,
+            .kind = .{ .binding = .{
+                .binding_mutability = .immutable,
+                .declared_type_reference = .{ .builtin = .string },
+            } },
+        });
+        const arguments_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "arguments",
+            .declared_at = null,
+            .kind = .{ .binding = .{
+                .binding_mutability = .immutable,
+                .declared_type_reference = .{ .array = string_type_reference },
+            } },
+        });
+        const function_id = try self.symbol_table.insertSymbol(.{
+            .name = "startProcess",
+            .declared_at = null,
+            .kind = .{ .function = .{
+                .parameter_symbol_ids = try self.arena.dupe(
+                    symbols.SymbolId,
+                    &.{ command_parameter_id, arguments_parameter_id },
+                ),
+                .return_type_reference = .{ .builtin = .string },
+                .implementation_kind = .builtin_start_process,
+            } },
+        });
+        try module_scope.insertSymbol("startProcess", function_id);
     }
 
     fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {

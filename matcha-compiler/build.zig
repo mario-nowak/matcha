@@ -309,6 +309,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("runtime/matcha_runtime.zig"),
         .target = target,
         .optimize = optimize,
+        // `startProcess` needs libc on Linux to read the environment it forwards to the child process.
+        .link_libc = true,
         .imports = &.{
             .{ .name = "runtime_symbols", .module = runtime_symbols_module },
         },
