@@ -149,7 +149,7 @@ pub const NodeEmitter = struct {
             ) },
             .unit_literal => return .zero_sized,
             .identifier => return values.emitIdentifier(self, node, lowered_program, environment),
-            .loop => |loop| return control_flow.emitLoop(self, &loop, lowered_program, environment),
+            .loop => |loop| return control_flow.emitLoop(self, node, &loop, lowered_program, environment),
             .@"while" => |while_statement| return control_flow.emitWhile(
                 self,
                 &while_statement,

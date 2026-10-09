@@ -143,3 +143,25 @@ test "statement-position match with non-unit arms reports a semantic diagnostic"
 
     try e2e.expectCompileDiagnostic(&result, "match expression used as a statement must evaluate to unit");
 }
+
+test "match arms that return from the function leave the value to the other arms" {
+    const source =
+        \\item Result = union { Ok: int, Error: string };
+        \\item describe(result: Result): string = {
+        \\    val value = match result {
+        \\        .Error(message) => {
+        \\            return "error: " + message;
+        \\        },
+        \\        .Ok(value) => value,
+        \\    };
+        \\    return "ok: " + value.toString();
+        \\};
+        \\printString(describe(.Ok(21)));
+        \\printString(describe(.Error("boom")));
+    ;
+
+    var result = try e2e.runSource("match_returning_arms.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "ok: 21\nerror: boom\n");
+}

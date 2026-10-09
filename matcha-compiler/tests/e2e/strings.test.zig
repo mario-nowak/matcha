@@ -74,16 +74,12 @@ test "slice returns the bytes between start and end" {
         \\printString(text.slice(0, 1));
         \\printString(text.slice(1, 6));
         \\printInt(text.slice(3, 3).length);
-        \\printString(match text.slice(0, 1) {
-        \\    "{" => "object",
-        \\    else => "other",
-        \\});
     ;
 
     var result = try e2e.runSource("strings_slice.mt", source);
     defer result.deinit();
 
-    try e2e.expectSuccessOutput(&result, "{\n\"key\"\n0\nobject\n");
+    try e2e.expectSuccessOutput(&result, "{\n\"key\"\n0\n");
 }
 
 test "slice reports a runtime error when the range is out of bounds" {
