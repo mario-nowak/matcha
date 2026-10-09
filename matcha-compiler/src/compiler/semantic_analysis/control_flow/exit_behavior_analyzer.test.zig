@@ -85,6 +85,87 @@ pub const ExitBehaviorAnalyzer = struct {
             }
         };
 
+        pub const loops = struct {
+            test "marks a loop as terminating when no leave targets it" {
+                const source =
+                    \\item spin(): unit = {
+                    \\    loop {
+                    \\        printInt(1);
+                    \\    }
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
+                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+
+                const result = try fixture.analyzer.analyzeProgram(&fixture.program);
+
+                try expect(result.get(loop.id).?).toMatch(.terminates);
+            }
+
+            test "marks a loop as falling through without a value when a leave targets it" {
+                const source =
+                    \\item stop(): unit = {
+                    \\    loop {
+                    \\        leave;
+                    \\    }
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
+                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+
+                const result = try fixture.analyzer.analyzeProgram(&fixture.program);
+
+                try expect(result.get(loop.id).?).toMatch(.falls_through_without_value);
+            }
+
+            test "marks a loop as terminating when only a nested loop has a leave" {
+                const source =
+                    \\item spin(): unit = {
+                    \\    loop {
+                    \\        while true {
+                    \\            leave;
+                    \\        }
+                    \\    }
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
+                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+
+                const result = try fixture.analyzer.analyzeProgram(&fixture.program);
+
+                try expect(result.get(loop.id).?).toMatch(.terminates);
+            }
+
+            test "rejects a non-unit function when a leave exits a loop whose body returns" {
+                const source =
+                    \\item pick(stop: boolean): int = {
+                    \\    loop {
+                    \\        if stop {
+                    \\            leave;
+                    \\        }
+                    \\        return 1;
+                    \\    }
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
+
+                const result = fixture.analyzer.analyzeProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "not all control-flow paths in this function return a value" },
+                });
+            }
+        };
+
         pub const match_expressions = struct {
             test "marks a match as falling through without a value when one arm leaves and another produces a value" {
                 const source =

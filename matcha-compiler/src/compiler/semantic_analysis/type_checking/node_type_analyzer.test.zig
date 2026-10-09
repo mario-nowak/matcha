@@ -1243,6 +1243,50 @@ pub const NodeTypeAnalyzer = struct {
             }
         };
 
+        pub const if_expressions = struct {
+            test "takes the else branch type when the then branch returns from the function" {
+                const source =
+                    \\item clamp(number: int): int = {
+                    \\    val clamped = if number > 9 {
+                    \\        return 9;
+                    \\    } else {
+                    \\        number
+                    \\    };
+                    \\    return clamped;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const if_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(if_node.id).?)).toMatch(.integer);
+            }
+
+            test "takes the then branch type when the else branch returns from the function" {
+                const source =
+                    \\item clamp(number: int): int = {
+                    \\    val clamped = if number <= 9 {
+                    \\        number
+                    \\    } else {
+                    \\        return 9;
+                    \\    };
+                    \\    return clamped;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const if_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(if_node.id).?)).toMatch(.integer);
+            }
+        };
+
         pub const match_expressions = struct {
             test "rejects a duplicate negative integer arm" {
                 const source =
@@ -1378,6 +1422,75 @@ pub const NodeTypeAnalyzer = struct {
                 });
             }
 
+            test "takes the type of the other arms when an arm returns from the function" {
+                const source =
+                    \\item parse(text: string): int = {
+                    \\    val number = match text {
+                    \\        "" => {
+                    \\            return -1;
+                    \\        },
+                    \\        else => text.toInt(),
+                    \\    };
+                    \\    return number;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
+            }
+
+            test "takes the type of the arms when the else arm returns from the function" {
+                const source =
+                    \\item parse(text: string): int = {
+                    \\    val number = match text {
+                    \\        "one" => 1,
+                    \\        else => {
+                    \\            return -1;
+                    \\        },
+                    \\    };
+                    \\    return number;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
+            }
+
+            test "rejects arms that produce different types when another arm returns from the function" {
+                const source =
+                    \\item parse(text: string): int = {
+                    \\    val number = match text {
+                    \\        "" => {
+                    \\            return -1;
+                    \\        },
+                    \\        "one" => "1",
+                    \\        else => 2,
+                    \\    };
+                    \\    return number;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "match else arm must produce the same type as other arms, expected string, found int" },
+                });
+            }
+
             test "rejects a match without an else arm when the patterns do not cover every value" {
                 const source =
                     \\val name = match 1 {
@@ -1449,6 +1562,29 @@ pub const NodeTypeAnalyzer = struct {
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                 const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
+            }
+
+            test "takes the type of the other arms when a case arm returns from the function" {
+                const source =
+                    \\item Result = union { Ok: int, Error: string };
+                    \\item unwrap(result: Result): int = {
+                    \\    val number = match result {
+                    \\        .Error => {
+                    \\            return -1;
+                    \\        },
+                    \\        .Ok(number) => number,
+                    \\    };
+                    \\    return number;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[1].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1780,6 +1916,28 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "match else arm must produce the same type as other arms, expected string, found int" },
                 });
+            }
+
+            test "takes the type of the other arms when an arm returns from the function" {
+                const source =
+                    \\item clamp(number: int): int = {
+                    \\    val clamped = match {
+                    \\        number > 9 => {
+                    \\            return 9;
+                    \\        },
+                    \\        else => number,
+                    \\    };
+                    \\    return clamped;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+
+                const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result.type_store.getType(result.type_id_by_node_id.get(match_node.id).?)).toMatch(.integer);
             }
 
             test "rejects a match without an else arm" {

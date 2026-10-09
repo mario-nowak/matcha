@@ -45,6 +45,26 @@ test "while loops and headless loops update values until leave" {
     try e2e.expectSuccessOutput(&result, "10\n");
 }
 
+test "a function can end with a loop that only exits through return" {
+    const source =
+        \\item firstAbove(numbers: int[], limit: int): int = {
+        \\    var index = 0;
+        \\    loop {
+        \\        if numbers[index] > limit {
+        \\            return numbers[index];
+        \\        }
+        \\        index += 1;
+        \\    }
+        \\};
+        \\printInt(firstAbove([1, 5, 9], 4));
+    ;
+
+    var result = try e2e.runSource("loop_exits_through_return.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "5\n");
+}
+
 test "one-branch if without braces reports a parser diagnostic" {
     const source =
         \\if true printInt(1);
@@ -78,6 +98,26 @@ test "non-boolean while condition reports a semantic diagnostic" {
     defer result.deinit();
 
     try e2e.expectCompileDiagnostic(&result, "while condition must be boolean, found int");
+}
+
+test "an if-expression branch that returns from the function leaves the value to the other branch" {
+    const source =
+        \\item clamp(number: int): int = {
+        \\    val doubled = if number > 100 {
+        \\        return 100;
+        \\    } else {
+        \\        number * 2
+        \\    };
+        \\    return doubled;
+        \\};
+        \\printInt(clamp(21));
+        \\printInt(clamp(101));
+    ;
+
+    var result = try e2e.runSource("if_expression_returning_branch.mt", source);
+    defer result.deinit();
+
+    try e2e.expectSuccessOutput(&result, "42\n100\n");
 }
 
 test "mismatched if-expression branches report a semantic diagnostic" {

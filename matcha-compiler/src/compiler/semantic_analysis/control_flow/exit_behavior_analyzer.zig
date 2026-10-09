@@ -13,12 +13,15 @@ pub const ExitBehaviorAnalyzer = struct {
     diagnostic_store: *diagnostics.DiagnosticStore,
     arena: std.mem.Allocator,
     exit_behavior_by_node_id: ExitBehaviorByNodeId,
+    // Whether a `leave` targets the innermost loop that is being analyzed.
+    innermost_loop_has_leave: bool,
 
     pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) @This() {
         return .{
             .diagnostic_store = diagnostic_store,
             .arena = arena,
             .exit_behavior_by_node_id = ExitBehaviorByNodeId.init(arena),
+            .innermost_loop_has_leave = false,
         };
     }
 
@@ -88,7 +91,7 @@ pub const ExitBehaviorAnalyzer = struct {
             .loop => |loop| try self.validateLoopNode(node, loop),
             .@"while" => |while_statement| try self.validateWhileNode(node, while_statement),
             .for_in => |for_in| try self.validateForInNode(node, for_in),
-            .leave_statement => try self.markNodeExitBehavior(node, .falls_through_without_value),
+            .leave_statement => try self.validateLeaveStatementNode(node),
             .continue_statement => try self.markNodeExitBehavior(node, .falls_through_without_value),
             .if_expression => |if_expression| try self.validateIfExpressionNode(node, if_expression),
             .match_expression => |match_expression| try self.validateMatchExpressionNode(node, match_expression),
@@ -215,10 +218,26 @@ pub const ExitBehaviorAnalyzer = struct {
         return result;
     }
 
+    fn validateLeaveStatementNode(self: *@This(), node: *const ast.Node) CompileError!ExitBehavior {
+        self.innermost_loop_has_leave = true;
+        return self.markNodeExitBehavior(node, .falls_through_without_value);
+    }
+
+    /// A `loop` only ends through `leave`. Without one, it never falls through: it returns or runs forever.
     fn validateLoopNode(self: *@This(), node: *const ast.Node, loop: ast.Loop) CompileError!ExitBehavior {
-        const result = try self.validateTerminatesWithValue(loop.body_block);
-        _ = try self.markNodeExitBehavior(node, result);
-        return result;
+        const has_leave = try self.validateLoopBodyHasLeave(loop.body_block);
+        return self.markNodeExitBehavior(node, if (has_leave) .falls_through_without_value else .terminates);
+    }
+
+    /// Analyzes a loop body and reports whether a `leave` in it targets this loop. A `leave` inside a nested loop
+    /// targets the nested loop instead.
+    fn validateLoopBodyHasLeave(self: *@This(), body_block: *const ast.Node) CompileError!bool {
+        const outer_loop_has_leave = self.innermost_loop_has_leave;
+        defer self.innermost_loop_has_leave = outer_loop_has_leave;
+
+        self.innermost_loop_has_leave = false;
+        _ = try self.validateTerminatesWithValue(body_block);
+        return self.innermost_loop_has_leave;
     }
 
     fn validateWhileNode(
@@ -238,7 +257,7 @@ pub const ExitBehaviorAnalyzer = struct {
             }
         }
 
-        _ = try self.validateTerminatesWithValue(while_statement.body_block);
+        _ = try self.validateLoopBodyHasLeave(while_statement.body_block);
         return self.markNodeExitBehavior(node, .falls_through_without_value);
     }
 
@@ -248,7 +267,7 @@ pub const ExitBehaviorAnalyzer = struct {
             return self.markNodeExitBehavior(node, .terminates);
         }
 
-        _ = try self.validateTerminatesWithValue(for_in.body_block);
+        _ = try self.validateLoopBodyHasLeave(for_in.body_block);
         return self.markNodeExitBehavior(node, .falls_through_without_value);
     }
 

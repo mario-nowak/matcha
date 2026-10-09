@@ -19,6 +19,8 @@ const LoopConstruct = struct {
     condition: ?*ast.Node,
     update: ?*ast.Node,
     body_block: *const ast.Block,
+    // A `loop` without `leave` never reaches its exit, so it gets no exit block and the code after it is unreachable.
+    never_exits: bool,
 };
 
 const DecisionConstruct = struct {
@@ -225,6 +227,7 @@ pub fn emitSubjectlessMatchExpression(
 
 pub fn emitLoop(
     emitter: *NodeEmitter,
+    node: *const ast.Node,
     loop: *const ast.Loop,
     lowered_program: *const lowering.LoweredProgram,
     environment: *Environment,
@@ -241,6 +244,12 @@ pub fn emitLoop(
             .condition = null,
             .body_block = body_block,
             .update = null,
+            // The exit behavior analysis only covers function bodies, so a loop outside a function always gets an
+            // exit block.
+            .never_exits = if (lowered_program.analyzed_program.exit_behavior_by_node_id.get(node.id)) |exit_behavior|
+                exit_behavior == .terminates
+            else
+                false,
         },
         lowered_program,
         environment,
@@ -265,6 +274,7 @@ pub fn emitWhile(
             .condition = while_statement.condition,
             .body_block = body_block,
             .update = while_statement.update,
+            .never_exits = false,
         },
         lowered_program,
         environment,
@@ -433,7 +443,9 @@ fn emitLoopConstruct(
     }
     try builder.emitBranchInstruction(null, &.{loop_header_label});
 
-    try builder.emitLabel(loop_exit_label);
+    if (!loop_construct.never_exits) {
+        try builder.emitLabel(loop_exit_label);
+    }
     environment.loop_context = previous_loop_context;
 
     return .statement;

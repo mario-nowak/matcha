@@ -1355,11 +1355,22 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         const then_block_type = try self.checkNode(if_expression.then_block, parent_node_expectation.forwarded(), environment);
+        const then_block_terminates = self.terminates(if_expression.then_block);
         const else_block_type = try self.checkNode(
             if_expression.else_block,
-            getBranchExpectation(parent_node_expectation, then_block_type),
+            getBranchExpectation(parent_node_expectation, if (then_block_terminates) null else then_block_type),
             environment,
         );
+
+        // If either the "then" or "else" block terminate this control flow path they cannot produce a value, hence
+        // the if expression has the type of the non terminating path.
+        if (then_block_terminates) {
+            return self.recordNodeType(node_id, else_block_type);
+        }
+        if (self.terminates(if_expression.else_block)) {
+            return self.recordNodeType(node_id, then_block_type);
+        }
+
         if (then_block_type != else_block_type) {
             try self.diagnostic_store.emitFormattedErrorFromToken(
                 self.arena,
@@ -1801,6 +1812,9 @@ pub const NodeTypeAnalyzer = struct {
             getBranchExpectation(parent_node_expectation, arm_result_type.*),
             environment,
         );
+        if (self.terminates(arm_body)) {
+            return;
+        }
         if (arm_result_type.*) |expected_type| {
             if (expected_type != body_type) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -1828,6 +1842,9 @@ pub const NodeTypeAnalyzer = struct {
             getBranchExpectation(parent_node_expectation, arm_result_type.*),
             environment,
         );
+        if (self.terminates(else_arm)) {
+            return;
+        }
         if (arm_result_type.*) |expected_type| {
             if (expected_type != else_type) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(
@@ -1887,6 +1904,14 @@ pub const NodeTypeAnalyzer = struct {
         }
 
         return result_type;
+    }
+
+    /// A branch that terminates on every path, for example a block that ends in `return`, never produces a value. So
+    /// it takes no part when its sibling branches agree on a type. The exit behavior analysis only covers function
+    /// bodies, so nodes outside functions never terminate.
+    fn terminates(self: *const @This(), node: *const ast.Node) bool {
+        const exit_behavior = self.exit_behavior_by_node_id.get(node.id) orelse return false;
+        return exit_behavior == .terminates;
     }
 
     fn recordNodeType(
