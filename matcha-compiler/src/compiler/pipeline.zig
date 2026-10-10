@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const lexing = @import("lexing");
 const ast = @import("ast");
 const parsing = @import("parsing");
+const sources = @import("sources");
 const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
 const llvm_codegen = @import("llvm_codegen");
@@ -11,7 +12,7 @@ pub fn generateLlvmIrFromFile(
     arena: std.mem.Allocator,
     input_path: []const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
-    source_registry: *diagnostics.SourceRegistry,
+    source_registry: *sources.SourceRegistry,
 ) ![]const u8 {
     const file_contents = readInputFile(arena, input_path) catch |read_error| {
         var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
@@ -119,7 +120,7 @@ pub fn emitFile(
     input_path: []const u8,
     output_path: ?[]const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
-    source_registry: *diagnostics.SourceRegistry,
+    source_registry: *sources.SourceRegistry,
 ) !void {
     const llvm_ir = try generateLlvmIrFromFile(arena, input_path, diagnostic_store, source_registry);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(arena, input_path);

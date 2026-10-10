@@ -1,4 +1,4 @@
-const ModuleId = @import("source_registry.zig").ModuleId;
+const ModuleId = @import("sources").ModuleId;
 
 pub const DiagnosticSpan = struct {
     module_id: ModuleId,

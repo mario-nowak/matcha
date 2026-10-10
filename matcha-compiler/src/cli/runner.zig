@@ -2,6 +2,7 @@ const std = @import("std");
 const build_options = @import("build_options");
 const matcha = @import("matcha");
 
+const sources = matcha.compiler.sources;
 const diagnostics = matcha.compiler.diagnostics;
 const Command = @import("command.zig").Command;
 const parser = @import("parser.zig");
@@ -21,7 +22,7 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .emit => |emit_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
-            var source_registry = diagnostics.SourceRegistry.init(arena);
+            var source_registry = sources.SourceRegistry.init(arena);
 
             matcha.compiler.pipeline.emitFile(
                 arena,
@@ -40,7 +41,7 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .build => |build_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
-            var source_registry = diagnostics.SourceRegistry.init(arena);
+            var source_registry = sources.SourceRegistry.init(arena);
 
             _ = matcha.toolchain.buildFile(
                 arena,
@@ -59,7 +60,7 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .run => |run_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
-            var source_registry = diagnostics.SourceRegistry.init(arena);
+            var source_registry = sources.SourceRegistry.init(arena);
 
             return matcha.toolchain.runFile(
                 arena,
@@ -98,7 +99,7 @@ pub fn reportUnreportedError(run_error: anyerror) void {
 }
 
 fn handleCompilationError(
-    source_registry: *const diagnostics.SourceRegistry,
+    source_registry: *const sources.SourceRegistry,
     diagnostic_store: *diagnostics.DiagnosticStore,
     compilation_error: anyerror,
 ) !u8 {

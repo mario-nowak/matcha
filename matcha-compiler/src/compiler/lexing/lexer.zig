@@ -1,4 +1,5 @@
 const std = @import("std");
+const sources = @import("sources");
 const diagnostics = @import("diagnostics");
 const CompileError = diagnostics.CompileError;
 const tokens = @import("token.zig");
@@ -7,7 +8,7 @@ const Token = tokens.Token;
 
 pub const Lexer = struct {
     source: []const u8,
-    module_id: diagnostics.ModuleId,
+    module_id: sources.ModuleId,
     line: usize,
     column: usize,
     offset_in_source: usize,
@@ -17,7 +18,7 @@ pub const Lexer = struct {
 
     pub fn init(
         source: []const u8,
-        module_id: diagnostics.ModuleId,
+        module_id: sources.ModuleId,
         arena: std.mem.Allocator,
         diagnostic_store: *diagnostics.DiagnosticStore,
     ) Lexer {

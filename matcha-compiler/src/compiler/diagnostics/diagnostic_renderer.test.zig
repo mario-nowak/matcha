@@ -1,12 +1,13 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
+const sources = @import("sources");
 
 pub const DiagnosticRenderer = struct {
     pub const render = struct {
         test "shows the path and line of the module that the diagnostic belongs to" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
-            var source_registry = diagnostics.SourceRegistry.init(arena.allocator());
+            var source_registry = sources.SourceRegistry.init(arena.allocator());
             _ = try source_registry.add("main.mt", "val main = 1;\n");
             const imported_module_id = try source_registry.add("imported.mt", "val imported = 2;\n");
             var output = std.Io.Writer.Allocating.init(arena.allocator());

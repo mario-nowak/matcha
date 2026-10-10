@@ -1,6 +1,6 @@
 const std = @import("std");
 const Diagnostic = @import("diagnostic.zig").Diagnostic;
-const SourceRegistry = @import("source_registry.zig").SourceRegistry;
+const SourceRegistry = @import("sources").SourceRegistry;
 
 pub const DiagnosticRenderer = struct {
     pub fn render(writer: *std.Io.Writer, source_registry: *const SourceRegistry, diagnostics: []const Diagnostic) !void {

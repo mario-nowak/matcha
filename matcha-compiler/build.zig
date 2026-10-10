@@ -33,15 +33,24 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
+    const sources_module = b.addModule("sources", .{
+        .root_source_file = b.path("src/compiler/sources/module.zig"),
+        .target = target,
+    });
+
     const diagnostics_module = b.addModule("diagnostics", .{
         .root_source_file = b.path("src/compiler/diagnostics/module.zig"),
         .target = target,
+        .imports = &.{
+            .{ .name = "sources", .module = sources_module },
+        },
     });
 
     const lexing_module = b.addModule("lexing", .{
         .root_source_file = b.path("src/compiler/lexing/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
         },
     });
@@ -169,6 +178,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "typing", .module = typing_module },
             .{ .name = "runtime_symbols", .module = runtime_symbols_module },
@@ -209,6 +219,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },

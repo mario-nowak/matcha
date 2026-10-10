@@ -1,4 +1,4 @@
-const diagnostics = @import("diagnostics");
+const sources = @import("sources");
 
 pub const TokenKind = union(enum) {
     // Keywords
@@ -57,7 +57,7 @@ pub const TokenKind = union(enum) {
 };
 
 pub const Token = struct {
-    module_id: diagnostics.ModuleId,
+    module_id: sources.ModuleId,
     line: usize,
     column: usize,
     offset_in_source: usize,
