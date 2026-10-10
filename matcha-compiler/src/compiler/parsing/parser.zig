@@ -19,10 +19,10 @@ pub const BlockItem = union(enum) {
 };
 
 pub const Parser = struct {
-    lexer: lexing.Lexer,
     arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
     next_node_id: ast.NodeId = 0,
+    lexer: lexing.Lexer = undefined,
 
     const ParseState = struct {
         current_binding_power: f64 = 0.0,
@@ -34,9 +34,8 @@ pub const Parser = struct {
         right_binding_power: f64,
     };
 
-    pub fn init(lexer: lexing.Lexer, arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Parser {
+    pub fn init(arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Parser {
         return .{
-            .lexer = lexer,
             .arena = arena,
             .diagnostic_store = diagnostic_store,
         };
@@ -48,7 +47,8 @@ pub const Parser = struct {
         return .{ .id = id, .kind = kind };
     }
 
-    pub fn parse(self: *Parser) !ast.Module {
+    pub fn parse(self: *Parser, lexer: lexing.Lexer) !ast.Module {
+        self.lexer = lexer;
         var statements = std.ArrayList(ast.Node){};
 
         while (true) {
