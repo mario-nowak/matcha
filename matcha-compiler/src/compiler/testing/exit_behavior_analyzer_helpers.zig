@@ -2,7 +2,7 @@ const std = @import("std");
 const ast = @import("ast");
 const diagnostics = @import("diagnostics");
 const ExitBehaviorAnalyzer = @import("semantic_analysis").control_flow_validation.ExitBehaviorAnalyzer;
-const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
+const setupParserFixture = @import("parser_helpers.zig").setupParserFixture;
 
 const ExitBehaviorAnalyzerFixture = struct {
     program: ast.Program,
@@ -15,15 +15,15 @@ pub fn setupExitBehaviorAnalyzerFixture(
     source: []const u8,
 ) !ExitBehaviorAnalyzerFixture {
     const arena = arena_state.allocator();
-    const parser_pipeline = try setupParserPipeline(arena_state, source);
-    const module = try parser_pipeline.parser.parse();
+    const parser_fixture = try setupParserFixture(arena_state, source);
+    const module = try parser_fixture.parser.parse(parser_fixture.lexer.*);
     const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
     const analyzer = try arena.create(ExitBehaviorAnalyzer);
-    analyzer.* = ExitBehaviorAnalyzer.init(arena, parser_pipeline.diagnostic_store);
+    analyzer.* = ExitBehaviorAnalyzer.init(arena, parser_fixture.diagnostic_store);
 
     return .{
         .program = program,
         .analyzer = analyzer,
-        .diagnostic_store = parser_pipeline.diagnostic_store,
+        .diagnostic_store = parser_fixture.diagnostic_store,
     };
 }

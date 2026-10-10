@@ -20,8 +20,8 @@ pub fn generateLlvmIrFromFile(
 
     const lexer = lexing.Lexer.init(file_contents, arena, diagnostic_store);
 
-    var parser = parsing.Parser.init(lexer, arena, diagnostic_store);
-    const module = try parser.parse();
+    var parser = parsing.Parser.init(arena, diagnostic_store);
+    const module = try parser.parse(lexer);
     const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(arena, diagnostic_store);
