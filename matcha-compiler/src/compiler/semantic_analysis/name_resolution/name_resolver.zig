@@ -37,11 +37,11 @@ pub const NameResolver = struct {
         };
     }
 
-    pub fn resolveProgram(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
+    pub fn resolveProgram(self: *@This(), program: *const ast.Module) !symbols.ResolvedProgram {
         return try self.resolveModule(program);
     }
 
-    fn resolveModule(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
+    fn resolveModule(self: *@This(), program: *const ast.Module) !symbols.ResolvedProgram {
         var root_scope = scope.Scope.init(self.arena, null);
         self.symbol_table = symbols.SymbolTable.init(self.arena);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
@@ -201,7 +201,7 @@ pub const NameResolver = struct {
         try module_scope.insertSymbol("startProcess", function_id);
     }
 
-    fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {
+    fn buildModuleScope(self: *@This(), program: *const ast.Module) CompileError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.arena, null);
         // Builtins come first, so the duplicate checks of the module items see them.
         try self.addBuiltinFunctions(&module_scope);

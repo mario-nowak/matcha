@@ -48,7 +48,7 @@ pub const Parser = struct {
         return .{ .id = id, .kind = kind };
     }
 
-    pub fn parse(self: *Parser) !ast.Program {
+    pub fn parse(self: *Parser) !ast.Module {
         var statements = std.ArrayList(ast.Node){};
 
         while (true) {
@@ -61,7 +61,7 @@ pub const Parser = struct {
             try statements.append(self.arena, statement);
         }
 
-        return ast.Program{
+        return ast.Module{
             .statements = try statements.toOwnedSlice(self.arena),
         };
     }

@@ -348,6 +348,6 @@ pub const IndexExpression = struct {
     right_bracket: lexing.Token,
 };
 
-pub const Program = struct {
+pub const Module = struct {
     statements: []Node,
 };
