@@ -5,7 +5,7 @@ const NameResolver = @import("semantic_analysis").name_resolution.NameResolver;
 const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
 
 const NameResolverFixture = struct {
-    program: ast.Program,
+    program: ast.Module,
     resolver: *NameResolver,
     diagnostic_store: *diagnostics.DiagnosticStore,
 };

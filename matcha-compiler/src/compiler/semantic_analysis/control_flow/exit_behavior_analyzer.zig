@@ -27,7 +27,7 @@ pub const ExitBehaviorAnalyzer = struct {
 
     pub fn analyzeProgram(
         self: *@This(),
-        program: *const ast.Program,
+        program: *const ast.Module,
     ) CompileError!ExitBehaviorByNodeId {
         self.exit_behavior_by_node_id.clearRetainingCapacity();
 

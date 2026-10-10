@@ -5,7 +5,7 @@ const StructuralValidator = @import("semantic_analysis").control_flow_validation
 const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
 
 const StructuralValidatorFixture = struct {
-    program: ast.Program,
+    program: ast.Module,
     validator: *StructuralValidator,
     diagnostic_store: *diagnostics.DiagnosticStore,
 };

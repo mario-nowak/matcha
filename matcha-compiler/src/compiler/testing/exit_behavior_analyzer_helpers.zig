@@ -5,7 +5,7 @@ const ExitBehaviorAnalyzer = @import("semantic_analysis").control_flow_validatio
 const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
 
 const ExitBehaviorAnalyzerFixture = struct {
-    program: ast.Program,
+    program: ast.Module,
     analyzer: *ExitBehaviorAnalyzer,
     diagnostic_store: *diagnostics.DiagnosticStore,
 };
