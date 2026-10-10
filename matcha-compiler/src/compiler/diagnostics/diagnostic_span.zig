@@ -1,4 +1,7 @@
+const ModuleId = @import("source_registry.zig").ModuleId;
+
 pub const DiagnosticSpan = struct {
+    module_id: ModuleId,
     line: usize,
     column: usize,
     byte_offset: usize,
@@ -6,6 +9,7 @@ pub const DiagnosticSpan = struct {
 
     pub fn fromToken(token: anytype) DiagnosticSpan {
         return .{
+            .module_id = token.module_id,
             .line = token.line,
             .column = token.column,
             .byte_offset = token.offset_in_source,

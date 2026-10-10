@@ -13,7 +13,7 @@ pub fn setupLexerPipeline(arena_state: *std.heap.ArenaAllocator, source: []const
     diagnostic_store.* = diagnostics.DiagnosticStore.init(arena);
 
     const lexer = try arena.create(lexing.Lexer);
-    lexer.* = lexing.Lexer.init(source, arena, diagnostic_store);
+    lexer.* = lexing.Lexer.init(source, 0, arena, diagnostic_store);
 
     return .{
         .diagnostic_store = diagnostic_store,
