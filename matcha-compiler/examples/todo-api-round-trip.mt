@@ -160,7 +160,7 @@ item JsonParser = structure {
                         "n" => "\n",
                         "r" => "\r",
                         "t" => "\t",
-                        // ponytail: `\uXXXX`, `\b` and `\f` are rejected, because Matcha cannot build a string from a
+                        // `\uXXXX`, `\b` and `\f` are rejected, because Matcha cannot build a string from a
                         // character code yet. Supporting them needs a builtin like `fromCodePoint(int): string`.
                         else => {
                             return .Error(self.error("unsupported string escape"));
