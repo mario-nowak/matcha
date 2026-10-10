@@ -21,16 +21,17 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .emit => |emit_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
+            var source_registry = diagnostics.SourceRegistry.init(arena);
 
             matcha.compiler.pipeline.emitFile(
                 arena,
                 emit_command.input_path,
                 emit_command.output_path,
                 &diagnostic_store,
+                &source_registry,
             ) catch |compilation_error| {
                 return try handleCompilationError(
-                    arena,
-                    emit_command.input_path,
+                    &source_registry,
                     &diagnostic_store,
                     compilation_error,
                 );
@@ -39,16 +40,17 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .build => |build_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
+            var source_registry = diagnostics.SourceRegistry.init(arena);
 
             _ = matcha.toolchain.buildFile(
                 arena,
                 build_command.input_path,
                 build_command.output_path,
                 &diagnostic_store,
+                &source_registry,
             ) catch |compilation_error| {
                 return try handleCompilationError(
-                    arena,
-                    build_command.input_path,
+                    &source_registry,
                     &diagnostic_store,
                     compilation_error,
                 );
@@ -57,16 +59,17 @@ pub fn run(arena: std.mem.Allocator, iter: anytype) !u8 {
         },
         .run => |run_command| {
             var diagnostic_store = diagnostics.DiagnosticStore.init(arena);
+            var source_registry = diagnostics.SourceRegistry.init(arena);
 
             return matcha.toolchain.runFile(
                 arena,
                 run_command.input_path,
                 run_command.program_arguments,
                 &diagnostic_store,
+                &source_registry,
             ) catch |compilation_error| {
                 return try handleCompilationError(
-                    arena,
-                    run_command.input_path,
+                    &source_registry,
                     &diagnostic_store,
                     compilation_error,
                 );
@@ -95,24 +98,15 @@ pub fn reportUnreportedError(run_error: anyerror) void {
 }
 
 fn handleCompilationError(
-    arena: std.mem.Allocator,
-    input_path: []const u8,
+    source_registry: *const diagnostics.SourceRegistry,
     diagnostic_store: *diagnostics.DiagnosticStore,
     compilation_error: anyerror,
 ) !u8 {
     switch (compilation_error) {
         error.DiagnosticsEmitted => {
-            const source = try readSourceFile(arena, input_path);
-            try diagnostics.renderStderr(input_path, source, diagnostic_store.items());
+            try diagnostics.renderStderr(source_registry, diagnostic_store.items());
             return 1;
         },
         else => return compilation_error,
     }
-}
-
-fn readSourceFile(arena: std.mem.Allocator, input_path: []const u8) ![]const u8 {
-    const cwd = std.fs.cwd();
-    const file = try cwd.openFile(input_path, .{});
-    defer file.close();
-    return file.readToEndAlloc(arena, std.math.maxInt(usize));
 }

@@ -2,6 +2,7 @@ const std = @import("std");
 
 comptime {
     _ = @import("testing/expect.test.zig");
+    referenceAllTestsRecursive(@import("diagnostics/diagnostic_renderer.test.zig"));
     referenceAllTestsRecursive(@import("lexing/lexer.test.zig"));
     _ = @import("parsing/type_expression_parser.test.zig");
     referenceAllTestsRecursive(@import("parsing/parser.test.zig"));

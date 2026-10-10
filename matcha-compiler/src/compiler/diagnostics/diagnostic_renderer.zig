@@ -1,27 +1,29 @@
 const std = @import("std");
 const Diagnostic = @import("diagnostic.zig").Diagnostic;
+const SourceRegistry = @import("source_registry.zig").SourceRegistry;
 
 pub const DiagnosticRenderer = struct {
-    pub fn render(writer: *std.Io.Writer, input_path: []const u8, source: []const u8, diagnostics: []const Diagnostic) !void {
+    pub fn render(writer: *std.Io.Writer, source_registry: *const SourceRegistry, diagnostics: []const Diagnostic) !void {
         for (diagnostics) |diagnostic| {
-            try renderOne(writer, input_path, source, diagnostic);
+            try renderOne(writer, source_registry, diagnostic);
         }
     }
 
-    fn renderOne(writer: *std.Io.Writer, input_path: []const u8, source: []const u8, diagnostic: Diagnostic) !void {
+    fn renderOne(writer: *std.Io.Writer, source_registry: *const SourceRegistry, diagnostic: Diagnostic) !void {
+        const source_file = source_registry.get(diagnostic.span.module_id);
         const severity_text = switch (diagnostic.severity) {
             .@"error" => "error",
         };
 
         const line_number = diagnostic.span.line;
         const column_number = diagnostic.span.column;
-        const line_text = sliceLine(source, diagnostic.span.byte_offset);
+        const line_text = sliceLine(source_file.source, diagnostic.span.byte_offset);
         const gutter_width = digitCount(line_number);
         const caret_count = if (diagnostic.span.byte_len == 0) @as(usize, 1) else diagnostic.span.byte_len;
         const caret_padding = if (column_number > 0) column_number - 1 else 0;
 
         try writer.print("{s}: {s}\n", .{ severity_text, diagnostic.message });
-        try writer.print(" --> {s}:{d}:{d}\n", .{ input_path, line_number, column_number });
+        try writer.print(" --> {s}:{d}:{d}\n", .{ source_file.path, line_number, column_number });
         try writeGutter(writer, gutter_width, null);
         try writer.writeAll("\n");
         try writeGutter(writer, gutter_width, line_number);
@@ -33,10 +35,10 @@ pub const DiagnosticRenderer = struct {
     }
 };
 
-pub fn renderStderr(input_path: []const u8, source: []const u8, diagnostics: []const Diagnostic) !void {
+pub fn renderStderr(source_registry: *const SourceRegistry, diagnostics: []const Diagnostic) !void {
     var stderr_buffer: [1024]u8 = undefined;
     var stderr_writer = std.fs.File.stderr().writerStreaming(&stderr_buffer);
-    try DiagnosticRenderer.render(&stderr_writer.interface, input_path, source, diagnostics);
+    try DiagnosticRenderer.render(&stderr_writer.interface, source_registry, diagnostics);
     try stderr_writer.interface.flush();
 }
 

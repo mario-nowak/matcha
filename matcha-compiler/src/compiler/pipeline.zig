@@ -11,6 +11,7 @@ pub fn generateLlvmIrFromFile(
     arena: std.mem.Allocator,
     input_path: []const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
+    source_registry: *diagnostics.SourceRegistry,
 ) ![]const u8 {
     const file_contents = readInputFile(arena, input_path) catch |read_error| {
         var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});
@@ -18,7 +19,8 @@ pub fn generateLlvmIrFromFile(
         return error.InputFileUnreadable;
     };
 
-    const lexer = lexing.Lexer.init(file_contents, arena, diagnostic_store);
+    const module_id = try source_registry.add(input_path, file_contents);
+    const lexer = lexing.Lexer.init(file_contents, module_id, arena, diagnostic_store);
 
     var parser = parsing.Parser.init(arena, diagnostic_store);
     const module = try parser.parse(lexer);
@@ -117,8 +119,9 @@ pub fn emitFile(
     input_path: []const u8,
     output_path: ?[]const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
+    source_registry: *diagnostics.SourceRegistry,
 ) !void {
-    const llvm_ir = try generateLlvmIrFromFile(arena, input_path, diagnostic_store);
+    const llvm_ir = try generateLlvmIrFromFile(arena, input_path, diagnostic_store, source_registry);
     const resolved_output_path = output_path orelse try getDefaultLlvmOutputPath(arena, input_path);
     writeFile(resolved_output_path, llvm_ir) catch |write_error| {
         var stderr_writer = std.fs.File.stderr().writerStreaming(&.{});

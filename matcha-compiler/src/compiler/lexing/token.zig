@@ -1,3 +1,5 @@
+const diagnostics = @import("diagnostics");
+
 pub const TokenKind = union(enum) {
     // Keywords
     val,
@@ -55,6 +57,7 @@ pub const TokenKind = union(enum) {
 };
 
 pub const Token = struct {
+    module_id: diagnostics.ModuleId,
     line: usize,
     column: usize,
     offset_in_source: usize,
