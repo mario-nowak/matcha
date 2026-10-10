@@ -16,7 +16,7 @@ pub const PlaceLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[2].kind.assignment_statement.target;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.modules[0].statements[2].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -31,7 +31,7 @@ pub const PlaceLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.assignment_statement.target;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -46,8 +46,8 @@ pub const PlaceLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.PlaceLowerer, &arena, source);
-            const counter_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
-            const assignment_target = fixture.analyzed_program.resolved_program.program.statements[1].kind.assignment_statement.target;
+            const counter_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
+            const assignment_target = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.assignment_statement.target;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 

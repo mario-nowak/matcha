@@ -26,7 +26,7 @@ pub const SemanticAnalyzer = struct {
         };
     }
 
-    pub fn analyzeProgram(self: *@This(), program: *const ast.Module) !analyzed_program_module.AnalyzedProgram {
+    pub fn analyzeProgram(self: *@This(), program: *const ast.Program) !analyzed_program_module.AnalyzedProgram {
         const exit_behavior_by_node_id = try self.control_flow_validator.validateProgram(program);
         const resolved_program = try self.name_resolver.resolveProgram(program);
         const type_check_result = try self.node_type_analyzer.analyzeProgram(&resolved_program, exit_behavior_by_node_id);

@@ -14,7 +14,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -32,7 +32,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
             const origin_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
@@ -51,7 +51,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const result_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const result_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
             const from_number_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(result_symbol_id).kind.@"union".function_symbol_ids[0];
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
@@ -66,7 +66,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -84,7 +84,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[1].id).?;
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -102,7 +102,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const point_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
             const method_symbol_id = fixture.analyzed_program.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
@@ -121,7 +121,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[0].id).?;
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[0].id).?;
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -136,7 +136,7 @@ pub const FunctionLayoutLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.FunctionLayoutLowerer, &arena, source);
-            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.statements[1].id).?;
+            const function_symbol_id = fixture.analyzed_program.resolved_program.symbol_id_by_node_id.get(fixture.analyzed_program.resolved_program.program.modules[0].statements[1].id).?;
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 

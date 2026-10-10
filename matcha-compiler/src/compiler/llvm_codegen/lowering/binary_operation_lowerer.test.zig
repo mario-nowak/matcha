@@ -14,7 +14,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -28,7 +28,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -42,7 +42,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -56,7 +56,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -70,7 +70,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -84,7 +84,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -98,7 +98,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -112,7 +112,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -126,7 +126,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -140,7 +140,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -154,7 +154,7 @@ pub const BinaryOperationLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
-            const binary_expression = fixture.analyzed_program.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 

@@ -14,7 +14,7 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const union_definition_node = resolved_program.program.statements[0];
+                    const union_definition_node = resolved_program.program.modules[0].statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
@@ -33,7 +33,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -54,7 +54,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -73,9 +73,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[1].id) orelse unreachable;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[1].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -97,10 +97,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -121,7 +121,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_case_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
+                    const union_case_node = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -154,10 +154,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -185,10 +185,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -311,9 +311,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const callee_node = program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const callee_node = module.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -368,10 +368,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -399,10 +399,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -423,7 +423,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_case_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
+                    const union_case_node = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -439,10 +439,10 @@ pub const NodeTypeAnalyzer = struct {
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
                     const resolved_program = fixture.resolved_program;
-                    const program = resolved_program.program;
-                    const union_definition_node = program.statements[0];
+                    const module = resolved_program.program.modules[0];
+                    const union_definition_node = module.statements[0];
                     const union_symbol_id = resolved_program.symbol_id_by_node_id.get(union_definition_node.id) orelse unreachable;
-                    const result_binding_node = program.statements[1];
+                    const result_binding_node = module.statements[1];
                     const result_symbol_id = resolved_program.symbol_id_by_node_id.get(result_binding_node.id) orelse unreachable;
                     const union_case_node = result_binding_node.kind.binding_declaration.value;
 
@@ -570,7 +570,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[2].id) orelse unreachable;
+                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[2].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -586,9 +586,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const body_node = program.statements[1].kind.item_definition.definition.function.body_expression;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const body_node = module.statements[1].kind.item_definition.definition.function.body_expression;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -605,9 +605,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const body_node = program.statements[1].kind.item_definition.definition.function.body_expression;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const body_node = module.statements[1].kind.item_definition.definition.function.body_expression;
                     const return_value_node = body_node.kind.block.statements[0].kind.return_statement.value orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
@@ -625,9 +625,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const if_node = program.statements[1].kind.binding_declaration.value;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const if_node = module.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -644,9 +644,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const block_node = program.statements[1].kind.binding_declaration.value;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const block_node = module.statements[1].kind.binding_declaration.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -664,9 +664,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const assigned_value_node = program.statements[2].kind.assignment_statement.value;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const assigned_value_node = module.statements[2].kind.assignment_statement.value;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -684,11 +684,11 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const inner_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const outer_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[1].id) orelse unreachable;
-                    const outer_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[2].id) orelse unreachable;
-                    const argument_node = &program.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
+                    const module = fixture.resolved_program.program.modules[0];
+                    const inner_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const outer_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[1].id) orelse unreachable;
+                    const outer_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[2].id) orelse unreachable;
+                    const argument_node = &module.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -707,9 +707,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const argument_node = &program.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
+                    const module = fixture.resolved_program.program.modules[0];
+                    const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const argument_node = &module.statements[2].kind.binding_declaration.value.kind.call_expression.arguments[0];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -725,9 +725,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const element_nodes = program.statements[1].kind.binding_declaration.value.kind.array_literal.elements;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const element_nodes = module.statements[1].kind.binding_declaration.value.kind.array_literal.elements;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -746,9 +746,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const implicit_case_node = &program.statements[1].kind.binding_declaration.value.kind.array_literal.elements[1];
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const implicit_case_node = &module.statements[1].kind.binding_declaration.value.kind.array_literal.elements[1];
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -768,9 +768,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const implicit_case_node = program.statements[1].kind.binding_declaration.value.kind.match_expression.arms[1].body_expression;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const implicit_case_node = module.statements[1].kind.binding_declaration.value.kind.match_expression.arms[1].body_expression;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -789,9 +789,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const else_arm_node = program.statements[1].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const else_arm_node = module.statements[1].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -807,9 +807,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const program = fixture.resolved_program.program;
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                    const else_block_node = program.statements[1].kind.binding_declaration.value.kind.if_expression.else_block;
+                    const module = fixture.resolved_program.program.modules[0];
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                    const else_block_node = module.statements[1].kind.binding_declaration.value.kind.if_expression.else_block;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -883,9 +883,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
                     const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
+                    const callee = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -904,9 +904,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
                     const from_number_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
+                    const callee = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -925,8 +925,8 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
+                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[1].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -947,8 +947,8 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
+                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[1].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -969,7 +969,7 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[1].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1034,9 +1034,9 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
                     const get_self_symbol_id = fixture.resolved_program.symbol_table.getSymbol(union_symbol_id).kind.@"union".function_symbol_ids[0];
-                    const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
+                    const callee = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1056,8 +1056,8 @@ pub const NodeTypeAnalyzer = struct {
                     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                     defer arena.deinit();
                     const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id) orelse unreachable;
-                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[1].id) orelse unreachable;
+                    const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id) orelse unreachable;
+                    const result_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[1].id) orelse unreachable;
 
                     const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1140,7 +1140,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const unit_literal = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
+                const unit_literal = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1156,7 +1156,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const binary_expression = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
+                const binary_expression = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1170,7 +1170,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const binary_expression = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
+                const binary_expression = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1202,9 +1202,9 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const program = fixture.resolved_program.program;
-                const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(program.statements[0].id) orelse unreachable;
-                const right_operand = program.statements[2].kind.binding_declaration.value.kind.binary_expression.right;
+                const module = fixture.resolved_program.program.modules[0];
+                const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(module.statements[0].id) orelse unreachable;
+                const right_operand = module.statements[2].kind.binding_declaration.value.kind.binary_expression.right;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1221,7 +1221,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const body_expression = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression;
+                const body_expression = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1235,7 +1235,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const function_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+                const function_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1258,7 +1258,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const if_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const if_node = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1279,7 +1279,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const if_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const if_node = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1437,7 +1437,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1459,7 +1459,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1561,7 +1561,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1584,7 +1584,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[1].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[1].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1603,7 +1603,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1622,7 +1622,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1641,7 +1641,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_arms = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.match_expression.arms;
+                const match_arms = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value.kind.match_expression.arms;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1661,7 +1661,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_arms = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.match_expression.arms;
+                const match_arms = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value.kind.match_expression.arms;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1680,7 +1680,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
                 const payload_binding = match_node.kind.match_expression.arms[1].pattern.kind.case.binding.?;
                 const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
 
@@ -1701,7 +1701,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
                 const payload_binding = match_node.kind.match_expression.arms[0].pattern.kind.case.binding.?;
                 const payload_binding_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(payload_binding.id).?;
 
@@ -1933,7 +1933,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const match_node = fixture.resolved_program.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
+                const match_node = fixture.resolved_program.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1970,7 +1970,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const member_expression = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -1986,7 +1986,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[2].kind.binding_declaration.value;
+                const member_expression = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2005,9 +2005,9 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
                 const origin_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
-                const callee = fixture.resolved_program.program.statements[1].kind.binding_declaration.value.kind.call_expression.callee;
+                const callee = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2027,9 +2027,9 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+                const point_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
                 const moved_symbol_id = fixture.resolved_program.symbol_table.getSymbol(point_symbol_id).kind.structure.function_symbol_ids[0];
-                const callee = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.call_expression.callee;
+                const callee = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2049,7 +2049,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const callee = fixture.resolved_program.program.statements[2].kind.binding_declaration.value.kind.call_expression.callee;
+                const callee = fixture.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2116,7 +2116,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
+                const member_expression = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2131,7 +2131,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const member_expression = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
+                const member_expression = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2146,7 +2146,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const callee = fixture.resolved_program.program.statements[1].kind.expression_statement.expression.kind.call_expression.callee;
+                const callee = fixture.resolved_program.program.modules[0].statements[1].kind.expression_statement.expression.kind.call_expression.callee;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2179,7 +2179,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const else_arm_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
+                const else_arm_node = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value.kind.match_expression.else_arm_expression orelse unreachable;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 
@@ -2193,7 +2193,7 @@ pub const NodeTypeAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
-                const else_block_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value.kind.if_expression.else_block;
+                const else_block_node = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value.kind.if_expression.else_block;
 
                 const result = try fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
 

@@ -37,11 +37,7 @@ pub const NameResolver = struct {
         };
     }
 
-    pub fn resolveProgram(self: *@This(), program: *const ast.Module) !symbols.ResolvedProgram {
-        return try self.resolveModule(program);
-    }
-
-    fn resolveModule(self: *@This(), program: *const ast.Module) !symbols.ResolvedProgram {
+    pub fn resolveProgram(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
         var root_scope = scope.Scope.init(self.arena, null);
         self.symbol_table = symbols.SymbolTable.init(self.arena);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
@@ -55,8 +51,10 @@ pub const NameResolver = struct {
                 .module_shadowing = .forbidden,
             },
         };
-        for (program.statements) |*statement| {
-            try self.resolveNode(statement, root_environment);
+        for (program.modules) |*module| {
+            for (module.statements) |*statement| {
+                try self.resolveNode(statement, root_environment);
+            }
         }
 
         self.symbol_table.assertAllFinalized();
@@ -201,17 +199,19 @@ pub const NameResolver = struct {
         try module_scope.insertSymbol("startProcess", function_id);
     }
 
-    fn buildModuleScope(self: *@This(), program: *const ast.Module) CompileError!scope.ModuleScope {
+    fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.arena, null);
         // Builtins come first, so the duplicate checks of the module items see them.
         try self.addBuiltinFunctions(&module_scope);
 
-        for (program.statements) |*statement| {
-            switch (statement.kind) {
-                .item_definition => |item_definition| {
-                    try self.registerModuleItemDefinition(statement.id, item_definition, &module_scope);
-                },
-                else => {},
+        for (program.modules) |*module| {
+            for (module.statements) |*statement| {
+                switch (statement.kind) {
+                    .item_definition => |item_definition| {
+                        try self.registerModuleItemDefinition(statement.id, item_definition, &module_scope);
+                    },
+                    else => {},
+                }
             }
         }
 

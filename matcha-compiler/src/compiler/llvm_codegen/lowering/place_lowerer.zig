@@ -15,8 +15,10 @@ pub const PlaceLowerer = struct {
     pub fn lower(self: *@This(), analyzed_program: *const semantic_analysis.AnalyzedProgram) !lowering_types.PlaceDecisionByNodeId {
         var decision_by_node_id = lowering_types.PlaceDecisionByNodeId.init(self.arena);
 
-        for (analyzed_program.resolved_program.program.statements) |*statement| {
-            try self.lowerNode(statement, analyzed_program, &decision_by_node_id);
+        for (analyzed_program.resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                try self.lowerNode(statement, analyzed_program, &decision_by_node_id);
+            }
         }
 
         return decision_by_node_id;

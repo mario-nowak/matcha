@@ -27,12 +27,14 @@ pub const ExitBehaviorAnalyzer = struct {
 
     pub fn analyzeProgram(
         self: *@This(),
-        program: *const ast.Module,
+        program: *const ast.Program,
     ) CompileError!ExitBehaviorByNodeId {
         self.exit_behavior_by_node_id.clearRetainingCapacity();
 
-        for (program.statements) |*statement| {
-            try self.validateFunctionReturnPathsInNode(statement);
+        for (program.modules) |*module| {
+            for (module.statements) |*statement| {
+                try self.validateFunctionReturnPathsInNode(statement);
+            }
         }
 
         return self.exit_behavior_by_node_id;

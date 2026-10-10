@@ -16,7 +16,7 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[2].kind.binding_declaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[2].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -31,7 +31,7 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.binding_declaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -46,7 +46,7 @@ pub const MemberAccessLowerer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupLowererFixture(lowering.MemberAccessLowerer, &arena, source);
-            const member_expression = fixture.analyzed_program.resolved_program.program.statements[1].kind.binding_declaration.value;
+            const member_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
             const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 

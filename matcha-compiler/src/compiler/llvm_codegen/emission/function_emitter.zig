@@ -48,13 +48,15 @@ pub const FunctionEmitter = struct {
         try self.runtime_call_emitter.emitInitiateGarbageCollectorCall(self.function_ir_builder);
         try self.runtime_call_emitter.emitInitializeArgumentsCall(self.function_ir_builder);
 
-        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
-            switch (statement.kind) {
-                .item_definition => continue,
-                else => {},
-            }
+        for (lowered_program.analyzed_program.resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                switch (statement.kind) {
+                    .item_definition => continue,
+                    else => {},
+                }
 
-            _ = try self.node_emitter.emitNode(statement, lowered_program, &environment);
+                _ = try self.node_emitter.emitNode(statement, lowered_program, &environment);
+            }
         }
 
         try self.function_ir_builder.emitTerminatorInstruction("ret i32 0");

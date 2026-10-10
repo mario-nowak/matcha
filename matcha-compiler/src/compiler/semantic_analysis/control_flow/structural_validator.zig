@@ -19,11 +19,13 @@ pub const StructuralValidator = struct {
 
     pub fn validateProgram(
         self: *@This(),
-        program: *const ast.Module,
+        program: *const ast.Program,
     ) CompileError!void {
         const context = ControlFlowValidationContext{};
-        for (program.statements) |*statement| {
-            try self.validateNode(statement, &context);
+        for (program.modules) |*module| {
+            for (module.statements) |*statement| {
+                try self.validateNode(statement, &context);
+            }
         }
     }
 

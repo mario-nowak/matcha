@@ -81,21 +81,23 @@ pub const LlvmModuleRenderer = struct {
         lowered_program: *const lowering.LoweredProgram,
     ) !std.ArrayList([]const u8) {
         var user_defined_functions = std.ArrayList([]const u8){};
-        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
-            switch (statement.kind) {
-                .item_definition => |item_definition| switch (item_definition.definition) {
-                    .function => |function_definition| {
-                        const function_ir = try self.function_emitter.emitFunctionDefinition(
-                            statement.id,
-                            &function_definition,
-                            lowered_program,
-                        );
-                        try user_defined_functions.append(self.arena, function_ir);
+        for (lowered_program.analyzed_program.resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                switch (statement.kind) {
+                    .item_definition => |item_definition| switch (item_definition.definition) {
+                        .function => |function_definition| {
+                            const function_ir = try self.function_emitter.emitFunctionDefinition(
+                                statement.id,
+                                &function_definition,
+                                lowered_program,
+                            );
+                            try user_defined_functions.append(self.arena, function_ir);
+                        },
+                        .structure => {},
+                        .@"union" => {},
                     },
-                    .structure => {},
-                    .@"union" => {},
-                },
-                else => {},
+                    else => {},
+                }
             }
         }
 
@@ -167,19 +169,21 @@ pub const LlvmModuleRenderer = struct {
     ) !std.ArrayList([]const u8) {
         var owned_function_definitions = std.ArrayList([]const u8){};
 
-        for (lowered_program.analyzed_program.resolved_program.program.statements) |*statement| {
-            const function_definitions = switch (statement.kind) {
-                .item_definition => |item_definition| switch (item_definition.definition) {
-                    inline .structure, .@"union" => |type_definition| type_definition.function_definitions,
+        for (lowered_program.analyzed_program.resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                const function_definitions = switch (statement.kind) {
+                    .item_definition => |item_definition| switch (item_definition.definition) {
+                        inline .structure, .@"union" => |type_definition| type_definition.function_definitions,
+                        else => continue,
+                    },
                     else => continue,
-                },
-                else => continue,
-            };
-            try self.appendOwnedFunctionDefinitions(
-                &owned_function_definitions,
-                function_definitions,
-                lowered_program,
-            );
+                };
+                try self.appendOwnedFunctionDefinitions(
+                    &owned_function_definitions,
+                    function_definitions,
+                    lowered_program,
+                );
+            }
         }
 
         return owned_function_definitions;

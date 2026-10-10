@@ -10,7 +10,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const body = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
+                const body = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -25,7 +25,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const body = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
+                const body = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression;
                 const call = body.kind.call_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
@@ -50,7 +50,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const function = fixture.program.statements[0].kind.item_definition.definition.@"union".function_definitions[0];
+                const function = fixture.program.modules[0].statements[0].kind.item_definition.definition.@"union".function_definitions[0];
                 const body = function.kind.item_definition.definition.function.body_expression;
                 const return_statement = body.kind.block.statements[0];
 
@@ -97,7 +97,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+                const loop = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -115,7 +115,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+                const loop = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -135,7 +135,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const loop = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
+                const loop = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0];
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -181,7 +181,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
+                const match_expression = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -204,7 +204,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
+                const match_expression = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression.kind.block.statements[0].kind.loop.body_block.kind.block.statements[0].kind.binding_declaration.value;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
@@ -221,7 +221,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupExitBehaviorAnalyzerFixture(&arena, source);
-                const match_expression = fixture.program.statements[0].kind.item_definition.definition.function.body_expression;
+                const match_expression = fixture.program.modules[0].statements[0].kind.item_definition.definition.function.body_expression;
 
                 const result = try fixture.analyzer.analyzeProgram(&fixture.program);
 
