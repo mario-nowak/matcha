@@ -72,8 +72,10 @@ pub const NodeTypeAnalyzer = struct {
         try self.seedModuleLevelItemTypes();
 
         const root_environment = TypeCheckEnvironment{ .function_return_type_id = null };
-        for (resolved_program.program.statements) |*statement| {
-            _ = try self.checkNode(statement, .as_statement, root_environment);
+        for (resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                _ = try self.checkNode(statement, .as_statement, root_environment);
+            }
         }
 
         self.type_store.assertAllFinalized();

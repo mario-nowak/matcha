@@ -35,7 +35,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+            const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
             const structure_type_id = fixture.type_check_result.type_id_by_symbol_id.get(structure_symbol_id).?;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
@@ -50,7 +50,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+            const structure_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
             const structure_type_id = fixture.type_check_result.type_id_by_symbol_id.get(structure_symbol_id).?;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
@@ -65,7 +65,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const array_node = fixture.resolved_program.program.statements[0].kind.binding_declaration.value;
+            const array_node = fixture.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
             const array_type_id = fixture.type_check_result.type_id_by_node_id.get(array_node.id).?;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
@@ -80,7 +80,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.statements[0].id).?;
+            const union_symbol_id = fixture.resolved_program.symbol_id_by_node_id.get(fixture.resolved_program.program.modules[0].statements[0].id).?;
             const union_type_id = fixture.type_check_result.type_id_by_symbol_id.get(union_symbol_id).?;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
@@ -96,7 +96,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const statements = fixture.resolved_program.program.statements;
+            const statements = fixture.resolved_program.program.modules[0].statements;
             const unit_node = statements[0].kind.binding_declaration.value;
             const integer_node = statements[1].kind.binding_declaration.value;
 
@@ -114,7 +114,7 @@ pub const RuntimeRepresentationAnalyzer = struct {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
             defer arena.deinit();
             const fixture = try setupRuntimeRepresentationAnalyzerFixture(&arena, source);
-            const implicit_member_node = fixture.resolved_program.program.statements[1].kind.binding_declaration.value;
+            const implicit_member_node = fixture.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
             const result = try fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(&fixture.type_check_result);
 

@@ -351,3 +351,7 @@ pub const IndexExpression = struct {
 pub const Module = struct {
     statements: []Node,
 };
+
+pub const Program = struct {
+    modules: []Module,
+};

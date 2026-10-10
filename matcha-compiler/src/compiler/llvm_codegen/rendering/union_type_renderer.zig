@@ -24,41 +24,43 @@ pub const UnionTypeRenderer = struct {
 
         var union_index: usize = 0;
 
-        for (resolved_program.program.statements) |*statement| {
-            switch (statement.kind) {
-                .item_definition => |item_definition| switch (item_definition.definition) {
-                    .@"union" => {},
+        for (resolved_program.program.modules) |*module| {
+            for (module.statements) |*statement| {
+                switch (statement.kind) {
+                    .item_definition => |item_definition| switch (item_definition.definition) {
+                        .@"union" => {},
+                        else => continue,
+                    },
                     else => continue,
-                },
-                else => continue,
-            }
-            const union_symbol_id = resolved_program.symbol_id_by_node_id.get(statement.id).?;
-            const union_type_id = analyzed_program.type_id_by_symbol_id.get(union_symbol_id).?;
-            const union_type = analyzed_program.type_store.getType(union_type_id).@"union";
-            const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
+                }
+                const union_symbol_id = resolved_program.symbol_id_by_node_id.get(statement.id).?;
+                const union_type_id = analyzed_program.type_id_by_symbol_id.get(union_symbol_id).?;
+                const union_type = analyzed_program.type_store.getType(union_type_id).@"union";
+                const union_layout = lowered_program.union_layout_by_type_id.get(union_type_id).?;
 
-            for (0..union_layout.cases.len) |case_index| {
-                if (case_index > 0 or union_index > 0) {
-                    try union_definitions_buffer.print(self.arena, "\n", .{});
+                for (0..union_layout.cases.len) |case_index| {
+                    if (case_index > 0 or union_index > 0) {
+                        try union_definitions_buffer.print(self.arena, "\n", .{});
+                    }
+
+                    try union_definitions_buffer.print(
+                        self.arena,
+                        "%{s} = type {{ {s}",
+                        .{ union_layout.cases[case_index].llvm_type_name, lowering_types.union_case_index_llvm_type },
+                    );
+
+                    const payload_type_id = union_type.cases[case_index].type_id;
+                    const type_runtime_representation = analyzed_program.runtime_representation_result.runtime_representation_by_type_id.get(payload_type_id).?;
+                    if (type_runtime_representation == .present) {
+                        const llvm_type = lowered_program.getLlvmIrType(payload_type_id);
+                        try union_definitions_buffer.print(self.arena, ", {s} }}", .{llvm_type});
+                    } else {
+                        try union_definitions_buffer.print(self.arena, " }}", .{});
+                    }
                 }
 
-                try union_definitions_buffer.print(
-                    self.arena,
-                    "%{s} = type {{ {s}",
-                    .{ union_layout.cases[case_index].llvm_type_name, lowering_types.union_case_index_llvm_type },
-                );
-
-                const payload_type_id = union_type.cases[case_index].type_id;
-                const type_runtime_representation = analyzed_program.runtime_representation_result.runtime_representation_by_type_id.get(payload_type_id).?;
-                if (type_runtime_representation == .present) {
-                    const llvm_type = lowered_program.getLlvmIrType(payload_type_id);
-                    try union_definitions_buffer.print(self.arena, ", {s} }}", .{llvm_type});
-                } else {
-                    try union_definitions_buffer.print(self.arena, " }}", .{});
-                }
+                union_index += 1;
             }
-
-            union_index += 1;
         }
 
         return union_definitions_buffer.toOwnedSlice(self.arena);

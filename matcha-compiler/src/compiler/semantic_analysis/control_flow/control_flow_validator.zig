@@ -25,7 +25,7 @@ pub const ControlFlowValidator = struct {
 
     pub fn validateProgram(
         self: *@This(),
-        program: *const ast.Module,
+        program: *const ast.Program,
     ) CompileError!ExitBehaviorByNodeId {
         try self.structural_validator.validateProgram(program);
         return self.exit_behavior_analyzer.analyzeProgram(program);

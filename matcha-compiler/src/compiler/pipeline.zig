@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const lexing = @import("lexing");
+const ast = @import("ast");
 const parsing = @import("parsing");
 const diagnostics = @import("diagnostics");
 const semantic_analysis = @import("semantic_analysis");
@@ -20,7 +21,8 @@ pub fn generateLlvmIrFromFile(
     const lexer = lexing.Lexer.init(file_contents, arena, diagnostic_store);
 
     var parser = parsing.Parser.init(lexer, arena, diagnostic_store);
-    const program = try parser.parse();
+    const module = try parser.parse();
+    const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
 
     const name_resolver = semantic_analysis.name_resolution.NameResolver.init(arena, diagnostic_store);
     const node_type_analyzer = try semantic_analysis.type_checking.NodeTypeAnalyzer.init(arena, diagnostic_store);

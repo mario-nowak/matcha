@@ -5,7 +5,7 @@ const ExitBehaviorAnalyzer = @import("semantic_analysis").control_flow_validatio
 const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
 
 const ExitBehaviorAnalyzerFixture = struct {
-    program: ast.Module,
+    program: ast.Program,
     analyzer: *ExitBehaviorAnalyzer,
     diagnostic_store: *diagnostics.DiagnosticStore,
 };
@@ -16,7 +16,8 @@ pub fn setupExitBehaviorAnalyzerFixture(
 ) !ExitBehaviorAnalyzerFixture {
     const arena = arena_state.allocator();
     const parser_pipeline = try setupParserPipeline(arena_state, source);
-    const program = try parser_pipeline.parser.parse();
+    const module = try parser_pipeline.parser.parse();
+    const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
     const analyzer = try arena.create(ExitBehaviorAnalyzer);
     analyzer.* = ExitBehaviorAnalyzer.init(arena, parser_pipeline.diagnostic_store);
 

@@ -5,7 +5,7 @@ const NameResolver = @import("semantic_analysis").name_resolution.NameResolver;
 const setupParserPipeline = @import("parser_helpers.zig").setupParserPipeline;
 
 const NameResolverFixture = struct {
-    program: ast.Module,
+    program: ast.Program,
     resolver: *NameResolver,
     diagnostic_store: *diagnostics.DiagnosticStore,
 };
@@ -16,7 +16,8 @@ pub fn setupNameResolverFixture(
 ) !NameResolverFixture {
     const arena = arena_state.allocator();
     const parser_pipeline = try setupParserPipeline(arena_state, source);
-    const program = try parser_pipeline.parser.parse();
+    const module = try parser_pipeline.parser.parse();
+    const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
     const resolver = try arena.create(NameResolver);
     resolver.* = NameResolver.init(arena, parser_pipeline.diagnostic_store);
 
