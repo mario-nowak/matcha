@@ -353,5 +353,6 @@ pub const Module = struct {
 };
 
 pub const Program = struct {
+    /// The first module is the root module. Only the root module contains statements other than item definitions, and they form the body of `main`.
     modules: []Module,
 };

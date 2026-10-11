@@ -5,6 +5,7 @@ pub const setupParserFixture = @import("parser_helpers.zig").setupParserFixture;
 pub const setupProgramFixture = @import("program_helpers.zig").setupProgramFixture;
 pub const setupPatternParserFixture = @import("pattern_parser_helpers.zig").setupPatternParserFixture;
 pub const setupStructuralValidatorFixture = @import("structural_validator_helpers.zig").setupStructuralValidatorFixture;
+pub const setupStructuralValidatorFixtureFromSourceFiles = @import("structural_validator_helpers.zig").setupStructuralValidatorFixtureFromSourceFiles;
 pub const setupExitBehaviorAnalyzerFixture = @import("exit_behavior_analyzer_helpers.zig").setupExitBehaviorAnalyzerFixture;
 pub const setupNameResolverFixture = @import("name_resolver_helpers.zig").setupNameResolverFixture;
 pub const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixture;
