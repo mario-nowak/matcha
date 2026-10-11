@@ -1,4 +1,5 @@
 const std = @import("std");
+const sources = @import("sources");
 const diagnostics = @import("diagnostics");
 const CompileError = diagnostics.CompileError;
 const tokens = @import("token.zig");
@@ -7,6 +8,7 @@ const Token = tokens.Token;
 
 pub const Lexer = struct {
     source: []const u8,
+    module_id: sources.ModuleId,
     line: usize,
     column: usize,
     offset_in_source: usize,
@@ -14,9 +16,15 @@ pub const Lexer = struct {
     arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
 
-    pub fn init(source: []const u8, arena: std.mem.Allocator, diagnostic_store: *diagnostics.DiagnosticStore) Lexer {
+    pub fn init(
+        source: []const u8,
+        module_id: sources.ModuleId,
+        arena: std.mem.Allocator,
+        diagnostic_store: *diagnostics.DiagnosticStore,
+    ) Lexer {
         return .{
             .source = source,
+            .module_id = module_id,
             .arena = arena,
             .diagnostic_store = diagnostic_store,
             .line = 1,
@@ -31,6 +39,7 @@ pub const Lexer = struct {
 
         if (self.done()) {
             return .{
+                .module_id = self.module_id,
                 .line = self.line,
                 .column = self.column,
                 .offset_in_source = self.offset_in_source,
@@ -80,6 +89,7 @@ pub const Lexer = struct {
         message: []const u8,
     ) CompileError {
         self.diagnostic_store.emitErrorFromSpan(.{
+            .module_id = self.module_id,
             .line = line,
             .column = column,
             .byte_offset = offset_in_source,
@@ -119,6 +129,7 @@ pub const Lexer = struct {
         }
 
         const token = Token{
+            .module_id = self.module_id,
             .line = self.line,
             .column = self.column,
             .offset_in_source = self.offset_in_source,
@@ -152,6 +163,7 @@ pub const Lexer = struct {
         );
 
         const token = Token{
+            .module_id = self.module_id,
             .line = self.line,
             .column = self.column,
             .offset_in_source = self.offset_in_source,
@@ -186,6 +198,7 @@ pub const Lexer = struct {
                 const decoded_content = try content.toOwnedSlice(self.arena);
 
                 return Token{
+                    .module_id = self.module_id,
                     .line = start_line,
                     .column = start_column,
                     .offset_in_source = start_offset,
@@ -267,6 +280,7 @@ pub const Lexer = struct {
 
             if (multi_character_kind) |kind| {
                 const token = Token{
+                    .module_id = self.module_id,
                     .line = self.line,
                     .column = self.column,
                     .offset_in_source = self.offset_in_source,
@@ -311,6 +325,7 @@ pub const Lexer = struct {
 
         if (kind) |resolved_kind| {
             return Token{
+                .module_id = self.module_id,
                 .line = line,
                 .column = column,
                 .offset_in_source = offset_in_source,

@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const compiler = @import("compiler");
+const sources = compiler.sources;
 const diagnostics = compiler.diagnostics;
 
 pub fn buildFile(
@@ -9,8 +10,9 @@ pub fn buildFile(
     input_path: []const u8,
     output_path: ?[]const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
+    source_registry: *sources.SourceRegistry,
 ) ![]const u8 {
-    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(arena, input_path, diagnostic_store);
+    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(arena, input_path, diagnostic_store, source_registry);
     const binary_output_path = output_path orelse try compiler.pipeline.getDefaultBinaryOutputPath(arena, input_path);
 
     var temp_dir = try TemporaryDirectory.create(arena);
@@ -30,8 +32,9 @@ pub fn runFile(
     input_path: []const u8,
     program_arguments: []const []const u8,
     diagnostic_store: *diagnostics.DiagnosticStore,
+    source_registry: *sources.SourceRegistry,
 ) !u8 {
-    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(arena, input_path, diagnostic_store);
+    const llvm_ir = try compiler.pipeline.generateLlvmIrFromFile(arena, input_path, diagnostic_store, source_registry);
 
     var temporary_directory = try TemporaryDirectory.create(arena);
     defer temporary_directory.delete();

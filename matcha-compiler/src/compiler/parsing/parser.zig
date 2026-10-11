@@ -179,6 +179,7 @@ pub const Parser = struct {
         }
 
         return .{
+            .module_id = token.module_id,
             .line = token.line,
             .column = token.column,
             .offset_in_source = token.offset_in_source,
