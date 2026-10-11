@@ -38,20 +38,24 @@ pub const NameResolver = struct {
     }
 
     pub fn resolveProgram(self: *@This(), program: *const ast.Program) !symbols.ResolvedProgram {
-        var root_scope = scope.Scope.init(self.arena, null);
         self.symbol_table = symbols.SymbolTable.init(self.arena);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
 
-        var module_scope = try self.buildModuleScope(program);
+        // All module scopes exist before any module is resolved, so imports can later look into other modules.
+        const module_scopes = try self.arena.alloc(scope.ModuleScope, program.modules.len);
+        for (program.modules, module_scopes) |*module, *module_scope| {
+            module_scope.* = try self.buildModuleScope(module);
+        }
 
-        const root_environment = ResolutionEnvironment{
-            .node_scope = &root_scope,
-            .module_scope = &module_scope,
-            .options = .{
-                .module_shadowing = .forbidden,
-            },
-        };
-        for (program.modules) |*module| {
+        for (program.modules, module_scopes) |*module, *module_scope| {
+            var root_scope = scope.Scope.init(self.arena, null);
+            const root_environment = ResolutionEnvironment{
+                .node_scope = &root_scope,
+                .module_scope = module_scope,
+                .options = .{
+                    .module_shadowing = .forbidden,
+                },
+            };
             for (module.statements) |*statement| {
                 try self.resolveNode(statement, root_environment);
             }
@@ -199,19 +203,18 @@ pub const NameResolver = struct {
         try module_scope.insertSymbol("startProcess", function_id);
     }
 
-    fn buildModuleScope(self: *@This(), program: *const ast.Program) CompileError!scope.ModuleScope {
+    fn buildModuleScope(self: *@This(), module: *const ast.Module) CompileError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.arena, null);
         // Builtins come first, so the duplicate checks of the module items see them.
+        // Every module gets its own builtin symbols until builtins are imported explicitly.
         try self.addBuiltinFunctions(&module_scope);
 
-        for (program.modules) |*module| {
-            for (module.statements) |*statement| {
-                switch (statement.kind) {
-                    .item_definition => |item_definition| {
-                        try self.registerModuleItemDefinition(statement.id, item_definition, &module_scope);
-                    },
-                    else => {},
-                }
+        for (module.statements) |*statement| {
+            switch (statement.kind) {
+                .item_definition => |item_definition| {
+                    try self.registerModuleItemDefinition(statement.id, item_definition, &module_scope);
+                },
+                else => {},
             }
         }
 
