@@ -18,9 +18,9 @@ pub const BlockItem = union(enum) {
     expression: ast.Node,
 };
 
-const ExportPlacement = enum {
-    allowed,
-    forbidden,
+const ExportModifierEligibility = enum {
+    export_modifier_allowed,
+    export_modifier_forbidden,
 };
 
 pub const Parser = struct {
@@ -73,7 +73,7 @@ pub const Parser = struct {
 
     fn parseStatement(self: *Parser) CompileError!ast.Node {
         if (self.startsItemDefinition()) {
-            return try self.parseItemDefinition(.allowed);
+            return try self.parseItemDefinition(.export_modifier_allowed);
         }
 
         const token = try self.lexer.peek();
@@ -179,7 +179,7 @@ pub const Parser = struct {
     }
 
     /// `item` and `export` are lexed as identifiers, so they stay usable as names. The parser turns them into keywords where an item starts.
-    fn contextualKeywordToken(token: lexing.Token, kind: lexing.TokenKind) lexing.Token {
+    fn convertToKeywordToken(token: lexing.Token, kind: lexing.TokenKind) lexing.Token {
         return .{
             .module_id = token.module_id,
             .line = token.line,
@@ -264,16 +264,16 @@ pub const Parser = struct {
         });
     }
 
-    fn parseItemDefinition(self: *@This(), export_placement: ExportPlacement) CompileError!ast.Node {
+    fn parseItemDefinition(self: *@This(), export_modifier_eligibility: ExportModifierEligibility) CompileError!ast.Node {
         var export_token: ?lexing.Token = null;
         if (isIdentifierNamed(try self.lexer.peek(), "export")) {
-            export_token = contextualKeywordToken(try self.lexer.next(), .@"export");
-            if (export_placement == .forbidden) {
+            export_token = convertToKeywordToken(try self.lexer.next(), .@"export");
+            if (export_modifier_eligibility == .export_modifier_forbidden) {
                 try self.diagnostic_store.emitErrorFromToken(export_token.?, "'export' is only allowed on top-level items");
                 return error.DiagnosticsEmitted;
             }
         }
-        const item_token = contextualKeywordToken(try self.lexer.next(), .item);
+        const item_token = convertToKeywordToken(try self.lexer.next(), .item);
 
         const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .identifier) {
@@ -349,7 +349,7 @@ pub const Parser = struct {
             }
 
             if (self.startsItemDefinition()) {
-                const item = try self.parseItemDefinition(.forbidden);
+                const item = try self.parseItemDefinition(.export_modifier_forbidden);
                 switch (item.kind) {
                     .item_definition => |item_definition| {
                         switch (item_definition.definition) {
@@ -450,7 +450,7 @@ pub const Parser = struct {
             }
 
             if (self.startsItemDefinition()) {
-                const item = try self.parseItemDefinition(.forbidden);
+                const item = try self.parseItemDefinition(.export_modifier_forbidden);
                 switch (item.kind) {
                     .item_definition => |item_definition| {
                         switch (item_definition.definition) {
