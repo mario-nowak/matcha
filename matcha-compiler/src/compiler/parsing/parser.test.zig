@@ -296,6 +296,70 @@ pub const Parser = struct {
             }
         };
 
+        pub const export_modifier = struct {
+            test "records the export token of an exported item" {
+                const source = "export item Point = structure { x: int; };";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .item_definition = .{
+                        .export_token = .{ .kind = .@"export" },
+                        .identifier_token = .{ .kind = .{ .identifier = "Point" } },
+                    } } },
+                } });
+            }
+
+            test "records no export token for an item without export" {
+                const source = "item Point = structure { x: int; };";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .item_definition = .{ .export_token = null } } },
+                } });
+            }
+
+            test "allows export as a binding name" {
+                const source = "val export = 1;";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .name = .{ .kind = .{ .identifier = "export" } },
+                    } } },
+                } });
+            }
+
+            test "rejects export on a function inside a structure" {
+                const source =
+                    \\item Point = structure {
+                    \\    export item get(self: Point): int = 1;
+                    \\};
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const result = fixture.parser.parse(fixture.lexer.*);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "'export' is only allowed on top-level items" },
+                });
+            }
+        };
+
         pub const member_access = struct {
             test "parses member access on an identifier" {
                 const source = "val value = point.x;";

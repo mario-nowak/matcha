@@ -18,6 +18,11 @@ pub const BlockItem = union(enum) {
     expression: ast.Node,
 };
 
+const ExportModifierEligibility = enum {
+    export_modifier_allowed,
+    export_modifier_forbidden,
+};
+
 pub const Parser = struct {
     arena: std.mem.Allocator,
     diagnostic_store: *diagnostics.DiagnosticStore,
@@ -68,7 +73,7 @@ pub const Parser = struct {
 
     fn parseStatement(self: *Parser) CompileError!ast.Node {
         if (self.startsItemDefinition()) {
-            return try self.parseItemDefinition();
+            return try self.parseItemDefinition(.export_modifier_allowed);
         }
 
         const token = try self.lexer.peek();
@@ -173,24 +178,24 @@ pub const Parser = struct {
         };
     }
 
-    fn contextualItemToken(token: lexing.Token) ?lexing.Token {
-        if (!isIdentifierNamed(token, "item")) {
-            return null;
-        }
-
+    /// `item` and `export` are lexed as identifiers, so they stay usable as names. The parser turns them into keywords where an item starts.
+    fn convertToKeywordToken(token: lexing.Token, kind: lexing.TokenKind) lexing.Token {
         return .{
             .module_id = token.module_id,
             .line = token.line,
             .column = token.column,
             .offset_in_source = token.offset_in_source,
             .length_in_source = token.length_in_source,
-            .kind = .item,
+            .kind = kind,
         };
     }
 
     fn startsItemDefinition(self: *@This()) bool {
         var lookahead = self.lexer;
-        const item_token = lookahead.next() catch return false;
+        var item_token = lookahead.next() catch return false;
+        if (isIdentifierNamed(item_token, "export")) {
+            item_token = lookahead.next() catch return false;
+        }
         if (!isIdentifierNamed(item_token, "item")) {
             return false;
         }
@@ -259,8 +264,16 @@ pub const Parser = struct {
         });
     }
 
-    fn parseItemDefinition(self: *@This()) CompileError!ast.Node {
-        const item_token = contextualItemToken(try self.lexer.next()) orelse unreachable;
+    fn parseItemDefinition(self: *@This(), export_modifier_eligibility: ExportModifierEligibility) CompileError!ast.Node {
+        var export_token: ?lexing.Token = null;
+        if (isIdentifierNamed(try self.lexer.peek(), "export")) {
+            export_token = convertToKeywordToken(try self.lexer.next(), .@"export");
+            if (export_modifier_eligibility == .export_modifier_forbidden) {
+                try self.diagnostic_store.emitErrorFromToken(export_token.?, "'export' is only allowed on top-level items");
+                return error.DiagnosticsEmitted;
+            }
+        }
+        const item_token = convertToKeywordToken(try self.lexer.next(), .item);
 
         const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .identifier) {
@@ -270,7 +283,7 @@ pub const Parser = struct {
 
         const post_identifier_token = try self.lexer.peek();
         if (post_identifier_token.kind == .left_parenthesis) {
-            return try self.parseFunctionDefinition(item_token, identifier_token);
+            return try self.parseFunctionDefinition(export_token, item_token, identifier_token);
         }
         if (post_identifier_token.kind != .assign) {
             try self.diagnostic_store.emitErrorFromToken(post_identifier_token, "expected '(' or '=' after item name");
@@ -280,10 +293,10 @@ pub const Parser = struct {
 
         const post_assign_token = try self.lexer.peek();
         if (post_assign_token.kind == .structure) {
-            return self.parseStructureDefinition(item_token, identifier_token);
+            return self.parseStructureDefinition(export_token, item_token, identifier_token);
         }
         if (post_assign_token.kind == .@"union") {
-            return self.parseUnionDefinition(item_token, identifier_token);
+            return self.parseUnionDefinition(export_token, item_token, identifier_token);
         }
 
         try self.diagnostic_store.emitErrorFromToken(post_assign_token, "expected 'structure' or 'union' after '=' in item definition");
@@ -292,6 +305,7 @@ pub const Parser = struct {
 
     fn parseUnionDefinition(
         self: *@This(),
+        export_token: ?lexing.Token,
         item_token: lexing.Token,
         identifier_token: lexing.Token,
     ) CompileError!ast.Node {
@@ -303,6 +317,7 @@ pub const Parser = struct {
         }
         return self.createNode(.{
             .item_definition = .{
+                .export_token = export_token,
                 .item_token = item_token,
                 .identifier_token = identifier_token,
                 .definition = .{ .@"union" = union_definition },
@@ -334,7 +349,7 @@ pub const Parser = struct {
             }
 
             if (self.startsItemDefinition()) {
-                const item = try self.parseItemDefinition();
+                const item = try self.parseItemDefinition(.export_modifier_forbidden);
                 switch (item.kind) {
                     .item_definition => |item_definition| {
                         switch (item_definition.definition) {
@@ -391,6 +406,7 @@ pub const Parser = struct {
 
     fn parseStructureDefinition(
         self: *@This(),
+        export_token: ?lexing.Token,
         item_token: lexing.Token,
         identifier_token: lexing.Token,
     ) CompileError!ast.Node {
@@ -402,6 +418,7 @@ pub const Parser = struct {
         }
         return self.createNode(.{
             .item_definition = .{
+                .export_token = export_token,
                 .item_token = item_token,
                 .identifier_token = identifier_token,
                 .definition = .{ .structure = structure },
@@ -433,7 +450,7 @@ pub const Parser = struct {
             }
 
             if (self.startsItemDefinition()) {
-                const item = try self.parseItemDefinition();
+                const item = try self.parseItemDefinition(.export_modifier_forbidden);
                 switch (item.kind) {
                     .item_definition => |item_definition| {
                         switch (item_definition.definition) {
@@ -486,6 +503,7 @@ pub const Parser = struct {
 
     fn parseFunctionDefinition(
         self: *@This(),
+        export_token: ?lexing.Token,
         item_token: lexing.Token,
         identifier_token: lexing.Token,
     ) CompileError!ast.Node {
@@ -556,6 +574,7 @@ pub const Parser = struct {
 
         return self.createNode(.{
             .item_definition = .{
+                .export_token = export_token,
                 .item_token = item_token,
                 .identifier_token = identifier_token,
                 .definition = .{
