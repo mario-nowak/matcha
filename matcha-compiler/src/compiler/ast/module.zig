@@ -84,6 +84,8 @@ pub const Node = struct {
 };
 
 pub const ItemDefinition = struct {
+    /// Set when the item is exported, so other modules can import it.
+    export_token: ?lexing.Token,
     item_token: lexing.Token,
     identifier_token: lexing.Token,
     definition: ItemDefinitionKind,
