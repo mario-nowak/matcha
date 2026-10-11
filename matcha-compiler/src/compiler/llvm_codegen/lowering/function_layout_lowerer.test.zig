@@ -2,6 +2,7 @@ const std = @import("std");
 const llvm_codegen = @import("llvm_codegen");
 const expect = @import("testing").expect;
 const setupLowererFixture = @import("testing").setupLowererFixture;
+const setupLowererFixtureFromSourceFiles = @import("testing").setupLowererFixtureFromSourceFiles;
 
 const lowering = llvm_codegen.lowering;
 
@@ -18,7 +19,7 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.function.identity" });
+            try expect(layouts.get(function_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.module.main.function.identity" });
         }
 
         test "names a structure function after its structure and its own name" {
@@ -37,7 +38,7 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.structure.Point.function.origin" });
+            try expect(layouts.get(origin_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.module.main.structure.Point.function.origin" });
         }
 
         test "names a union function after its union and its own name" {
@@ -56,7 +57,24 @@ pub const FunctionLayoutLowerer = struct {
 
             const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
 
-            try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.union.Result.function.fromNumber" });
+            try expect(layouts.get(from_number_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.module.main.union.Result.function.fromNumber" });
+        }
+
+        test "names a function after the module that defines it" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixtureFromSourceFiles(lowering.FunctionLayoutLowerer, &arena, &.{
+                .{ .path = "main.mt", .source = "item parse(value: int): int = value;" },
+                .{ .path = "other.mt", .source = "item parse(value: int): int = value;" },
+            });
+            const resolved_program = fixture.analyzed_program.resolved_program;
+            const main_parse_symbol_id = resolved_program.symbol_id_by_node_id.get(resolved_program.program.modules[0].statements[0].id).?;
+            const other_parse_symbol_id = resolved_program.symbol_id_by_node_id.get(resolved_program.program.modules[1].statements[0].id).?;
+
+            const layouts = try fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(layouts.get(main_parse_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.module.main.function.parse" });
+            try expect(layouts.get(other_parse_symbol_id).?).toMatch(.{ .llvm_function_name = "matcha.module.other.function.parse" });
         }
 
         test "omits unit parameters from the parameter indices" {

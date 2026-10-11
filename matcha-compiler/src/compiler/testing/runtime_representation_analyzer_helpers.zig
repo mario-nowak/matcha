@@ -1,24 +1,33 @@
 const std = @import("std");
 const symbols = @import("symbols");
+const sources = @import("sources");
 const semantic_analysis = @import("semantic_analysis");
 const control_flow_validation = semantic_analysis.control_flow_validation;
 
 const TypeCheckResult = semantic_analysis.type_checking.TypeCheckResult;
 const RuntimeRepresentationAnalyzer = semantic_analysis.runtime_representation.RuntimeRepresentationAnalyzer;
-const setupNodeTypeAnalyzerFixture = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixture;
+const setupNodeTypeAnalyzerFixtureFromSourceFiles = @import("node_type_analyzer_helpers.zig").setupNodeTypeAnalyzerFixtureFromSourceFiles;
 
 const RuntimeRepresentationAnalyzerFixture = struct {
     resolved_program: symbols.ResolvedProgram,
     exit_behavior_by_node_id: control_flow_validation.ExitBehaviorByNodeId,
     type_check_result: TypeCheckResult,
     runtime_representation_analyzer: *RuntimeRepresentationAnalyzer,
+    source_registry: *sources.SourceRegistry,
 };
 
 pub fn setupRuntimeRepresentationAnalyzerFixture(
     arena_state: *std.heap.ArenaAllocator,
     source: []const u8,
 ) !RuntimeRepresentationAnalyzerFixture {
-    const node_type_analyzer_fixture = try setupNodeTypeAnalyzerFixture(arena_state, source);
+    return setupRuntimeRepresentationAnalyzerFixtureFromSourceFiles(arena_state, &.{.{ .path = "main.mt", .source = source }});
+}
+
+pub fn setupRuntimeRepresentationAnalyzerFixtureFromSourceFiles(
+    arena_state: *std.heap.ArenaAllocator,
+    source_files: []const sources.SourceFile,
+) !RuntimeRepresentationAnalyzerFixture {
+    const node_type_analyzer_fixture = try setupNodeTypeAnalyzerFixtureFromSourceFiles(arena_state, source_files);
     const type_check_result = try node_type_analyzer_fixture.node_type_analyzer.analyzeProgram(
         &node_type_analyzer_fixture.resolved_program,
         node_type_analyzer_fixture.exit_behavior_by_node_id,
@@ -32,5 +41,6 @@ pub fn setupRuntimeRepresentationAnalyzerFixture(
         .exit_behavior_by_node_id = node_type_analyzer_fixture.exit_behavior_by_node_id,
         .type_check_result = type_check_result,
         .runtime_representation_analyzer = runtime_representation_analyzer,
+        .source_registry = node_type_analyzer_fixture.source_registry,
     };
 }

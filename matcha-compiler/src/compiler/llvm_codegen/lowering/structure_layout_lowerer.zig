@@ -2,13 +2,16 @@ const std = @import("std");
 const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
+const ModuleNameLowerer = @import("module_name_lowerer.zig").ModuleNameLowerer;
 
 pub const StructureLayoutLowerer = struct {
     arena: std.mem.Allocator,
+    module_name_lowerer: *const ModuleNameLowerer,
 
-    pub fn init(arena: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator, module_name_lowerer: *const ModuleNameLowerer) @This() {
         return .{
             .arena = arena,
+            .module_name_lowerer = module_name_lowerer,
         };
     }
 
@@ -80,10 +83,11 @@ pub const StructureLayoutLowerer = struct {
         structure_type: typing.StructureType,
     ) ![]const u8 {
         const structure_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(structure_type.symbol_id);
+        const module_name = try self.module_name_lowerer.lower(structure_symbol.declared_at.?.module_id);
         return std.fmt.allocPrint(
             self.arena,
-            "matcha.structure.{s}",
-            .{structure_symbol.name},
+            "{s}.structure.{s}",
+            .{ module_name, structure_symbol.name },
         );
     }
 };

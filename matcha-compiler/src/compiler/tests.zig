@@ -20,6 +20,7 @@ comptime {
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/binary_operation_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/structure_layout_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/lowering/function_layout_lowerer.test.zig"));
+    referenceAllTestsRecursive(@import("llvm_codegen/lowering/module_name_lowerer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/structure_type_renderer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/string_literal_renderer.test.zig"));
     referenceAllTestsRecursive(@import("llvm_codegen/rendering/runtime_symbol_renderer.test.zig"));

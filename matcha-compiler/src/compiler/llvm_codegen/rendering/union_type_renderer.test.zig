@@ -15,7 +15,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Signal.case.Ready = type { i32 }
+                \\%matcha.module.main.union.Signal.case.Ready = type { i32 }
             );
         }
 
@@ -30,7 +30,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Count.case.Value = type { i32, i64 }
+                \\%matcha.module.main.union.Count.case.Value = type { i32, i64 }
             );
         }
 
@@ -46,10 +46,10 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Payload.case.Number = type { i32, i64 }
-                \\%matcha.union.Payload.case.Text = type { i32, %matcha.compiler_module.builtin.type.string }
-                \\%matcha.union.Payload.case.Owner = type { i32, ptr }
-                \\%matcha.union.Payload.case.Owners = type { i32, ptr }
+                \\%matcha.module.main.union.Payload.case.Number = type { i32, i64 }
+                \\%matcha.module.main.union.Payload.case.Text = type { i32, %matcha.compiler_module.builtin.type.string }
+                \\%matcha.module.main.union.Payload.case.Owner = type { i32, ptr }
+                \\%matcha.module.main.union.Payload.case.Owners = type { i32, ptr }
             );
         }
 
@@ -64,7 +64,7 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Signal.case.Ready = type { i32 }
+                \\%matcha.module.main.union.Signal.case.Ready = type { i32 }
             );
         }
 
@@ -79,8 +79,8 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Tree.case.Leaf = type { i32, i64 }
-                \\%matcha.union.Tree.case.Parent = type { i32, ptr }
+                \\%matcha.module.main.union.Tree.case.Leaf = type { i32, i64 }
+                \\%matcha.module.main.union.Tree.case.Parent = type { i32, ptr }
             );
         }
 
@@ -95,9 +95,9 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.Direction.case.North = type { i32 }
-                \\%matcha.union.Direction.case.East = type { i32 }
-                \\%matcha.union.Direction.case.South = type { i32 }
+                \\%matcha.module.main.union.Direction.case.North = type { i32 }
+                \\%matcha.module.main.union.Direction.case.East = type { i32 }
+                \\%matcha.module.main.union.Direction.case.South = type { i32 }
             );
         }
 
@@ -113,10 +113,10 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.First.case.A = type { i32, i64 }
-                \\%matcha.union.First.case.B = type { i32 }
-                \\%matcha.union.Second.case.C = type { i32, i64 }
-                \\%matcha.union.Second.case.D = type { i32 }
+                \\%matcha.module.main.union.First.case.A = type { i32, i64 }
+                \\%matcha.module.main.union.First.case.B = type { i32 }
+                \\%matcha.module.main.union.Second.case.C = type { i32, i64 }
+                \\%matcha.module.main.union.Second.case.D = type { i32 }
             );
         }
 
@@ -132,8 +132,8 @@ pub const UnionTypeRenderer = struct {
             const rendered = try fixture.union_type_renderer.renderUnionTypeDefinitions(&fixture.lowered_program);
 
             try expect(rendered).toMatch(
-                \\%matcha.union.First.case.A = type { i32 }
-                \\%matcha.union.Second.case.B = type { i32 }
+                \\%matcha.module.main.union.First.case.A = type { i32 }
+                \\%matcha.module.main.union.Second.case.B = type { i32 }
             );
         }
 

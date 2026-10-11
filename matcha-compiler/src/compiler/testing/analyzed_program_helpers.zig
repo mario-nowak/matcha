@@ -1,15 +1,21 @@
 const std = @import("std");
+const sources = @import("sources");
 const semantic_analysis = @import("semantic_analysis");
 
 const AnalyzedProgram = semantic_analysis.AnalyzedProgram;
-const setupRuntimeRepresentationAnalyzerFixture = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixture;
+const setupRuntimeRepresentationAnalyzerFixtureFromSourceFiles = @import("runtime_representation_analyzer_helpers.zig").setupRuntimeRepresentationAnalyzerFixtureFromSourceFiles;
+
+const AnalyzedProgramFixture = struct {
+    analyzed_program: *const AnalyzedProgram,
+    source_registry: *sources.SourceRegistry,
+};
 
 /// Runs the full semantic analysis. Lowering results keep a pointer to the analyzed program, so it lives in the arena_state.
-pub fn setupAnalyzedProgram(
+pub fn setupAnalyzedProgramFixture(
     arena_state: *std.heap.ArenaAllocator,
-    source: []const u8,
-) !*const AnalyzedProgram {
-    const runtime_representation_analyzer_fixture = try setupRuntimeRepresentationAnalyzerFixture(arena_state, source);
+    source_files: []const sources.SourceFile,
+) !AnalyzedProgramFixture {
+    const runtime_representation_analyzer_fixture = try setupRuntimeRepresentationAnalyzerFixtureFromSourceFiles(arena_state, source_files);
     const runtime_representation_result = try runtime_representation_analyzer_fixture.runtime_representation_analyzer.analyzeRuntimeRepresentations(
         &runtime_representation_analyzer_fixture.type_check_result,
     );
@@ -22,5 +28,8 @@ pub fn setupAnalyzedProgram(
         runtime_representation_result,
     );
 
-    return analyzed_program;
+    return .{
+        .analyzed_program = analyzed_program,
+        .source_registry = runtime_representation_analyzer_fixture.source_registry,
+    };
 }

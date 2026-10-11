@@ -123,6 +123,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/llvm_codegen/lowering/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "semantic_analysis", .module = semantic_analysis_module },
             .{ .name = "symbols", .module = symbols_module },
