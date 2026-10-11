@@ -22,8 +22,13 @@ pub const StructuralValidator = struct {
         program: *const ast.Program,
     ) CompileError!void {
         const context = ControlFlowValidationContext{};
-        for (program.modules) |*module| {
+        for (program.modules, 0..) |*module, module_index| {
+            const is_root_module = module_index == 0;
             for (module.statements) |*statement| {
+                if (!is_root_module and statement.kind != .item_definition) {
+                    try self.diagnostic_store.emitErrorFromToken(statement.primaryToken(), "only item definitions are allowed outside the root module");
+                    return error.DiagnosticsEmitted;
+                }
                 try self.validateNode(statement, &context);
             }
         }
