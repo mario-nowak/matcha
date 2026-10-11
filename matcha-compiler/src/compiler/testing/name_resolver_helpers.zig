@@ -2,7 +2,7 @@ const std = @import("std");
 const ast = @import("ast");
 const diagnostics = @import("diagnostics");
 const NameResolver = @import("semantic_analysis").name_resolution.NameResolver;
-const setupParserFixture = @import("parser_helpers.zig").setupParserFixture;
+const setupProgramFixture = @import("program_helpers.zig").setupProgramFixture;
 
 const NameResolverFixture = struct {
     program: ast.Program,
@@ -15,15 +15,13 @@ pub fn setupNameResolverFixture(
     source: []const u8,
 ) !NameResolverFixture {
     const arena = arena_state.allocator();
-    const parser_fixture = try setupParserFixture(arena_state, source);
-    const module = try parser_fixture.parser.parse(parser_fixture.lexer.*);
-    const program = ast.Program{ .modules = try arena.dupe(ast.Module, &.{module}) };
+    const program_fixture = try setupProgramFixture(arena_state, &.{.{ .path = "main.mt", .source = source }});
     const resolver = try arena.create(NameResolver);
-    resolver.* = NameResolver.init(arena, parser_fixture.diagnostic_store);
+    resolver.* = NameResolver.init(arena, program_fixture.diagnostic_store);
 
     return .{
-        .program = program,
+        .program = program_fixture.program,
         .resolver = resolver,
-        .diagnostic_store = parser_fixture.diagnostic_store,
+        .diagnostic_store = program_fixture.diagnostic_store,
     };
 }
