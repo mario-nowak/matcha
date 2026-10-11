@@ -1,6 +1,8 @@
 const std = @import("std");
 const expect = @import("testing").expect;
 const setupNameResolverFixture = @import("testing").setupNameResolverFixture;
+const setupProgramFixture = @import("testing").setupProgramFixture;
+const name_resolution = @import("semantic_analysis").name_resolution;
 
 test "NameResolver > resolveProgram: records union cases with resolved payload types" {
     const source = "item WebEvent = union { PageLoad, PageUnload: unit, KeyPress: string, Click: int, };";
@@ -1009,6 +1011,39 @@ pub const NameResolver = struct {
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "value 'printInt' is already declared in module scope" },
+                });
+            }
+        };
+
+        pub const modules = struct {
+            test "allows items with the same name in different modules" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item parse(value: int): int = value;" },
+                    .{ .path = "other.mt", .source = "item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                _ = try resolver.resolveProgram(&fixture.program);
+
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+
+            test "rejects a reference to an item of another module" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "val result = helper(1);" },
+                    .{ .path = "other.mt", .source = "item helper(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'helper'" },
                 });
             }
         };
