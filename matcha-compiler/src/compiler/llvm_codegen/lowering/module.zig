@@ -9,4 +9,5 @@ pub const PlaceLowerer = @import("place_lowerer.zig").PlaceLowerer;
 pub const StructureLayoutLowerer = @import("structure_layout_lowerer.zig").StructureLayoutLowerer;
 pub const UnionLayoutLowerer = @import("union_layout_lowerer.zig").UnionLayoutLowerer;
 pub const FunctionLayoutLowerer = @import("function_layout_lowerer.zig").FunctionLayoutLowerer;
+pub const ModuleNameLowerer = @import("module_name_lowerer.zig").ModuleNameLowerer;
 pub const llvm_type = @import("llvm_type.zig");

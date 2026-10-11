@@ -4,13 +4,16 @@ const semantic_analysis = @import("semantic_analysis");
 const symbols = @import("symbols");
 
 const lowering_types = @import("lowering_types.zig");
+const ModuleNameLowerer = @import("module_name_lowerer.zig").ModuleNameLowerer;
 
 pub const FunctionLayoutLowerer = struct {
     arena: std.mem.Allocator,
+    module_name_lowerer: *const ModuleNameLowerer,
 
-    pub fn init(arena: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator, module_name_lowerer: *const ModuleNameLowerer) @This() {
         return .{
             .arena = arena,
+            .module_name_lowerer = module_name_lowerer,
         };
     }
 
@@ -91,6 +94,7 @@ pub const FunctionLayoutLowerer = struct {
         function_symbol: symbols.Symbol,
         owner_symbol: ?symbols.Symbol,
     ) ![]const u8 {
+        const module_name = try self.module_name_lowerer.lower(function_symbol.declared_at.?.module_id);
         if (owner_symbol) |owner| {
             const owner_kind_name = switch (owner.kind) {
                 .structure => "structure",
@@ -99,15 +103,15 @@ pub const FunctionLayoutLowerer = struct {
             };
             return std.fmt.allocPrint(
                 self.arena,
-                "matcha.{s}.{s}.function.{s}",
-                .{ owner_kind_name, owner.name, function_symbol.name },
+                "{s}.{s}.{s}.function.{s}",
+                .{ module_name, owner_kind_name, owner.name, function_symbol.name },
             );
         }
 
         return std.fmt.allocPrint(
             self.arena,
-            "matcha.function.{s}",
-            .{function_symbol.name},
+            "{s}.function.{s}",
+            .{ module_name, function_symbol.name },
         );
     }
 };

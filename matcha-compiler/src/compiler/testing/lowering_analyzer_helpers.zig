@@ -5,7 +5,7 @@ const lowering = llvm_codegen.lowering;
 
 const AnalyzedProgram = semantic_analysis.AnalyzedProgram;
 const LoweringAnalyzer = lowering.LoweringAnalyzer;
-const setupAnalyzedProgram = @import("analyzed_program_helpers.zig").setupAnalyzedProgram;
+const setupAnalyzedProgramFixture = @import("analyzed_program_helpers.zig").setupAnalyzedProgramFixture;
 
 const LoweringAnalyzerFixture = struct {
     analyzed_program: *const AnalyzedProgram,
@@ -17,7 +17,9 @@ pub fn setupLoweringAnalyzerFixture(
     source: []const u8,
 ) !LoweringAnalyzerFixture {
     const arena = arena_state.allocator();
-    const analyzed_program = try setupAnalyzedProgram(arena_state, source);
+    const analyzed_program_fixture = try setupAnalyzedProgramFixture(arena_state, &.{.{ .path = "main.mt", .source = source }});
+    const module_name_lowerer = try arena.create(lowering.ModuleNameLowerer);
+    module_name_lowerer.* = lowering.ModuleNameLowerer.init(arena, analyzed_program_fixture.source_registry);
 
     const llvm_type_table_lowerer = try arena.create(lowering.LlvmTypeTableLowerer);
     llvm_type_table_lowerer.* = lowering.LlvmTypeTableLowerer.init(arena);
@@ -30,11 +32,11 @@ pub fn setupLoweringAnalyzerFixture(
     const place_lowerer = try arena.create(lowering.PlaceLowerer);
     place_lowerer.* = lowering.PlaceLowerer.init(arena);
     const structure_layout_lowerer = try arena.create(lowering.StructureLayoutLowerer);
-    structure_layout_lowerer.* = lowering.StructureLayoutLowerer.init(arena);
+    structure_layout_lowerer.* = lowering.StructureLayoutLowerer.init(arena, module_name_lowerer);
     const union_layout_lowerer = try arena.create(lowering.UnionLayoutLowerer);
-    union_layout_lowerer.* = lowering.UnionLayoutLowerer.init(arena);
+    union_layout_lowerer.* = lowering.UnionLayoutLowerer.init(arena, module_name_lowerer);
     const function_layout_lowerer = try arena.create(lowering.FunctionLayoutLowerer);
-    function_layout_lowerer.* = lowering.FunctionLayoutLowerer.init(arena);
+    function_layout_lowerer.* = lowering.FunctionLayoutLowerer.init(arena, module_name_lowerer);
 
     const lowering_analyzer = try arena.create(LoweringAnalyzer);
     lowering_analyzer.* = LoweringAnalyzer.init(
@@ -49,7 +51,7 @@ pub fn setupLoweringAnalyzerFixture(
     );
 
     return .{
-        .analyzed_program = analyzed_program,
+        .analyzed_program = analyzed_program_fixture.analyzed_program,
         .lowering_analyzer = lowering_analyzer,
     };
 }

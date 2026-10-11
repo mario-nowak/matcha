@@ -2,13 +2,16 @@ const std = @import("std");
 const semantic_analysis = @import("semantic_analysis");
 const typing = @import("typing");
 const lowering_types = @import("lowering_types.zig");
+const ModuleNameLowerer = @import("module_name_lowerer.zig").ModuleNameLowerer;
 
 pub const UnionLayoutLowerer = struct {
     arena: std.mem.Allocator,
+    module_name_lowerer: *const ModuleNameLowerer,
 
-    pub fn init(arena: std.mem.Allocator) @This() {
+    pub fn init(arena: std.mem.Allocator, module_name_lowerer: *const ModuleNameLowerer) @This() {
         return .{
             .arena = arena,
+            .module_name_lowerer = module_name_lowerer,
         };
     }
 
@@ -51,11 +54,12 @@ pub const UnionLayoutLowerer = struct {
         const union_symbol = analyzed_program.resolved_program.symbol_table.getSymbol(union_type.symbol_id);
         const union_symbol_information = union_symbol.kind.@"union";
         const union_case = union_symbol_information.cases[case_index];
+        const module_name = try self.module_name_lowerer.lower(union_symbol.declared_at.?.module_id);
 
         return std.fmt.allocPrint(
             self.arena,
-            "matcha.union.{s}.case.{s}",
-            .{ union_symbol.name, union_case.name },
+            "{s}.union.{s}.case.{s}",
+            .{ module_name, union_symbol.name, union_case.name },
         );
     }
 };

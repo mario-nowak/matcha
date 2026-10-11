@@ -29,17 +29,17 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.structure.Point = type { i64, i64 }
+                    \\%matcha.module.main.structure.Point = type { i64, i64 }
                     \\
-                    \\define i64 @matcha.function.sum(ptr %parameter.point) {
+                    \\define i64 @matcha.module.main.function.sum(ptr %parameter.point) {
                     \\entry:
                     \\    %address.binding.point.0 = alloca ptr
                     \\    store ptr %parameter.point, ptr %address.binding.point.0
                     \\    %value.0 = load ptr, ptr %address.binding.point.0
-                    \\    %value.1 = getelementptr inbounds %matcha.structure.Point, ptr %value.0, i32 0, i32 0
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.0, i32 0, i32 0
                     \\    %value.2 = load i64, ptr %value.1
                     \\    %value.3 = load ptr, ptr %address.binding.point.0
-                    \\    %value.4 = getelementptr inbounds %matcha.structure.Point, ptr %value.3, i32 0, i32 1
+                    \\    %value.4 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.3, i32 0, i32 1
                     \\    %value.5 = load i64, ptr %value.4
                     \\    %value.6 = add i64 %value.2, %value.5
                     \\    ret i64 %value.6
@@ -49,12 +49,12 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.structure.Point, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.structure.Point, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.0, i32 0, i32 0
                     \\    store i64 1, ptr %value.1
-                    \\    %value.2 = getelementptr inbounds %matcha.structure.Point, ptr %value.0, i32 0, i32 1
+                    \\    %value.2 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.0, i32 0, i32 1
                     \\    store i64 2, ptr %value.2
-                    \\    %value.3 = call i64 @matcha.function.sum(ptr %value.0)
+                    \\    %value.3 = call i64 @matcha.module.main.function.sum(ptr %value.0)
                     \\    call void @matcha.compiler_module.builtin.function.printInt(i64 %value.3)
                     \\    ret i32 0
                     \\}
@@ -91,7 +91,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\define i64 @matcha.function.make() {
+                    \\define i64 @matcha.module.main.function.make() {
                     \\entry:
                     \\    %address.binding.wrapper.0 = alloca ptr
                     \\    ret i64 1
@@ -138,10 +138,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.union.Result.case.None = type { i32 }
-                    \\%matcha.union.Result.case.Some = type { i32, i64 }
+                    \\%matcha.module.main.union.Result.case.None = type { i32 }
+                    \\%matcha.module.main.union.Result.case.Some = type { i32, i64 }
                     \\
-                    \\define i64 @matcha.union.Result.function.valueOr(ptr %parameter.self, i64 %parameter.fallback) {
+                    \\define i64 @matcha.module.main.union.Result.function.valueOr(ptr %parameter.self, i64 %parameter.fallback) {
                     \\entry:
                     \\    %address.binding.self.0 = alloca ptr
                     \\    %address.binding.fallback.0 = alloca i64
@@ -158,7 +158,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\match.0.arm.1.condition:
                     \\    br label %match.0.arm.1
                     \\match.0.arm.1:
-                    \\    %value.4 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %value.0, i32 0, i32 1
+                    \\    %value.4 = getelementptr inbounds %matcha.module.main.union.Result.case.Some, ptr %value.0, i32 0, i32 1
                     \\    %value.5 = load i64, ptr %value.4
                     \\    store i64 %value.5, ptr %address.binding.value.0
                     \\    %value.6 = load i64, ptr %address.binding.value.0
@@ -173,12 +173,12 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %address.binding.value.0 = alloca i64
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Result.case.Some, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Result.case.Some, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Result.case.Some, ptr %value.0, i32 0, i32 0
                     \\    store i32 1, ptr %value.1
-                    \\    %value.2 = getelementptr inbounds %matcha.union.Result.case.Some, ptr %value.0, i32 0, i32 1
+                    \\    %value.2 = getelementptr inbounds %matcha.module.main.union.Result.case.Some, ptr %value.0, i32 0, i32 1
                     \\    store i64 4, ptr %value.2
-                    \\    %value.3 = call i64 @matcha.union.Result.function.valueOr(ptr %value.0, i64 0)
+                    \\    %value.3 = call i64 @matcha.module.main.union.Result.function.valueOr(ptr %value.0, i64 0)
                     \\    store i64 %value.3, ptr %address.binding.value.0
                     \\    ret i32 0
                     \\}
@@ -208,8 +208,8 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
-                    \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
+                    \\%matcha.module.main.union.Offset.case.Horizontal = type { i32, i64 }
+                    \\%matcha.module.main.union.Offset.case.Vertical = type { i32, i64 }
                     \\
                     \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                     \\entry:
@@ -217,10 +217,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
                     \\    %value.0 = sub i64 0, 3
-                    \\    %value.1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Vertical, ptr null, i64 1) to i64))
-                    \\    %value.2 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %value.1, i32 0, i32 0
+                    \\    %value.1 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Offset.case.Vertical, ptr null, i64 1) to i64))
+                    \\    %value.2 = getelementptr inbounds %matcha.module.main.union.Offset.case.Vertical, ptr %value.1, i32 0, i32 0
                     \\    store i32 1, ptr %value.2
-                    \\    %value.3 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %value.1, i32 0, i32 1
+                    \\    %value.3 = getelementptr inbounds %matcha.module.main.union.Offset.case.Vertical, ptr %value.1, i32 0, i32 1
                     \\    store i64 %value.0, ptr %value.3
                     \\    store ptr %value.1, ptr %address.binding.offset.0
                     \\    ret i32 0
@@ -251,16 +251,16 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.union.Signal.case.Off = type { i32 }
-                    \\%matcha.union.Signal.case.On = type { i32 }
+                    \\%matcha.module.main.union.Signal.case.Off = type { i32 }
+                    \\%matcha.module.main.union.Signal.case.On = type { i32 }
                     \\
                     \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                     \\entry:
                     \\    %address.binding.signal.0 = alloca ptr
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.union.Signal.case.On, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Signal.case.On, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Signal.case.On, ptr %value.0, i32 0, i32 0
                     \\    store i32 1, ptr %value.1
                     \\    store ptr %value.0, ptr %address.binding.signal.0
                     \\    ret i32 0
@@ -296,14 +296,14 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.union.Signal.case.Off = type { i32 }
-                    \\%matcha.union.Signal.case.On = type { i32 }
+                    \\%matcha.module.main.union.Signal.case.Off = type { i32 }
+                    \\%matcha.module.main.union.Signal.case.On = type { i32 }
                     \\
-                    \\define ptr @matcha.function.make() {
+                    \\define ptr @matcha.module.main.function.make() {
                     \\entry:
                     \\    %address.binding.signal.0 = alloca ptr
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.Off, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.union.Signal.case.Off, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Signal.case.Off, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Signal.case.Off, ptr %value.0, i32 0, i32 0
                     \\    store i32 0, ptr %value.1
                     \\    ret ptr %value.0
                     \\}
@@ -862,9 +862,9 @@ pub const LlvmIrCodeGenerator = struct {
                         \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                         \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
-                        \\%matcha.union.Offset.case.None = type { i32 }
-                        \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
-                        \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.None = type { i32 }
+                        \\%matcha.module.main.union.Offset.case.Horizontal = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.Vertical = type { i32, i64 }
                         \\
                         \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                         \\entry:
@@ -874,10 +874,10 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %address.binding.result.0 = alloca i64
                         \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                         \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
-                        \\    %value.1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
+                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
                         \\    store i32 1, ptr %value.1
-                        \\    %value.2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
+                        \\    %value.2 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
                         \\    store i64 4, ptr %value.2
                         \\    store ptr %value.0, ptr %address.binding.offset.0
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
@@ -891,7 +891,7 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.7 = icmp eq i32 %value.6, 1
                         \\    br i1 %value.7, label %match.0.arm.1, label %match.0.arm.2.condition
                         \\match.0.arm.1:
-                        \\    %value.8 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
+                        \\    %value.8 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
                         \\    %value.9 = load i64, ptr %value.8
                         \\    store i64 %value.9, ptr %address.binding.value.0
                         \\    %value.10 = load i64, ptr %address.binding.value.0
@@ -899,7 +899,7 @@ pub const LlvmIrCodeGenerator = struct {
                         \\match.0.arm.2.condition:
                         \\    br label %match.0.arm.2
                         \\match.0.arm.2:
-                        \\    %value.11 = getelementptr inbounds %matcha.union.Offset.case.Vertical, ptr %value.3, i32 0, i32 1
+                        \\    %value.11 = getelementptr inbounds %matcha.module.main.union.Offset.case.Vertical, ptr %value.3, i32 0, i32 1
                         \\    %value.12 = load i64, ptr %value.11
                         \\    store i64 %value.12, ptr %address.binding.value.1
                         \\    %value.13 = load i64, ptr %address.binding.value.1
@@ -939,8 +939,8 @@ pub const LlvmIrCodeGenerator = struct {
                         \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                         \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
-                        \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
-                        \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.Horizontal = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.Vertical = type { i32, i64 }
                         \\
                         \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                         \\entry:
@@ -948,10 +948,10 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %address.binding.result.0 = alloca i64
                         \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                         \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
-                        \\    %value.1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
+                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
                         \\    store i32 0, ptr %value.1
-                        \\    %value.2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
+                        \\    %value.2 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
                         \\    store i64 4, ptr %value.2
                         \\    store ptr %value.0, ptr %address.binding.offset.0
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
@@ -999,8 +999,8 @@ pub const LlvmIrCodeGenerator = struct {
                         \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                         \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
-                        \\%matcha.union.Offset.case.Horizontal = type { i32, i64 }
-                        \\%matcha.union.Offset.case.Vertical = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.Horizontal = type { i32, i64 }
+                        \\%matcha.module.main.union.Offset.case.Vertical = type { i32, i64 }
                         \\
                         \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                         \\entry:
@@ -1009,10 +1009,10 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %address.binding.result.0 = alloca i64
                         \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                         \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
-                        \\    %value.1 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
+                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Offset.case.Horizontal, ptr null, i64 1) to i64))
+                        \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 0
                         \\    store i32 0, ptr %value.1
-                        \\    %value.2 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
+                        \\    %value.2 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.0, i32 0, i32 1
                         \\    store i64 4, ptr %value.2
                         \\    store ptr %value.0, ptr %address.binding.offset.0
                         \\    %value.3 = load ptr, ptr %address.binding.offset.0
@@ -1020,7 +1020,7 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %value.5 = icmp eq i32 %value.4, 0
                         \\    br i1 %value.5, label %match.0.arm.0, label %match.0.else
                         \\match.0.arm.0:
-                        \\    %value.6 = getelementptr inbounds %matcha.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
+                        \\    %value.6 = getelementptr inbounds %matcha.module.main.union.Offset.case.Horizontal, ptr %value.3, i32 0, i32 1
                         \\    %value.7 = load i64, ptr %value.6
                         \\    store i64 %value.7, ptr %address.binding.value.0
                         \\    %value.8 = load i64, ptr %address.binding.value.0
@@ -1062,8 +1062,8 @@ pub const LlvmIrCodeGenerator = struct {
                         \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                         \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                         \\
-                        \\%matcha.union.Signal.case.Off = type { i32 }
-                        \\%matcha.union.Signal.case.On = type { i32 }
+                        \\%matcha.module.main.union.Signal.case.Off = type { i32 }
+                        \\%matcha.module.main.union.Signal.case.On = type { i32 }
                         \\
                         \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                         \\entry:
@@ -1071,8 +1071,8 @@ pub const LlvmIrCodeGenerator = struct {
                         \\    %address.binding.result.0 = alloca i64
                         \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                         \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.union.Signal.case.On, ptr null, i64 1) to i64))
-                        \\    %value.1 = getelementptr inbounds %matcha.union.Signal.case.On, ptr %value.0, i32 0, i32 0
+                        \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.union.Signal.case.On, ptr null, i64 1) to i64))
+                        \\    %value.1 = getelementptr inbounds %matcha.module.main.union.Signal.case.On, ptr %value.0, i32 0, i32 0
                         \\    store i32 1, ptr %value.1
                         \\    store ptr %value.0, ptr %address.binding.signal.0
                         \\    %value.2 = load ptr, ptr %address.binding.signal.0
@@ -1352,7 +1352,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\define i64 @matcha.function.make() {
+                    \\define i64 @matcha.module.main.function.make() {
                     \\entry:
                     \\    %address.binding.values.0 = alloca ptr
                     \\    ret i64 1
@@ -1393,9 +1393,9 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.structure.Mixed = type { i64 }
+                    \\%matcha.module.main.structure.Mixed = type { i64 }
                     \\
-                    \\define void @matcha.function.consume(ptr %parameter.mixed) {
+                    \\define void @matcha.module.main.function.consume(ptr %parameter.mixed) {
                     \\entry:
                     \\    %address.binding.mixed.0 = alloca ptr
                     \\    store ptr %parameter.mixed, ptr %address.binding.mixed.0
@@ -1406,10 +1406,10 @@ pub const LlvmIrCodeGenerator = struct {
                     \\entry:
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Mixed, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.structure.Mixed, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.structure.Mixed, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.structure.Mixed, ptr %value.0, i32 0, i32 0
                     \\    store i64 1, ptr %value.1
-                    \\    call void @matcha.function.consume(ptr %value.0)
+                    \\    call void @matcha.module.main.function.consume(ptr %value.0)
                     \\    ret i32 0
                     \\}
                     \\
@@ -1443,7 +1443,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\define ptr @matcha.function.choose(i1 %parameter.flag) {
+                    \\define ptr @matcha.module.main.function.choose(i1 %parameter.flag) {
                     \\entry:
                     \\    %address.binding.flag.0 = alloca i1
                     \\    store i1 %parameter.flag, ptr %address.binding.flag.0
@@ -1465,7 +1465,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %address.binding.chosen.0 = alloca ptr
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.function.choose(i1 1)
+                    \\    %value.0 = call ptr @matcha.module.main.function.choose(i1 1)
                     \\    store ptr %value.0, ptr %address.binding.chosen.0
                     \\    ret i32 0
                     \\}
@@ -1581,19 +1581,19 @@ pub const LlvmIrCodeGenerator = struct {
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
                     \\
-                    \\%matcha.structure.Point = type { i64 }
+                    \\%matcha.module.main.structure.Point = type { i64 }
                     \\
                     \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                     \\entry:
                     \\    %address.binding.point.0 = alloca ptr
                     \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
                     \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
-                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.structure.Point, ptr null, i64 1) to i64))
-                    \\    %value.1 = getelementptr inbounds %matcha.structure.Point, ptr %value.0, i32 0, i32 0
+                    \\    %value.0 = call ptr @matcha.compiler_module.runtime.function.allocate(i64 ptrtoint (ptr getelementptr (%matcha.module.main.structure.Point, ptr null, i64 1) to i64))
+                    \\    %value.1 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.0, i32 0, i32 0
                     \\    store i64 1, ptr %value.1
                     \\    store ptr %value.0, ptr %address.binding.point.0
                     \\    %value.2 = load ptr, ptr %address.binding.point.0
-                    \\    %value.3 = getelementptr inbounds %matcha.structure.Point, ptr %value.2, i32 0, i32 0
+                    \\    %value.3 = getelementptr inbounds %matcha.module.main.structure.Point, ptr %value.2, i32 0, i32 0
                     \\    store i64 2, ptr %value.3
                     \\    ret i32 0
                     \\}
@@ -1628,7 +1628,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\
                     \\@matcha.string_literal.0 = private unnamed_addr constant [2 x i8] c"hi"
                     \\
-                    \\define %matcha.compiler_module.builtin.type.string @matcha.function.echo(%matcha.compiler_module.builtin.type.string %parameter.text) {
+                    \\define %matcha.compiler_module.builtin.type.string @matcha.module.main.function.echo(%matcha.compiler_module.builtin.type.string %parameter.text) {
                     \\entry:
                     \\    %address.binding.text.0 = alloca %matcha.compiler_module.builtin.type.string
                     \\    store %matcha.compiler_module.builtin.type.string %parameter.text, ptr %address.binding.text.0
@@ -1643,7 +1643,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.0 = getelementptr inbounds [2 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
                     \\    %value.1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %value.0, 0
                     \\    %value.2 = insertvalue %matcha.compiler_module.builtin.type.string %value.1, i64 2, 1
-                    \\    %value.3 = call %matcha.compiler_module.builtin.type.string @matcha.function.echo(%matcha.compiler_module.builtin.type.string %value.2)
+                    \\    %value.3 = call %matcha.compiler_module.builtin.type.string @matcha.module.main.function.echo(%matcha.compiler_module.builtin.type.string %value.2)
                     \\    %value.4 = extractvalue %matcha.compiler_module.builtin.type.string %value.3, 0
                     \\    %value.5 = extractvalue %matcha.compiler_module.builtin.type.string %value.3, 1
                     \\    call void @matcha.compiler_module.builtin.function.printString(ptr %value.4, i64 %value.5)

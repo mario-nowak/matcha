@@ -54,9 +54,10 @@ pub fn generateLlvmIrFromFile(
     var member_access_lowerer = llvm_codegen.lowering.MemberAccessLowerer.init(arena);
     var binary_operation_lowerer = llvm_codegen.lowering.BinaryOperationLowerer.init(arena);
     var place_lowerer = llvm_codegen.lowering.PlaceLowerer.init(arena);
-    var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(arena);
-    var union_layout_lowerer = llvm_codegen.lowering.UnionLayoutLowerer.init(arena);
-    var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(arena);
+    const module_name_lowerer = llvm_codegen.lowering.ModuleNameLowerer.init(arena, source_registry);
+    var structure_layout_lowerer = llvm_codegen.lowering.StructureLayoutLowerer.init(arena, &module_name_lowerer);
+    var union_layout_lowerer = llvm_codegen.lowering.UnionLayoutLowerer.init(arena, &module_name_lowerer);
+    var function_layout_lowerer = llvm_codegen.lowering.FunctionLayoutLowerer.init(arena, &module_name_lowerer);
 
     var lowering_analyzer = llvm_codegen.lowering.LoweringAnalyzer.init(
         &llvm_type_table_lowerer,
