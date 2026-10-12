@@ -34,12 +34,12 @@ pub fn build(b: *std.Build) void {
     // in this directory.
 
     const sources_module = b.addModule("sources", .{
-        .root_source_file = b.path("src/compiler/sources/module.zig"),
+        .root_source_file = b.path("src/compiler/sources/root.zig"),
         .target = target,
     });
 
     const diagnostics_module = b.addModule("diagnostics", .{
-        .root_source_file = b.path("src/compiler/diagnostics/module.zig"),
+        .root_source_file = b.path("src/compiler/diagnostics/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "sources", .module = sources_module },
@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const lexing_module = b.addModule("lexing", .{
-        .root_source_file = b.path("src/compiler/lexing/module.zig"),
+        .root_source_file = b.path("src/compiler/lexing/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "sources", .module = sources_module },
@@ -56,7 +56,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const type_expressions_module = b.addModule("type_expressions", .{
-        .root_source_file = b.path("src/compiler/type_expressions/module.zig"),
+        .root_source_file = b.path("src/compiler/type_expressions/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const ast_module = b.addModule("ast", .{
-        .root_source_file = b.path("src/compiler/ast/module.zig"),
+        .root_source_file = b.path("src/compiler/ast/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "sources", .module = sources_module },
@@ -74,7 +74,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const parsing_module = b.addModule("parsing", .{
-        .root_source_file = b.path("src/compiler/parsing/module.zig"),
+        .root_source_file = b.path("src/compiler/parsing/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -85,7 +85,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const loading_module = b.addModule("loading", .{
-        .root_source_file = b.path("src/compiler/loading/module.zig"),
+        .root_source_file = b.path("src/compiler/loading/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
@@ -97,7 +97,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const symbols_module = b.addModule("symbols", .{
-        .root_source_file = b.path("src/compiler/symbols/module.zig"),
+        .root_source_file = b.path("src/compiler/symbols/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const typing_module = b.addModule("typing", .{
-        .root_source_file = b.path("src/compiler/typing/module.zig"),
+        .root_source_file = b.path("src/compiler/typing/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "symbols", .module = symbols_module },
@@ -114,16 +114,63 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const semantic_analysis_module = b.addModule("semantic_analysis", .{
-        .root_source_file = b.path("src/compiler/semantic_analysis/module.zig"),
+    const name_resolution_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/semantic_analysis/name_resolution/root.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
             .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
+        },
+    });
+
+    const control_flow_validation_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/semantic_analysis/control_flow/root.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "type_expressions", .module = type_expressions_module },
+        },
+    });
+
+    const type_checking_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/semantic_analysis/type_checking/root.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "symbols", .module = symbols_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "control_flow_validation", .module = control_flow_validation_module },
+        },
+    });
+
+    const runtime_representation_module = b.createModule(.{
+        .root_source_file = b.path("src/compiler/semantic_analysis/runtime_representation/root.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "typing", .module = typing_module },
+            .{ .name = "type_checking", .module = type_checking_module },
+        },
+    });
+
+    const semantic_analysis_module = b.addModule("semantic_analysis", .{
+        .root_source_file = b.path("src/compiler/semantic_analysis/root.zig"),
+        .target = target,
+        .imports = &.{
             .{ .name = "ast", .module = ast_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "typing", .module = typing_module },
-            .{ .name = "type_expressions", .module = type_expressions_module },
-            .{ .name = "diagnostics", .module = diagnostics_module },
+            .{ .name = "name_resolution", .module = name_resolution_module },
+            .{ .name = "control_flow_validation", .module = control_flow_validation_module },
+            .{ .name = "type_checking", .module = type_checking_module },
+            .{ .name = "runtime_representation", .module = runtime_representation_module },
         },
     });
 
@@ -133,7 +180,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const lowering_module = b.createModule(.{
-        .root_source_file = b.path("src/compiler/llvm_codegen/lowering/module.zig"),
+        .root_source_file = b.path("src/compiler/llvm_codegen/lowering/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "sources", .module = sources_module },
@@ -146,7 +193,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const emission_module = b.createModule(.{
-        .root_source_file = b.path("src/compiler/llvm_codegen/emission/module.zig"),
+        .root_source_file = b.path("src/compiler/llvm_codegen/emission/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -160,7 +207,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const rendering_module = b.createModule(.{
-        .root_source_file = b.path("src/compiler/llvm_codegen/rendering/module.zig"),
+        .root_source_file = b.path("src/compiler/llvm_codegen/rendering/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
@@ -173,7 +220,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const llvm_codegen_module = b.addModule("llvm_codegen", .{
-        .root_source_file = b.path("src/compiler/llvm_codegen/module.zig"),
+        .root_source_file = b.path("src/compiler/llvm_codegen/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
@@ -187,7 +234,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     const compiler_module = b.addModule("compiler", .{
-        .root_source_file = b.path("src/compiler/module.zig"),
+        .root_source_file = b.path("src/compiler/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "lexing", .module = lexing_module },
@@ -205,7 +252,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const toolchain_module = b.addModule("toolchain", .{
-        .root_source_file = b.path("src/toolchain/module.zig"),
+        .root_source_file = b.path("src/toolchain/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "compiler", .module = compiler_module },
@@ -213,7 +260,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const testing_module = b.createModule(.{
-        .root_source_file = b.path("src/compiler/testing/module.zig"),
+        .root_source_file = b.path("src/compiler/testing/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
@@ -274,7 +321,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const cli_module = b.createModule(.{
-        .root_source_file = b.path("src/cli/module.zig"),
+        .root_source_file = b.path("src/cli/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{

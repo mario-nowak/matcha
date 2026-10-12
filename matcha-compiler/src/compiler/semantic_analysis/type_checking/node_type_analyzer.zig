@@ -5,7 +5,7 @@ const diagnostics = @import("diagnostics");
 const CompileError = diagnostics.CompileError;
 const symbols = @import("symbols");
 const typing = @import("typing");
-const control_flow_validation = @import("../control_flow/module.zig");
+const control_flow_validation = @import("control_flow_validation");
 const type_checking_types = @import("type_checking_types.zig");
 
 const ExhaustivenessClass = type_checking_types.ExhaustivenessClass;

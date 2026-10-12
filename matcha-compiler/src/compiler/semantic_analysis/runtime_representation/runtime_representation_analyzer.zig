@@ -1,6 +1,6 @@
 const std = @import("std");
 const typing = @import("typing");
-const type_checking = @import("../type_checking/module.zig");
+const type_checking = @import("type_checking");
 const runtime_representation_types = @import("runtime_representation_types.zig");
 
 const RuntimeRepresentation = runtime_representation_types.RuntimeRepresentation;

@@ -1,5 +1,5 @@
 const lexing = @import("lexing");
-const NodeId = @import("module.zig").NodeId;
+const NodeId = @import("node.zig").NodeId;
 
 pub const Pattern = struct {
     id: NodeId,

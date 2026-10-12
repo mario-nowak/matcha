@@ -1,6 +1,6 @@
 const typing = @import("typing");
 const symbols = @import("symbols");
-const control_flow_validation = @import("../control_flow/module.zig");
+const control_flow_validation = @import("control_flow_validation");
 
 pub const NodeRoleExpressionKind = enum {
     value,
