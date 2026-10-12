@@ -1,5 +1,6 @@
 const std = @import("std");
-const ast = @import("ast");
+
+const builtins_import_path = "builtin";
 
 pub const ImportPathResolution = union(enum) {
     builtins,
@@ -14,7 +15,7 @@ pub fn resolveImportPath(
     importing_module_path: []const u8,
     import_path: []const u8,
 ) !ImportPathResolution {
-    if (std.mem.eql(u8, import_path, ast.builtins_import_path)) {
+    if (std.mem.eql(u8, import_path, builtins_import_path)) {
         return .builtins;
     }
     if (!std.mem.endsWith(u8, import_path, ".mt")) {
