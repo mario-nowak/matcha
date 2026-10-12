@@ -52,7 +52,6 @@ pub fn setupProgramFixture(
                 .module_path => |module_path| .{ .module = for (source_files, 0..) |candidate_source_file, module_id| {
                     if (std.mem.eql(u8, candidate_source_file.path, module_path)) break @intCast(module_id);
                 } else return error.ImportedSourceFileMissing },
-                .missing_extension => return error.ImportPathMissingExtension,
             };
             try import_target_by_node_id.put(statement.id, import_target);
         }

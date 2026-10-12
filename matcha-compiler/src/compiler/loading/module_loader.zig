@@ -61,10 +61,16 @@ pub const ModuleLoader = struct {
                 const import_path = import_definition.path_token.kind.string_literal;
                 const import_target: ast.ImportTarget = switch (try resolveImportPath(self.arena, source_file.path, import_path)) {
                     .builtins => .builtins,
-                    .module_path => |module_path| .{ .module = try self.discoverModule(module_path, import_definition, &module_id_by_canonical_path) },
-                    .missing_extension => {
-                        try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, import_definition.path_token, "import path '{s}' must end with '.mt'", .{import_path});
-                        return error.DiagnosticsEmitted;
+                    .module_path => |module_path| module: {
+                        if (!std.mem.endsWith(u8, import_path, ".mt")) {
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, import_definition.path_token, "import path '{s}' must end with '.mt'", .{import_path});
+                            return error.DiagnosticsEmitted;
+                        }
+                        break :module .{ .module = try self.discoverModule(
+                            module_path,
+                            import_definition,
+                            &module_id_by_canonical_path,
+                        ) };
                     },
                 };
                 try import_target_by_node_id.put(statement.id, import_target);
