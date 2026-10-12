@@ -1,8 +1,8 @@
 const symbols = @import("symbols");
 const typing = @import("typing");
-const control_flow_validation = @import("./control_flow/module.zig");
-const type_checking = @import("./type_checking/module.zig");
-const runtime_representation = @import("./runtime_representation/module.zig");
+const control_flow_validation = @import("control_flow_validation");
+const type_checking = @import("type_checking");
+const runtime_representation = @import("runtime_representation");
 
 pub const AnalyzedProgram = struct {
     resolved_program: symbols.ResolvedProgram,

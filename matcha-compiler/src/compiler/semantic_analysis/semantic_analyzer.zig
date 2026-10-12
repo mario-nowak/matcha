@@ -1,10 +1,10 @@
 const std = @import("std");
 const ast = @import("ast");
 const analyzed_program_module = @import("analyzed_program.zig");
-const name_resolution = @import("name_resolution/module.zig");
-const type_checking = @import("type_checking/module.zig");
-const control_flow_validation = @import("control_flow/module.zig");
-const runtime_representation = @import("runtime_representation/module.zig");
+const name_resolution = @import("name_resolution");
+const type_checking = @import("type_checking");
+const control_flow_validation = @import("control_flow_validation");
+const runtime_representation = @import("runtime_representation");
 
 pub const SemanticAnalyzer = struct {
     name_resolver: name_resolution.NameResolver,

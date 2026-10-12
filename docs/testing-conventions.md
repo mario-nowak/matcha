@@ -57,7 +57,7 @@ Zig only analyzes a nested `test` when something references its struct. A missed
 1. Mark every scope struct `pub`. The registration only sees `pub` declarations.
 2. Register the file in `src/compiler/tests.zig` with `referenceAllTestsRecursive(@import("..."))`. A plain `_ = @import("...")` skips all nested tests.
 
-`referenceAllTestsRecursive()` exists only in `src/compiler/tests.zig`. The CLI tests (`src/cli/module.zig`) and the e2e tests (`tests/e2e/tests.zig`) have their own test roots. Add the helper to a root before its files use nested scopes.
+`referenceAllTestsRecursive()` exists only in `src/compiler/tests.zig`. The CLI tests (`src/cli/root.zig`) and the e2e tests (`tests/e2e/tests.zig`) have their own test roots. Add the helper to a root before its files use nested scopes.
 
 ### Filtering
 
