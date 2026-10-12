@@ -18,6 +18,7 @@ pub const TokenKind = union(enum) {
     in,
     item,
     @"export",
+    import,
     @"return",
     structure,
     @"union",

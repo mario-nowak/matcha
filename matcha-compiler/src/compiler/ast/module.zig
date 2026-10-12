@@ -51,7 +51,10 @@ pub const Node = struct {
     pub fn primaryToken(self: *const @This()) lexing.Token {
         return switch (self.kind) {
             .binding_declaration => |binding_declaration| binding_declaration.name,
-            .item_definition => |item_definition| item_definition.identifier_token,
+            .item_definition => |item_definition| switch (item_definition.declared_names) {
+                .single => |name_token| name_token,
+                .destructuring => item_definition.item_token,
+            },
             .return_statement => |return_statement| return_statement.return_token,
             .if_statement => |if_statement| if_statement.if_token,
             .expression_statement => |expression_statement| expression_statement.expression.primaryToken(),
@@ -87,14 +90,38 @@ pub const ItemDefinition = struct {
     /// Set when the item is exported, so other modules can import it.
     export_token: ?lexing.Token,
     item_token: lexing.Token,
-    identifier_token: lexing.Token,
+    declared_names: DeclaredNames,
     definition: ItemDefinitionKind,
+};
+
+/// The names that a declaration introduces.
+pub const DeclaredNames = union(enum) {
+    single: lexing.Token,
+    destructuring: Destructuring,
+};
+
+/// Binds several names at once, each to the member of the same name.
+pub const Destructuring = struct {
+    left_brace: lexing.Token,
+    entries: []DestructuringEntry,
+    right_brace: lexing.Token,
+};
+
+pub const DestructuringEntry = struct {
+    id: NodeId,
+    name_token: lexing.Token,
 };
 
 pub const ItemDefinitionKind = union(enum) {
     function: FunctionDefinition,
     structure: StructureDefinition,
     @"union": UnionDefinition,
+    import: ImportDefinition,
+};
+
+pub const ImportDefinition = struct {
+    import_token: lexing.Token,
+    path_token: lexing.Token,
 };
 
 pub const UnionDefinition = struct {

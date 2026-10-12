@@ -47,9 +47,13 @@ pub const Parser = struct {
     }
 
     fn createNode(self: *Parser, kind: ast.NodeKind) ast.Node {
+        return .{ .id = self.createNodeId(), .kind = kind };
+    }
+
+    fn createNodeId(self: *Parser) ast.NodeId {
         const id = self.next_node_id;
         self.next_node_id += 1;
-        return .{ .id = id, .kind = kind };
+        return id;
     }
 
     pub fn parse(self: *Parser, lexer: lexing.Lexer) !ast.Module {
@@ -200,6 +204,10 @@ pub const Parser = struct {
             return false;
         }
 
+        if ((lookahead.peek() catch return false).kind == .left_brace) {
+            return true;
+        }
+
         if ((lookahead.peek() catch return false).kind != .identifier) {
             return false;
         }
@@ -275,6 +283,10 @@ pub const Parser = struct {
         }
         const item_token = convertToKeywordToken(try self.lexer.next(), .item);
 
+        if ((try self.lexer.peek()).kind == .left_brace) {
+            return try self.parseImportDefinition(export_token, item_token);
+        }
+
         const identifier_token = try self.lexer.next();
         if (identifier_token.kind != .identifier) {
             try self.diagnostic_store.emitErrorFromToken(identifier_token, "expected identifier after 'item'");
@@ -292,6 +304,10 @@ pub const Parser = struct {
         _ = try self.lexer.next(); // consume equal sign
 
         const post_assign_token = try self.lexer.peek();
+        if (isIdentifierNamed(post_assign_token, "import")) {
+            try self.diagnostic_store.emitErrorFromToken(post_assign_token, "an imported module must be destructured");
+            return error.DiagnosticsEmitted;
+        }
         if (post_assign_token.kind == .structure) {
             return self.parseStructureDefinition(export_token, item_token, identifier_token);
         }
@@ -301,6 +317,90 @@ pub const Parser = struct {
 
         try self.diagnostic_store.emitErrorFromToken(post_assign_token, "expected 'structure' or 'union' after '=' in item definition");
         return error.DiagnosticsEmitted;
+    }
+
+    fn parseImportDefinition(
+        self: *@This(),
+        export_token: ?lexing.Token,
+        item_token: lexing.Token,
+    ) CompileError!ast.Node {
+        if (export_token) |token| {
+            try self.diagnostic_store.emitErrorFromToken(token, "'export' is not allowed on imports");
+            return error.DiagnosticsEmitted;
+        }
+
+        const destructuring = try self.parseDestructuring();
+
+        const assign_token = try self.lexer.next();
+        if (assign_token.kind != .assign) {
+            try self.diagnostic_store.emitErrorFromToken(assign_token, "expected '=' after destructuring");
+            return error.DiagnosticsEmitted;
+        }
+
+        const import_token = try self.lexer.next();
+        if (!isIdentifierNamed(import_token, "import")) {
+            try self.diagnostic_store.emitErrorFromToken(import_token, "destructuring is only allowed for imports");
+            return error.DiagnosticsEmitted;
+        }
+
+        const path_token = try self.lexer.next();
+        if (path_token.kind != .string_literal) {
+            try self.diagnostic_store.emitErrorFromToken(path_token, "expected a module path string after 'import'");
+            return error.DiagnosticsEmitted;
+        }
+
+        const semicolon_token = try self.lexer.next();
+        if (semicolon_token.kind != .semicolon) {
+            try self.diagnostic_store.emitErrorFromToken(semicolon_token, "expected ';' after import");
+            return error.DiagnosticsEmitted;
+        }
+
+        return self.createNode(.{
+            .item_definition = .{
+                .export_token = null,
+                .item_token = item_token,
+                .declared_names = .{ .destructuring = destructuring },
+                .definition = .{ .import = .{
+                    .import_token = convertToKeywordToken(import_token, .import),
+                    .path_token = path_token,
+                } },
+            },
+        });
+    }
+
+    fn parseDestructuring(self: *@This()) CompileError!ast.Destructuring {
+        const left_brace_token = try self.lexer.next();
+
+        var entries = std.ArrayList(ast.DestructuringEntry){};
+        while ((try self.lexer.peek()).kind != .right_brace) {
+            const name_token = try self.lexer.next();
+            if (name_token.kind != .identifier) {
+                try self.diagnostic_store.emitErrorFromToken(name_token, "expected a name in destructuring");
+                return error.DiagnosticsEmitted;
+            }
+            try entries.append(self.arena, .{ .id = self.createNodeId(), .name_token = name_token });
+
+            if ((try self.lexer.peek()).kind != .comma) {
+                break;
+            }
+            _ = try self.lexer.next(); // consume comma
+        }
+
+        const right_brace_token = try self.lexer.next();
+        if (right_brace_token.kind != .right_brace) {
+            try self.diagnostic_store.emitErrorFromToken(right_brace_token, "expected ',' or '}' in destructuring");
+            return error.DiagnosticsEmitted;
+        }
+        if (entries.items.len == 0) {
+            try self.diagnostic_store.emitErrorFromToken(right_brace_token, "expected at least one name in destructuring");
+            return error.DiagnosticsEmitted;
+        }
+
+        return .{
+            .left_brace = left_brace_token,
+            .entries = try entries.toOwnedSlice(self.arena),
+            .right_brace = right_brace_token,
+        };
     }
 
     fn parseUnionDefinition(
@@ -319,7 +419,7 @@ pub const Parser = struct {
             .item_definition = .{
                 .export_token = export_token,
                 .item_token = item_token,
-                .identifier_token = identifier_token,
+                .declared_names = .{ .single = identifier_token },
                 .definition = .{ .@"union" = union_definition },
             },
         });
@@ -355,7 +455,7 @@ pub const Parser = struct {
                         switch (item_definition.definition) {
                             .function => try function_definitions.append(self.arena, item),
                             else => {
-                                try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside union body");
+                                try self.diagnostic_store.emitErrorFromToken(item.primaryToken(), "expected function definition inside union body");
                                 return error.DiagnosticsEmitted;
                             },
                         }
@@ -420,7 +520,7 @@ pub const Parser = struct {
             .item_definition = .{
                 .export_token = export_token,
                 .item_token = item_token,
-                .identifier_token = identifier_token,
+                .declared_names = .{ .single = identifier_token },
                 .definition = .{ .structure = structure },
             },
         });
@@ -456,7 +556,7 @@ pub const Parser = struct {
                         switch (item_definition.definition) {
                             .function => try function_definitions.append(self.arena, item),
                             else => {
-                                try self.diagnostic_store.emitErrorFromToken(item_definition.identifier_token, "expected function definition inside structure body");
+                                try self.diagnostic_store.emitErrorFromToken(item.primaryToken(), "expected function definition inside structure body");
                                 return error.DiagnosticsEmitted;
                             },
                         }
@@ -576,7 +676,7 @@ pub const Parser = struct {
             .item_definition = .{
                 .export_token = export_token,
                 .item_token = item_token,
-                .identifier_token = identifier_token,
+                .declared_names = .{ .single = identifier_token },
                 .definition = .{
                     .function = .{
                         .parameters = try parameters.toOwnedSlice(self.arena),

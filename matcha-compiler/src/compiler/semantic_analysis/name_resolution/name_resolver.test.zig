@@ -1016,6 +1016,20 @@ pub const NameResolver = struct {
         };
 
         pub const modules = struct {
+            test "rejects an import because imports are not supported yet" {
+                const source = "item { Point } = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "imports are not supported yet" },
+                });
+            }
+
             test "allows items with the same name in different modules" {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();

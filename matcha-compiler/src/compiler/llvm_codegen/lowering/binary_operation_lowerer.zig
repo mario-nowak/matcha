@@ -40,6 +40,7 @@ pub const BinaryOperationLowerer = struct {
                         try self.lowerNode(function_definition_node, analyzed_program, decision_by_node_id);
                     }
                 },
+                .import => {},
             },
             .return_statement => |return_statement| {
                 if (return_statement.value) |value| {

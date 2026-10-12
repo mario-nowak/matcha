@@ -348,6 +348,7 @@ pub const NodeTypeAnalyzer = struct {
                     );
                 }
             },
+            .import => {},
         }
 
         return self.recordNodeType(node_id, self.type_store.unit_type_id);
