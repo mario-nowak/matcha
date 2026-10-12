@@ -2,6 +2,7 @@ pub const lexing = @import("lexing");
 pub const ast = @import("ast");
 pub const type_expressions = @import("type_expressions");
 pub const parsing = @import("parsing");
+pub const loading = @import("loading");
 pub const sources = @import("sources");
 pub const diagnostics = @import("diagnostics");
 pub const typing = @import("typing");

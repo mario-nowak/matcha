@@ -67,6 +67,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/ast/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
         },
@@ -80,6 +81,18 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
+        },
+    });
+
+    const loading_module = b.addModule("loading", .{
+        .root_source_file = b.path("src/compiler/loading/module.zig"),
+        .target = target,
+        .imports = &.{
+            .{ .name = "ast", .module = ast_module },
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "parsing", .module = parsing_module },
+            .{ .name = "diagnostics", .module = diagnostics_module },
+            .{ .name = "sources", .module = sources_module },
         },
     });
 
@@ -178,6 +191,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "loading", .module = loading_module },
             .{ .name = "parsing", .module = parsing_module },
             .{ .name = "sources", .module = sources_module },
             .{ .name = "diagnostics", .module = diagnostics_module },
@@ -202,6 +216,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "ast", .module = ast_module },
             .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "loading", .module = loading_module },
             .{ .name = "parsing", .module = parsing_module },
             .{ .name = "symbols", .module = symbols_module },
             .{ .name = "sources", .module = sources_module },
@@ -220,6 +235,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "lexing", .module = lexing_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "type_expressions", .module = type_expressions_module },
+            .{ .name = "loading", .module = loading_module },
             .{ .name = "parsing", .module = parsing_module },
             .{ .name = "sources", .module = sources_module },
             .{ .name = "diagnostics", .module = diagnostics_module },

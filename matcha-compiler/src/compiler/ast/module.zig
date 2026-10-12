@@ -1,14 +1,16 @@
 const std = @import("std");
-const lexing = @import("lexing");
-const type_expressions = @import("type_expressions");
 
-pub const NodeId = u32;
+const lexing = @import("lexing");
+const sources = @import("sources");
+const type_expressions = @import("type_expressions");
 
 pub const Pattern = @import("pattern.zig").Pattern;
 pub const PatternKind = @import("pattern.zig").PatternKind;
 pub const IntegerLiteralPattern = @import("pattern.zig").IntegerLiteralPattern;
 pub const CasePattern = @import("pattern.zig").CasePattern;
 pub const PayloadBinding = @import("pattern.zig").PayloadBinding;
+
+pub const NodeId = u32;
 
 pub const NodeKind = union(enum) {
     // Statements-ish nodes
@@ -384,4 +386,8 @@ pub const Module = struct {
 pub const Program = struct {
     /// The first module is the root module. Only the root module contains statements other than item definitions, and they form the body of `main`.
     modules: []Module,
+    /// The module that each import item refers to.
+    imported_module_id_by_node_id: ImportedModuleIdByNodeId,
 };
+
+pub const ImportedModuleIdByNodeId = std.AutoHashMap(NodeId, sources.ModuleId);

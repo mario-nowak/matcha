@@ -2,6 +2,7 @@ pub const expect = @import("expect.zig").expect;
 pub const setupLexerPipeline = @import("lexer_helpers.zig").setupLexerPipeline;
 pub const collectTokens = @import("lexer_helpers.zig").collectTokens;
 pub const setupParserFixture = @import("parser_helpers.zig").setupParserFixture;
+pub const setupModuleLoaderFixture = @import("module_loader_helpers.zig").setupModuleLoaderFixture;
 pub const setupProgramFixture = @import("program_helpers.zig").setupProgramFixture;
 pub const setupPatternParserFixture = @import("pattern_parser_helpers.zig").setupPatternParserFixture;
 pub const setupStructuralValidatorFixture = @import("structural_validator_helpers.zig").setupStructuralValidatorFixture;
