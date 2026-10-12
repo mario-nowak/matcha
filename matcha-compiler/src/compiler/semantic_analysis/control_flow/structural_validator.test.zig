@@ -65,7 +65,7 @@ pub const StructuralValidator = struct {
                         .path = "main.mt",
                         .source =
                         \\item { printInt } = import "builtin";
-                        \\printInt(1);"
+                        \\printInt(1);
                         ,
                     },
                     .{
