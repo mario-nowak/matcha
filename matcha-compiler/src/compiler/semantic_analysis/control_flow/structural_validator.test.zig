@@ -61,8 +61,8 @@ pub const StructuralValidator = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupStructuralValidatorFixtureFromSourceFiles(&arena, &.{
-                    .{ .path = "main.mt", .source = "printInt(1);" },
-                    .{ .path = "other.mt", .source = "printInt(2);" },
+                    .{ .path = "main.mt", .source = "item { printInt } = import \"builtin\";\nprintInt(1);" },
+                    .{ .path = "other.mt", .source = "item { printInt } = import \"builtin\";\nprintInt(2);" },
                 });
 
                 const result = fixture.validator.validateProgram(&fixture.program);
@@ -77,7 +77,7 @@ pub const StructuralValidator = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupStructuralValidatorFixtureFromSourceFiles(&arena, &.{
-                    .{ .path = "main.mt", .source = "printInt(1);" },
+                    .{ .path = "main.mt", .source = "item { printInt } = import \"builtin\";\nprintInt(1);" },
                     .{ .path = "other.mt", .source = "item Point = structure { x: int; };" },
                 });
 

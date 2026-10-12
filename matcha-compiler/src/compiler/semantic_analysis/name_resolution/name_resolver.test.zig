@@ -482,6 +482,7 @@ test "NameResolver > resolveProgram: resolves forward structure references in fi
 
 test "NameResolver > resolveProgram: resolves for-in item bindings inside loop bodies" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val numbers = [1, 2, 3];
         \\for number in numbers {
         \\    printInt(number);
@@ -490,7 +491,7 @@ test "NameResolver > resolveProgram: resolves for-in item bindings inside loop b
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const fixture = try setupNameResolverFixture(&arena, source);
-    const for_in_node = fixture.program.modules[0].statements[1];
+    const for_in_node = fixture.program.modules[0].statements[2];
     const print_call = for_in_node.kind.for_in.body_block.kind.block.statements[0].kind.expression_statement.expression.kind.call_expression;
 
     const result = try fixture.resolver.resolveProgram(&fixture.program);
@@ -520,6 +521,7 @@ pub const NameResolver = struct {
         pub const match_expression = struct {
             test "resolves a payload binding in its arm body" {
                 const source =
+                    \\item { printString, printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -530,7 +532,7 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.modules[0].statements[2].kind.expression_statement.expression;
+                const match_node = fixture.program.modules[0].statements[3].kind.expression_statement.expression;
                 const second_match_arm = match_node.kind.match_expression.arms[1];
                 const print_call_argument = second_match_arm.body_expression.kind.call_expression.arguments[0];
 
@@ -544,6 +546,7 @@ pub const NameResolver = struct {
 
             test "keeps a payload binding out of the other arms" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -565,6 +568,7 @@ pub const NameResolver = struct {
 
             test "keeps a payload binding out of the else arm" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -586,6 +590,7 @@ pub const NameResolver = struct {
 
             test "keeps a payload binding out of statements after the match" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -608,6 +613,7 @@ pub const NameResolver = struct {
 
             test "gives payload bindings with the same name in two arms separate symbols" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Pair = union { First: int, Second: int };
                     \\val pair = .First(1);
                     \\match pair {
@@ -618,7 +624,7 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.modules[0].statements[2].kind.expression_statement.expression;
+                const match_node = fixture.program.modules[0].statements[3].kind.expression_statement.expression;
                 const first_match_arm = match_node.kind.match_expression.arms[0];
                 const second_match_arm = match_node.kind.match_expression.arms[1];
 
@@ -631,6 +637,7 @@ pub const NameResolver = struct {
 
             test "records a payload binding as an immutable binding symbol" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -641,7 +648,7 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.modules[0].statements[2].kind.expression_statement.expression;
+                const match_node = fixture.program.modules[0].statements[3].kind.expression_statement.expression;
                 const some_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
@@ -655,6 +662,7 @@ pub const NameResolver = struct {
 
             test "records no symbol for a case pattern without a qualifier" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -665,7 +673,7 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const match_node = fixture.program.modules[0].statements[2].kind.expression_statement.expression;
+                const match_node = fixture.program.modules[0].statements[3].kind.expression_statement.expression;
                 const none_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
@@ -675,6 +683,7 @@ pub const NameResolver = struct {
 
             test "rejects unit as a payload binding name" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -762,6 +771,7 @@ pub const NameResolver = struct {
 
             test "rejects a payload binding with the name of a module item outside functions" {
                 const source =
+                    \\item { printInt, printString } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -801,6 +811,7 @@ pub const NameResolver = struct {
 
             test "resolves the qualifier of a case pattern to the union" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -811,8 +822,8 @@ pub const NameResolver = struct {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupNameResolverFixture(&arena, source);
-                const union_node = fixture.program.modules[0].statements[0];
-                const match_node = fixture.program.modules[0].statements[2].kind.expression_statement.expression;
+                const union_node = fixture.program.modules[0].statements[1];
+                const match_node = fixture.program.modules[0].statements[3].kind.expression_statement.expression;
                 const none_match_arm = match_node.kind.match_expression.arms[0];
 
                 const result = try fixture.resolver.resolveProgram(&fixture.program);
@@ -823,6 +834,7 @@ pub const NameResolver = struct {
 
             test "rejects an undefined qualifier in a case pattern" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Result = union { None, Some: int };
                     \\val result = .Some(1);
                     \\match result {
@@ -846,6 +858,7 @@ pub const NameResolver = struct {
         pub const for_in = struct {
             test "rejects a for-in binding with the name of a parameter" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item sum(numbers: int[], number: int): int = {
                     \\    for number in numbers {
                     \\        printInt(number);
@@ -867,6 +880,7 @@ pub const NameResolver = struct {
 
             test "rejects a for-in binding with the name of a binding in an enclosing block" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item sum(numbers: int[]): int = {
                     \\    val number = 1;
                     \\    for number in numbers {
@@ -889,6 +903,7 @@ pub const NameResolver = struct {
 
             test "rejects a for-in binding with the name of a for-in binding in an enclosing loop" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item sum(numbers: int[]): int = {
                     \\    for number in numbers {
                     \\        for number in numbers {
@@ -912,6 +927,7 @@ pub const NameResolver = struct {
 
             test "rejects a for-in binding with the name of a module item outside functions" {
                 const source =
+                    \\item { printInt, printString } = import "builtin";
                     \\val numbers = [1, 2, 3];
                     \\for printString in numbers {
                     \\    printInt(printString);
@@ -931,6 +947,7 @@ pub const NameResolver = struct {
 
             test "lets a for-in binding shadow a module item inside a function" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item number(): int = 1;
                     \\item sum(numbers: int[]): int = {
                     \\    for number in numbers {
@@ -950,8 +967,38 @@ pub const NameResolver = struct {
         };
 
         pub const builtin_functions = struct {
-            test "rejects a function with the name of a builtin function" {
+            test "rejects a call to a builtin function that is not imported" {
                 const source =
+                    \\printInt(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "undefined identifier 'printInt'" },
+                });
+            }
+
+            test "allows an item with the name of a builtin function that is not imported" {
+                const source =
+                    \\item printInt(value: int): unit = unit;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                _ = try fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+
+            test "rejects an item with the name of an imported builtin function" {
+                const source =
+                    \\item { printInt } = import "builtin";
                     \\item printInt(value: int): unit = unit;
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -962,44 +1009,13 @@ pub const NameResolver = struct {
 
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "function 'printInt' is already defined" },
+                    .{ .message = "item 'printInt' is already defined" },
                 });
             }
 
-            test "rejects a structure with the name of a builtin function" {
+            test "rejects a module-level binding with the name of an imported builtin function" {
                 const source =
-                    \\item printInt = structure { value: int; };
-                ;
-                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-                defer arena.deinit();
-                const fixture = try setupNameResolverFixture(&arena, source);
-
-                const result = fixture.resolver.resolveProgram(&fixture.program);
-
-                try expect(result).toBeError(error.DiagnosticsEmitted);
-                try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "structure 'printInt' is already defined" },
-                });
-            }
-
-            test "rejects a union with the name of a builtin function" {
-                const source =
-                    \\item printInt = union { None, Some: int };
-                ;
-                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-                defer arena.deinit();
-                const fixture = try setupNameResolverFixture(&arena, source);
-
-                const result = fixture.resolver.resolveProgram(&fixture.program);
-
-                try expect(result).toBeError(error.DiagnosticsEmitted);
-                try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "union 'printInt' is already defined" },
-                });
-            }
-
-            test "rejects a module-level binding with the name of a builtin function" {
-                const source =
+                    \\item { printInt } = import "builtin";
                     \\val printInt = 1;
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1011,6 +1027,22 @@ pub const NameResolver = struct {
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "value 'printInt' is already declared in module scope" },
+                });
+            }
+
+            test "rejects a name that the builtins do not define" {
+                const source =
+                    \\item { print } = import "builtin";
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNameResolverFixture(&arena, source);
+
+                const result = fixture.resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "module 'builtin' has no item 'print'" },
                 });
             }
         };

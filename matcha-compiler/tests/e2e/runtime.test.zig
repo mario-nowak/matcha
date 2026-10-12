@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "array index out of bounds reports a runtime error" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val xs = [1, 2];
         \\printInt(xs[3]);
     ;

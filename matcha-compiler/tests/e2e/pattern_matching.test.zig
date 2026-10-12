@@ -6,6 +6,7 @@ pub const Matcha = struct {
             pub const arms = struct {
                 test "runs the arm of the constructed case and binds its payload" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Horizontal(4);
                         \\printInt(match offset {
@@ -22,6 +23,7 @@ pub const Matcha = struct {
 
                 test "runs the last arm when no earlier arm matches" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { None, Horizontal: int, Vertical: int };
                         \\val offset = Offset.Vertical(-3);
                         \\printInt(match offset {
@@ -39,6 +41,7 @@ pub const Matcha = struct {
 
                 test "runs the arm of a payloadless case" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Maybe = union { None, Some: int };
                         \\val maybe = Maybe.None;
                         \\printInt(match maybe {
@@ -55,6 +58,7 @@ pub const Matcha = struct {
 
                 test "runs the matching arm when the arms are in a different order than the cases" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Horizontal(5);
                         \\printInt(match offset {
@@ -71,6 +75,7 @@ pub const Matcha = struct {
 
                 test "matches qualified case patterns like implicit case patterns" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Vertical(7);
                         \\printInt(match offset {
@@ -87,6 +92,7 @@ pub const Matcha = struct {
 
                 test "ignores the payload when a case pattern has no binding" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Vertical(7);
                         \\printInt(match offset {
@@ -103,6 +109,7 @@ pub const Matcha = struct {
 
                 test "runs the else arm when no case arm matches" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Vertical(7);
                         \\printInt(match offset {
@@ -119,6 +126,7 @@ pub const Matcha = struct {
 
                 test "runs only the side effects of the matched arm when the match is a statement" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset = Offset.Horizontal(4);
                         \\match offset {
@@ -135,6 +143,7 @@ pub const Matcha = struct {
 
                 test "returns from the function when the matched arm returns" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\item horizontalOrZero(offset: Offset): int = {
                         \\    match offset {
@@ -160,6 +169,7 @@ pub const Matcha = struct {
             pub const implicit_construction = struct {
                 test "constructs a payload case from the declared type" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\val offset: Offset = .Horizontal(4);
                         \\printInt(match offset {
@@ -176,6 +186,7 @@ pub const Matcha = struct {
 
                 test "constructs a payloadless case from the declared type" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Maybe = union { None, Some: int };
                         \\val maybe: Maybe = .None;
                         \\printInt(match maybe {
@@ -194,6 +205,7 @@ pub const Matcha = struct {
             pub const values = struct {
                 test "passes a union to a function" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\item length(offset: Offset): int = match offset {
                         \\    .Horizontal(value) => value,
@@ -210,6 +222,7 @@ pub const Matcha = struct {
 
                 test "returns a union from a function" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\item rotate(offset: Offset): Offset = match offset {
                         \\    .Horizontal(value) => Offset.Vertical(value),
@@ -229,6 +242,7 @@ pub const Matcha = struct {
 
                 test "reassigns a mutable union binding to a different case" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Maybe = union { None, Some: int };
                         \\var maybe = Maybe.None;
                         \\maybe = Maybe.Some(9);
@@ -246,6 +260,7 @@ pub const Matcha = struct {
 
                 test "stores unions in an array" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Maybe = union { None, Some: int };
                         \\val maybes: Maybe[] = [.Some(1), .None, .Some(20)];
                         \\var sum = 0;
@@ -266,6 +281,7 @@ pub const Matcha = struct {
 
                 test "stores a union in a structure field" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\item Move = structure {
                         \\    offset: Offset;
@@ -287,6 +303,7 @@ pub const Matcha = struct {
             pub const payloads = struct {
                 test "binds a string payload" {
                     const source =
+                        \\item { printString } = import "builtin";
                         \\item Message = union { Empty, Text: string };
                         \\val message = Message.Text("hello");
                         \\printString(match message {
@@ -303,6 +320,7 @@ pub const Matcha = struct {
 
                 test "binds a structure payload" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Point = structure {
                         \\    x: int;
                         \\    y: int;
@@ -323,6 +341,7 @@ pub const Matcha = struct {
 
                 test "binds a union payload" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Offset = union { Horizontal: int, Vertical: int };
                         \\item Step = union { Stay, Move: Offset };
                         \\val step = Step.Move(Offset.Vertical(8));
@@ -343,6 +362,7 @@ pub const Matcha = struct {
 
                 test "binds a unit payload" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Signal = union { Off, On: unit };
                         \\val signal = Signal.On(unit);
                         \\printInt(match signal {
@@ -361,6 +381,7 @@ pub const Matcha = struct {
             pub const functions = struct {
                 test "calls a method that matches on its receiver" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Result = union {
                         \\    None,
                         \\    Some: int,
@@ -380,6 +401,7 @@ pub const Matcha = struct {
 
                 test "calls a type function through the union name" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Result = union {
                         \\    None,
                         \\    Some: int,
@@ -400,6 +422,7 @@ pub const Matcha = struct {
 
                 test "constructs a union through an implicit type function call" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Result = union {
                         \\    None,
                         \\    Some: int,
@@ -420,6 +443,7 @@ pub const Matcha = struct {
 
                 test "calls a method from another method of the same union" {
                     const source =
+                        \\item { printInt } = import "builtin";
                         \\item Result = union {
                         \\    None,
                         \\    Some: int,

@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "arrays support append indexing length and for-in iteration" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val numbers = [1, 2, 3];
         \\numbers.append(4);
         \\numbers[0] = 10;
@@ -21,6 +22,7 @@ test "arrays support append indexing length and for-in iteration" {
 
 test "non-array for-in iterable reports a semantic diagnostic" {
     const source =
+        \\item { printInt } = import "builtin";
         \\for value in 1 {
         \\    printInt(value);
         \\}

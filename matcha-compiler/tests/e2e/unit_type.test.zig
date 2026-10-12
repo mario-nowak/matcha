@@ -13,6 +13,7 @@ test "the unit literal can be assigned to variables" {
 
 test "variables with unit type can be reassigned and values are evaluated" {
     const source =
+        \\item { printString } = import "builtin";
         \\var value: unit = unit;
         \\value = printString("evaluated");
     ;
@@ -25,6 +26,7 @@ test "variables with unit type can be reassigned and values are evaluated" {
 
 test "the unit literal can be returned from functions" {
     const source =
+        \\item { printString } = import "builtin";
         \\item printHelloWorld(): unit = {
         \\    printString("Hello, world!");
         \\    return unit;
@@ -40,6 +42,7 @@ test "the unit literal can be returned from functions" {
 
 test "unit return values in a function are evaluated" {
     const source =
+        \\item { printString } = import "builtin";
         \\item printHelloWorld(): unit = {
         \\    return printString("Hello, world!");
         \\};
@@ -54,6 +57,7 @@ test "unit return values in a function are evaluated" {
 
 test "a function that returns unit can be called without using its return value" {
     const source =
+        \\item { printString } = import "builtin";
         \\item printHelloWorld(): unit = {
         \\    printString("Hello, world!");
         \\    return unit;
@@ -69,6 +73,7 @@ test "a function that returns unit can be called without using its return value"
 
 test "a block that evaluates to unit can be used as an expression" {
     const source =
+        \\item { printString } = import "builtin";
         \\val x = {
         \\    printString("Hello, world!");
         \\};
@@ -82,6 +87,7 @@ test "a block that evaluates to unit can be used as an expression" {
 
 test "if expressions can evaluate to unit" {
     const source =
+        \\item { printString } = import "builtin";
         \\val then_result: unit = if true {
         \\    printString("then");
         \\} else {
@@ -102,6 +108,7 @@ test "if expressions can evaluate to unit" {
 
 test "match expressions can evaluate to unit" {
     const source =
+        \\item { printString } = import "builtin";
         \\val true_result: unit = match true {
         \\    true => printString("true"),
         \\    false => printString("not true"),
@@ -120,6 +127,7 @@ test "match expressions can evaluate to unit" {
 
 test "an array can be constructed with unit elements" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val unit_array: unit[] = [unit, unit, unit];
         \\printInt(unit_array.length);
     ;
@@ -157,6 +165,7 @@ test "accessing an array of unit element out of bounds results in a panic" {
 
 test "the values of an array of unit elements are evaluated" {
     const source =
+        \\item { printString } = import "builtin";
         \\val unit_array: unit[] = [
         \\    printString("Hello, world!"),
         \\    printString("Hello, world!"),
@@ -172,6 +181,7 @@ test "the values of an array of unit elements are evaluated" {
 
 test "an array of unit elements can be iterated over" {
     const source =
+        \\item { printString } = import "builtin";
         \\val unit_array: unit[] = [unit, unit, unit];
         \\for element in unit_array {
         \\    printString("Hello, world!");
@@ -186,6 +196,7 @@ test "an array of unit elements can be iterated over" {
 
 test "an array of unit elements can be appended to" {
     const source =
+        \\item { printInt } = import "builtin";
         \\var unit_array: unit[] = [unit, unit, unit];
         \\unit_array.append(unit);
         \\printInt(unit_array.length);
@@ -199,6 +210,7 @@ test "an array of unit elements can be appended to" {
 
 test "an element of an array of unit elements can be assigned to" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\var unit_array: unit[] = [unit, unit, unit];
         \\unit_array[1] = printString("evaluated");
         \\printInt(unit_array.length);
@@ -224,6 +236,7 @@ test "assigning to an element of an array of unit elements out of bounds results
 
 test "the elements of an array of unit elements can be used in a for-in loop" {
     const source =
+        \\item { printString } = import "builtin";
         \\val unit_array: unit[] = [unit, unit, unit];
         \\for element in unit_array {
         \\    val x: unit = element;
@@ -239,6 +252,7 @@ test "the elements of an array of unit elements can be used in a for-in loop" {
 
 test "an empty array of unit elements can be appended to" {
     const source =
+        \\item { printInt } = import "builtin";
         \\var unit_array: unit[] = [];
         \\unit_array.append(unit);
         \\unit_array.append(unit);
@@ -253,6 +267,7 @@ test "an empty array of unit elements can be appended to" {
 
 test "the argument of an append to an array of unit elements is evaluated" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\var unit_array: unit[] = [unit];
         \\unit_array.append(printString("evaluated"));
         \\printInt(unit_array.length);
@@ -266,6 +281,7 @@ test "the argument of an append to an array of unit elements is evaluated" {
 
 test "an array of unit elements can be passed to and returned from functions" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item makeArray(): unit[] = {
         \\    return [unit, unit];
         \\};
@@ -283,6 +299,7 @@ test "an array of unit elements can be passed to and returned from functions" {
 
 test "an array of arrays of unit elements can be constructed and accessed" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val nested: unit[][] = [[unit], [unit, unit]];
         \\printInt(nested[1].length);
     ;
@@ -309,6 +326,7 @@ test "fields of structures can be of unit type" {
 
 test "structures with only unit type fields can have functions" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\
@@ -328,6 +346,7 @@ test "structures with only unit type fields can have functions" {
 
 test "structures with only unit type fields can have type functions" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\
@@ -346,6 +365,7 @@ test "structures with only unit type fields can have type functions" {
 
 test "functions can have parameters with types that don't have any runtime representation" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\
@@ -386,6 +406,7 @@ test "structures can have fields with unit type and fields of other types" {
 
 test "represented structure fields after erased fields can be read" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item MixedUnitStruct = structure {
         \\    erased: unit;
         \\    value: int;
@@ -402,6 +423,7 @@ test "represented structure fields after erased fields can be read" {
 
 test "represented structure fields after erased fields can be assigned" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item MixedUnitStruct = structure {
         \\    erased: unit;
         \\    value: int;
@@ -435,6 +457,7 @@ test "erased structure fields can be read" {
 
 test "erased structure fields can be assigned and values are evaluated" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\item MixedUnitStruct = structure {
         \\    erased: unit;
         \\    value: int;
@@ -452,6 +475,7 @@ test "erased structure fields can be assigned and values are evaluated" {
 
 test "represented fields separated by an erased field use compact runtime indices" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item MixedUnitStruct = structure {
         \\    first: int;
         \\    erased: unit;
@@ -470,6 +494,7 @@ test "represented fields separated by an erased field use compact runtime indice
 
 test "functions can return structures without runtime representation" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};
@@ -487,6 +512,7 @@ test "functions can return structures without runtime representation" {
 
 test "arrays can contain structures without runtime representation" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};
@@ -504,6 +530,7 @@ test "arrays can contain structures without runtime representation" {
 
 test "multiple erased function arguments are evaluated in order" {
     const source =
+        \\item { printInt, printString } = import "builtin";
         \\item selectValue(first: unit, value: int, second: unit): int = {
         \\    return value;
         \\};
@@ -522,6 +549,7 @@ test "multiple erased function arguments are evaluated in order" {
 
 test "structure fields can be constructed out of definition order when fields are erased" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item MixedUnitStruct = structure {
         \\    first: int;
         \\    erased: unit;
@@ -544,6 +572,7 @@ test "structure fields can be constructed out of definition order when fields ar
 
 test "if expressions can return structures without runtime representation" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};
@@ -570,6 +599,7 @@ test "if expressions can return structures without runtime representation" {
 
 test "match expressions can return structures without runtime representation" {
     const source =
+        \\item { printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};
@@ -594,6 +624,7 @@ test "match expressions can return structures without runtime representation" {
 
 test "functions can have only erased parameters" {
     const source =
+        \\item { printInt, printString } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};
@@ -614,6 +645,7 @@ test "functions can have only erased parameters" {
 
 test "structures can contain nested structures without runtime representation" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\item UnitStruct = structure {
         \\    field: unit;
         \\};

@@ -16,13 +16,13 @@ const ResolutionOptions = struct {
     module_shadowing: ModuleShadowing,
 };
 
-/// An item that a module defines itself. Builtins and imported items are not module items.
-const ModuleItem = struct {
+/// An item that an import can bind: an item that a module defines itself, or a builtin function.
+const ImportableItem = struct {
     symbol_id: symbols.SymbolId,
     is_exported: bool,
 };
 
-const ModuleItemByName = std.StringHashMap(ModuleItem);
+const ImportableItemByName = std.StringHashMap(ImportableItem);
 
 const ResolutionEnvironment = struct {
     node_scope: *scope.Scope,
@@ -49,8 +49,9 @@ pub const NameResolver = struct {
         self.symbol_table = symbols.SymbolTable.init(self.arena);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
 
+        const builtin_item_table = try self.createBuiltinItemTable();
         const module_scopes = try self.arena.alloc(scope.ModuleScope, program.modules.len);
-        const module_item_tables = try self.arena.alloc(ModuleItemByName, program.modules.len);
+        const module_item_tables = try self.arena.alloc(ImportableItemByName, program.modules.len);
         for (program.modules, module_scopes, module_item_tables) |*module, *module_scope, *module_item_table| {
             module_scope.* = try self.buildModuleScope(module);
             module_item_table.* = try self.collectModuleItems(module);
@@ -67,11 +68,14 @@ pub const NameResolver = struct {
                     .import => |import_definition| import_definition,
                     else => continue,
                 };
-                const imported_module_id = program.imported_module_id_by_node_id.get(statement.id) orelse unreachable;
+                const imported_item_table = switch (program.import_target_by_node_id.get(statement.id) orelse unreachable) {
+                    .module => |imported_module_id| module_item_tables[imported_module_id],
+                    .builtins => builtin_item_table,
+                };
                 try self.bindImportedItems(
                     item_definition.declared_names.destructuring,
                     import_definition,
-                    module_item_tables[imported_module_id],
+                    imported_item_table,
                     module_scope,
                 );
             }
@@ -99,16 +103,19 @@ pub const NameResolver = struct {
         };
     }
 
-    fn addBuiltinFunctions(self: *@This(), module_scope: *scope.ModuleScope) !void {
-        try self.addPrintIntBuiltinDebuggingFunction(module_scope);
-        try self.addPrintStringBuiltinDebuggingFunction(module_scope);
-        try self.addReadFileBuiltinFunction(module_scope);
-        try self.addReadLineBuiltinFunction(module_scope);
-        try self.addGetArgumentsBuiltinFunction(module_scope);
-        try self.addStartProcessBuiltinFunction(module_scope);
+    /// Creates the builtin functions once for the whole program. Modules see them only through `import "builtin"`.
+    fn createBuiltinItemTable(self: *@This()) !ImportableItemByName {
+        var builtin_item_table = ImportableItemByName.init(self.arena);
+        try self.addPrintIntBuiltinDebuggingFunction(&builtin_item_table);
+        try self.addPrintStringBuiltinDebuggingFunction(&builtin_item_table);
+        try self.addReadFileBuiltinFunction(&builtin_item_table);
+        try self.addReadLineBuiltinFunction(&builtin_item_table);
+        try self.addGetArgumentsBuiltinFunction(&builtin_item_table);
+        try self.addStartProcessBuiltinFunction(&builtin_item_table);
+        return builtin_item_table;
     }
 
-    fn addPrintIntBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addPrintIntBuiltinDebuggingFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const parameter_id = try self.symbol_table.insertSymbol(.{
             .name = "value",
             .declared_at = null,
@@ -126,10 +133,10 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_print_int,
             } },
         });
-        try module_scope.insertSymbol("printInt", function_id);
+        try builtin_item_table.put("printInt", .{ .symbol_id = function_id, .is_exported = true });
     }
 
-    fn addPrintStringBuiltinDebuggingFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addPrintStringBuiltinDebuggingFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const parameter_id = try self.symbol_table.insertSymbol(.{
             .name = "value",
             .declared_at = null,
@@ -147,10 +154,10 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_print_string,
             } },
         });
-        try module_scope.insertSymbol("printString", function_id);
+        try builtin_item_table.put("printString", .{ .symbol_id = function_id, .is_exported = true });
     }
 
-    fn addReadFileBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addReadFileBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const parameter_id = try self.symbol_table.insertSymbol(.{
             .name = "path",
             .declared_at = null,
@@ -168,10 +175,10 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_read_file,
             } },
         });
-        try module_scope.insertSymbol("readFile", function_id);
+        try builtin_item_table.put("readFile", .{ .symbol_id = function_id, .is_exported = true });
     }
 
-    fn addReadLineBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addReadLineBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const function_id = try self.symbol_table.insertSymbol(.{
             .name = "readLine",
             .declared_at = null,
@@ -181,10 +188,10 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_read_line,
             } },
         });
-        try module_scope.insertSymbol("readLine", function_id);
+        try builtin_item_table.put("readLine", .{ .symbol_id = function_id, .is_exported = true });
     }
 
-    fn addGetArgumentsBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addGetArgumentsBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const string_type_reference = try self.arena.create(symbols.ResolvedTypeReference);
         string_type_reference.* = .{ .builtin = .string };
         const function_id = try self.symbol_table.insertSymbol(.{
@@ -196,10 +203,10 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_get_arguments,
             } },
         });
-        try module_scope.insertSymbol("getArguments", function_id);
+        try builtin_item_table.put("getArguments", .{ .symbol_id = function_id, .is_exported = true });
     }
 
-    fn addStartProcessBuiltinFunction(self: *@This(), module_scope: *scope.ModuleScope) !void {
+    fn addStartProcessBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
         const string_type_reference = try self.arena.create(symbols.ResolvedTypeReference);
         string_type_reference.* = .{ .builtin = .string };
         const command_parameter_id = try self.symbol_table.insertSymbol(.{
@@ -230,14 +237,11 @@ pub const NameResolver = struct {
                 .implementation_kind = .builtin_start_process,
             } },
         });
-        try module_scope.insertSymbol("startProcess", function_id);
+        try builtin_item_table.put("startProcess", .{ .symbol_id = function_id, .is_exported = true });
     }
 
     fn buildModuleScope(self: *@This(), module: *const ast.Module) CompileError!scope.ModuleScope {
         var module_scope = scope.ModuleScope.init(self.arena, null);
-        // Builtins come first, so the duplicate checks of the module items see them.
-        // Every module gets its own builtin symbols until builtins are imported explicitly.
-        try self.addBuiltinFunctions(&module_scope);
 
         for (module.statements) |*statement| {
             switch (statement.kind) {
@@ -272,8 +276,8 @@ pub const NameResolver = struct {
         }
     }
 
-    fn collectModuleItems(self: *@This(), module: *const ast.Module) CompileError!ModuleItemByName {
-        var module_item_by_name = ModuleItemByName.init(self.arena);
+    fn collectModuleItems(self: *@This(), module: *const ast.Module) CompileError!ImportableItemByName {
+        var module_items_by_name = ImportableItemByName.init(self.arena);
         for (module.statements) |*statement| {
             const item_definition = switch (statement.kind) {
                 .item_definition => |item_definition| item_definition,
@@ -283,12 +287,12 @@ pub const NameResolver = struct {
                 .single => |name_token| name_token,
                 .destructuring => continue,
             };
-            try module_item_by_name.put(name_token.kind.identifier, .{
+            try module_items_by_name.put(name_token.kind.identifier, .{
                 .symbol_id = self.symbol_id_by_node_id.get(statement.id) orelse unreachable,
                 .is_exported = item_definition.export_token != null,
             });
         }
-        return module_item_by_name;
+        return module_items_by_name;
     }
 
     /// Binds each destructured name to the symbol of the imported item, so all later phases treat it like the item itself.
@@ -296,17 +300,17 @@ pub const NameResolver = struct {
         self: *@This(),
         destructuring: ast.Destructuring,
         import_definition: ast.ImportDefinition,
-        imported_module_item_by_name: ModuleItemByName,
+        importable_item_by_name: ImportableItemByName,
         module_scope: *scope.ModuleScope,
     ) CompileError!void {
         const module_path = import_definition.path_token.kind.string_literal;
         for (destructuring.entries) |entry| {
             const item_name = entry.name_token.kind.identifier;
-            const module_item = imported_module_item_by_name.get(item_name) orelse {
+            const importable_item = importable_item_by_name.get(item_name) orelse {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, entry.name_token, "module '{s}' has no item '{s}'", .{ module_path, item_name });
                 return error.DiagnosticsEmitted;
             };
-            if (!module_item.is_exported) {
+            if (!importable_item.is_exported) {
                 try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, entry.name_token, "item '{s}' of module '{s}' is not exported", .{ item_name, module_path });
                 return error.DiagnosticsEmitted;
             }
@@ -315,8 +319,8 @@ pub const NameResolver = struct {
                 return error.DiagnosticsEmitted;
             };
 
-            try module_scope.insertSymbol(item_name, module_item.symbol_id);
-            try self.symbol_id_by_node_id.put(entry.id, module_item.symbol_id);
+            try module_scope.insertSymbol(item_name, importable_item.symbol_id);
+            try self.symbol_id_by_node_id.put(entry.id, importable_item.symbol_id);
         }
     }
 

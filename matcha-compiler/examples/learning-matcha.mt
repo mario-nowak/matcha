@@ -9,6 +9,14 @@
 // 4. structures and methods
 // 5. unions and pattern matching
 
+item {
+    printInt,
+    printString,
+    getArguments,
+    readFile,
+    readLine,
+} = import "builtin";
+
 // # Basics
 
 // ## Defining values
@@ -171,6 +179,7 @@ for entry in entries {
 // # Functions
 // ## Built-in functions
 // Matcha currently has a small built-in standard library.
+// A file sees a built-in function only after importing it, like the import at the top of this file.
 // `printInt` prints an int.
 printInt(the_answer);
 

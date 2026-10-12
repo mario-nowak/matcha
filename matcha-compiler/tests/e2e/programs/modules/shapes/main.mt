@@ -1,3 +1,4 @@
+item { printString } = import "builtin";
 item { Point, Shape, scaled, describe } = import "geometry.mt";
 
 item describeTwice(shape: Shape): string = describe(shape) + " / " + describe(shape);

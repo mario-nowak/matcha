@@ -1,3 +1,5 @@
+item { getArguments, readFile, printInt } = import "builtin";
+
 item absolute(number: int): int = match {
     number < 0 => -number,
     else => number,

@@ -5,6 +5,7 @@ const lexing = @import("lexing");
 const parsing = @import("parsing");
 const sources = @import("sources");
 const CompileError = diagnostics.CompileError;
+const resolveImportPath = @import("import_path.zig").resolveImportPath;
 
 /// Loads the root module and every module it reaches through imports, each exactly once.
 pub const ModuleLoader = struct {
@@ -34,7 +35,7 @@ pub const ModuleLoader = struct {
         root_source: []const u8,
     ) !ast.Program {
         var module_id_by_canonical_path = std.StringHashMap(sources.ModuleId).init(self.arena);
-        var imported_module_id_by_node_id = ast.ImportedModuleIdByNodeId.init(self.arena);
+        var import_target_by_node_id = ast.ImportTargetByNodeId.init(self.arena);
         var modules = std.ArrayList(ast.Module){};
 
         const root_module_id = try self.source_registry.add(root_path, root_source);
@@ -57,33 +58,32 @@ pub const ModuleLoader = struct {
                     },
                     else => continue,
                 };
-                const imported_module_id = try self.discoverModule(
-                    source_file.path,
-                    import_definition,
-                    &module_id_by_canonical_path,
-                );
-                try imported_module_id_by_node_id.put(statement.id, imported_module_id);
+                const import_path = import_definition.path_token.kind.string_literal;
+                const import_target: ast.ImportTarget = switch (try resolveImportPath(self.arena, source_file.path, import_path)) {
+                    .builtins => .builtins,
+                    .module_path => |module_path| .{ .module = try self.discoverModule(module_path, import_definition, &module_id_by_canonical_path) },
+                    .missing_extension => {
+                        try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, import_definition.path_token, "import path '{s}' must end with '.mt'", .{import_path});
+                        return error.DiagnosticsEmitted;
+                    },
+                };
+                try import_target_by_node_id.put(statement.id, import_target);
             }
         }
 
         return .{
             .modules = try modules.toOwnedSlice(self.arena),
-            .imported_module_id_by_node_id = imported_module_id_by_node_id,
+            .import_target_by_node_id = import_target_by_node_id,
         };
     }
 
     fn discoverModule(
         self: *@This(),
-        importing_module_path: []const u8,
+        module_path: []const u8,
         import_definition: ast.ImportDefinition,
         module_id_by_canonical_path: *std.StringHashMap(sources.ModuleId),
     ) CompileError!sources.ModuleId {
         const import_path = import_definition.path_token.kind.string_literal;
-        // The import path is relative to the importing module. The joined path stays relative, so diagnostics stay readable.
-        const module_path = try std.fs.path.resolve(
-            self.arena,
-            &.{ std.fs.path.dirname(importing_module_path) orelse "", import_path },
-        );
 
         const canonical_path = self.canonicalizePath(module_path) catch |canonicalize_error| switch (canonicalize_error) {
             error.OutOfMemory => return error.OutOfMemory,

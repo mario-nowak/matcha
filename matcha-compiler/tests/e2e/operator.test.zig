@@ -25,6 +25,7 @@ test "invalid compound assignment reports a semantic diagnostic" {
 
 test "unit values compare equal and never unequal" {
     const source =
+        \\item { printString } = import "builtin";
         \\printString(match {
         \\    unit == unit => "equal",
         \\    else => "not equal",
@@ -43,6 +44,7 @@ test "unit values compare equal and never unequal" {
 
 test "unit comparison evaluates both operands" {
     const source =
+        \\item { printInt } = import "builtin";
         \\val same = printInt(1) == printInt(2);
     ;
 
@@ -54,6 +56,7 @@ test "unit comparison evaluates both operands" {
 
 test "arrays compare by reference identity" {
     const source =
+        \\item { printString } = import "builtin";
         \\val first = [1, 2, 3];
         \\val alias = first;
         \\val separate = [1, 2, 3];
@@ -76,6 +79,7 @@ test "arrays compare by reference identity" {
 
 test "compares a structure with an anonymous structure literal" {
     const source =
+        \\item { printString } = import "builtin";
         \\item Point = structure { x: int; };
         \\val point = Point { x = 1 };
         \\printString(match {
@@ -92,6 +96,7 @@ test "compares a structure with an anonymous structure literal" {
 
 test "and skips the right operand when the left operand is false" {
     const source =
+        \\item { printString } = import "builtin";
         \\item check(): boolean = {
         \\    printString("evaluated");
         \\    true
@@ -108,6 +113,7 @@ test "and skips the right operand when the left operand is false" {
 
 test "or skips the right operand when the left operand is true" {
     const source =
+        \\item { printString } = import "builtin";
         \\item check(): boolean = {
         \\    printString("evaluated");
         \\    true
@@ -124,6 +130,7 @@ test "or skips the right operand when the left operand is true" {
 
 test "and guards an array index with a bounds check" {
     const source =
+        \\item { printString } = import "builtin";
         \\val numbers = [1, 2];
         \\val index = 5;
         \\printString(if index < numbers.length and numbers[index] == 1 { "found" } else { "not found" });
@@ -137,6 +144,7 @@ test "and guards an array index with a bounds check" {
 
 test "evaluates an or nested in the right operand of an and" {
     const source =
+        \\item { printString } = import "builtin";
         \\val left = true;
         \\printString(if left and (false or left) { "yes" } else { "no" });
     ;
@@ -152,6 +160,7 @@ pub const Matcha = struct {
         pub const integer_division = struct {
             test "divides integers toward zero" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\printInt(7 / 2);
                     \\printInt(-7 / 2);
                 ;
@@ -164,6 +173,7 @@ pub const Matcha = struct {
 
             test "reports a division by zero with its location" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\val divisor = 0;
                     \\printInt(10 / divisor);
                 ;
@@ -172,11 +182,12 @@ pub const Matcha = struct {
                 defer result.deinit();
 
                 try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  --> ");
-                try e2e.expectContains(result.stderr, "/division_by_zero.mt:2:13\n");
+                try e2e.expectContains(result.stderr, "/division_by_zero.mt:3:13\n");
             }
 
             test "reports an overflowing division with its location" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\val dividend = -9223372036854775807 - 1;
                     \\val divisor = -1;
                     \\printInt(dividend / divisor);
@@ -186,7 +197,7 @@ pub const Matcha = struct {
                 defer result.deinit();
 
                 try e2e.expectRuntimeError(&result, "runtime error: integer overflow in division\n  --> ");
-                try e2e.expectContains(result.stderr, "/division_overflow.mt:3:19\n");
+                try e2e.expectContains(result.stderr, "/division_overflow.mt:4:19\n");
             }
         };
     };

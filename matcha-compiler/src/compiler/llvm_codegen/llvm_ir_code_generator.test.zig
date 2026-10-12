@@ -7,6 +7,7 @@ pub const LlvmIrCodeGenerator = struct {
         pub const structures = struct {
             test "lowers a structure passed to a function and printed" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\item Point = structure { x: int; y: int; };
                     \\item sum(point: Point): int = point.x + point.y;
                     \\printInt(sum(Point { x = 1, y = 2 }));
@@ -1101,6 +1102,7 @@ pub const LlvmIrCodeGenerator = struct {
         pub const arrays = struct {
             test "lowers an array literal and a for in loop over it" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\val numbers = [1, 2];
                     \\for value in numbers {
                     \\    printInt(value);
@@ -1479,6 +1481,7 @@ pub const LlvmIrCodeGenerator = struct {
 
             test "omits element storage for an array of unit" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\val values: unit[] = [unit, unit];
                     \\printInt(values.length);
                 ;
@@ -1609,6 +1612,7 @@ pub const LlvmIrCodeGenerator = struct {
         pub const runtime_calls = struct {
             test "passes a string literal through a function to printString" {
                 const source =
+                    \\item { printString } = import "builtin";
                     \\item echo(text: string): string = text;
                     \\printString(echo("hi"));
                 ;
@@ -1659,6 +1663,7 @@ pub const LlvmIrCodeGenerator = struct {
 
             test "lowers the input builtins to runtime calls" {
                 const source =
+                    \\item { readLine, readFile, getArguments } = import "builtin";
                     \\val line = readLine();
                     \\val input = readFile("input.txt");
                     \\val arguments = getArguments();

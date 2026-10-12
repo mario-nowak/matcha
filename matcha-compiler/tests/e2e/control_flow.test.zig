@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "if statements, if expressions, and block results produce the expected values" {
     const source =
+        \\item { printInt } = import "builtin";
         \\var confirmed = 0;
         \\if true {
         \\    confirmed = 1;
@@ -25,6 +26,7 @@ test "if statements, if expressions, and block results produce the expected valu
 
 test "while loops and headless loops update values until leave" {
     const source =
+        \\item { printInt } = import "builtin";
         \\var i = 0;
         \\var sum = 0;
         \\while i < 4 : i += 1 {
@@ -47,6 +49,7 @@ test "while loops and headless loops update values until leave" {
 
 test "a function can end with a loop that only exits through return" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item firstAbove(numbers: int[], limit: int): int = {
         \\    var index = 0;
         \\    loop {
@@ -67,6 +70,7 @@ test "a function can end with a loop that only exits through return" {
 
 test "one-branch if without braces reports a parser diagnostic" {
     const source =
+        \\item { printInt } = import "builtin";
         \\if true printInt(1);
     ;
 
@@ -102,6 +106,7 @@ test "non-boolean while condition reports a semantic diagnostic" {
 
 test "an if-expression branch that returns from the function leaves the value to the other branch" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item clamp(number: int): int = {
         \\    val doubled = if number > 100 {
         \\        return 100;

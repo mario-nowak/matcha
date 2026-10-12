@@ -386,8 +386,16 @@ pub const Module = struct {
 pub const Program = struct {
     /// The first module is the root module. Only the root module contains statements other than item definitions, and they form the body of `main`.
     modules: []Module,
-    /// The module that each import item refers to.
-    imported_module_id_by_node_id: ImportedModuleIdByNodeId,
+    /// What each import item refers to.
+    import_target_by_node_id: ImportTargetByNodeId,
 };
 
-pub const ImportedModuleIdByNodeId = std.AutoHashMap(NodeId, sources.ModuleId);
+/// The import path of the builtin functions. Every other import path names a `.mt` file.
+pub const builtins_import_path = "builtin";
+
+pub const ImportTarget = union(enum) {
+    module: sources.ModuleId,
+    builtins,
+};
+
+pub const ImportTargetByNodeId = std.AutoHashMap(NodeId, ImportTarget);

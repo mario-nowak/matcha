@@ -34,7 +34,7 @@ pub const ModuleLoader = struct {
             const program = try fixture.load("main.mt");
 
             const import_node_id = program.modules[0].statements[0].id;
-            try expect(program.imported_module_id_by_node_id.get(import_node_id).?).toMatch(1);
+            try expect(program.import_target_by_node_id.get(import_node_id).?).toMatch(.{ .module = 1 });
         }
 
         test "resolves an import path relative to the importing module" {
@@ -96,7 +96,7 @@ pub const ModuleLoader = struct {
             const program = try fixture.load("main.mt");
 
             try std.testing.expectEqual(2, program.modules.len);
-            try expect(program.imported_module_id_by_node_id.get(program.modules[1].statements[0].id).?).toMatch(0);
+            try expect(program.import_target_by_node_id.get(program.modules[1].statements[0].id).?).toMatch(.{ .module = 0 });
         }
 
         test "reports a missing module at its import path" {
@@ -112,6 +112,37 @@ pub const ModuleLoader = struct {
             try expect(result).toBeError(error.DiagnosticsEmitted);
             try expect(fixture.diagnostic_store.items()).toMatch(.{
                 .{ .message = "cannot find module 'missing.mt'", .span = .{ .module_id = 0, .column = 21 } },
+            });
+        }
+
+        test "records the builtins as the target of a builtin import" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var directory = std.testing.tmpDir(.{});
+            defer directory.cleanup();
+            try directory.dir.writeFile(.{ .sub_path = "main.mt", .data = "item { printInt } = import \"builtin\";" });
+            const fixture = try setupModuleLoaderFixture(&arena, &directory);
+
+            const program = try fixture.load("main.mt");
+
+            try std.testing.expectEqual(1, program.modules.len);
+            try expect(program.import_target_by_node_id.get(program.modules[0].statements[0].id).?).toMatch(.builtins);
+        }
+
+        test "reports an import path without the .mt extension" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var directory = std.testing.tmpDir(.{});
+            defer directory.cleanup();
+            try directory.dir.writeFile(.{ .sub_path = "main.mt", .data = "item { Point } = import \"geometry\";" });
+            try directory.dir.writeFile(.{ .sub_path = "geometry", .data = "export item Point = structure { x: int; };" });
+            const fixture = try setupModuleLoaderFixture(&arena, &directory);
+
+            const result = fixture.load("main.mt");
+
+            try expect(result).toBeError(error.DiagnosticsEmitted);
+            try expect(fixture.diagnostic_store.items()).toMatch(.{
+                .{ .message = "import path 'geometry' must end with '.mt'" },
             });
         }
     };
