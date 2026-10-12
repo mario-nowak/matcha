@@ -47,7 +47,7 @@ pub const ExitBehaviorAnalyzer = struct {
         switch (node.kind) {
             .item_definition => |item_definition| switch (item_definition.definition) {
                 .function => |function_definition| {
-                    try self.validateFunctionReturnsValue(item_definition.identifier_token, &function_definition);
+                    try self.validateFunctionReturnsValue(item_definition.declared_names.single, &function_definition);
                 },
                 .structure => |structure| {
                     for (structure.function_definitions) |*function_definition_node| {
@@ -59,6 +59,7 @@ pub const ExitBehaviorAnalyzer = struct {
                         try self.validateFunctionReturnPathsInNode(function_definition_node);
                     }
                 },
+                .import => {},
             },
             else => {},
         }

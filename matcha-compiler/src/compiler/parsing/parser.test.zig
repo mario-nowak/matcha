@@ -263,7 +263,7 @@ pub const Parser = struct {
 
                 try expect(module).toMatch(.{ .statements = .{
                     .{ .kind = .{ .item_definition = .{
-                        .identifier_token = .{ .kind = .{ .identifier = "Point" } },
+                        .declared_names = .{ .single = .{ .kind = .{ .identifier = "Point" } } },
                         .definition = .{ .structure = .{} },
                     } } },
                 } });
@@ -286,7 +286,7 @@ pub const Parser = struct {
                         .definition = .{ .structure = .{
                             .function_definitions = .{
                                 .{ .kind = .{ .item_definition = .{
-                                    .identifier_token = .{ .kind = .{ .identifier = "get" } },
+                                    .declared_names = .{ .single = .{ .kind = .{ .identifier = "get" } } },
                                     .definition = .{ .function = .{} },
                                 } } },
                             },
@@ -308,7 +308,7 @@ pub const Parser = struct {
                 try expect(module).toMatch(.{ .statements = .{
                     .{ .kind = .{ .item_definition = .{
                         .export_token = .{ .kind = .@"export" },
-                        .identifier_token = .{ .kind = .{ .identifier = "Point" } },
+                        .declared_names = .{ .single = .{ .kind = .{ .identifier = "Point" } } },
                     } } },
                 } });
             }
@@ -356,6 +356,131 @@ pub const Parser = struct {
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
                     .{ .message = "'export' is only allowed on top-level items" },
+                });
+            }
+        };
+
+        pub const imports = struct {
+            test "parses the destructured names and the path of an import" {
+                const source = "item { Point, parse } = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .item_definition = .{
+                        .declared_names = .{ .destructuring = .{ .entries = .{
+                            .{ .name_token = .{ .kind = .{ .identifier = "Point" } } },
+                            .{ .name_token = .{ .kind = .{ .identifier = "parse" } } },
+                        } } },
+                        .definition = .{ .import = .{
+                            .import_token = .{ .kind = .import },
+                            .path_token = .{ .kind = .{ .string_literal = "geometry.mt" } },
+                        } },
+                    } } },
+                } });
+            }
+
+            test "allows a trailing comma after the last destructured name" {
+                const source = "item { Point, } = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .item_definition = .{
+                        .declared_names = .{ .destructuring = .{ .entries = .{
+                            .{ .name_token = .{ .kind = .{ .identifier = "Point" } } },
+                        } } },
+                    } } },
+                } });
+            }
+
+            test "gives each destructured name its own node id" {
+                const source = "item { Point, parse } = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                const entries = module.statements[0].kind.item_definition.declared_names.destructuring.entries;
+                try std.testing.expect(entries[0].id != entries[1].id);
+                try std.testing.expect(entries[0].id != module.statements[0].id);
+            }
+
+            test "allows import as a binding name" {
+                const source = "val import = 1;";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .name = .{ .kind = .{ .identifier = "import" } },
+                    } } },
+                } });
+            }
+
+            test "rejects an import without destructuring" {
+                const source = "item geometry = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const result = fixture.parser.parse(fixture.lexer.*);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "an imported module must be destructured" },
+                });
+            }
+
+            test "rejects destructuring without an import" {
+                const source = "item { Point } = structure { x: int; };";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const result = fixture.parser.parse(fixture.lexer.*);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "destructuring is only allowed for imports" },
+                });
+            }
+
+            test "rejects an empty destructuring" {
+                const source = "item {} = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const result = fixture.parser.parse(fixture.lexer.*);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "expected at least one name in destructuring" },
+                });
+            }
+
+            test "rejects export on an import" {
+                const source = "export item { Point } = import \"geometry.mt\";";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const result = fixture.parser.parse(fixture.lexer.*);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "'export' is not allowed on imports" },
                 });
             }
         };
@@ -670,7 +795,7 @@ pub const Parser = struct {
                         .definition = .{ .@"union" = .{
                             .function_definitions = .{
                                 .{ .kind = .{ .item_definition = .{
-                                    .identifier_token = .{ .kind = .{ .identifier = "asString" } },
+                                    .declared_names = .{ .single = .{ .kind = .{ .identifier = "asString" } } },
                                     .definition = .{ .function = .{} },
                                 } } },
                             },

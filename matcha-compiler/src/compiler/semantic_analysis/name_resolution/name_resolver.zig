@@ -237,6 +237,10 @@ pub const NameResolver = struct {
             .@"union" => {
                 try self.registerModuleUnionSymbol(node_id, item_definition, module_scope);
             },
+            .import => |import_definition| {
+                try self.diagnostic_store.emitErrorFromToken(import_definition.import_token, "imports are not supported yet");
+                return error.DiagnosticsEmitted;
+            },
         }
     }
 
@@ -246,10 +250,10 @@ pub const NameResolver = struct {
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) CompileError!void {
-        const function_name = item_definition.identifier_token.kind.identifier;
-        try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "function");
+        const function_name = item_definition.declared_names.single.kind.identifier;
+        try self.validateIdentifierIsAvailable(item_definition.declared_names.single, function_name, "function");
         module_scope.validateNotInScope(function_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "function '{s}' is already defined", .{function_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.declared_names.single, "function '{s}' is already defined", .{function_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -268,10 +272,10 @@ pub const NameResolver = struct {
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) CompileError!void {
-        const structure_name = item_definition.identifier_token.kind.identifier;
-        try self.validateIdentifierIsAvailable(item_definition.identifier_token, structure_name, "structure");
+        const structure_name = item_definition.declared_names.single.kind.identifier;
+        try self.validateIdentifierIsAvailable(item_definition.declared_names.single, structure_name, "structure");
         module_scope.validateNotInScope(structure_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "structure '{s}' is already defined", .{structure_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.declared_names.single, "structure '{s}' is already defined", .{structure_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -290,10 +294,10 @@ pub const NameResolver = struct {
         item_definition: ast.ItemDefinition,
         module_scope: *scope.ModuleScope,
     ) CompileError!void {
-        const union_name = item_definition.identifier_token.kind.identifier;
-        try self.validateIdentifierIsAvailable(item_definition.identifier_token, union_name, "union");
+        const union_name = item_definition.declared_names.single.kind.identifier;
+        try self.validateIdentifierIsAvailable(item_definition.declared_names.single, union_name, "union");
         module_scope.validateNotInScope(union_name) catch {
-            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "union '{s}' is already defined", .{union_name});
+            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.declared_names.single, "union '{s}' is already defined", .{union_name});
             return error.DiagnosticsEmitted;
         };
 
@@ -404,15 +408,16 @@ pub const NameResolver = struct {
     ) CompileError!void {
         switch (item_definition.definition) {
             .function => |function_definition| {
-                const function_symbol_id = module_scope.lookupSymbol(item_definition.identifier_token.kind.identifier) orelse unreachable;
+                const function_symbol_id = module_scope.lookupSymbol(item_definition.declared_names.single.kind.identifier) orelse unreachable;
                 try self.resolveFunction(function_symbol_id, &function_definition, module_scope);
             },
             .structure => |structure_definition| {
-                try self.resolveStructureDefinition(item_definition.identifier_token.kind.identifier, &structure_definition, module_scope);
+                try self.resolveStructureDefinition(item_definition.declared_names.single.kind.identifier, &structure_definition, module_scope);
             },
             .@"union" => |union_definition| {
-                try self.resolveUnionDefinition(item_definition.identifier_token.kind.identifier, &union_definition, module_scope);
+                try self.resolveUnionDefinition(item_definition.declared_names.single.kind.identifier, &union_definition, module_scope);
             },
+            .import => {},
         }
     }
 
@@ -771,10 +776,10 @@ pub const NameResolver = struct {
             switch (node.kind) {
                 .item_definition => |item_definition| switch (item_definition.definition) {
                     .function => |function_definition| {
-                        const function_name = item_definition.identifier_token.kind.identifier;
-                        try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "structure member");
+                        const function_name = item_definition.declared_names.single.kind.identifier;
+                        try self.validateIdentifierIsAvailable(item_definition.declared_names.single, function_name, "structure member");
                         if (member_kind_by_name.get(function_name)) |_| {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.declared_names.single, "structure member '{s}' is already declared in '{s}'", .{ function_name, structure_name });
                             return error.DiagnosticsEmitted;
                         }
                         try member_kind_by_name.put(function_name, .function);
@@ -838,10 +843,10 @@ pub const NameResolver = struct {
             switch (node.kind) {
                 .item_definition => |item_definition| switch (item_definition.definition) {
                     .function => |function_definition| {
-                        const function_name = item_definition.identifier_token.kind.identifier;
-                        try self.validateIdentifierIsAvailable(item_definition.identifier_token, function_name, "union member");
+                        const function_name = item_definition.declared_names.single.kind.identifier;
+                        try self.validateIdentifierIsAvailable(item_definition.declared_names.single, function_name, "union member");
                         if (member_kind_by_name.get(function_name)) |_| {
-                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.identifier_token, "union member '{s}' is already declared in '{s}'", .{ function_name, union_name });
+                            try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, item_definition.declared_names.single, "union member '{s}' is already declared in '{s}'", .{ function_name, union_name });
                             return error.DiagnosticsEmitted;
                         }
                         try member_kind_by_name.put(function_name, .function);

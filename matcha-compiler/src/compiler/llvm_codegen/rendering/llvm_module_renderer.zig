@@ -93,8 +93,10 @@ pub const LlvmModuleRenderer = struct {
                             );
                             try user_defined_functions.append(self.arena, function_ir);
                         },
-                        .structure => {},
-                        .@"union" => {},
+                        .structure,
+                        .@"union",
+                        .import,
+                        => {},
                     },
                     else => {},
                 }
