@@ -8,6 +8,7 @@ comptime {
     _ = @import("parsing/type_expression_parser.test.zig");
     referenceAllTestsRecursive(@import("parsing/parser.test.zig"));
     referenceAllTestsRecursive(@import("parsing/pattern_parser.test.zig"));
+    referenceAllTestsRecursive(@import("loading/module_loader.test.zig"));
     _ = @import("pipeline.test.zig");
     referenceAllTestsRecursive(@import("semantic_analysis/control_flow/structural_validator.test.zig"));
     referenceAllTestsRecursive(@import("semantic_analysis/control_flow/exit_behavior_analyzer.test.zig"));

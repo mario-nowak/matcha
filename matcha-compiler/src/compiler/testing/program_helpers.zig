@@ -31,7 +31,10 @@ pub fn setupProgramFixture(
     }
 
     return .{
-        .program = .{ .modules = modules },
+        .program = .{
+            .modules = modules,
+            .imported_module_id_by_node_id = ast.ImportedModuleIdByNodeId.init(arena),
+        },
         .diagnostic_store = diagnostic_store,
         .source_registry = source_registry,
     };

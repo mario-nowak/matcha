@@ -17,6 +17,7 @@ comptime {
     _ = @import("unit_type.test.zig");
     referenceAllTestsRecursive(@import("cli.test.zig"));
     referenceAllTestsRecursive(@import("pattern_matching.test.zig"));
+    referenceAllTestsRecursive(@import("modules.test.zig"));
 }
 
 /// Test blocks inside nested structs are only analyzed when the struct is referenced.
