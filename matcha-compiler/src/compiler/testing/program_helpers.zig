@@ -43,7 +43,11 @@ pub fn setupProgramFixture(
                 },
                 else => continue,
             };
-            const import_target: ast.ImportTarget = switch (try loading.resolveImportPath(arena, source_file.path, import_definition.path_token.kind.string_literal)) {
+            const import_target: ast.ImportTarget = switch (try loading.resolveImportPath(
+                arena,
+                source_file.path,
+                import_definition.path_token.kind.string_literal,
+            )) {
                 .builtins => .builtins,
                 .module_path => |module_path| .{ .module = for (source_files, 0..) |candidate_source_file, module_id| {
                     if (std.mem.eql(u8, candidate_source_file.path, module_path)) break @intCast(module_id);

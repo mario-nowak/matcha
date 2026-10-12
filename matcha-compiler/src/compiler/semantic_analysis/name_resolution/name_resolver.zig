@@ -96,6 +96,7 @@ pub const NameResolver = struct {
         }
 
         self.symbol_table.assertAllFinalized();
+
         return .{
             .program = program.*,
             .symbol_id_by_node_id = self.symbol_id_by_node_id,
@@ -103,7 +104,6 @@ pub const NameResolver = struct {
         };
     }
 
-    /// Creates the builtin functions once for the whole program. Modules see them only through `import "builtin"`.
     fn createBuiltinItemTable(self: *@This()) !ImportableItemByName {
         var builtin_item_table = ImportableItemByName.init(self.arena);
         try self.addPrintIntBuiltinDebuggingFunction(&builtin_item_table);
@@ -112,6 +112,7 @@ pub const NameResolver = struct {
         try self.addReadLineBuiltinFunction(&builtin_item_table);
         try self.addGetArgumentsBuiltinFunction(&builtin_item_table);
         try self.addStartProcessBuiltinFunction(&builtin_item_table);
+
         return builtin_item_table;
     }
 
@@ -292,6 +293,7 @@ pub const NameResolver = struct {
                 .is_exported = item_definition.export_token != null,
             });
         }
+
         return module_items_by_name;
     }
 
