@@ -78,9 +78,9 @@ pub const RuntimeSymbolRenderer = struct {
                 \\declare i64 @matcha.compiler_module.builtin.type.string.method.toInt(ptr, i64)
                 \\declare void @matcha.compiler_module.builtin.type.string.method.slice(ptr, ptr, i64, i64, i64)
                 \\declare void @matcha.compiler_module.builtin.type.int.method.toString(ptr, i64)
-                \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64, i64, i64, i64) noreturn
-                \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64, i64) noreturn
-                \\declare void @matcha.compiler_module.runtime.function.panicDivisionOverflow(i64, i64) noreturn
+                \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(ptr, i64, i64, i64, i64, i64) noreturn
+                \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(ptr, i64, i64, i64) noreturn
+                \\declare void @matcha.compiler_module.runtime.function.panicDivisionOverflow(ptr, i64, i64, i64) noreturn
                 \\declare ptr @matcha.compiler_module.runtime.function.arrayAppendSlot(ptr, i64)
             );
         }

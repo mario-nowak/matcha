@@ -151,7 +151,8 @@ test "accessing an array of unit element out of bounds results in a panic" {
     var result = try e2e.runSource("unit_literal_array.mt", source);
     defer result.deinit();
 
-    try e2e.expectCompileDiagnostic(&result, "runtime error: array index out of bounds\n  at line 2, column 37\n  index 3 is out of bounds for length 3\n");
+    try e2e.expectCompileDiagnostic(&result, "runtime error: array index out of bounds\n  --> ");
+    try e2e.expectContains(result.stderr, "/unit_literal_array.mt:2:37\n  index 3 is out of bounds for length 3\n");
 }
 
 test "the values of an array of unit elements are evaluated" {

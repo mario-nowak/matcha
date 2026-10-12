@@ -121,21 +121,21 @@ pub const RuntimeSymbolRenderer = struct {
         if (requirements.panic_index_out_of_bounds) {
             try runtime_symbol_declarations.print(
                 self.arena,
-                "\ndeclare void @{s}(i64, i64, i64, i64) noreturn",
+                "\ndeclare void @{s}(ptr, i64, i64, i64, i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_index_out_of_bounds_function_name},
             );
         }
         if (requirements.panic_division_by_zero) {
             try runtime_symbol_declarations.print(
                 self.arena,
-                "\ndeclare void @{s}(i64, i64) noreturn",
+                "\ndeclare void @{s}(ptr, i64, i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_division_by_zero_function_name},
             );
         }
         if (requirements.panic_division_overflow) {
             try runtime_symbol_declarations.print(
                 self.arena,
-                "\ndeclare void @{s}(i64, i64) noreturn",
+                "\ndeclare void @{s}(ptr, i64, i64, i64) noreturn",
                 .{runtime_symbols.runtime_panic_division_overflow_function_name},
             );
         }

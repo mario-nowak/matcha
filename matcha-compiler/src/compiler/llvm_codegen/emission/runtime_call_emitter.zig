@@ -3,9 +3,16 @@ const lowering = @import("lowering");
 const runtime_symbols = @import("runtime_symbols");
 
 const FunctionIrBuilder = @import("function_ir_builder.zig").FunctionIrBuilder;
+const StringLiteralGlobal = @import("string_literal_pool.zig").StringLiteralGlobal;
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const FunctionSymbolGenerator = function_symbol_generator_module.FunctionSymbolGenerator;
 const Value = function_symbol_generator_module.Value;
+
+pub const RuntimePanicSourceLocation = struct {
+    path_global: StringLiteralGlobal,
+    line: usize,
+    column: usize,
+};
 
 pub const RuntimeStringParts = struct {
     pointer_value: Value,
@@ -322,41 +329,47 @@ pub const RuntimeCallEmitter = struct {
     pub fn emitPanicIndexOutOfBoundsCall(
         self: *@This(),
         builder: *FunctionIrBuilder,
-        line: usize,
-        column: usize,
+        location: RuntimePanicSourceLocation,
         index_value: Value,
         length_value: Value,
     ) !void {
         self.runtime_requirements.panic_index_out_of_bounds = true;
         try builder.emitInstruction(try std.fmt.allocPrint(
             self.arena,
-            "call void @{s}(i64 {d}, i64 {d}, i64 {s}, i64 {s})",
+            "call void @{s}({s}, i64 {s}, i64 {s})",
             .{
                 runtime_symbols.runtime_panic_index_out_of_bounds_function_name,
-                line,
-                column,
+                try self.renderRuntimePanicSourceLocationArguments(location),
                 index_value,
                 length_value,
             },
         ));
     }
 
-    pub fn emitPanicDivisionByZeroCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) !void {
+    pub fn emitPanicDivisionByZeroCall(self: *@This(), builder: *FunctionIrBuilder, location: RuntimePanicSourceLocation) !void {
         self.runtime_requirements.panic_division_by_zero = true;
         try builder.emitInstruction(try std.fmt.allocPrint(
             self.arena,
-            "call void @{s}(i64 {d}, i64 {d})",
-            .{ runtime_symbols.runtime_panic_division_by_zero_function_name, line, column },
+            "call void @{s}({s})",
+            .{ runtime_symbols.runtime_panic_division_by_zero_function_name, try self.renderRuntimePanicSourceLocationArguments(location) },
         ));
     }
 
-    pub fn emitPanicDivisionOverflowCall(self: *@This(), builder: *FunctionIrBuilder, line: usize, column: usize) !void {
+    pub fn emitPanicDivisionOverflowCall(self: *@This(), builder: *FunctionIrBuilder, location: RuntimePanicSourceLocation) !void {
         self.runtime_requirements.panic_division_overflow = true;
         try builder.emitInstruction(try std.fmt.allocPrint(
             self.arena,
-            "call void @{s}(i64 {d}, i64 {d})",
-            .{ runtime_symbols.runtime_panic_division_overflow_function_name, line, column },
+            "call void @{s}({s})",
+            .{ runtime_symbols.runtime_panic_division_overflow_function_name, try self.renderRuntimePanicSourceLocationArguments(location) },
         ));
+    }
+
+    fn renderRuntimePanicSourceLocationArguments(self: *const @This(), location: RuntimePanicSourceLocation) ![]const u8 {
+        return std.fmt.allocPrint(
+            self.arena,
+            "ptr {s}, i64 {d}, i64 {d}, i64 {d}",
+            .{ location.path_global.name, location.path_global.len, location.line, location.column },
+        );
     }
 
     pub fn emitArrayAppendSlotCall(

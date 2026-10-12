@@ -1,4 +1,6 @@
 const std = @import("std");
+const lexing = @import("lexing");
+const sources = @import("sources");
 const ast = @import("ast");
 const symbols = @import("symbols");
 const typing = @import("typing");
@@ -79,6 +81,7 @@ pub const NodeEmitter = struct {
     runtime_call_emitter: *RuntimeCallEmitter,
     string_literal_pool: *StringLiteralPool,
     string_literal_emitter: *StringLiteralEmitter,
+    source_registry: *const sources.SourceRegistry,
 
     pub fn init(
         arena: std.mem.Allocator,
@@ -87,6 +90,7 @@ pub const NodeEmitter = struct {
         runtime_call_emitter: *RuntimeCallEmitter,
         string_literal_pool: *StringLiteralPool,
         string_literal_emitter: *StringLiteralEmitter,
+        source_registry: *const sources.SourceRegistry,
     ) @This() {
         return .{
             .arena = arena,
@@ -95,6 +99,17 @@ pub const NodeEmitter = struct {
             .runtime_call_emitter = runtime_call_emitter,
             .string_literal_pool = string_literal_pool,
             .string_literal_emitter = string_literal_emitter,
+            .source_registry = source_registry,
+        };
+    }
+
+    /// Registers the module path as a string global, once per module.
+    pub fn createRuntimePanicSourceLocation(self: *@This(), token: lexing.Token) !runtime_call_emitter_module.RuntimePanicSourceLocation {
+        const path = self.source_registry.get(token.module_id).path;
+        return .{
+            .path_global = try self.string_literal_pool.registerSourcePath(token.module_id, path),
+            .line = token.line,
+            .column = token.column,
         };
     }
 

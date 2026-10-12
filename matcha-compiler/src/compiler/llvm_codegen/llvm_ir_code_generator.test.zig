@@ -638,11 +638,13 @@ pub const LlvmIrCodeGenerator = struct {
                     \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
                     \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
                     \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
-                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64, i64) noreturn
-                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionOverflow(i64, i64) noreturn
+                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(ptr, i64, i64, i64) noreturn
+                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionOverflow(ptr, i64, i64, i64) noreturn
                     \\
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
+                    \\
+                    \\@matcha.string_literal.0 = private unnamed_addr constant [7 x i8] c"main.mt"
                     \\
                     \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                     \\entry:
@@ -658,7 +660,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.2 = icmp eq i64 %value.1, 0
                     \\    br i1 %value.2, label %division.0.zero_divisor, label %division.0.nonzero_divisor
                     \\division.0.zero_divisor:
-                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionByZero(i64 3, i64 25)
+                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionByZero(ptr @matcha.string_literal.0, i64 7, i64 3, i64 25)
                     \\    unreachable
                     \\division.0.nonzero_divisor:
                     \\    %value.3 = icmp eq i64 %value.0, -9223372036854775808
@@ -666,7 +668,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.5 = and i1 %value.3, %value.4
                     \\    br i1 %value.5, label %division.0.overflow, label %division.0.no_overflow
                     \\division.0.overflow:
-                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionOverflow(i64 3, i64 25)
+                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionOverflow(ptr @matcha.string_literal.0, i64 7, i64 3, i64 25)
                     \\    unreachable
                     \\division.0.no_overflow:
                     \\    %value.6 = sdiv i64 %value.0, %value.1
@@ -1190,10 +1192,12 @@ pub const LlvmIrCodeGenerator = struct {
                     \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
                     \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
                     \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
-                    \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64, i64, i64, i64) noreturn
+                    \\declare void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(ptr, i64, i64, i64, i64, i64) noreturn
                     \\
                     \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
                     \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
+                    \\
+                    \\@matcha.string_literal.0 = private unnamed_addr constant [7 x i8] c"main.mt"
                     \\
                     \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
                     \\entry:
@@ -1220,7 +1224,7 @@ pub const LlvmIrCodeGenerator = struct {
                     \\    %value.12 = or i1 %value.10, %value.11
                     \\    br i1 %value.12, label %index.0.out_of_bounds, label %index.0.in_bounds
                     \\index.0.out_of_bounds:
-                    \\    call void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(i64 2, i64 8, i64 0, i64 %value.8)
+                    \\    call void @matcha.compiler_module.runtime.function.panicIndexOutOfBounds(ptr @matcha.string_literal.0, i64 7, i64 2, i64 8, i64 0, i64 %value.8)
                     \\    unreachable
                     \\index.0.in_bounds:
                     \\    %value.13 = load ptr, ptr %value.9
