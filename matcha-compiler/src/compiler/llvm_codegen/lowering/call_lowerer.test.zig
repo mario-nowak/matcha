@@ -156,12 +156,13 @@ pub const CallLowerer = struct {
         pub const builtins = struct {
             test "lowers printInt to a builtin call" {
                 const source =
+                    \\item { printInt } = import "builtin";
                     \\printInt(1);
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.expression_statement.expression;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.expression_statement.expression;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -170,12 +171,13 @@ pub const CallLowerer = struct {
 
             test "lowers printString to a builtin call" {
                 const source =
+                    \\item { printString } = import "builtin";
                     \\printString("hello");
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.expression_statement.expression;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.expression_statement.expression;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -184,12 +186,13 @@ pub const CallLowerer = struct {
 
             test "lowers readFile to a builtin call" {
                 const source =
+                    \\item { readFile } = import "builtin";
                     \\val input = readFile("input.txt");
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -198,12 +201,13 @@ pub const CallLowerer = struct {
 
             test "lowers readLine to a builtin call" {
                 const source =
+                    \\item { readLine } = import "builtin";
                     \\val line = readLine();
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -212,12 +216,13 @@ pub const CallLowerer = struct {
 
             test "lowers getArguments to a builtin call" {
                 const source =
+                    \\item { getArguments } = import "builtin";
                     \\val arguments = getArguments();
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 
@@ -226,12 +231,13 @@ pub const CallLowerer = struct {
 
             test "lowers startProcess to a builtin call" {
                 const source =
+                    \\item { startProcess } = import "builtin";
                     \\val output = startProcess("echo", ["hello"]);
                 ;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const fixture = try setupLowererFixture(lowering.CallLowerer, &arena, source);
-                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
+                const call_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[1].kind.binding_declaration.value;
 
                 const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
 

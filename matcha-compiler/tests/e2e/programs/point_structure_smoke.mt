@@ -1,3 +1,5 @@
+item { printString } = import "builtin";
+
 item Point = structure {
     x: int;
     y: int;

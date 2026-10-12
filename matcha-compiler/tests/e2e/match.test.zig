@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "subjectful and subjectless match expressions choose the right arm" {
     const source =
+        \\item { printString } = import "builtin";
         \\val yes_or_no = match true {
         \\    true => "yes",
         \\    false => "no",
@@ -22,6 +23,7 @@ test "subjectful and subjectless match expressions choose the right arm" {
 
 test "integer and string matches use else arms when needed" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\val level = match 2 {
         \\    1 => "one",
         \\    else => "other",
@@ -43,6 +45,7 @@ test "integer and string matches use else arms when needed" {
 
 test "negative integer arms match negative subjects" {
     const source =
+        \\item { printString } = import "builtin";
         \\val number = 0 - 1;
         \\val name = match number {
         \\    1 => "one",
@@ -60,6 +63,7 @@ test "negative integer arms match negative subjects" {
 
 test "match expressions can be used directly as function bodies" {
     const source =
+        \\item { printString } = import "builtin";
         \\item describe(flag: boolean): string = match flag {
         \\    true => "enabled",
         \\    false => "disabled",
@@ -146,6 +150,7 @@ test "statement-position match with non-unit arms reports a semantic diagnostic"
 
 test "match arms that return from the function leave the value to the other arms" {
     const source =
+        \\item { printString } = import "builtin";
         \\item Result = union { Ok: int, Error: string };
         \\item describe(result: Result): string = {
         \\    val value = match result {

@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "structure construction member access and type functions work together" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item Point = structure {
         \\    x: int;
         \\    y: int;
@@ -29,6 +30,7 @@ test "structure construction member access and type functions work together" {
 
 test "anonymous structure literals contextual typing and instance methods work together" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item Point = structure {
         \\    x: int;
         \\    y: int;
@@ -165,6 +167,7 @@ test "duplicate structure method names report a semantic diagnostic" {
 
 test "structures can be compared" {
     const source =
+        \\item { printString } = import "builtin";
         \\item User = structure {
         \\    name: string;
         \\};
@@ -199,6 +202,7 @@ test "structures can be compared" {
 
 test "structure aliases preserve identity" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item User = structure { name: string; };
         \\val original = User { name = "Mario" };
         \\val alias = original;
@@ -217,6 +221,7 @@ test "structure aliases preserve identity" {
 
 test "empty structure identity survives function calls and array storage" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item Empty = structure {};
         \\item identity(value: Empty): Empty = value;
         \\val original = Empty {};
@@ -242,6 +247,7 @@ test "empty structure identity survives function calls and array storage" {
 
 test "structures with only unit fields have distinct identities" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item UnitOnly = structure { field: unit; };
         \\val original = UnitOnly { field = unit };
         \\val other = UnitOnly { field = unit };
@@ -290,6 +296,7 @@ test "structures can have no fields" {
 
 test "structures without fields can be compared" {
     const source =
+        \\item { printString } = import "builtin";
         \\item StructureWithoutFields = structure {};
         \\val instance = StructureWithoutFields {};
         \\val otherInstance = StructureWithoutFields {};
@@ -322,6 +329,7 @@ test "structures without fields can be compared" {
 
 test "structure literals assign fields by name regardless of initializer order" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item Point = structure {
         \\    x: int;
         \\    y: int;

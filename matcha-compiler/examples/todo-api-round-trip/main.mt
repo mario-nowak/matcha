@@ -4,6 +4,8 @@
 // Run with: matcha run examples/todo-api-round-trip/main.mt
 // Needs `curl` and network access.
 
+item { startProcess, printString } = import "builtin";
+
 // # Round trip
 
 item { JsonParser } = import "json.mt";

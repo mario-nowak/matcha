@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "string concatenation, comparison, and length behave as expected" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\val greeting = "hello" + " world";
         \\val is_same = greeting == "hello world";
         \\val is_different = greeting != "other";
@@ -18,6 +19,7 @@ test "string concatenation, comparison, and length behave as expected" {
 
 test "string literal escapes print their decoded characters" {
     const source =
+        \\item { printString } = import "builtin";
         \\printString("quote \" backslash \\ tab\tend\n");
     ;
 
@@ -29,6 +31,7 @@ test "string literal escapes print their decoded characters" {
 
 test "compound addition appends to a string variable" {
     const source =
+        \\item { printString } = import "builtin";
         \\var text = "a";
         \\text += "b";
         \\printString(text);
@@ -42,6 +45,7 @@ test "compound addition appends to a string variable" {
 
 test "string helpers trim split toInt and toString work together" {
     const source =
+        \\item { printInt, printString } = import "builtin";
         \\val input = " 1,2 ";
         \\val trimmed = input.trim();
         \\val parts = trimmed.split(",");
@@ -59,6 +63,7 @@ test "string helpers trim split toInt and toString work together" {
 
 test "printString with int argument reports a semantic diagnostic" {
     const source =
+        \\item { printString } = import "builtin";
         \\printString(42);
     ;
 
@@ -70,6 +75,7 @@ test "printString with int argument reports a semantic diagnostic" {
 
 test "slice returns the bytes between start and end" {
     const source =
+        \\item { printString, printInt } = import "builtin";
         \\val text = "{\"key\": 1}";
         \\printString(text.slice(0, 1));
         \\printString(text.slice(1, 6));
@@ -84,6 +90,7 @@ test "slice returns the bytes between start and end" {
 
 test "slice reports a runtime error when the range is out of bounds" {
     const source =
+        \\item { printString } = import "builtin";
         \\printString("abc".slice(2, 4));
     ;
 

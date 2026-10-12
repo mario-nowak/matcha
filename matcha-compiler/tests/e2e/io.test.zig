@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "readLine reads a line from stdin" {
     const source =
+        \\item { printString, readLine } = import "builtin";
         \\printString(readLine());
     ;
     const stdin = "hello from stdin\n";
@@ -14,6 +15,7 @@ test "readLine reads a line from stdin" {
 
 test "getArguments forwards command-line arguments" {
     const source =
+        \\item { getArguments, printInt, printString } = import "builtin";
         \\val args = getArguments();
         \\printInt(args.length);
         \\if args.length > 0 {
@@ -33,6 +35,7 @@ test "getArguments forwards command-line arguments" {
 
 test "readFile reads file contents from disk" {
     const source =
+        \\item { readFile, printString } = import "builtin";
         \\val content = readFile("tests/e2e/programs/io/read_file_input.txt");
         \\printString(content.trim());
     ;
@@ -45,6 +48,7 @@ test "readFile reads file contents from disk" {
 
 test "startProcess returns the stdout of the started process" {
     const source =
+        \\item { printString, startProcess } = import "builtin";
         \\printString(startProcess("echo", ["hello", "matcha"]).trim());
     ;
 
@@ -56,6 +60,7 @@ test "startProcess returns the stdout of the started process" {
 
 test "startProcess panics with the exit status and stderr when the process exits with a non-zero status" {
     const source =
+        \\item { printString, startProcess } = import "builtin";
         \\printString(startProcess("sh", ["-c", "echo oops >&2; exit 3"]));
     ;
 

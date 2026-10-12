@@ -90,7 +90,7 @@ pub const ExitBehaviorAnalyzer = struct {
                 const source =
                     \\item spin(): unit = {
                     \\    loop {
-                    \\        printInt(1);
+                    \\        val value = 1;
                     \\    }
                     \\};
                 ;

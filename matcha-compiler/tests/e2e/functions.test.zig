@@ -2,6 +2,7 @@ const e2e = @import("helpers.zig");
 
 test "built-in printInt prints integers" {
     const source =
+        \\item { printInt } = import "builtin";
         \\printInt(42);
     ;
 
@@ -13,6 +14,7 @@ test "built-in printInt prints integers" {
 
 test "expression-bodied functions can call each other" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item identity(value: int): int = value;
         \\item double(value: int): int = identity(value) * 2;
         \\printInt(double(21));
@@ -26,6 +28,7 @@ test "expression-bodied functions can call each other" {
 
 test "block-bodied functions can return computed values" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item sumTo(limit: int): int = {
         \\    var i = 0;
         \\    var sum = 0;
@@ -45,6 +48,7 @@ test "block-bodied functions can return computed values" {
 
 test "block result that returns on every path terminates the function" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item classify(value: int): int = {
         \\    val offset = 10;
         \\    if value > 0 { return offset + 1; } else { return offset - 1; }
@@ -84,6 +88,7 @@ test "function used as a value reports a diagnostic" {
 
 test "function selected by an if-expression cannot be called" {
     const source =
+        \\item { printInt } = import "builtin";
         \\item f(): int = 1;
         \\item g(): int = 2;
         \\printInt((if true { f } else { g })());

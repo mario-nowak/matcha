@@ -1,4 +1,7 @@
 // A decision is exactly one of three cases. Only the problem cases carry a reason.
+
+item { printString, readFile, getArguments } = import "builtin";
+
 item AuditDecision = union {
     Valid,
     Invalid: string,
