@@ -5,6 +5,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#modules" },
     { "include": "#declarations" },
     { "include": "#keywords" },
     { "include": "#storage" },
@@ -33,6 +34,46 @@
             {
               "name": "constant.character.escape.matcha",
               "match": "\\\\[nrt\"\\\\]"
+            }
+          ]
+        }
+      ]
+    },
+    "modules": {
+      "patterns": [
+        {
+          "comment": "`export` and `import` are contextual keywords, so they stay usable as names elsewhere.",
+          "name": "storage.modifier.export.matcha",
+          "match": "\\bexport\\b(?=\\s+item\\b)"
+        },
+        {
+          "name": "keyword.control.import.matcha",
+          "match": "\\bimport\\b(?=\\s*\")"
+        },
+        {
+          "comment": "item { Point, parse } = import \"geometry.mt\";",
+          "begin": "\\b(item)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "storage.type.matcha" },
+            "2": { "name": "punctuation.definition.destructuring.begin.matcha" }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.destructuring.end.matcha" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            {
+              "name": "entity.name.type.matcha",
+              "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+            },
+            {
+              "name": "entity.name.function.matcha",
+              "match": "\\b[a-z][a-zA-Z0-9_]*\\b"
+            },
+            {
+              "name": "punctuation.separator.comma.matcha",
+              "match": ","
             }
           ]
         }

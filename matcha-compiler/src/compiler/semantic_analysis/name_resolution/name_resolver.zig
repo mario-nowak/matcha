@@ -16,6 +16,14 @@ const ResolutionOptions = struct {
     module_shadowing: ModuleShadowing,
 };
 
+/// An item that a module defines itself. Builtins and imported items are not module items.
+const ModuleItem = struct {
+    symbol_id: symbols.SymbolId,
+    is_exported: bool,
+};
+
+const ModuleItemByName = std.StringHashMap(ModuleItem);
+
 const ResolutionEnvironment = struct {
     node_scope: *scope.Scope,
     module_scope: *scope.ModuleScope,
@@ -41,10 +49,32 @@ pub const NameResolver = struct {
         self.symbol_table = symbols.SymbolTable.init(self.arena);
         self.symbol_id_by_node_id = symbols.SymbolIdByNodeId.init(self.arena);
 
-        // All module scopes exist before any module is resolved, so imports can later look into other modules.
         const module_scopes = try self.arena.alloc(scope.ModuleScope, program.modules.len);
-        for (program.modules, module_scopes) |*module, *module_scope| {
+        const module_item_tables = try self.arena.alloc(ModuleItemByName, program.modules.len);
+        for (program.modules, module_scopes, module_item_tables) |*module, *module_scope, *module_item_table| {
             module_scope.* = try self.buildModuleScope(module);
+            module_item_table.* = try self.collectModuleItems(module);
+        }
+
+        // Every module has registered its items before the first import binds them, so modules can import each other.
+        for (program.modules, module_scopes) |*module, *module_scope| {
+            for (module.statements) |*statement| {
+                const item_definition = switch (statement.kind) {
+                    .item_definition => |item_definition| item_definition,
+                    else => continue,
+                };
+                const import_definition = switch (item_definition.definition) {
+                    .import => |import_definition| import_definition,
+                    else => continue,
+                };
+                const imported_module_id = program.imported_module_id_by_node_id.get(statement.id) orelse unreachable;
+                try self.bindImportedItems(
+                    item_definition.declared_names.destructuring,
+                    import_definition,
+                    module_item_tables[imported_module_id],
+                    module_scope,
+                );
+            }
         }
 
         for (program.modules, module_scopes) |*module, *module_scope| {
@@ -237,10 +267,56 @@ pub const NameResolver = struct {
             .@"union" => {
                 try self.registerModuleUnionSymbol(node_id, item_definition, module_scope);
             },
-            .import => |import_definition| {
-                try self.diagnostic_store.emitErrorFromToken(import_definition.import_token, "imports are not supported yet");
+            // Imports bind items of other modules, so they wait until every module has registered its items.
+            .import => {},
+        }
+    }
+
+    fn collectModuleItems(self: *@This(), module: *const ast.Module) CompileError!ModuleItemByName {
+        var module_item_by_name = ModuleItemByName.init(self.arena);
+        for (module.statements) |*statement| {
+            const item_definition = switch (statement.kind) {
+                .item_definition => |item_definition| item_definition,
+                else => continue,
+            };
+            const name_token = switch (item_definition.declared_names) {
+                .single => |name_token| name_token,
+                .destructuring => continue,
+            };
+            try module_item_by_name.put(name_token.kind.identifier, .{
+                .symbol_id = self.symbol_id_by_node_id.get(statement.id) orelse unreachable,
+                .is_exported = item_definition.export_token != null,
+            });
+        }
+        return module_item_by_name;
+    }
+
+    /// Binds each destructured name to the symbol of the imported item, so all later phases treat it like the item itself.
+    fn bindImportedItems(
+        self: *@This(),
+        destructuring: ast.Destructuring,
+        import_definition: ast.ImportDefinition,
+        imported_module_item_by_name: ModuleItemByName,
+        module_scope: *scope.ModuleScope,
+    ) CompileError!void {
+        const module_path = import_definition.path_token.kind.string_literal;
+        for (destructuring.entries) |entry| {
+            const item_name = entry.name_token.kind.identifier;
+            const module_item = imported_module_item_by_name.get(item_name) orelse {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, entry.name_token, "module '{s}' has no item '{s}'", .{ module_path, item_name });
                 return error.DiagnosticsEmitted;
-            },
+            };
+            if (!module_item.is_exported) {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, entry.name_token, "item '{s}' of module '{s}' is not exported", .{ item_name, module_path });
+                return error.DiagnosticsEmitted;
+            }
+            module_scope.validateNotInScope(item_name) catch {
+                try self.diagnostic_store.emitFormattedErrorFromToken(self.arena, entry.name_token, "item '{s}' is already defined", .{item_name});
+                return error.DiagnosticsEmitted;
+            };
+
+            try module_scope.insertSymbol(item_name, module_item.symbol_id);
+            try self.symbol_id_by_node_id.put(entry.id, module_item.symbol_id);
         }
     }
 

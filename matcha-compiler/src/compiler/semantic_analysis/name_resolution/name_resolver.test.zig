@@ -1015,21 +1015,124 @@ pub const NameResolver = struct {
             }
         };
 
-        pub const modules = struct {
-            test "rejects an import because imports are not supported yet" {
-                const source = "item { Point } = import \"geometry.mt\";";
+        pub const imports = struct {
+            test "binds each destructured name to the symbol of the exported item" {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
-                const fixture = try setupNameResolverFixture(&arena, source);
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { parse } = import \"geometry.mt\";" },
+                    .{ .path = "geometry.mt", .source = "export item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
 
-                const result = fixture.resolver.resolveProgram(&fixture.program);
+                const result = try resolver.resolveProgram(&fixture.program);
+
+                const entry = fixture.program.modules[0].statements[0].kind.item_definition.declared_names.destructuring.entries[0];
+                const parse_symbol_id = result.symbol_id_by_node_id.get(fixture.program.modules[1].statements[0].id).?;
+                try expect(result.symbol_id_by_node_id.get(entry.id).?).toMatch(parse_symbol_id);
+            }
+
+            test "resolves a reference to an imported item to the symbol of the exported item" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { parse } = import \"geometry.mt\";\nval result = parse(1);" },
+                    .{ .path = "geometry.mt", .source = "export item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = try resolver.resolveProgram(&fixture.program);
+
+                const call = fixture.program.modules[0].statements[1].kind.binding_declaration.value.kind.call_expression;
+                const parse_symbol_id = result.symbol_id_by_node_id.get(fixture.program.modules[1].statements[0].id).?;
+                try expect(result.symbol_id_by_node_id.get(call.callee.id).?).toMatch(parse_symbol_id);
+            }
+
+            test "resolves modules that import each other" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { Account } = import \"account.mt\";\nexport item User = structure { name: string; };" },
+                    .{ .path = "account.mt", .source = "item { User } = import \"main.mt\";\nexport item Account = structure { owner: User; };" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = try resolver.resolveProgram(&fixture.program);
+
+                _ = result;
+                try expect(fixture.diagnostic_store.items()).toMatch(.{});
+            }
+
+            test "rejects a name that the imported module does not define" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { format } = import \"geometry.mt\";" },
+                    .{ .path = "geometry.mt", .source = "export item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = resolver.resolveProgram(&fixture.program);
 
                 try expect(result).toBeError(error.DiagnosticsEmitted);
                 try expect(fixture.diagnostic_store.items()).toMatch(.{
-                    .{ .message = "imports are not supported yet" },
+                    .{ .message = "module 'geometry.mt' has no item 'format'" },
                 });
             }
 
+            test "rejects an item that the imported module does not export" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { parse } = import \"geometry.mt\";" },
+                    .{ .path = "geometry.mt", .source = "item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "item 'parse' of module 'geometry.mt' is not exported" },
+                });
+            }
+
+            test "rejects a builtin function as an imported name" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { printInt } = import \"geometry.mt\";" },
+                    .{ .path = "geometry.mt", .source = "export item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "module 'geometry.mt' has no item 'printInt'" },
+                });
+            }
+
+            test "rejects an imported name that the importing module already defines" {
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupProgramFixture(&arena, &.{
+                    .{ .path = "main.mt", .source = "item { parse } = import \"geometry.mt\";\nitem parse(value: int): int = value;" },
+                    .{ .path = "geometry.mt", .source = "export item parse(value: int): int = value;" },
+                });
+                var resolver = name_resolution.NameResolver.init(arena.allocator(), fixture.diagnostic_store);
+
+                const result = resolver.resolveProgram(&fixture.program);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .message = "item 'parse' is already defined" },
+                });
+            }
+        };
+
+        pub const modules = struct {
             test "allows items with the same name in different modules" {
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
