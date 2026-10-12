@@ -171,7 +171,8 @@ pub const Matcha = struct {
                 var result = try e2e.runSource("division_by_zero.mt", source);
                 defer result.deinit();
 
-                try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  at line 2, column 13\n");
+                try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  --> ");
+                try e2e.expectContains(result.stderr, "/division_by_zero.mt:2:13\n");
             }
 
             test "reports an overflowing division with its location" {
@@ -184,7 +185,8 @@ pub const Matcha = struct {
                 var result = try e2e.runSource("division_overflow.mt", source);
                 defer result.deinit();
 
-                try e2e.expectRuntimeError(&result, "runtime error: integer overflow in division\n  at line 3, column 19\n");
+                try e2e.expectRuntimeError(&result, "runtime error: integer overflow in division\n  --> ");
+                try e2e.expectContains(result.stderr, "/division_overflow.mt:3:19\n");
             }
         };
     };

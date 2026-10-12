@@ -202,7 +202,7 @@ pub const RuntimeCallEmitter = struct {
             var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
             var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
 
-            try runtime_call_emitter.emitPanicIndexOutOfBoundsCall(&function_ir_builder, 1, 1, "%index", "%length");
+            try runtime_call_emitter.emitPanicIndexOutOfBoundsCall(&function_ir_builder, .{ .path_global = .{ .name = "@path", .content = "main.mt", .len = 7 }, .line = 1, .column = 1 }, "%index", "%length");
 
             try expect(runtime_call_emitter.runtime_requirements).toMatch(.{ .panic_index_out_of_bounds = true });
         }

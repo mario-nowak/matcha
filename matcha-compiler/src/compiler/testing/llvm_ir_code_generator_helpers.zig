@@ -48,6 +48,7 @@ pub fn setupLlvmIrCodeGeneratorFixture(
         runtime_call_emitter,
         string_literal_pool,
         string_literal_emitter,
+        lowering_analyzer_fixture.source_registry,
     );
     const function_emitter = try arena.create(llvm_codegen.FunctionEmitter);
     function_emitter.* = llvm_codegen.FunctionEmitter.init(

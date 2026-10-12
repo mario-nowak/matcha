@@ -149,6 +149,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/compiler/llvm_codegen/emission/module.zig"),
         .target = target,
         .imports = &.{
+            .{ .name = "lexing", .module = lexing_module },
+            .{ .name = "sources", .module = sources_module },
             .{ .name = "ast", .module = ast_module },
             .{ .name = "lowering", .module = lowering_module },
             .{ .name = "symbols", .module = symbols_module },

@@ -22,4 +22,11 @@ pub const imports = struct {
 
         try e2e.expectSuccessOutput(&result, "dot with length 20\nempty\nempty / empty\nabab\n");
     }
+
+    test "reports a runtime panic in an imported module at the path of that module" {
+        var result = try e2e.runFile("tests/e2e/programs/modules/panic/main.mt");
+        defer result.deinit();
+
+        try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  --> tests/e2e/programs/modules/panic/statistics.mt:1:55\n");
+    }
 };

@@ -31,8 +31,8 @@ extern fn GC_malloc(size: usize) ?*anyopaque;
 extern fn GC_malloc_atomic(size: usize) ?*anyopaque;
 extern fn write(fd: c_int, buf: [*]const u8, count: usize) isize;
 
-const stdout_fd: c_int = 1;
-const stderr_fd: c_int = 2;
+const stdout_file_descriptor: c_int = 1;
+const stderr_file_descriptor: c_int = 2;
 
 const MatchaString = extern struct {
     ptr: [*]const u8,
@@ -45,21 +45,21 @@ const ArrayHeader = extern struct {
     data: ?*anyopaque,
 };
 
-fn writeTo(fd: c_int, bytes: []const u8) void {
+fn writeTo(file_descriptor: c_int, bytes: []const u8) void {
     if (bytes.len == 0) {
         return;
     }
 
-    _ = write(fd, bytes.ptr, bytes.len);
+    _ = write(file_descriptor, bytes.ptr, bytes.len);
 }
 
 fn writeStdout(bytes: []const u8) void {
-    writeTo(stdout_fd, bytes);
+    writeTo(stdout_file_descriptor, bytes);
 }
 
 fn panic(message: []const u8) noreturn {
-    writeTo(stderr_fd, message);
-    writeTo(stderr_fd, "\n");
+    writeTo(stderr_file_descriptor, message);
+    writeTo(stderr_file_descriptor, "\n");
     std.process.exit(1);
 }
 
@@ -303,7 +303,7 @@ fn startProcess(
     };
     if (failure_message) |message| {
         // Forward the stderr of the process, so the panic shows why it failed.
-        writeTo(stderr_fd, result.stderr);
+        writeTo(stderr_file_descriptor, result.stderr);
         panic(message);
     }
 
@@ -432,24 +432,30 @@ fn intToString(out: *MatchaString, value: i64) callconv(.c) void {
     out.* = copyBytesToAtomic(rendered);
 }
 
-fn panicIndexOutOfBounds(line: usize, column: usize, index: i64, length: usize) callconv(.c) noreturn {
-    var buffer: [256]u8 = undefined;
-    const formatted = std.fmt.bufPrint(
-        &buffer,
-        "runtime error: array index out of bounds\n  at line {d}, column {d}\n  index {d} is out of bounds for length {d}",
-        .{ line, column, index, length },
-    ) catch unreachable;
-    panic(formatted);
+/// Writes ` --> path:line:column` on its own line, like the location of a compile error. The path has no length limit,
+/// so it is written directly instead of through a fixed buffer.
+fn writeSourceLocation(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize) void {
+    var buffer: [64]u8 = undefined;
+    writeTo(stderr_file_descriptor, "\n  --> ");
+    writeTo(stderr_file_descriptor, path_pointer[0..path_length]);
+    writeTo(stderr_file_descriptor, std.fmt.bufPrint(&buffer, ":{d}:{d}", .{ line, column }) catch unreachable);
 }
 
-fn panicDivisionByZero(line: usize, column: usize) callconv(.c) noreturn {
+fn panicIndexOutOfBounds(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize, index: i64, length: usize) callconv(.c) noreturn {
+    writeTo(stderr_file_descriptor, "runtime error: array index out of bounds");
+    writeSourceLocation(path_pointer, path_length, line, column);
     var buffer: [128]u8 = undefined;
-    const formatted = std.fmt.bufPrint(&buffer, "runtime error: division by zero\n  at line {d}, column {d}", .{ line, column }) catch unreachable;
-    panic(formatted);
+    panic(std.fmt.bufPrint(&buffer, "\n  index {d} is out of bounds for length {d}", .{ index, length }) catch unreachable);
 }
 
-fn panicDivisionOverflow(line: usize, column: usize) callconv(.c) noreturn {
-    var buffer: [128]u8 = undefined;
-    const formatted = std.fmt.bufPrint(&buffer, "runtime error: integer overflow in division\n  at line {d}, column {d}", .{ line, column }) catch unreachable;
-    panic(formatted);
+fn panicDivisionByZero(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize) callconv(.c) noreturn {
+    writeTo(stderr_file_descriptor, "runtime error: division by zero");
+    writeSourceLocation(path_pointer, path_length, line, column);
+    panic("");
+}
+
+fn panicDivisionOverflow(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize) callconv(.c) noreturn {
+    writeTo(stderr_file_descriptor, "runtime error: integer overflow in division");
+    writeSourceLocation(path_pointer, path_length, line, column);
+    panic("");
 }

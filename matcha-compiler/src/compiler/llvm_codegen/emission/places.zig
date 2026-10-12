@@ -239,12 +239,9 @@ pub fn emitIndexExpressionPointer(
     try builder.emitBranchInstruction(out_of_bounds_value, &.{ out_of_bounds_label, in_bounds_label });
 
     try builder.emitLabel(out_of_bounds_label);
-    const line = index_expression.left_bracket.line;
-    const column = index_expression.left_bracket.column;
     try emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
         builder,
-        line,
-        column,
+        try emitter.createRuntimePanicSourceLocation(index_expression.left_bracket),
         index_value,
         length_value,
     );

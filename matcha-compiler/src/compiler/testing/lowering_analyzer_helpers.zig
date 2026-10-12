@@ -1,4 +1,5 @@
 const std = @import("std");
+const sources = @import("sources");
 const semantic_analysis = @import("semantic_analysis");
 const llvm_codegen = @import("llvm_codegen");
 const lowering = llvm_codegen.lowering;
@@ -10,6 +11,7 @@ const setupAnalyzedProgramFixture = @import("analyzed_program_helpers.zig").setu
 const LoweringAnalyzerFixture = struct {
     analyzed_program: *const AnalyzedProgram,
     lowering_analyzer: *LoweringAnalyzer,
+    source_registry: *const sources.SourceRegistry,
 };
 
 pub fn setupLoweringAnalyzerFixture(
@@ -53,5 +55,6 @@ pub fn setupLoweringAnalyzerFixture(
     return .{
         .analyzed_program = analyzed_program_fixture.analyzed_program,
         .lowering_analyzer = lowering_analyzer,
+        .source_registry = analyzed_program_fixture.source_registry,
     };
 }

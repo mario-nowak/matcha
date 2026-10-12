@@ -10,6 +10,7 @@ const Value = function_symbol_generator_module.Value;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
+const RuntimePanicSourceLocation = @import("runtime_call_emitter.zig").RuntimePanicSourceLocation;
 
 pub fn emitIdentifier(
     emitter: *NodeEmitter,
@@ -61,8 +62,7 @@ pub fn emitBinaryExpression(
         .zero_sized_compare_not_equal => return .{ .value = "0" },
         .checked_divide => return .{ .value = try emitCheckedDivision(
             emitter,
-            binary_expression.operator_token.line,
-            binary_expression.operator_token.column,
+            try emitter.createRuntimePanicSourceLocation(binary_expression.operator_token),
             left_value.expectValue(),
             right_value.expectValue(),
         ) },
@@ -83,8 +83,7 @@ pub fn emitBinaryExpression(
 // does not fit into an `int`.
 fn emitCheckedDivision(
     emitter: *NodeEmitter,
-    line: usize,
-    column: usize,
+    location: RuntimePanicSourceLocation,
     dividend_value: Value,
     divisor_value: Value,
 ) !Value {
@@ -100,7 +99,7 @@ fn emitCheckedDivision(
     try builder.emitBranchInstruction(zero_divisor_value, &.{ zero_divisor_label, nonzero_divisor_label });
 
     try builder.emitLabel(zero_divisor_label);
-    try emitter.runtime_call_emitter.emitPanicDivisionByZeroCall(builder, line, column);
+    try emitter.runtime_call_emitter.emitPanicDivisionByZeroCall(builder, location);
     try builder.emitTerminatorInstruction("unreachable");
 
     try builder.emitLabel(nonzero_divisor_label);
@@ -113,7 +112,7 @@ fn emitCheckedDivision(
     try builder.emitBranchInstruction(overflow_value, &.{ overflow_label, no_overflow_label });
 
     try builder.emitLabel(overflow_label);
-    try emitter.runtime_call_emitter.emitPanicDivisionOverflowCall(builder, line, column);
+    try emitter.runtime_call_emitter.emitPanicDivisionOverflowCall(builder, location);
     try builder.emitTerminatorInstruction("unreachable");
 
     try builder.emitLabel(no_overflow_label);

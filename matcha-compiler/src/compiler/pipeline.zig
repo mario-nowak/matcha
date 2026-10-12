@@ -82,6 +82,7 @@ pub fn generateLlvmIrFromFile(
         &runtime_call_emitter,
         &string_literal_pool,
         &string_literal_emitter,
+        source_registry,
     );
 
     var function_emitter = llvm_codegen.FunctionEmitter.init(
