@@ -15,4 +15,11 @@ pub const imports = struct {
 
         try e2e.expectCompileDiagnostic(&result, " --> tests/e2e/programs/modules/broken_geometry.mt:");
     }
+
+    test "runs a program that uses the exported items of an imported module" {
+        var result = try e2e.runFile("tests/e2e/programs/modules/shapes/main.mt");
+        defer result.deinit();
+
+        try e2e.expectSuccessOutput(&result, "dot with length 20\nempty\nempty / empty\nabab\n");
+    }
 };

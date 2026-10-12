@@ -1,73 +1,6 @@
-// Fetches a todo from the JSONPlaceholder mock API with curl, parses the JSON response into a domain
-// object, changes it, and sends it back. JSONPlaceholder echoes the update without storing it.
-//
-// Run with: matcha run examples/todo-api-round-trip.mt
-// Needs `curl` and network access.
+// Parses JSON text into `Json` values and serializes them back.
 
-// # Round trip
-
-// `startProcess` panics when curl exits with a non-zero status. `--fail-with-body` makes HTTP errors do that.
-item main(): unit = {
-    val TODO_API_URL = "https://jsonplaceholder.typicode.com/todos/1";
-
-    val response = startProcess("curl", ["--silent", "--show-error", "--fail-with-body", TODO_API_URL]);
-    val json = match JsonParser.parse(response) {
-        .Error(message) => {
-            printString("Invalid JSON: " + message);
-            return;
-        },
-        .Ok(value) => value,
-    };
-    val todo = match Todo.fromJson(json) {
-        .Error(message) => {
-            printString("Invalid todo: " + message);
-            return;
-        },
-        .Ok(value) => value,
-    };
-    printString("Fetched: " + todo.describe());
-
-    todo.title += " (reviewed)";
-    todo.completed = true;
-
-    val payload = todo.serialize();
-    printString("Sending: " + payload);
-
-    val update_response = startProcess("curl", [
-        "--silent",
-        "--show-error",
-        "--fail-with-body",
-        "--request",
-        "PUT",
-        "--header",
-        "Content-Type: application/json; charset=UTF-8",
-        "--data",
-        payload,
-        TODO_API_URL,
-    ]);
-    val updated_json = match JsonParser.parse(update_response) {
-        .Error(message) => {
-            printString("Invalid JSON: " + message);
-            return;
-        },
-        .Ok(value) => value,
-    };
-    val updated_todo = match Todo.fromJson(updated_json) {
-        .Error(message) => {
-            printString("Invalid todo: " + message);
-            return;
-        },
-        .Ok(value) => value,
-    };
-    printString("Updated: " + updated_todo.describe());
-};
-
-main();
-
-
-// # JSON
-
-item JsonParser = structure {
+export item JsonParser = structure {
     input: string;
     position: int;
 
@@ -303,13 +236,13 @@ item JsonParser = structure {
 };
 
 // Matcha has no generics, so every result type is its own union.
-item JsonResult = union {
+export item JsonResult = union {
     Ok: Json,
     Error: string,
 };
 
 // A JSON value. Numbers are ints only, because Matcha has no floating-point type yet.
-item Json = union {
+export item Json = union {
     Null,
     Boolean: boolean,
     Number: int,
@@ -371,106 +304,12 @@ item Json = union {
     };
 };
 
-item Member = structure {
+export item Member = structure {
     key: string;
     value: Json;
 };
 
 item TextResult = union {
     Ok: string,
-    Error: string,
-};
-
-
-// # Domain
-
-item Todo = structure {
-    id: int;
-    userId: int;
-    title: string;
-    completed: boolean;
-
-    item fromJson(json: Json): TodoResult = {
-        val members = match json {
-            .Object(members) => members,
-            else => {
-                return .Error("expected a todo object");
-            },
-        };
-        val todo = Todo {
-            id = 0,
-            userId = 0,
-            title = "",
-            completed = false,
-        };
-        var found_fields = 0;
-
-        for member in members {
-            match member.key {
-                "id" => {
-                    todo.id = match member.value {
-                        .Number(id) => id,
-                        else => {
-                            return .Error("field 'id' must be a number");
-                        },
-                    };
-                    found_fields += 1;
-                },
-                "userId" => {
-                    todo.userId = match member.value {
-                        .Number(user_id) => user_id,
-                        else => {
-                            return .Error("field 'userId' must be a number");
-                        },
-                    };
-                    found_fields += 1;
-                },
-                "title" => {
-                    todo.title = match member.value {
-                        .Text(title) => title,
-                        else => {
-                            return .Error("field 'title' must be a string");
-                        },
-                    };
-                    found_fields += 1;
-                },
-                "completed" => {
-                    todo.completed = match member.value {
-                        .Boolean(completed) => completed,
-                        else => {
-                            return .Error("field 'completed' must be a boolean");
-                        },
-                    };
-                    found_fields += 1;
-                },
-                else => unit,
-            };
-        }
-
-        if found_fields != 4 {
-            return .Error("todo is missing fields");
-        }
-
-        return .Ok(todo);
-    };
-
-    item toJson(self: Todo): Json = .Object([
-        Member { key = "id", value = .Number(self.id) },
-        Member { key = "userId", value = .Number(self.userId) },
-        Member { key = "title", value = .Text(self.title) },
-        Member { key = "completed", value = .Boolean(self.completed) },
-    ]);
-
-    item serialize(self: Todo): string = self.toJson().serialize();
-
-    item describe(self: Todo): string = "Todo #" + self.id.toString() + " (user " + self.userId.toString() + "): \""
-        + self.title + "\" " + match self.completed {
-            true => "[done]",
-            false => "[open]",
-        };
-};
-
-item TodoResult = union {
-    Ok: Todo,
     Error: string,
 };

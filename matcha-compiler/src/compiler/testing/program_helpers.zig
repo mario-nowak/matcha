@@ -12,6 +12,7 @@ const ProgramFixture = struct {
 };
 
 /// Builds a `Program` with one module per source file. Each source file gets the next `ModuleId`, in the given order.
+/// An import must name one of the source files.
 pub fn setupProgramFixture(
     arena_state: *std.heap.ArenaAllocator,
     source_files: []const sources.SourceFile,
@@ -30,10 +31,29 @@ pub fn setupProgramFixture(
         module.* = try parser.parse(lexer);
     }
 
+    // Connects each import to the source file at its path, as the module loader does with real files.
+    var imported_module_id_by_node_id = ast.ImportedModuleIdByNodeId.init(arena);
+    for (source_files, modules) |source_file, module| {
+        for (module.statements) |statement| {
+            const import_definition = switch (statement.kind) {
+                .item_definition => |item_definition| switch (item_definition.definition) {
+                    .import => |import_definition| import_definition,
+                    else => continue,
+                },
+                else => continue,
+            };
+            const import_path = try std.fs.path.resolve(arena, &.{ std.fs.path.dirname(source_file.path) orelse "", import_definition.path_token.kind.string_literal });
+            const imported_module_id = for (source_files, 0..) |candidate_source_file, module_id| {
+                if (std.mem.eql(u8, candidate_source_file.path, import_path)) break module_id;
+            } else return error.ImportedSourceFileMissing;
+            try imported_module_id_by_node_id.put(statement.id, @intCast(imported_module_id));
+        }
+    }
+
     return .{
         .program = .{
             .modules = modules,
-            .imported_module_id_by_node_id = ast.ImportedModuleIdByNodeId.init(arena),
+            .imported_module_id_by_node_id = imported_module_id_by_node_id,
         },
         .diagnostic_store = diagnostic_store,
         .source_registry = source_registry,
