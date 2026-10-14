@@ -200,5 +200,49 @@ pub const Matcha = struct {
                 try e2e.expectContains(result.stderr, "/division_overflow.mt:4:19\n");
             }
         };
+
+        pub const integer_remainder = struct {
+            test "keeps the sign of the dividend" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\printInt(7 % 3);
+                    \\printInt(-7 % 3);
+                    \\printInt(7 % -3);
+                ;
+
+                var result = try e2e.runSource("integer_remainder.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "1\n-1\n1\n");
+            }
+
+            test "reports a remainder by zero with its location" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\val divisor = 0;
+                    \\printInt(10 % divisor);
+                ;
+
+                var result = try e2e.runSource("remainder_by_zero.mt", source);
+                defer result.deinit();
+
+                try e2e.expectRuntimeError(&result, "runtime error: division by zero\n  --> ");
+                try e2e.expectContains(result.stderr, "/remainder_by_zero.mt:3:13\n");
+            }
+
+            test "returns zero for the smallest integer and a divisor of negative one" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\val dividend = -9223372036854775807 - 1;
+                    \\val divisor = -1;
+                    \\printInt(dividend % divisor);
+                ;
+
+                var result = try e2e.runSource("remainder_of_smallest_integer.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "0\n");
+            }
+        };
     };
 };

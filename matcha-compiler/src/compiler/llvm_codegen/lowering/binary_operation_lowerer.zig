@@ -195,6 +195,7 @@ pub const BinaryOperationLowerer = struct {
             .@"and" => return .short_circuit_and,
             .@"or" => return .short_circuit_or,
             .divide => return .checked_divide,
+            .remainder => return .checked_remainder,
             else => {},
         }
 
@@ -219,6 +220,7 @@ pub const BinaryOperationLowerer = struct {
             .@"and",
             .@"or",
             .divide,
+            .remainder,
             => unreachable,
         } };
     }

@@ -7,6 +7,7 @@ const function_symbol_generator_module = @import("function_symbol_generator.zig"
 const node_emitter_module = @import("node_emitter.zig");
 
 const Value = function_symbol_generator_module.Value;
+const ConstructLabels = function_symbol_generator_module.ConstructLabels;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
@@ -66,6 +67,12 @@ pub fn emitBinaryExpression(
             left_value.expectValue(),
             right_value.expectValue(),
         ) },
+        .checked_remainder => return .{ .value = try emitCheckedRemainder(
+            emitter,
+            try emitter.createRuntimePanicSourceLocation(binary_expression.operator_token),
+            left_value.expectValue(),
+            right_value.expectValue(),
+        ) },
         else => {},
     }
 
@@ -89,20 +96,10 @@ fn emitCheckedDivision(
 ) !Value {
     const builder = emitter.function_ir_builder;
     const labels = try emitter.function_symbol_generator.generateConstructLabels("division");
-    const zero_divisor_label = try labels.role("zero_divisor");
-    const nonzero_divisor_label = try labels.role("nonzero_divisor");
     const overflow_label = try labels.role("overflow");
     const no_overflow_label = try labels.role("no_overflow");
 
-    const zero_divisor_value = try emitter.function_symbol_generator.generateValueName();
-    try builder.emitInstruction(try std.fmt.allocPrint(emitter.arena, "{s} = icmp eq i64 {s}, 0", .{ zero_divisor_value, divisor_value }));
-    try builder.emitBranchInstruction(zero_divisor_value, &.{ zero_divisor_label, nonzero_divisor_label });
-
-    try builder.emitLabel(zero_divisor_label);
-    try emitter.runtime_call_emitter.emitPanicDivisionByZeroCall(builder, location);
-    try builder.emitTerminatorInstruction("unreachable");
-
-    try builder.emitLabel(nonzero_divisor_label);
+    try emitZeroDivisorCheck(emitter, labels, location, divisor_value);
     const minimum_dividend_value = try emitter.function_symbol_generator.generateValueName();
     try builder.emitInstruction(try std.fmt.allocPrint(emitter.arena, "{s} = icmp eq i64 {s}, {d}", .{ minimum_dividend_value, dividend_value, std.math.minInt(i64) }));
     const negative_one_divisor_value = try emitter.function_symbol_generator.generateValueName();
@@ -120,6 +117,68 @@ fn emitCheckedDivision(
     try builder.emitInstruction(try std.fmt.allocPrint(emitter.arena, "{s} = sdiv i64 {s}, {s}", .{ quotient_value, dividend_value, divisor_value }));
 
     return quotient_value;
+}
+
+// Panics on a zero divisor, because `srem` is undefined behavior for it. `srem` is also undefined behavior for
+// `INT_MIN % -1`, although the remainder is 0. Any `x % -1` equals `x % 1`, so a divisor of -1 is replaced with 1.
+fn emitCheckedRemainder(
+    emitter: *NodeEmitter,
+    location: RuntimePanicSourceLocation,
+    dividend_value: Value,
+    divisor_value: Value,
+) !Value {
+    const builder = emitter.function_ir_builder;
+    const labels = try emitter.function_symbol_generator.generateConstructLabels("remainder");
+
+    try emitZeroDivisorCheck(emitter, labels, location, divisor_value);
+    const negative_one_divisor_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
+        emitter.arena,
+        "{s} = icmp eq i64 {s}, -1",
+        .{ negative_one_divisor_value, divisor_value },
+    ));
+    const safe_divisor_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
+        emitter.arena,
+        "{s} = select i1 {s}, i64 1, i64 {s}",
+        .{ safe_divisor_value, negative_one_divisor_value, divisor_value },
+    ));
+    const remainder_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
+        emitter.arena,
+        "{s} = srem i64 {s}, {s}",
+        .{ remainder_value, dividend_value, safe_divisor_value },
+    ));
+
+    return remainder_value;
+}
+
+fn emitZeroDivisorCheck(
+    emitter: *NodeEmitter,
+    labels: ConstructLabels,
+    location: RuntimePanicSourceLocation,
+    divisor_value: Value,
+) !void {
+    const builder = emitter.function_ir_builder;
+    const zero_divisor_label = try labels.role("zero_divisor");
+    const nonzero_divisor_label = try labels.role("nonzero_divisor");
+
+    const zero_divisor_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitInstruction(try std.fmt.allocPrint(
+        emitter.arena,
+        "{s} = icmp eq i64 {s}, 0",
+        .{ zero_divisor_value, divisor_value },
+    ));
+    try builder.emitBranchInstruction(
+        zero_divisor_value,
+        &.{ zero_divisor_label, nonzero_divisor_label },
+    );
+
+    try builder.emitLabel(zero_divisor_label);
+    try emitter.runtime_call_emitter.emitPanicDivisionByZeroCall(builder, location);
+    try builder.emitTerminatorInstruction("unreachable");
+
+    try builder.emitLabel(nonzero_divisor_label);
 }
 
 // Emits the right operand only when the left operand does not decide the result already. The result is a phi of
@@ -276,6 +335,7 @@ pub fn emitLoweredBinaryOperation(
         .short_circuit_and,
         .short_circuit_or,
         .checked_divide,
+        .checked_remainder,
         => unreachable,
     };
 }

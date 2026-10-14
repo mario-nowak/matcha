@@ -30,6 +30,33 @@ pub const Parser = struct {
                 } });
             }
 
+            test "binds remainder as tightly as multiplication" {
+                const source = "val result = 1 + 2 * 7 % 3;";
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupParserFixture(&arena, source);
+
+                const module = try fixture.parser.parse(fixture.lexer.*);
+
+                try expect(module).toMatch(.{ .statements = .{
+                    .{ .kind = .{ .binding_declaration = .{
+                        .value = .{ .kind = .{ .binary_expression = .{
+                            .operator = .add,
+                            .left = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 1 } } } },
+                            .right = .{ .kind = .{ .binary_expression = .{
+                                .operator = .remainder,
+                                .left = .{ .kind = .{ .binary_expression = .{
+                                    .operator = .multiply,
+                                    .left = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 2 } } } },
+                                    .right = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 7 } } } },
+                                } } },
+                                .right = .{ .kind = .{ .integer_literal = .{ .kind = .{ .int_literal = 3 } } } },
+                            } } },
+                        } } },
+                    } } },
+                } });
+            }
+
             test "orders arithmetic, comparison, and boolean operators by precedence" {
                 const source = "val result = 1 + 2 >= 3 and false or true;";
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

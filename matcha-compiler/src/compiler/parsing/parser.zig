@@ -1299,6 +1299,7 @@ pub const Parser = struct {
                             .minus => ast.BinaryOperator.subtract,
                             .asterisk => ast.BinaryOperator.multiply,
                             .slash => ast.BinaryOperator.divide,
+                            .percent => ast.BinaryOperator.remainder,
                             .equal_equal => ast.BinaryOperator.equal,
                             .not_equal => ast.BinaryOperator.not_equal,
                             .less_than => ast.BinaryOperator.less_than,
@@ -1344,7 +1345,10 @@ pub const Parser = struct {
                 .left_binding_power = 5.0,
                 .right_binding_power = 5.1,
             },
-            .asterisk, .slash => .{
+            .asterisk,
+            .slash,
+            .percent,
+            => .{
                 .left_binding_power = 6.0,
                 .right_binding_power = 6.1,
             },

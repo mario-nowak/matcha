@@ -46,6 +46,7 @@ pub const TokenKind = union(enum) {
     minus,
     asterisk,
     slash,
+    percent,
     comma,
     dot,
     //
