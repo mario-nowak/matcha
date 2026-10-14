@@ -1,0 +1,19 @@
+{
+  "grammars": [
+    {
+      "name": "matcha",
+      "camelcase": "Matcha",
+      "scope": "source.matcha",
+      "path": ".",
+      "file-types": ["mt", "matcha"]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Token-level Tree-sitter grammar for Matcha",
+    "links": {
+      "repository": "https://github.com/mario-nowak/matcha"
+    }
+  }
+}

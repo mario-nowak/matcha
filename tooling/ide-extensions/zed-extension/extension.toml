@@ -1,0 +1,13 @@
+id = "matcha"
+name = "Matcha"
+version = "0.1.0"
+schema_version = 1
+authors = ["Mario Nowak"]
+description = "Syntax highlighting for the Matcha programming language."
+repository = "https://github.com/mario-nowak/matcha"
+
+[grammars.matcha]
+repository = "https://github.com/mario-nowak/matcha"
+# Must be a commit that contains tooling/tree-sitter-matcha.
+rev = "REPLACE_WITH_COMMIT_SHA"
+path = "tooling/tree-sitter-matcha"
