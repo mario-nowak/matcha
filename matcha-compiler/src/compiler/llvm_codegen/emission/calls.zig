@@ -7,6 +7,7 @@ const lowering = @import("lowering");
 const function_symbol_generator_module = @import("function_symbol_generator.zig");
 const node_emitter_module = @import("node_emitter.zig");
 const emitUnionConstruction = @import("aggregates.zig").emitUnionConstruction;
+const places = @import("places.zig");
 
 const Value = function_symbol_generator_module.Value;
 const NodeEmitter = node_emitter_module.NodeEmitter;
@@ -386,6 +387,33 @@ fn emitStringMethodCall(
                 start_value.expectValue(),
                 end_value.expectValue(),
             ) };
+        },
+        .get_byte_at => {
+            if (call_expression.arguments.len != 1) unreachable;
+
+            const index_value = (try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment)).expectValue();
+            const string_parts = try emitter.emitStringParts(base_value);
+            try places.emitIndexBoundsCheck(
+                emitter,
+                .string,
+                try emitter.createRuntimePanicSourceLocation(callee_member_expression.member_name_token),
+                index_value,
+                string_parts.length_value,
+            );
+
+            const builder = emitter.function_ir_builder;
+            const byte_pointer_value = try emitter.function_symbol_generator.generateValueName();
+            try builder.emitElementPointer(byte_pointer_value, "i8", string_parts.pointer_value, index_value);
+            const byte_value = try emitter.function_symbol_generator.generateValueName();
+            try builder.emitLoad(byte_value, byte_pointer_value, "i8");
+            const result_value = try emitter.function_symbol_generator.generateValueName();
+            try builder.emitInstruction(try std.fmt.allocPrint(
+                emitter.arena,
+                "{s} = zext i8 {s} to i64",
+                .{ result_value, byte_value },
+            ));
+
+            return .{ .value = result_value };
         },
     }
 }

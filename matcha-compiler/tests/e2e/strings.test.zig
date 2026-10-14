@@ -99,3 +99,39 @@ test "slice reports a runtime error when the range is out of bounds" {
 
     try e2e.expectRuntimeError(&result, "runtime error: string slice [2, 4) is out of bounds for length 3");
 }
+
+pub const Matcha = struct {
+    pub const run = struct {
+        pub const string_bytes = struct {
+            test "returns the bytes of a string, not its characters" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\val text = "Ab";
+                    \\printInt(text.getByteAt(0));
+                    \\printInt(text.getByteAt(1));
+                    \\printInt("é".getByteAt(0));
+                ;
+
+                var result = try e2e.runSource("string_bytes.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "65\n98\n195\n");
+            }
+
+            test "reports an index out of bounds with its location" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\val text = "abc";
+                    \\printInt(text.getByteAt(3));
+                ;
+
+                var result = try e2e.runSource("string_byte_out_of_bounds.mt", source);
+                defer result.deinit();
+
+                try e2e.expectRuntimeError(&result, "runtime error: string index out of bounds\n  --> ");
+                try e2e.expectContains(result.stderr, "/string_byte_out_of_bounds.mt:3:15\n");
+                try e2e.expectContains(result.stderr, "index 3 is out of bounds for length 3");
+            }
+        };
+    };
+};

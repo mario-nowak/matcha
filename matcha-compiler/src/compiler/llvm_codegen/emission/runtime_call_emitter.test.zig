@@ -223,6 +223,19 @@ pub const RuntimeCallEmitter = struct {
         }
     };
 
+    pub const emitPanicStringIndexOutOfBoundsCall = struct {
+        test "records the panic string index out of bounds runtime requirement" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
+            var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
+
+            try runtime_call_emitter.emitPanicStringIndexOutOfBoundsCall(&function_ir_builder, .{ .path_global = .{ .name = "@path", .content = "main.mt", .len = 7 }, .line = 1, .column = 1 }, "%index", "%length");
+
+            try expect(runtime_call_emitter.runtime_requirements).toMatch(.{ .panic_string_index_out_of_bounds = true });
+        }
+    };
+
     pub const emitArrayAppendSlotCall = struct {
         test "records the array append slot runtime requirement" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

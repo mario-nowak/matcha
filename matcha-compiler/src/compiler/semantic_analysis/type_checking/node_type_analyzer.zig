@@ -1019,6 +1019,14 @@ pub const NodeTypeAnalyzer = struct {
                     try self.recordMemberAccess(node_id, .{ .string_instance_method_access = .slice });
                     return self.recordNodeType(node_id, slice_function_type_id);
                 }
+                if (std.mem.eql(u8, member_name, "getByteAt")) {
+                    const get_byte_at_function_type_id = try self.getStringMethodFunctionTypeId(
+                        &.{self.type_store.integer_type_id},
+                        self.type_store.integer_type_id,
+                    );
+                    try self.recordMemberAccess(node_id, .{ .string_instance_method_access = .get_byte_at });
+                    return self.recordNodeType(node_id, get_byte_at_function_type_id);
+                }
 
                 try self.diagnostic_store.emitFormattedErrorFromToken(
                     self.arena,

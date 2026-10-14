@@ -62,6 +62,10 @@ val string_as_int = "1337".toInt(); // `toInt` will panic for invalid strings.
 val string_length = my_string.length;
 // `slice` returns the bytes from a start index up to, but not including, an end index.
 val first_letter = my_string.slice(0, 1); // "h". `slice` will panic for out-of-bounds ranges.
+// `getByteAt` returns one byte as an int. It reads bytes, not characters, so "é" starts with 195.
+val first_byte = my_string.getByteAt(0); // 104. `getByteAt` will panic for out-of-bounds indexes.
+// Strings compare byte by byte, so uppercase letters sort before lowercase ones.
+val sorts_first = "Zebra" < "apple"; // true
 
 // ### Arrays
 // Arrays are small headers that store the length and a pointer to the underlying data.

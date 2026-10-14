@@ -132,6 +132,13 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.runtime_panic_index_out_of_bounds_function_name},
             );
         }
+        if (requirements.panic_string_index_out_of_bounds) {
+            try runtime_symbol_declarations.print(
+                self.arena,
+                "\ndeclare void @{s}(ptr, i64, i64, i64, i64, i64) noreturn",
+                .{runtime_symbols.runtime_panic_string_index_out_of_bounds_function_name},
+            );
+        }
         if (requirements.panic_division_by_zero) {
             try runtime_symbol_declarations.print(
                 self.arena,

@@ -1929,5 +1929,64 @@ pub const LlvmIrCodeGenerator = struct {
                 );
             }
         };
+
+        pub const string_bytes = struct {
+            test "checks the index before loading a byte of the string" {
+                const source =
+                    \\val text = "ab";
+                    \\val byte = text.getByteAt(1);
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.panicStringIndexOutOfBounds(ptr, i64, i64, i64, i64, i64) noreturn
+                    \\
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
+                    \\
+                    \\@matcha.string_literal.0 = private unnamed_addr constant [2 x i8] c"ab"
+                    \\@matcha.string_literal.1 = private unnamed_addr constant [7 x i8] c"main.mt"
+                    \\
+                    \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
+                    \\entry:
+                    \\    %address.binding.text.0 = alloca %matcha.compiler_module.builtin.type.string
+                    \\    %address.binding.byte.0 = alloca i64
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
+                    \\    %value.0 = getelementptr inbounds [2 x i8], ptr @matcha.string_literal.0, i64 0, i64 0
+                    \\    %value.1 = insertvalue %matcha.compiler_module.builtin.type.string undef, ptr %value.0, 0
+                    \\    %value.2 = insertvalue %matcha.compiler_module.builtin.type.string %value.1, i64 2, 1
+                    \\    store %matcha.compiler_module.builtin.type.string %value.2, ptr %address.binding.text.0
+                    \\    %value.3 = load %matcha.compiler_module.builtin.type.string, ptr %address.binding.text.0
+                    \\    %value.4 = extractvalue %matcha.compiler_module.builtin.type.string %value.3, 0
+                    \\    %value.5 = extractvalue %matcha.compiler_module.builtin.type.string %value.3, 1
+                    \\    %value.6 = icmp slt i64 1, 0
+                    \\    %value.7 = icmp sge i64 1, %value.5
+                    \\    %value.8 = or i1 %value.6, %value.7
+                    \\    br i1 %value.8, label %index.0.out_of_bounds, label %index.0.in_bounds
+                    \\index.0.out_of_bounds:
+                    \\    call void @matcha.compiler_module.runtime.function.panicStringIndexOutOfBounds(ptr @matcha.string_literal.1, i64 7, i64 2, i64 17, i64 1, i64 %value.5)
+                    \\    unreachable
+                    \\index.0.in_bounds:
+                    \\    %value.9 = getelementptr inbounds i8, ptr %value.4, i64 1
+                    \\    %value.10 = load i8, ptr %value.9
+                    \\    %value.11 = zext i8 %value.10 to i64
+                    \\    store i64 %value.11, ptr %address.binding.byte.0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+        };
     };
 };
