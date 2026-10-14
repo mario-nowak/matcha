@@ -313,6 +313,7 @@ pub const Lexer = struct {
             '-' => .minus,
             '*' => .asterisk,
             '/' => .slash,
+            '%' => .percent,
             '<' => .less_than,
             '>' => .greater_than,
             ',' => .comma,

@@ -681,6 +681,61 @@ pub const LlvmIrCodeGenerator = struct {
             }
         };
 
+        pub const integer_remainder = struct {
+            test "checks the divisor and replaces a divisor of negative one before taking the remainder" {
+                const source =
+                    \\val dividend = 10;
+                    \\val divisor = 3;
+                    \\val remainder = dividend % divisor;
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupLlvmIrCodeGeneratorFixture(&arena, source);
+
+                const llvm_ir = try fixture.llvm_ir_code_generator.generateLlvmIr(fixture.analyzed_program);
+
+                try expect(llvm_ir).toMatch(
+                    \\target triple = "x86_64-unknown-linux-gnu"
+                    \\
+                    \\declare void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocate(i64)
+                    \\declare ptr @matcha.compiler_module.runtime.function.allocateAtomic(i64)
+                    \\declare void @matcha.compiler_module.runtime.function.initArguments(i32, ptr)
+                    \\declare void @matcha.compiler_module.runtime.function.panicDivisionByZero(ptr, i64, i64, i64) noreturn
+                    \\
+                    \\%matcha.compiler_module.builtin.type.string = type { ptr, i64 }
+                    \\%matcha.compiler_module.builtin.type.array = type { i64, i64, ptr }
+                    \\
+                    \\@matcha.string_literal.0 = private unnamed_addr constant [7 x i8] c"main.mt"
+                    \\
+                    \\define i32 @main(i32 %parameter.argc, ptr %parameter.argv) {
+                    \\entry:
+                    \\    %address.binding.dividend.0 = alloca i64
+                    \\    %address.binding.divisor.0 = alloca i64
+                    \\    %address.binding.remainder.0 = alloca i64
+                    \\    call void @matcha.compiler_module.runtime.function.initiateGarbageCollector()
+                    \\    call void @matcha.compiler_module.runtime.function.initArguments(i32 %parameter.argc, ptr %parameter.argv)
+                    \\    store i64 10, ptr %address.binding.dividend.0
+                    \\    store i64 3, ptr %address.binding.divisor.0
+                    \\    %value.0 = load i64, ptr %address.binding.dividend.0
+                    \\    %value.1 = load i64, ptr %address.binding.divisor.0
+                    \\    %value.2 = icmp eq i64 %value.1, 0
+                    \\    br i1 %value.2, label %remainder.0.zero_divisor, label %remainder.0.nonzero_divisor
+                    \\remainder.0.zero_divisor:
+                    \\    call void @matcha.compiler_module.runtime.function.panicDivisionByZero(ptr @matcha.string_literal.0, i64 7, i64 3, i64 26)
+                    \\    unreachable
+                    \\remainder.0.nonzero_divisor:
+                    \\    %value.3 = icmp eq i64 %value.1, -1
+                    \\    %value.4 = select i1 %value.3, i64 1, i64 %value.1
+                    \\    %value.5 = srem i64 %value.0, %value.4
+                    \\    store i64 %value.5, ptr %address.binding.remainder.0
+                    \\    ret i32 0
+                    \\}
+                    \\
+                );
+            }
+        };
+
         pub const match = struct {
             test "lowers a match with a subject to a compare and branch chain" {
                 const source =

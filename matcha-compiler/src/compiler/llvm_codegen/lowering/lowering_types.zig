@@ -85,6 +85,7 @@ pub const BinaryOperationDecision = union(enum) {
     short_circuit_and,
     short_circuit_or,
     checked_divide,
+    checked_remainder,
 };
 
 pub const PlaceDecision = union(enum) {
