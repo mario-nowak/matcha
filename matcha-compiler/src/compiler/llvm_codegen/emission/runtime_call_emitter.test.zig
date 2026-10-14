@@ -121,6 +121,21 @@ pub const RuntimeCallEmitter = struct {
         }
     };
 
+    pub const emitStringCompareOrderCall = struct {
+        test "records the string compare order runtime requirement" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
+            var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
+            var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
+            const string_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
+
+            _ = try runtime_call_emitter.emitStringCompareOrderCall(&function_ir_builder, &function_symbol_generator, string_parts, string_parts);
+
+            try expect(runtime_call_emitter.runtime_requirements).toMatch(.{ .string_compare_order = true });
+        }
+    };
+
     pub const emitStringTrimCall = struct {
         test "records the string trim runtime requirement" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

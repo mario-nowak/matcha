@@ -83,6 +83,13 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.runtime_string_compare_function_name},
             );
         }
+        if (requirements.string_compare_order) {
+            try runtime_symbol_declarations.print(
+                self.arena,
+                "\ndeclare i64 @{s}(ptr, i64, ptr, i64)",
+                .{runtime_symbols.runtime_string_compare_order_function_name},
+            );
+        }
         if (requirements.string_trim) {
             try runtime_symbol_declarations.print(
                 self.arena,

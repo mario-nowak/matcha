@@ -74,11 +74,19 @@ pub const PrimitiveBinaryOperation = enum {
     greater_than_or_equal,
 };
 
+pub const StringOrderComparison = enum {
+    less_than,
+    less_than_or_equal,
+    greater_than,
+    greater_than_or_equal,
+};
+
 pub const BinaryOperationDecision = union(enum) {
     primitive_operation: PrimitiveBinaryOperation,
     string_concatenate,
     string_compare_equal,
     string_compare_not_equal,
+    string_compare_order: StringOrderComparison,
     zero_sized_compare_equal,
     zero_sized_compare_not_equal,
     union_case_index_comparison,

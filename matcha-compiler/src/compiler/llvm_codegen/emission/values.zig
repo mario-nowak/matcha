@@ -330,6 +330,27 @@ pub fn emitLoweredBinaryOperation(
             ));
             break :compare_not_equal result_value;
         },
+        .string_compare_order => |comparison| compare_order: {
+            const order_value = try emitter.runtime_call_emitter.emitStringCompareOrderCall(
+                emitter.function_ir_builder,
+                emitter.function_symbol_generator,
+                try emitter.emitStringParts(left_value),
+                try emitter.emitStringParts(right_value),
+            );
+            const condition = switch (comparison) {
+                .less_than => "slt",
+                .less_than_or_equal => "sle",
+                .greater_than => "sgt",
+                .greater_than_or_equal => "sge",
+            };
+            const result_value = try emitter.function_symbol_generator.generateValueName();
+            try emitter.function_ir_builder.emitInstruction(try std.fmt.allocPrint(
+                emitter.arena,
+                "{s} = icmp {s} i64 {s}, 0",
+                .{ result_value, condition, order_value },
+            ));
+            break :compare_order result_value;
+        },
         .zero_sized_compare_equal,
         .zero_sized_compare_not_equal,
         .short_circuit_and,
