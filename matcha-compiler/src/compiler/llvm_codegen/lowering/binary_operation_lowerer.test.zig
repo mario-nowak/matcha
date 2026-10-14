@@ -105,6 +105,20 @@ pub const BinaryOperationLowerer = struct {
             try expect(decisions.get(binary_expression.id).?).toMatch(.string_compare_not_equal);
         }
 
+        test "lowers string ordering to a runtime order comparison" {
+            const source =
+                \\val before = "a" < "b";
+            ;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const fixture = try setupLowererFixture(lowering.BinaryOperationLowerer, &arena, source);
+            const binary_expression = fixture.analyzed_program.resolved_program.program.modules[0].statements[0].kind.binding_declaration.value;
+
+            const decisions = try fixture.lowerer.lower(fixture.analyzed_program);
+
+            try expect(decisions.get(binary_expression.id).?).toMatch(.{ .string_compare_order = .less_than });
+        }
+
         test "lowers unit equality to a zero-sized equality comparison" {
             const source =
                 \\val same = unit == unit;

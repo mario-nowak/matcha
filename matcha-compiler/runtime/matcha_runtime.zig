@@ -16,6 +16,7 @@ comptime {
     @export(&startProcess, .{ .name = runtime_symbols.builtin_start_process_function_name });
     @export(&stringConcatenate, .{ .name = runtime_symbols.runtime_string_concatenate_function_name });
     @export(&stringCompare, .{ .name = runtime_symbols.runtime_string_compare_function_name });
+    @export(&stringCompareOrder, .{ .name = runtime_symbols.runtime_string_compare_order_function_name });
     @export(&stringTrim, .{ .name = runtime_symbols.builtin_string_trim_method_name });
     @export(&stringSplit, .{ .name = runtime_symbols.builtin_string_split_method_name });
     @export(&stringToInt, .{ .name = runtime_symbols.builtin_string_to_int_method_name });
@@ -341,6 +342,20 @@ fn stringCompare(
     right_len: usize,
 ) callconv(.c) bool {
     return std.mem.eql(u8, left_ptr[0..left_len], right_ptr[0..right_len]);
+}
+
+// Orders byte by byte. A string sorts before every longer string that starts with it.
+fn stringCompareOrder(
+    left_ptr: [*]const u8,
+    left_len: usize,
+    right_ptr: [*]const u8,
+    right_len: usize,
+) callconv(.c) i64 {
+    return switch (std.mem.order(u8, left_ptr[0..left_len], right_ptr[0..right_len])) {
+        .lt => -1,
+        .eq => 0,
+        .gt => 1,
+    };
 }
 
 fn stringTrim(out: *MatchaString, ptr: [*]const u8, len: usize) callconv(.c) void {

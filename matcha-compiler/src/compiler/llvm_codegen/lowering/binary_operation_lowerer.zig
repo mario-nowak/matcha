@@ -175,6 +175,10 @@ pub const BinaryOperationLowerer = struct {
                 .add => .string_concatenate,
                 .equal => .string_compare_equal,
                 .not_equal => .string_compare_not_equal,
+                .less_than => .{ .string_compare_order = .less_than },
+                .less_than_or_equal => .{ .string_compare_order = .less_than_or_equal },
+                .greater_than => .{ .string_compare_order = .greater_than },
+                .greater_than_or_equal => .{ .string_compare_order = .greater_than_or_equal },
                 else => unreachable,
             };
         }

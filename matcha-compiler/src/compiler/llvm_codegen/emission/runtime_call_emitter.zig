@@ -213,6 +213,30 @@ pub const RuntimeCallEmitter = struct {
         return result_value;
     }
 
+    pub fn emitStringCompareOrderCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        left_parts: RuntimeStringParts,
+        right_parts: RuntimeStringParts,
+    ) !Value {
+        self.runtime_requirements.string_compare_order = true;
+        const result_value = try symbol_generator.generateValueName();
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "{s} = call i64 @{s}(ptr {s}, i64 {s}, ptr {s}, i64 {s})",
+            .{
+                result_value,
+                runtime_symbols.runtime_string_compare_order_function_name,
+                left_parts.pointer_value,
+                left_parts.length_value,
+                right_parts.pointer_value,
+                right_parts.length_value,
+            },
+        ));
+        return result_value;
+    }
+
     pub fn emitStringTrimCall(
         self: *@This(),
         builder: *FunctionIrBuilder,

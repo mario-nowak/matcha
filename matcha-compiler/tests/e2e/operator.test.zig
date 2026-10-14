@@ -244,5 +244,24 @@ pub const Matcha = struct {
                 try e2e.expectSuccessOutput(&result, "0\n");
             }
         };
+
+        pub const string_ordering = struct {
+            test "orders strings byte by byte with a prefix first" {
+                const source =
+                    \\item { printInt } = import "builtin";
+                    \\printInt(if "apple" < "banana" { 1 } else { 0 });
+                    \\printInt(if "Zebra" < "apple" { 1 } else { 0 });
+                    \\printInt(if "app" < "apple" { 1 } else { 0 });
+                    \\printInt(if "b" <= "a" { 1 } else { 0 });
+                    \\printInt(if "b" >= "b" { 1 } else { 0 });
+                    \\printInt(if "b" > "a" { 1 } else { 0 });
+                ;
+
+                var result = try e2e.runSource("string_ordering.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "1\n1\n1\n0\n1\n1\n");
+            }
+        };
     };
 };
