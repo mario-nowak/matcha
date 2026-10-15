@@ -10,6 +10,7 @@ const Value = function_symbol_generator_module.Value;
 const NodeEmitter = node_emitter_module.NodeEmitter;
 const EmissionResult = node_emitter_module.EmissionResult;
 const Environment = node_emitter_module.Environment;
+const RuntimePanicSourceLocation = @import("runtime_call_emitter.zig").RuntimePanicSourceLocation;
 
 pub fn emitBindingDeclaration(
     emitter: *NodeEmitter,
@@ -212,6 +213,43 @@ pub fn emitIndexExpressionPointer(
         lowering.llvm_type.array_data_field_index,
     );
 
+    try emitIndexBoundsCheck(
+        emitter,
+        .array,
+        try emitter.createRuntimePanicSourceLocation(index_expression.left_bracket),
+        index_value,
+        length_value,
+    );
+    const element_runtime_representation = lowered_program
+        .analyzed_program
+        .runtime_representation_result
+        .runtime_representation_by_type_id
+        .get(element_type_id) orelse unreachable;
+    // Compute the pointer to the element at the given index if bounds check passes
+    if (!element_runtime_representation.hasRuntimeRepresentation()) {
+        return .zero_sized;
+    }
+    const data_value = try emitter.function_symbol_generator.generateValueName();
+    try builder.emitLoad(data_value, data_pointer_value, "ptr");
+    const element_pointer_value = try emitter.function_symbol_generator.generateValueName();
+    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
+    try builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
+
+    return .{ .value = element_pointer_value };
+}
+
+pub const IndexedSequence = enum { array, string };
+
+// Panics when the index is negative or not below the length. Emission continues in the `in_bounds` label.
+pub fn emitIndexBoundsCheck(
+    emitter: *NodeEmitter,
+    indexed_sequence: IndexedSequence,
+    location: RuntimePanicSourceLocation,
+    index_value: Value,
+    length_value: Value,
+) !void {
+    const builder = emitter.function_ir_builder;
+
     const negative_check_value = try emitter.function_symbol_generator.generateValueName();
     try builder.emitInstruction(try std.fmt.allocPrint(
         emitter.arena,
@@ -239,29 +277,11 @@ pub fn emitIndexExpressionPointer(
     try builder.emitBranchInstruction(out_of_bounds_value, &.{ out_of_bounds_label, in_bounds_label });
 
     try builder.emitLabel(out_of_bounds_label);
-    try emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(
-        builder,
-        try emitter.createRuntimePanicSourceLocation(index_expression.left_bracket),
-        index_value,
-        length_value,
-    );
+    switch (indexed_sequence) {
+        .array => try emitter.runtime_call_emitter.emitPanicIndexOutOfBoundsCall(builder, location, index_value, length_value),
+        .string => try emitter.runtime_call_emitter.emitPanicStringIndexOutOfBoundsCall(builder, location, index_value, length_value),
+    }
     try builder.emitTerminatorInstruction("unreachable");
 
     try builder.emitLabel(in_bounds_label);
-    const element_runtime_representation = lowered_program
-        .analyzed_program
-        .runtime_representation_result
-        .runtime_representation_by_type_id
-        .get(element_type_id) orelse unreachable;
-    // Compute the pointer to the element at the given index if bounds check passes
-    if (!element_runtime_representation.hasRuntimeRepresentation()) {
-        return .zero_sized;
-    }
-    const data_value = try emitter.function_symbol_generator.generateValueName();
-    try builder.emitLoad(data_value, data_pointer_value, "ptr");
-    const element_pointer_value = try emitter.function_symbol_generator.generateValueName();
-    const element_llvm_type = lowered_program.getLlvmIrType(element_type_id);
-    try builder.emitElementPointer(element_pointer_value, element_llvm_type, data_value, index_value);
-
-    return .{ .value = element_pointer_value };
 }

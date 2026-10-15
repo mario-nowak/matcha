@@ -370,6 +370,26 @@ pub const RuntimeCallEmitter = struct {
         ));
     }
 
+    pub fn emitPanicStringIndexOutOfBoundsCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        location: RuntimePanicSourceLocation,
+        index_value: Value,
+        length_value: Value,
+    ) !void {
+        self.runtime_requirements.panic_string_index_out_of_bounds = true;
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "call void @{s}({s}, i64 {s}, i64 {s})",
+            .{
+                runtime_symbols.runtime_panic_string_index_out_of_bounds_function_name,
+                try self.renderRuntimePanicSourceLocationArguments(location),
+                index_value,
+                length_value,
+            },
+        ));
+    }
+
     pub fn emitPanicDivisionByZeroCall(self: *@This(), builder: *FunctionIrBuilder, location: RuntimePanicSourceLocation) !void {
         self.runtime_requirements.panic_division_by_zero = true;
         try builder.emitInstruction(try std.fmt.allocPrint(

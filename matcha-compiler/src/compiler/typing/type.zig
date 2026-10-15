@@ -120,6 +120,7 @@ pub const StringInstanceMethod = enum {
     split,
     to_int,
     slice,
+    get_byte_at,
 };
 
 pub const IntegerInstanceMethod = enum {

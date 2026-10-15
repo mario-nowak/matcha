@@ -8,7 +8,7 @@ comptime {
     _ = @import("control_flow.test.zig");
     _ = @import("match.test.zig");
     _ = @import("functions.test.zig");
-    _ = @import("strings.test.zig");
+    referenceAllTestsRecursive(@import("strings.test.zig"));
     _ = @import("arrays.test.zig");
     _ = @import("structures.test.zig");
     _ = @import("io.test.zig");

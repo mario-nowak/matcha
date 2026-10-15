@@ -23,6 +23,7 @@ comptime {
     @export(&stringSlice, .{ .name = runtime_symbols.builtin_string_slice_method_name });
     @export(&intToString, .{ .name = runtime_symbols.builtin_int_to_string_method_name });
     @export(&panicIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name });
+    @export(&panicStringIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_string_index_out_of_bounds_function_name });
     @export(&panicDivisionByZero, .{ .name = runtime_symbols.runtime_panic_division_by_zero_function_name });
     @export(&panicDivisionOverflow, .{ .name = runtime_symbols.runtime_panic_division_overflow_function_name });
 }
@@ -458,6 +459,13 @@ fn writeSourceLocation(path_pointer: [*]const u8, path_length: usize, line: usiz
 
 fn panicIndexOutOfBounds(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize, index: i64, length: usize) callconv(.c) noreturn {
     writeTo(stderr_file_descriptor, "runtime error: array index out of bounds");
+    writeSourceLocation(path_pointer, path_length, line, column);
+    var buffer: [128]u8 = undefined;
+    panic(std.fmt.bufPrint(&buffer, "\n  index {d} is out of bounds for length {d}", .{ index, length }) catch unreachable);
+}
+
+fn panicStringIndexOutOfBounds(path_pointer: [*]const u8, path_length: usize, line: usize, column: usize, index: i64, length: usize) callconv(.c) noreturn {
+    writeTo(stderr_file_descriptor, "runtime error: string index out of bounds");
     writeSourceLocation(path_pointer, path_length, line, column);
     var buffer: [128]u8 = undefined;
     panic(std.fmt.bufPrint(&buffer, "\n  index {d} is out of bounds for length {d}", .{ index, length }) catch unreachable);
