@@ -69,3 +69,35 @@ test "startProcess panics with the exit status and stderr when the process exits
 
     try e2e.expectRuntimeError(&result, "oops\nruntime error: process exited with status 3\n");
 }
+
+pub const Matcha = struct {
+    pub const run = struct {
+        pub const file_chunks = struct {
+            test "reads the bytes at an offset, shortened at the end of the file" {
+                const source =
+                    \\item { readFileChunk, printString } = import "builtin";
+                    \\val path = "tests/e2e/programs/io/read_file_input.txt";
+                    \\printString(readFileChunk(path, 7, 4));
+                    \\printString(readFileChunk(path, 12, 100).trim());
+                ;
+
+                var result = try e2e.runSource("io_read_file_chunk.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "file\ninput\n");
+            }
+
+            test "returns an empty string at the end of the file" {
+                const source =
+                    \\item { readFileChunk, printInt } = import "builtin";
+                    \\printInt(readFileChunk("tests/e2e/programs/io/read_file_input.txt", 1000, 4).length);
+                ;
+
+                var result = try e2e.runSource("io_read_file_chunk_end.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "0\n");
+            }
+        };
+    };
+};

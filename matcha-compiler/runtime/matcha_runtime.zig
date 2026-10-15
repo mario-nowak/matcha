@@ -10,6 +10,7 @@ comptime {
     @export(&printInt, .{ .name = runtime_symbols.builtin_print_int_function_name });
     @export(&printString, .{ .name = runtime_symbols.builtin_print_string_function_name });
     @export(&readFile, .{ .name = runtime_symbols.builtin_read_file_function_name });
+    @export(&readFileChunk, .{ .name = runtime_symbols.builtin_read_file_chunk_function_name });
     @export(&readLine, .{ .name = runtime_symbols.builtin_read_line_function_name });
     @export(&initArguments, .{ .name = runtime_symbols.runtime_init_arguments_function_name });
     @export(&getArguments, .{ .name = runtime_symbols.builtin_get_arguments_function_name });
@@ -167,6 +168,25 @@ fn readFile(out: *MatchaString, path_ptr: [*]const u8, path_len: usize) callconv
     const bytes: [*]u8 = @ptrCast(allocation);
     const buffer = bytes[0..file_size];
     const bytes_read = file.readAll(buffer) catch panic("runtime error: failed to read file");
+
+    out.* = .{
+        .ptr = bytes,
+        .len = bytes_read,
+    };
+}
+
+// Opens the file for every chunk, so the caller needs no file handle. Returns "" at or after the end of the file.
+fn readFileChunk(out: *MatchaString, path_ptr: [*]const u8, path_len: usize, offset: i64, length: i64) callconv(.c) void {
+    if (offset < 0 or length < 0) {
+        panic("runtime error: readFileChunk needs a non-negative offset and length");
+    }
+
+    var file = std.fs.cwd().openFile(path_ptr[0..path_len], .{}) catch panic("runtime error: failed to open file");
+    defer file.close();
+
+    const allocation = allocateAtomic(@max(@as(usize, @intCast(length)), 1)) orelse panic("runtime error: out of memory");
+    const bytes: [*]u8 = @ptrCast(allocation);
+    const bytes_read = file.preadAll(bytes[0..@intCast(length)], @intCast(offset)) catch panic("runtime error: failed to read file");
 
     out.* = .{
         .ptr = bytes,

@@ -106,6 +106,35 @@ pub const RuntimeCallEmitter = struct {
         );
     }
 
+    pub fn emitReadFileChunkCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        path_parts: RuntimeStringParts,
+        offset_value: Value,
+        length_value: Value,
+    ) !Value {
+        self.runtime_requirements.read_file_chunk = true;
+        const result_address = try symbol_generator.generateSyntheticAddressName();
+        try builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "call void @{s}(ptr {s}, ptr {s}, i64 {s}, i64 {s}, i64 {s})",
+            .{
+                runtime_symbols.builtin_read_file_chunk_function_name,
+                result_address,
+                path_parts.pointer_value,
+                path_parts.length_value,
+                offset_value,
+                length_value,
+            },
+        ));
+
+        const result_value = try symbol_generator.generateValueName();
+        try builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
+    }
+
     pub fn emitReadLineCall(
         self: *@This(),
         builder: *FunctionIrBuilder,

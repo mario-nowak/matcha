@@ -8,6 +8,7 @@ pub const BuiltinCallKind = enum {
     print_int,
     print_string,
     read_file,
+    read_file_chunk,
     read_line,
     get_arguments,
     start_process,

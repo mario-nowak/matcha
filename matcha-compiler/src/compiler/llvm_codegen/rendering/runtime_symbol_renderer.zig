@@ -48,6 +48,13 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.builtin_read_file_function_name},
             );
         }
+        if (requirements.read_file_chunk) {
+            try runtime_symbol_declarations.print(
+                self.arena,
+                "\ndeclare void @{s}(ptr, ptr, i64, i64, i64)",
+                .{runtime_symbols.builtin_read_file_chunk_function_name},
+            );
+        }
         if (requirements.read_line) {
             try runtime_symbol_declarations.print(
                 self.arena,
