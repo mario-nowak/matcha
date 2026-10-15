@@ -59,6 +59,13 @@ pub fn emitCallExpression(
                     lowered_program,
                     environment,
                 ),
+                .join => try emitArrayJoinCall(
+                    emitter,
+                    &callee_member_expression,
+                    call_expression,
+                    lowered_program,
+                    environment,
+                ),
             };
         },
         .string_method => |string_method| {
@@ -334,6 +341,25 @@ fn emitArrayAppendCall(
     try emitter.function_ir_builder.emitStore(argument_value.expectValue(), slot_value, element_llvm_type);
 
     return .zero_sized;
+}
+
+fn emitArrayJoinCall(
+    emitter: *NodeEmitter,
+    callee_member_expression: *const ast.MemberExpression,
+    call_expression: *const ast.CallExpression,
+    lowered_program: *const lowering.LoweredProgram,
+    environment: *Environment,
+) !EmissionResult {
+    if (call_expression.arguments.len != 1) unreachable;
+
+    const array_value = (try emitter.emitNode(callee_member_expression.base, lowered_program, environment)).expectValue();
+    const separator_value = (try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment)).expectValue();
+    return .{ .value = try emitter.runtime_call_emitter.emitArrayJoinCall(
+        emitter.function_ir_builder,
+        emitter.function_symbol_generator,
+        array_value,
+        try emitter.emitStringParts(separator_value),
+    ) };
 }
 
 fn emitStringMethodCall(

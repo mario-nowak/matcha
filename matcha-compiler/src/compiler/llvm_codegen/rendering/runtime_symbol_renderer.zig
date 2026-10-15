@@ -118,6 +118,13 @@ pub const RuntimeSymbolRenderer = struct {
                 .{runtime_symbols.builtin_string_slice_method_name},
             );
         }
+        if (requirements.array_join) {
+            try runtime_symbol_declarations.print(
+                self.arena,
+                "\ndeclare void @{s}(ptr, ptr, ptr, i64)",
+                .{runtime_symbols.builtin_array_join_method_name},
+            );
+        }
         if (requirements.int_to_string) {
             try runtime_symbol_declarations.print(
                 self.arena,

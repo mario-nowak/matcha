@@ -2153,6 +2153,23 @@ pub const NodeTypeAnalyzer = struct {
                 try expect(result.member_access_by_node_id.get(callee.id).?).toMatch(.{ .array_instance_method_access = .append });
             }
 
+            test "rejects join on an array that does not hold strings" {
+                const source =
+                    \\val numbers = [1, 2];
+                    \\val joined = numbers.join(", ");
+                ;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const fixture = try setupNodeTypeAnalyzerFixture(&arena, source);
+
+                const result = fixture.node_type_analyzer.analyzeProgram(&fixture.resolved_program, fixture.exit_behavior_by_node_id);
+
+                try expect(result).toBeError(error.DiagnosticsEmitted);
+                try expect(fixture.diagnostic_store.items()).toMatch(.{
+                    .{ .severity = .@"error", .message = "'join' is only available on arrays of strings" },
+                });
+            }
+
             test "rejects an empty array literal when the expected type is an integer" {
                 const source =
                     \\val x: int = [];

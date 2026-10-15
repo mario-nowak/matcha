@@ -78,6 +78,8 @@ val empty_array: string[] = []; // Empty arrays require an explicit type annotat
 my_second_array.append(4);
 // Arrays have a `length` field.
 val array_length = my_int_array.length; // This is 4 now.
+// Arrays of strings can be joined with a separator between the elements.
+val joined_words = ["red", "green", "blue"].join(", "); // "red, green, blue"
 
 
 // # Control flow
