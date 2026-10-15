@@ -326,6 +326,33 @@ pub const RuntimeCallEmitter = struct {
         return result_value;
     }
 
+    pub fn emitArrayJoinCall(
+        self: *@This(),
+        builder: *FunctionIrBuilder,
+        symbol_generator: *FunctionSymbolGenerator,
+        array_value: Value,
+        separator_parts: RuntimeStringParts,
+    ) !Value {
+        self.runtime_requirements.array_join = true;
+        const result_address = try symbol_generator.generateSyntheticAddressName();
+        try builder.emitStackAllocation(result_address, lowering.llvm_type.string_llvm_type);
+        try builder.emitInstruction(try std.fmt.allocPrint(
+            self.arena,
+            "call void @{s}(ptr {s}, ptr {s}, ptr {s}, i64 {s})",
+            .{
+                runtime_symbols.builtin_array_join_method_name,
+                result_address,
+                array_value,
+                separator_parts.pointer_value,
+                separator_parts.length_value,
+            },
+        ));
+
+        const result_value = try symbol_generator.generateValueName();
+        try builder.emitLoad(result_value, result_address, lowering.llvm_type.string_llvm_type);
+        return result_value;
+    }
+
     pub fn emitIntToStringCall(
         self: *@This(),
         builder: *FunctionIrBuilder,

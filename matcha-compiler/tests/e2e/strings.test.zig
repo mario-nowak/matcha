@@ -133,5 +133,24 @@ pub const Matcha = struct {
                 try e2e.expectContains(result.stderr, "index 3 is out of bounds for length 3");
             }
         };
+
+        pub const string_joining = struct {
+            test "puts the separator only between elements" {
+                const source =
+                    \\item { printString } = import "builtin";
+                    \\val several: string[] = ["a", "b", "c"];
+                    \\val single: string[] = ["a"];
+                    \\val none: string[] = [];
+                    \\printString(several.join(", "));
+                    \\printString(single.join(", "));
+                    \\printString(none.join(", "));
+                ;
+
+                var result = try e2e.runSource("string_joining.mt", source);
+                defer result.deinit();
+
+                try e2e.expectSuccessOutput(&result, "a, b, c\na\n\n");
+            }
+        };
     };
 };

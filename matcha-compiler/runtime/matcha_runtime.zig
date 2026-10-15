@@ -21,6 +21,7 @@ comptime {
     @export(&stringSplit, .{ .name = runtime_symbols.builtin_string_split_method_name });
     @export(&stringToInt, .{ .name = runtime_symbols.builtin_string_to_int_method_name });
     @export(&stringSlice, .{ .name = runtime_symbols.builtin_string_slice_method_name });
+    @export(&arrayJoin, .{ .name = runtime_symbols.builtin_array_join_method_name });
     @export(&intToString, .{ .name = runtime_symbols.builtin_int_to_string_method_name });
     @export(&panicIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_index_out_of_bounds_function_name });
     @export(&panicStringIndexOutOfBounds, .{ .name = runtime_symbols.runtime_panic_string_index_out_of_bounds_function_name });
@@ -439,6 +440,38 @@ fn stringSlice(out: *MatchaString, ptr: [*]const u8, len: usize, start: i64, end
     out.* = .{
         .ptr = ptr + start_index,
         .len = end_index - start_index,
+    };
+}
+
+// Measures the result first, so it allocates once and copies every byte once.
+fn arrayJoin(out: *MatchaString, array: *const ArrayHeader, separator_ptr: [*]const u8, separator_len: usize) callconv(.c) void {
+    const part_count: usize = @intCast(array.length);
+    if (part_count == 0) {
+        out.* = copyBytesToAtomic("");
+        return;
+    }
+
+    const parts: [*]const MatchaString = @ptrCast(@alignCast(array.data.?));
+    var result_len = separator_len * (part_count - 1);
+    for (parts[0..part_count]) |part| {
+        result_len += part.len;
+    }
+
+    const allocation = allocateAtomic(@max(result_len, 1)) orelse panic("runtime error: out of memory");
+    const result_ptr: [*]u8 = @ptrCast(allocation);
+    var offset: usize = 0;
+    for (parts[0..part_count], 0..) |part, part_index| {
+        if (part_index > 0) {
+            @memcpy(result_ptr[offset .. offset + separator_len], separator_ptr[0..separator_len]);
+            offset += separator_len;
+        }
+        @memcpy(result_ptr[offset .. offset + part.len], part.ptr[0..part.len]);
+        offset += part.len;
+    }
+
+    out.* = .{
+        .ptr = result_ptr,
+        .len = result_len,
     };
 }
 

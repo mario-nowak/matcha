@@ -109,6 +109,7 @@ pub const FunctionType = struct {
 
 pub const ArrayInstanceMethod = enum {
     append,
+    join,
 };
 
 pub const ArrayInstanceField = enum {

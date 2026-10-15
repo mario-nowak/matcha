@@ -181,6 +181,21 @@ pub const RuntimeCallEmitter = struct {
         }
     };
 
+    pub const emitArrayJoinCall = struct {
+        test "records the array join runtime requirement" {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            var runtime_call_emitter = llvm_codegen.RuntimeCallEmitter.init(arena.allocator());
+            var function_ir_builder = llvm_codegen.FunctionIrBuilder.init(arena.allocator());
+            var function_symbol_generator = llvm_codegen.FunctionSymbolGenerator.init(arena.allocator());
+            const separator_parts = RuntimeStringParts{ .pointer_value = "%pointer", .length_value = "%length" };
+
+            _ = try runtime_call_emitter.emitArrayJoinCall(&function_ir_builder, &function_symbol_generator, "%array", separator_parts);
+
+            try expect(runtime_call_emitter.runtime_requirements).toMatch(.{ .array_join = true });
+        }
+    };
+
     pub const emitStringSliceCall = struct {
         test "records the string slice runtime requirement" {
             var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

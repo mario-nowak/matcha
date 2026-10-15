@@ -975,6 +975,22 @@ pub const NodeTypeAnalyzer = struct {
                     try self.recordMemberAccess(node_id, .{ .array_instance_method_access = .append });
                     return self.recordNodeType(node_id, append_function_type_id);
                 }
+                if (std.mem.eql(u8, member_name, "join")) {
+                    const element_type_id = switch (self.type_store.getType(base_type_id)) {
+                        .array => |element_type_id| element_type_id,
+                        else => unreachable,
+                    };
+                    if (element_type_id != self.type_store.string_type_id) {
+                        try self.diagnostic_store.emitErrorFromToken(member_expression.member_name_token, "'join' is only available on arrays of strings");
+                        return error.DiagnosticsEmitted;
+                    }
+                    const join_function_type_id = try self.getStringMethodFunctionTypeId(
+                        &.{self.type_store.string_type_id},
+                        self.type_store.string_type_id,
+                    );
+                    try self.recordMemberAccess(node_id, .{ .array_instance_method_access = .join });
+                    return self.recordNodeType(node_id, join_function_type_id);
+                }
                 if (std.mem.eql(u8, member_name, "length")) {
                     try self.recordMemberAccess(node_id, .{ .array_instance_field_access = .length });
                     return self.recordNodeType(node_id, self.type_store.integer_type_id);
