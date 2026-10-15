@@ -386,7 +386,9 @@ pub fn build(b: *std.Build) void {
     const runtime_root_module = b.createModule(.{
         .root_source_file = b.path("runtime/matcha_runtime.zig"),
         .target = target,
-        .optimize = optimize,
+        // Every compiled Matcha program links this library. In Debug mode it runs about 7 times slower, so a Debug
+        // build of the compiler still links an optimized runtime. ReleaseSafe keeps Zig's safety checks.
+        .optimize = if (optimize == .Debug) .ReleaseSafe else optimize,
         // `startProcess` needs libc on Linux to read the environment it forwards to the child process.
         .link_libc = true,
         .imports = &.{
