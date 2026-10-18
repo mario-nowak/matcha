@@ -189,16 +189,16 @@ pub const NameResolver = struct {
                 .declared_type_reference = .{ .builtin = .string },
             } },
         });
-        const offset_parameter_id = try self.symbol_table.insertSymbol(.{
-            .name = "offset",
+        const offset_bytes_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "offset_bytes",
             .declared_at = null,
             .kind = .{ .binding = .{
                 .binding_mutability = .immutable,
                 .declared_type_reference = .{ .builtin = .integer },
             } },
         });
-        const length_parameter_id = try self.symbol_table.insertSymbol(.{
-            .name = "length",
+        const length_bytes_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "length_bytes",
             .declared_at = null,
             .kind = .{ .binding = .{
                 .binding_mutability = .immutable,
@@ -209,7 +209,7 @@ pub const NameResolver = struct {
             .name = "readFileChunk",
             .declared_at = null,
             .kind = .{ .function = .{
-                .parameter_symbol_ids = try self.arena.dupe(symbols.SymbolId, &.{ path_parameter_id, offset_parameter_id, length_parameter_id }),
+                .parameter_symbol_ids = try self.arena.dupe(symbols.SymbolId, &.{ path_parameter_id, offset_bytes_parameter_id, length_bytes_parameter_id }),
                 .return_type_reference = .{ .builtin = .string },
                 .implementation_kind = .builtin_read_file_chunk,
             } },

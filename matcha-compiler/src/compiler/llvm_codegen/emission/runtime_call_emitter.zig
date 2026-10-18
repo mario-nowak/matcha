@@ -111,8 +111,8 @@ pub const RuntimeCallEmitter = struct {
         builder: *FunctionIrBuilder,
         symbol_generator: *FunctionSymbolGenerator,
         path_parts: RuntimeStringParts,
-        offset_value: Value,
-        length_value: Value,
+        offset_bytes_value: Value,
+        length_bytes_value: Value,
     ) !Value {
         self.runtime_requirements.read_file_chunk = true;
         const result_address = try symbol_generator.generateSyntheticAddressName();
@@ -125,8 +125,8 @@ pub const RuntimeCallEmitter = struct {
                 result_address,
                 path_parts.pointer_value,
                 path_parts.length_value,
-                offset_value,
-                length_value,
+                offset_bytes_value,
+                length_bytes_value,
             },
         ));
 

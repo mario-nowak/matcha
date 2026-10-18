@@ -176,21 +176,27 @@ fn readFile(out: *MatchaString, path_ptr: [*]const u8, path_len: usize) callconv
 }
 
 // Opens the file for every chunk, so the caller needs no file handle. Returns "" at or after the end of the file.
-fn readFileChunk(out: *MatchaString, path_ptr: [*]const u8, path_len: usize, offset: i64, length: i64) callconv(.c) void {
-    if (offset < 0 or length < 0) {
-        panic("runtime error: readFileChunk needs a non-negative offset and length");
+fn readFileChunk(
+    out: *MatchaString,
+    path_pointer: [*]const u8,
+    path_length_bytes: usize,
+    offset_bytes: i64,
+    length_bytes: i64,
+) callconv(.c) void {
+    if (offset_bytes < 0 or length_bytes < 0) {
+        panic("runtime error: readFileChunk needs a non-negative offset_bytes and length_bytes");
     }
 
-    var file = std.fs.cwd().openFile(path_ptr[0..path_len], .{}) catch panic("runtime error: failed to open file");
+    var file = std.fs.cwd().openFile(path_pointer[0..path_length_bytes], .{}) catch panic("runtime error: failed to open file");
     defer file.close();
 
-    const allocation = allocateAtomic(@max(@as(usize, @intCast(length)), 1)) orelse panic("runtime error: out of memory");
+    const allocation = allocateAtomic(@max(@as(usize, @intCast(length_bytes)), 1)) orelse panic("runtime error: out of memory");
     const bytes: [*]u8 = @ptrCast(allocation);
-    const bytes_read = file.preadAll(bytes[0..@intCast(length)], @intCast(offset)) catch panic("runtime error: failed to read file");
+    const read_length_bytes = file.preadAll(bytes[0..@intCast(length_bytes)], @intCast(offset_bytes)) catch panic("runtime error: failed to read file");
 
     out.* = .{
         .ptr = bytes,
-        .len = bytes_read,
+        .len = read_length_bytes,
     };
 }
 
