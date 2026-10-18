@@ -61,6 +61,7 @@ fn linkNativeBinary(arena: std.mem.Allocator, llvm_ir_path: []const u8, binary_o
 
     try argv.appendSlice(arena, &.{
         "clang",
+        "-O2",
         "-target",
         compiler.pipeline.getLlvmTargetTriple(),
         llvm_ir_path,

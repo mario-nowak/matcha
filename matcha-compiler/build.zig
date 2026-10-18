@@ -386,7 +386,8 @@ pub fn build(b: *std.Build) void {
     const runtime_root_module = b.createModule(.{
         .root_source_file = b.path("runtime/matcha_runtime.zig"),
         .target = target,
-        .optimize = optimize,
+        // Every compiled Matcha program links this library, so its mode does not follow the compiler's mode.
+        .optimize = .ReleaseSafe,
         // `startProcess` needs libc on Linux to read the environment it forwards to the child process.
         .link_libc = true,
         .imports = &.{
@@ -398,6 +399,9 @@ pub fn build(b: *std.Build) void {
         .root_module = runtime_root_module,
         .linkage = .static,
     });
+    // Compiled programs link this library with clang, not Zig, so Zig's compiler_rt is not linked for them. Optimized
+    // builds call into it, for example `__zig_probe_stack` for large stack frames on x86_64 Linux.
+    runtime.bundle_compiler_rt = true;
     b.installArtifact(runtime);
 
     // This declares intent for the executable to be installed into the
