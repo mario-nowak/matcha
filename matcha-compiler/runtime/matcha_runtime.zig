@@ -192,7 +192,9 @@ fn readFileChunk(
 
     const allocation = allocateAtomic(@max(@as(usize, @intCast(length_bytes)), 1)) orelse panic("runtime error: out of memory");
     const bytes: [*]u8 = @ptrCast(allocation);
-    const read_length_bytes = file.preadAll(bytes[0..@intCast(length_bytes)], @intCast(offset_bytes)) catch panic("runtime error: failed to read file");
+    var file_reader = file.reader(&.{});
+    file_reader.seekTo(@intCast(offset_bytes)) catch panic("runtime error: failed to read file");
+    const read_length_bytes = file_reader.interface.readSliceShort(bytes[0..@intCast(length_bytes)]) catch panic("runtime error: failed to read file");
 
     out.* = .{
         .ptr = bytes,
