@@ -1,7 +1,7 @@
 // Temperatures are stored in tenths of a degree, so "-12.3" is -123. That avoids floating point numbers entirely.
 
 // Parses "-12.3" or "4.5". 1BRC temperatures always have exactly one fractional digit.
-export item parseTemperatureInTenths(text: string): int = {
+export item parseTemperatureTenths(text: string): int = {
     val MINUS_BYTE = 45;
     val DOT_BYTE = 46;
     val ZERO_BYTE = 48;
@@ -13,24 +13,24 @@ export item parseTemperatureInTenths(text: string): int = {
         index = 1;
     }
 
-    var tenths = 0;
+    var tenths_absolute = 0;
     while index < text.length : index += 1 {
         val byte = text.getByteAt(index);
         if byte != DOT_BYTE {
-            tenths = tenths * 10 + byte - ZERO_BYTE;
+            tenths_absolute = tenths_absolute * 10 + byte - ZERO_BYTE;
         }
     }
 
-    return sign * tenths;
+    return sign * tenths_absolute;
 };
 
-export item formatTenths(tenths: int): string = {
-    val sign = if tenths < 0 { "-" } else { "" };
-    val absolute_tenths = if tenths < 0 { -tenths } else { tenths };
-    val whole_degrees = absolute_tenths / 10;
-    val fractional_digit = absolute_tenths % 10;
+export item formatTemperatureTenths(temperature_tenths: int): string = {
+    val sign = if temperature_tenths < 0 { "-" } else { "" };
+    val tenths_absolute = if temperature_tenths < 0 { -temperature_tenths } else { temperature_tenths };
+    val degrees_whole = tenths_absolute / 10;
+    val tenths_digit = tenths_absolute % 10;
 
-    return sign + whole_degrees.toString() + "." + fractional_digit.toString();
+    return sign + degrees_whole.toString() + "." + tenths_digit.toString();
 };
 
 // Rounds half up, toward positive infinity, like `Math.round` in the 1BRC reference implementation. So -0.05 becomes

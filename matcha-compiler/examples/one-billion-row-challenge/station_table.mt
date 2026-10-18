@@ -1,3 +1,5 @@
+item { hashPolynomial } = import "polynomial_hash.mt";
+item { Measurement } = import "measurement.mt";
 item { StationStatistics } = import "station_statistics.mt";
 
 // A hash table with open addressing and linear probing. A slot holds the index of a station in `stations`, or -1 when
@@ -21,31 +23,20 @@ export item StationTable = structure {
         };
     };
 
-    item record(self: StationTable, station: string, temperature_in_tenths: int): unit = {
-        var slot_index = hashStation(station) % self.slots.length;
+    item record(self: StationTable, measurement: Measurement): unit = {
+        var slot_index = hashPolynomial(measurement.station) % self.slots.length;
         loop {
             val station_index = self.slots[slot_index];
             if station_index == -1 {
                 self.slots[slot_index] = self.stations.length;
-                self.stations.append(StationStatistics.create(station, temperature_in_tenths));
+                self.stations.append(StationStatistics.create(measurement.station, measurement.temperature_tenths));
                 return;
             }
-            if self.stations[station_index].name == station {
-                self.stations[station_index].record(temperature_in_tenths);
+            if self.stations[station_index].name == measurement.station {
+                self.stations[station_index].record(measurement.temperature_tenths);
                 return;
             }
             slot_index = (slot_index + 1) % self.slots.length;
         }
     };
-};
-
-// A polynomial hash over the bytes. The modulo after every step keeps the value far below the int range.
-item hashStation(station: string): int = {
-    var hash = 0;
-    var index = 0;
-    while index < station.length : index += 1 {
-        hash = (hash * 31 + station.getByteAt(index)) % 1000003;
-    }
-
-    return hash;
 };
