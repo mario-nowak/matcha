@@ -109,6 +109,7 @@ pub const NameResolver = struct {
         try self.addPrintIntBuiltinDebuggingFunction(&builtin_item_table);
         try self.addPrintStringBuiltinDebuggingFunction(&builtin_item_table);
         try self.addReadFileBuiltinFunction(&builtin_item_table);
+        try self.addReadFileChunkBuiltinFunction(&builtin_item_table);
         try self.addReadLineBuiltinFunction(&builtin_item_table);
         try self.addGetArgumentsBuiltinFunction(&builtin_item_table);
         try self.addStartProcessBuiltinFunction(&builtin_item_table);
@@ -177,6 +178,43 @@ pub const NameResolver = struct {
             } },
         });
         try builtin_item_table.put("readFile", .{ .symbol_id = function_id, .is_exported = true });
+    }
+
+    fn addReadFileChunkBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {
+        const path_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "path",
+            .declared_at = null,
+            .kind = .{ .binding = .{
+                .binding_mutability = .immutable,
+                .declared_type_reference = .{ .builtin = .string },
+            } },
+        });
+        const offset_bytes_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "offset_bytes",
+            .declared_at = null,
+            .kind = .{ .binding = .{
+                .binding_mutability = .immutable,
+                .declared_type_reference = .{ .builtin = .integer },
+            } },
+        });
+        const length_bytes_parameter_id = try self.symbol_table.insertSymbol(.{
+            .name = "length_bytes",
+            .declared_at = null,
+            .kind = .{ .binding = .{
+                .binding_mutability = .immutable,
+                .declared_type_reference = .{ .builtin = .integer },
+            } },
+        });
+        const function_id = try self.symbol_table.insertSymbol(.{
+            .name = "readFileChunk",
+            .declared_at = null,
+            .kind = .{ .function = .{
+                .parameter_symbol_ids = try self.arena.dupe(symbols.SymbolId, &.{ path_parameter_id, offset_bytes_parameter_id, length_bytes_parameter_id }),
+                .return_type_reference = .{ .builtin = .string },
+                .implementation_kind = .builtin_read_file_chunk,
+            } },
+        });
+        try builtin_item_table.put("readFileChunk", .{ .symbol_id = function_id, .is_exported = true });
     }
 
     fn addReadLineBuiltinFunction(self: *@This(), builtin_item_table: *ImportableItemByName) !void {

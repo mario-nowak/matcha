@@ -44,6 +44,7 @@ pub const RuntimeSymbolRenderer = struct {
                 .print_int = true,
                 .print_string = true,
                 .read_file = true,
+                .read_file_chunk = true,
                 .read_line = true,
                 .get_arguments = true,
                 .start_process = true,
@@ -71,6 +72,7 @@ pub const RuntimeSymbolRenderer = struct {
                 \\declare void @matcha.compiler_module.builtin.function.printInt(i64)
                 \\declare void @matcha.compiler_module.builtin.function.printString(ptr, i64)
                 \\declare void @matcha.compiler_module.builtin.function.readFile(ptr, ptr, i64)
+                \\declare void @matcha.compiler_module.builtin.function.readFileChunk(ptr, ptr, i64, i64, i64)
                 \\declare void @matcha.compiler_module.builtin.function.readLine(ptr)
                 \\declare ptr @matcha.compiler_module.builtin.function.getArguments()
                 \\declare void @matcha.compiler_module.builtin.function.startProcess(ptr, ptr, i64, ptr)

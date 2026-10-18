@@ -11,7 +11,7 @@ comptime {
     referenceAllTestsRecursive(@import("strings.test.zig"));
     _ = @import("arrays.test.zig");
     _ = @import("structures.test.zig");
-    _ = @import("io.test.zig");
+    referenceAllTestsRecursive(@import("io.test.zig"));
     _ = @import("runtime.test.zig");
     _ = @import("smoke.test.zig");
     _ = @import("unit_type.test.zig");

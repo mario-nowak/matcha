@@ -224,6 +224,7 @@ pub const CallLowerer = struct {
             .builtin_print_int => .print_int,
             .builtin_print_string => .print_string,
             .builtin_read_file => .read_file,
+            .builtin_read_file_chunk => .read_file_chunk,
             .builtin_read_line => .read_line,
             .builtin_get_arguments => .get_arguments,
             .builtin_start_process => .start_process,

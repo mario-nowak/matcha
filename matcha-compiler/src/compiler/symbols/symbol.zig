@@ -93,6 +93,7 @@ pub const FunctionImplementationKind = union(enum) {
     builtin_print_int,
     builtin_print_string,
     builtin_read_file,
+    builtin_read_file_chunk,
     builtin_read_line,
     builtin_get_arguments,
     builtin_start_process,

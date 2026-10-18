@@ -180,6 +180,19 @@ fn emitBuiltinCall(
                 try emitter.emitStringParts(path_value.expectValue()),
             ) };
         },
+        .read_file_chunk => {
+            if (call_expression.arguments.len != 3) unreachable;
+            const path_value = try emitter.emitNode(&call_expression.arguments[0], lowered_program, environment);
+            const offset_bytes_value = try emitter.emitNode(&call_expression.arguments[1], lowered_program, environment);
+            const length_bytes_value = try emitter.emitNode(&call_expression.arguments[2], lowered_program, environment);
+            return .{ .value = try emitter.runtime_call_emitter.emitReadFileChunkCall(
+                emitter.function_ir_builder,
+                emitter.function_symbol_generator,
+                try emitter.emitStringParts(path_value.expectValue()),
+                offset_bytes_value.expectValue(),
+                length_bytes_value.expectValue(),
+            ) };
+        },
         .read_line => {
             if (call_expression.arguments.len != 0) unreachable;
             return .{ .value = try emitter.runtime_call_emitter.emitReadLineCall(
